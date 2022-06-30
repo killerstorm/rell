@@ -5,13 +5,10 @@
 package net.postchain.rell.compiler.base.fn
 
 import net.postchain.rell.compiler.ast.*
-import net.postchain.rell.compiler.base.core.C_DefinitionContext
-import net.postchain.rell.compiler.base.core.C_FunctionBodyContext
-import net.postchain.rell.compiler.base.core.C_TypeHint
-import net.postchain.rell.compiler.base.core.C_Types
+import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.def.*
 import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
@@ -56,7 +53,7 @@ object C_FunctionUtils {
 
     fun compileGlobalConstantHeader(
             defCtx: C_DefinitionContext,
-            simpleName: S_Name,
+            simpleName: C_Name,
             defNames: R_DefinitionNames,
             explicitType: S_Type?,
             expr: S_Expr,
@@ -83,10 +80,10 @@ object C_FunctionUtils {
             resTypeHint: C_TypeHint
     ): V_Expr {
         val res = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, callTarget)
-        return res ?: C_Utils.errorVExpr(ctx, callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
+        return res ?: C_ExprUtils.errorVExpr(ctx, callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
     }
 
-    fun compileReturnType(ctx: C_ExprContext, name: S_Name, header: C_FunctionHeader): R_Type? {
+    fun compileReturnType(ctx: C_ExprContext, name: C_Name, header: C_FunctionHeader): R_Type? {
         if (header.explicitType != null) {
             return header.explicitType
         } else if (header.body == null) {

@@ -579,8 +579,8 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testMemberAccess() {
-        chkEx("{ var x: text?; return x.size(); }", "ct_err:expr_mem_null:size")
-        chkEx("{ var x: (a:integer)?; return x.a; }", "ct_err:expr_mem_null:a")
+        chkEx("{ var x: text?; return x.size(); }", "ct_err:[expr_var_uninit:x][expr_mem_null:size]")
+        chkEx("{ var x: (a:integer)?; return x.a; }", "ct_err:[expr_var_uninit:x][expr_mem_null:a]")
         chkEx("{ var x: (a:integer)?; return x.b; }", "ct_err:unknown_member:[(a:integer)]:b")
         chkEx("{ var x: (a:integer); return x.a; }", "ct_err:expr_var_uninit:x")
         chkEx("{ var x: list<integer>? = _nullable([1]); return x[0]; }", "ct_err:expr_subscript_null")
@@ -649,8 +649,10 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x: (a:(b:(c:integer)?)?)? = _nullable((a=null)); return x?.a?.b?.c; }", "null")
         chkEx("{ val x: (a:(b:(c:integer)?)?)? = null; return x?.a?.b?.c; }", "null")
 
-        chkEx("{ val x: (a:(b:(c:integer)?)?)? = _nullable((a=(b=(c=123)))); return x.a.b.c; }", "ct_err:expr_mem_null:a")
-        chkEx("{ val x: (a:(b:(c:integer)?)?)? = _nullable((a=(b=(c=123)))); return x?.a.b.c; }", "ct_err:expr_mem_null:b")
+        chkEx("{ val x: (a:(b:(c:integer)?)?)? = _nullable((a=(b=(c=123)))); return x.a.b.c; }",
+                "ct_err:[expr_mem_null:a][expr_mem_null:b][expr_mem_null:c]")
+        chkEx("{ val x: (a:(b:(c:integer)?)?)? = _nullable((a=(b=(c=123)))); return x?.a.b.c; }",
+                "ct_err:[expr_mem_null:b][expr_mem_null:c]")
         chkEx("{ val x: (a:(b:(c:integer)?)?)? = _nullable((a=(b=(c=123)))); return x?.a?.b.c; }", "ct_err:expr_mem_null:c")
 
         chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return x.a.b.c; }", "ct_err:expr_mem_null:a")

@@ -5,17 +5,22 @@
 package net.postchain.rell.tools.api
 
 import net.postchain.rell.RellConfigGen
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.compiler.base.core.C_Compiler
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.module.C_ModuleUtils
-import net.postchain.rell.compiler.base.utils.*
+import net.postchain.rell.compiler.base.utils.C_Message
+import net.postchain.rell.compiler.base.utils.C_SourceDir
+import net.postchain.rell.compiler.base.utils.C_SourceFile
+import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.runtime.Rt_RellVersionProperty
 import net.postchain.rell.utils.RellCliEnv
 import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
@@ -24,8 +29,19 @@ import java.io.File
 
 class IdeModuleInfo(
         @JvmField val name: R_ModuleName,
-        @JvmField val directory: Boolean
+        @JvmField val directory: Boolean,
+        @JvmField val app: Boolean,
+        @JvmField val test: Boolean,
+        @JvmField val imports: Set<R_ModuleName>
 )
+
+class IdeCompilationResult(
+        messages: List<C_Message>,
+        symbolInfos: Map<S_Pos, IdeSymbolInfo>
+) {
+    @JvmField val messages = messages.toImmList()
+    @JvmField val symbolInfos = symbolInfos.toImmMap()
+}
 
 @Suppress("UNUSED")
 object IdeApi {
@@ -35,15 +51,13 @@ object IdeApi {
         return R_ModuleName.ofOpt(s)
     }
 
-    @JvmStatic fun getModuleInfo(path: C_SourcePath, ast: S_RellFile): IdeModuleInfo? {
-        val (moduleName, directory) = C_ModuleUtils.getModuleInfo(path, ast)
-        return if (moduleName == null) null else IdeModuleInfo(moduleName, directory)
+    @JvmStatic fun getModuleName(path: C_SourcePath, ast: S_RellFile): R_ModuleName? {
+        val (moduleName, _) = C_ModuleUtils.getModuleInfo(path, ast)
+        return moduleName
     }
 
-    @JvmStatic fun getImportedModules(moduleName: R_ModuleName, ast: S_RellFile): List<R_ModuleName> {
-        val res = mutableSetOf<R_ModuleName>()
-        ast.ideGetImportedModules(moduleName, res)
-        return res.toImmList()
+    @JvmStatic fun getModuleInfo(path: C_SourcePath, ast: S_RellFile): IdeModuleInfo? {
+        return ast.ideModuleInfo(path)
     }
 
     private object IdeRellCliEnv: RellCliEnv() {
@@ -59,15 +73,6 @@ object IdeApi {
 
     @JvmStatic fun buildOutlineTree(b: IdeOutlineTreeBuilder, ast: S_RellFile) {
         ast.ideBuildOutlineTree(b)
-    }
-
-    @JvmStatic fun validate(
-            sourceDir: C_SourceDir,
-            modules: List<R_ModuleName>,
-            options: C_CompilerOptions
-    ): List<C_Message> {
-        val res = C_Compiler.compile(sourceDir, modules, options)
-        return res.messages
     }
 
     @JvmStatic fun getRellVersionInfo(): Map<Rt_RellVersionProperty, String>? {
@@ -88,9 +93,13 @@ object IdeApi {
         return res
     }
 
-    @JvmStatic fun isValidRellTestFile(text: String): Boolean {
-        val ast = C_Parser.parse(C_SourcePath.EMPTY, text)
-        return ast.ideIsTestFile()
+    @JvmStatic fun compile(
+            sourceDir: C_SourceDir,
+            modules: List<R_ModuleName>,
+            options: C_CompilerOptions
+    ): IdeCompilationResult {
+        val res = C_Compiler.compile(sourceDir, modules, options)
+        return IdeCompilationResult(res.messages, res.ideSymbolInfos)
     }
 }
 
@@ -110,4 +119,10 @@ object IdeDirApi {
 
     @JvmStatic
     fun parseSourcePath(s: String): C_SourcePath? = C_SourcePath.parseOpt(s)
+
+    @JvmStatic
+    fun makeSourcePath(parts: List<String>): C_SourcePath = C_SourcePath.of(parts)
+
+    @JvmStatic
+    fun makeSourcePathOpt(parts: List<String>): C_SourcePath? = C_SourcePath.ofOpt(parts)
 }

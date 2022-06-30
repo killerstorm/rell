@@ -6,11 +6,13 @@ package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.base.core.C_ExtReplCommand
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_SymbolContextManager
 import net.postchain.rell.compiler.base.module.C_MidModuleCompiler
 import net.postchain.rell.compiler.base.module.C_ModuleKey
 import net.postchain.rell.compiler.base.module.C_ModuleLoader
 import net.postchain.rell.compiler.base.module.C_PrecompiledModule
 import net.postchain.rell.compiler.base.utils.C_SourceDir
+import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
@@ -25,15 +27,18 @@ class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
             currentModuleName: R_ModuleName?,
             preModules: Map<C_ModuleKey, C_PrecompiledModule>
     ): C_ExtReplCommand {
+        val symCtxManager = C_SymbolContextManager(null)
         val preModuleNames = preModules.map { it.key.name }.toImmSet()
-        val modLdr = C_ModuleLoader(msgCtx, sourceDir, preModuleNames)
+        val modLdr = C_ModuleLoader(msgCtx, symCtxManager.provider, sourceDir, preModuleNames)
 
         if (currentModuleName != null) {
             modLdr.loadModule(currentModuleName)
         }
 
         val srcCtx = modLdr.readerCtx.createModuleSourceContext(currentModuleName ?: R_ModuleName.EMPTY)
-        val midMembers = defs.mapNotNull { it.compile(srcCtx) }
+        val defCtx = srcCtx.createDefinitionContext(C_SourcePath.EMPTY)
+
+        val midMembers = defs.mapNotNull { it.compile(defCtx) }
         val midModules = modLdr.finish()
 
         val midCompiler = C_MidModuleCompiler(msgCtx, midModules)
@@ -41,7 +46,7 @@ class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
             midCompiler.compileModule(currentModuleName, null)
         }
 
-        val extMembers = midCompiler.compileMembers(midMembers)
+        val extMembers = midCompiler.compileReplMembers(midMembers)
         val extModules = midCompiler.getExtModules()
 
         return C_ExtReplCommand(extModules, extMembers, currentModuleName, stmts, preModules)

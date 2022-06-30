@@ -164,8 +164,8 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testErr() {
-        chkOp("update foo @ {} ( x = 0 );", "ct_err:unknown_entity:foo")
-        chkOp("delete foo @ {};", "ct_err:unknown_entity:foo")
+        chkOp("update foo @ {} ( x = 0 );", "ct_err:unknown_def:entity:foo")
+        chkOp("delete foo @ {};", "ct_err:unknown_def:entity:foo")
 
         chkOp("update person @ {} ( foo = 123 );", "ct_err:attr_unknown_name:foo")
 

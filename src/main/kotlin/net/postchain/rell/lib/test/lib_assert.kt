@@ -6,14 +6,16 @@ package net.postchain.rell.lib.test
 
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_Nullable
 import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseCtx
 import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseMatch
 import net.postchain.rell.compiler.base.fn.C_GlobalSpecialFuncCase
+import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
+import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_SpecialGlobalFuncCaseMatch
-import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.vexpr.V_BinaryOp
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.R_BooleanType
@@ -25,8 +27,8 @@ import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.immListOf
 
-object C_Lib_Rell_Test_Assert {
-    val FUNCTIONS = C_GlobalFuncBuilder("rell.test")
+object C_Lib_Test_Assert {
+    private val FUNCTIONS = C_GlobalFuncBuilder("rell.test")
             .add("assert_equals", C_FuncCase_AssertEquals(true))
             .add("assert_not_equals", C_FuncCase_AssertEquals(false))
             .add("assert_true", R_UnitType, listOf(R_BooleanType), R_Fns.AssertBoolean(true))
@@ -43,6 +45,10 @@ object C_Lib_Rell_Test_Assert {
             .add("assert_ge_lt", C_FuncCase_AssertRange(C_BinOp_Ge, C_BinOp_Lt))
             .add("assert_ge_le", C_FuncCase_AssertRange(C_BinOp_Ge, C_BinOp_Le))
             .build()
+
+    fun bind(nsBuilder: C_SysNsProtoBuilder) {
+        C_LibUtils.bindFunctions(nsBuilder, FUNCTIONS)
+    }
 }
 
 private object R_Fns {
@@ -97,7 +103,7 @@ private object C_FuncCase_AssertNotNull: C_GlobalSpecialFuncCase() {
 
         override fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr {
             val rActual = actual.toRExpr()
-            return C_Utils.createSysCallRExpr(resType, R_Fns.AssertNotNull, listOf(rActual), caseCtx)
+            return C_ExprUtils.createSysCallRExpr(resType, R_Fns.AssertNotNull, listOf(rActual), caseCtx)
         }
     }
 }

@@ -4,8 +4,8 @@
 
 package net.postchain.rell.model.expr
 
-import net.postchain.rell.compiler.base.utils.C_Constants
 import net.postchain.rell.compiler.base.expr.C_EntityAttrRef
+import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_CallFrame
@@ -390,7 +390,7 @@ object RedDb_Utils {
         override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
             bld.append("ROUND(")
             expr.toSql(ctx, bld, false)
-            bld.append(", ${C_Constants.DECIMAL_FRAC_DIGITS})")
+            bld.append(", ${Lib_DecimalMath.DECIMAL_FRAC_DIGITS})")
         }
     }
 }

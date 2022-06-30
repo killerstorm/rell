@@ -11,7 +11,11 @@ import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_SimpleDestination
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.model.*
+import net.postchain.rell.lib.type.C_Lib_Type_ByteArray
+import net.postchain.rell.lib.type.C_Lib_Type_Text
+import net.postchain.rell.model.R_IntegerType
+import net.postchain.rell.model.R_TextType
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 
 sealed class V_CommonSubscriptKind(val resType: R_Type) {
@@ -29,7 +33,7 @@ object V_CommonSubscriptKind_Text: V_CommonSubscriptKind(R_TextType) {
     override fun canBeDbExpr() = true
 
     override fun compileDb(pos: S_Pos, dbBase: Db_Expr, dbKey: Db_Expr): Db_Expr {
-        return Db_CallExpr(R_TextType, Db_SysFn_Text_Subscript, listOf(dbBase, dbKey))
+        return Db_CallExpr(R_TextType, C_Lib_Type_Text.DB_SUBSCRIPT, listOf(dbBase, dbKey))
     }
 }
 
@@ -39,7 +43,7 @@ object V_CommonSubscriptKind_ByteArray: V_CommonSubscriptKind(R_IntegerType) {
     override fun canBeDbExpr() = true
 
     override fun compileDb(pos: S_Pos, dbBase: Db_Expr, dbKey: Db_Expr): Db_Expr {
-        return Db_CallExpr(R_IntegerType, Db_SysFn_ByteArray_Subscript, listOf(dbBase, dbKey))
+        return Db_CallExpr(R_IntegerType, C_Lib_Type_ByteArray.DB_SUBSCRIPT, listOf(dbBase, dbKey))
     }
 }
 

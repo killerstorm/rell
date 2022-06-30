@@ -14,9 +14,11 @@ import com.github.h0tk3y.betterParse.parser.ParseResult
 import com.github.h0tk3y.betterParse.parser.Parsed
 import com.github.h0tk3y.betterParse.parser.Parser
 import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.utils.C_Parser
+import net.postchain.rell.model.R_KeyIndexKind
 import net.postchain.rell.model.expr.R_AtCardinality
-import net.postchain.rell.model.expr.R_AtWhatSort
+import net.postchain.rell.utils.immListOf
 import kotlin.reflect.KProperty
 
 object S_Keywords {
@@ -109,7 +111,6 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val RECORD by relltok("record")
     private val RETURN by relltok("return")
     private val SET by relltok("set")
-    private val SORT by relltok("sort")
     private val STRUCT by relltok("struct")
     private val TRUE by relltok("true")
     private val UPDATE by relltok("update")
@@ -210,33 +211,23 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val annotationArg by annotationArgValue or annotationArgName
     private val annotationArgs by ( -LPAR * separatedTerms(annotationArg, COMMA, true ) * -RPAR)
 
-    private val annotationNameName by name
-    private val annotationNameSort by SORT map { S_Name(it.pos, it.text) }
-    private val annotationName by annotationNameName or annotationNameSort
-
-    private val annotation by ( -AT * annotationName * optional(annotationArgs) ) map {
+    private val annotation by ( -AT * name * optional(annotationArgs) ) map {
         (name, args) ->
-        S_Annotation(name, args ?: listOf())
+        S_Annotation(name, args ?: immListOf())
     }
 
     private val keywordModifier by (
-            ( ABSTRACT map { S_KeywordModifier(S_Name(it.pos, it.text), S_KeywordModifierKind.ABSTRACT) } )
-            or ( OVERRIDE map { S_KeywordModifier(S_Name(it.pos, it.text), S_KeywordModifierKind.OVERRIDE) } )
+            ( ABSTRACT map { S_KeywordModifier(C_Name.make(it.pos, it.text), S_KeywordModifierKind.ABSTRACT) } )
+            or ( OVERRIDE map { S_KeywordModifier(C_Name.make(it.pos, it.text), S_KeywordModifierKind.OVERRIDE) } )
     )
 
     private val modifier: Parser<S_Modifier> by keywordModifier or annotation
 
-    private val nameTypeAttrHeader by name * -COLON * type map { (name, type) -> S_AttrHeader(name, type) }
+    private val nameTypeAttrHeader by name * -COLON * type map { (name, type) -> S_NamedAttrHeader(name, type) }
 
     private val anonAttrHeader by qualifiedName * optional(QUESTION) map {
         (name, nullable) ->
-        if (name.parts.size == 1 && nullable == null) {
-            S_AttrHeader(name.last, null)
-        } else {
-            val type = S_NameType(name)
-            val resultType = if (nullable == null) type else S_NullableType(nullable.pos, type)
-            S_AttrHeader(name.last, resultType)
-        }
+        S_AnonAttrHeader(name, nullable != null)
     }
 
     private val attrHeader by ( nameTypeAttrHeader or anonAttrHeader )
@@ -253,8 +244,8 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 
     private val keyIndexKind by (
-            ( KEY mapNode { S_KeyIndexKind.KEY } )
-            or ( INDEX mapNode { S_KeyIndexKind.INDEX } )
+            ( KEY mapNode { R_KeyIndexKind.KEY } )
+            or ( INDEX mapNode { R_KeyIndexKind.INDEX } )
     )
 
     private val relKeyIndexClause by ( keyIndexKind * separatedTerms(baseAttributeDefinition, COMMA, false) * -SEMI ) map {
@@ -266,9 +257,9 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val entityAnnotations by -LPAR * separatedTerms(name, COMMA, false) * -RPAR
 
-    private val entityBodyFull by ( -LCURL * zeroOrMore(relAnyClause) * -RCURL)
+    private val entityBodyFull by ( -LCURL * zeroOrMore(relAnyClause) * -RCURL )
     private val entityBodyShort by (SEMI) map { null }
-    private val entityBody by ( entityBodyFull or entityBodyShort)
+    private val entityBody by ( entityBodyFull or entityBodyShort )
 
     private val entityKeyword by (ENTITY map { it.pos to false }) or (CLASS map { it.pos to true })
 
@@ -288,7 +279,7 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val structKeyword by (STRUCT map { it.pos to false }) or (RECORD map { it.pos to true })
 
-    private val structDef by ( structKeyword * name * -LCURL * zeroOrMore(attributeDefinition) * -RCURL) map {
+    private val structDef by ( structKeyword * name * -LCURL * zeroOrMore(attributeDefinition) * -RCURL ) map {
         (posDeprecated, name, attrs) ->
         val (pos, deprecated) = posDeprecated
         val deprecatedKwPos = if (deprecated) pos else null
@@ -408,18 +399,12 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val atExprWhatSimple by oneOrMore((-DOT * name)) map { path -> S_AtExprWhat_Simple(path) }
 
-    private val atExprWhatSort by ( optional(MINUS) * SORT) map {
-        (minus, kw) ->
-        val sort = if (minus == null) R_AtWhatSort.ASC else R_AtWhatSort.DESC
-        S_PosValue(kw.pos, sort)
-    }
-
     private val atExprWhatName by ( name * -ASSIGN)
 
-    private val atExprWhatComplexItem by ( zeroOrMore(annotation) * optional(atExprWhatSort) * optional(atExprWhatName) * expressionRef) map {
-        (annotations, sort, name, expr) ->
+    private val atExprWhatComplexItem by ( zeroOrMore(annotation) * optional(atExprWhatName) * expressionRef) map {
+        (annotations, name, expr) ->
         val modifiers = S_Modifiers(annotations.map { it })
-        S_AtExprWhatComplexField(name, expr, modifiers, sort)
+        S_AtExprWhatComplexField(name, expr, modifiers)
     }
 
     private val atExprWhatComplex by ( -LPAR * separatedTerms(atExprWhatComplexItem, COMMA, false) * -RPAR) map {
@@ -774,17 +759,16 @@ object S_Grammar : Grammar<S_RellFile>() {
         annotatedDef { S_NamespaceDefinition(kw.pos, it, name, defs) }
     }
 
-    private val absoluteImportModule by separatedTerms(name, DOT, false) map { S_ImportModulePath(null, it) }
+    private val absoluteImportModule by qualifiedName map { S_ImportModulePath(null, it) }
 
-    private val relativeImportModule by DOT * separatedTerms(name, DOT, true) map {
-        (pos, path) ->
-        S_ImportModulePath(S_RelativeImportModulePath(pos.pos, 0), path)
+    private val relativeImportModule by DOT * optional(qualifiedName) map {
+        (pos, moduleName) ->
+        S_ImportModulePath(S_RelativeImportModulePath(pos.pos, 0), moduleName)
     }
 
-    private val upImportModule by oneOrMore(CARET) * optional(-DOT * separatedTerms(name, DOT, false)) map {
-        (carets, path) ->
-        S_ImportModulePath(S_RelativeImportModulePath(carets[0].pos, carets.size), path
-                ?: listOf())
+    private val upImportModule by oneOrMore(CARET) * optional(-DOT * qualifiedName) map {
+        (carets, moduleName) ->
+        S_ImportModulePath(S_RelativeImportModulePath(carets[0].pos, carets.size), moduleName)
     }
 
     private val importModule by absoluteImportModule or relativeImportModule or upImportModule

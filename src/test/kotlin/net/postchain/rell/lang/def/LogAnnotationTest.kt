@@ -65,7 +65,7 @@ class LogAnnotationTest: BaseRellTest() {
         chk("foo@{} ( .transaction.block.timestamp )", "int[1500000000000]")
     }
 
-    @Test fun testSysAttributesModify() {
+    @Test fun testAttributesModify() {
         def("@log entity foo { x: integer; }")
         tst.chainId = 333
         tst.inserts = LibBlockTransactionTest.BLOCK_INSERTS_333
@@ -77,7 +77,8 @@ class LogAnnotationTest: BaseRellTest() {
         chkOp("create foo(x = 123);")
         tst.chkData("foo(1,444,123)")
 
-        chkOp("update foo@{} ( transaction = transaction@{} );", "ct_err:update_attr_not_mutable:transaction")
+        chkOp("update foo@{} ( transaction = transaction@{} );", "ct_err:stmt_update_cant:foo")
+        chkOp("update foo@{} ( x = 456 );", "ct_err:stmt_update_cant:foo")
     }
 
     @Test fun testDelete() {
@@ -85,6 +86,21 @@ class LogAnnotationTest: BaseRellTest() {
         def("entity bar { x: integer; }")
         chkOp("delete foo @* {};", "ct_err:stmt_delete_cant:foo")
         chkOp("delete bar @* {};")
+    }
+
+    @Test fun testSysAttrRedefinition() {
+        chkCompile("@log entity foo { transaction; }", "ct_err:dup_attr:transaction")
+        chkCompile("@log entity foo { key transaction; }", "OK")
+        chkCompile("@log entity foo { index transaction; }", "OK")
+
+        chkCompile("@log entity foo { key mutable transaction; }",
+                "ct_err:[entity:attr:mutable_not_primary:transaction][entity_attr_mutable_log:foo:transaction]")
+        chkCompile("@log entity foo { index mutable transaction; }",
+                "ct_err:[entity:attr:mutable_not_primary:transaction][entity_attr_mutable_log:foo:transaction]")
+
+        chkCompile("@log entity foo { transaction: integer; }", "ct_err:dup_attr:transaction")
+        chkCompile("@log entity foo { key transaction: integer; }", "ct_err:entity:attr:type_diff:[transaction]:[integer]")
+        chkCompile("@log entity foo { index transaction: integer; }", "ct_err:entity:attr:type_diff:[transaction]:[integer]")
     }
 
     private fun opContext() = Rt_OpContext(RellTestUtils.Rt_TestTxContext, -1, 444, -1, -1, listOf(), listOf())

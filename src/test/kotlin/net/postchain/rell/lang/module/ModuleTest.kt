@@ -4,9 +4,9 @@
 
 package net.postchain.rell.lang.module
 
-import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.BaseRellTest
@@ -90,13 +90,13 @@ class ModuleTest: BaseRellTest(false) {
 
     @Test fun testImportCompilationError2() {
         file("lib/a.rell", "module; entity user { a: integer; b: text; c: boolean; x: ERROR; }")
-        chkCompile("import lib.a; query q() = (a.user@{}).a;", "ct_err:lib/a.rell:unknown_type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).b;", "ct_err:lib/a.rell:unknown_type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).c;", "ct_err:lib/a.rell:unknown_type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:lib/a.rell:unknown_type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).a;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).b;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).c;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
         chkCompile("import lib.a; query q() = (a.user@{}).z;",
-                "ct_err:[main.rell:unknown_member:[lib.a:user]:z][lib/a.rell:unknown_type:ERROR]")
-        chkCompile("import lib.a; query q() = 123;", "ct_err:lib/a.rell:unknown_type:ERROR")
+                "ct_err:[main.rell:unknown_member:[lib.a:user]:z][lib/a.rell:unknown_def:type:ERROR]")
+        chkCompile("import lib.a; query q() = 123;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
     }
 
     @Test fun testImportAliasConflict() {
@@ -334,10 +334,10 @@ class ModuleTest: BaseRellTest(false) {
 
     private fun chkSystemDefsNotVisibleFromOutside() {
         chkFull("import a; query q(): a.rec = a.rec();", "a:rec[x=int[123]]")
-        chkFull("import a; query q(): a.integer = 123;", "ct_err:unknown_type:a.integer")
-        chkFull("import a; query q(): a.boolean = false;", "ct_err:unknown_type:a.boolean")
-        chkFull("import a; query q(): a.text = 'Abc';", "ct_err:unknown_type:a.text")
-        chkFull("import a; query q(): a.byte_array = x'1234';", "ct_err:unknown_type:a.byte_array")
+        chkFull("import a; query q(): a.integer = 123;", "ct_err:unknown_def:type:a.integer")
+        chkFull("import a; query q(): a.boolean = false;", "ct_err:unknown_def:type:a.boolean")
+        chkFull("import a; query q(): a.text = 'Abc';", "ct_err:unknown_def:type:a.text")
+        chkFull("import a; query q(): a.byte_array = x'1234';", "ct_err:unknown_def:type:a.byte_array")
         chkFull("import a; query q() = a.abs(-123);", "ct_err:unknown_name:a.abs")
         chkFull("import a; query q() = abs(-123);", "int[123]")
         chkFull("import a; query q() = a.integer.MIN_VALUE;", "ct_err:unknown_name:a.integer")
@@ -420,21 +420,21 @@ class ModuleTest: BaseRellTest(false) {
         )
 
         chkCompileTestModules(sourceDir, listOf(), listOf(), "[]")
-        chkCompileTestModules(sourceDir, listOf(""), listOf(), "[[]]")
-        chkCompileTestModules(sourceDir, listOf("simple"), listOf(), "[[],[simple]]")
-        chkCompileTestModules(sourceDir, listOf("nested"), listOf(), "[[],[nested]]")
-        chkCompileTestModules(sourceDir, listOf("nested.deeper"), listOf(), "[[],[nested],[nested.deeper]]")
+        chkCompileTestModules(sourceDir, listOf(""), listOf(), "[[*]]")
+        chkCompileTestModules(sourceDir, listOf("simple"), listOf(), "[[],[*simple]]")
+        chkCompileTestModules(sourceDir, listOf("nested"), listOf(), "[[],[*nested]]")
+        chkCompileTestModules(sourceDir, listOf("nested.deeper"), listOf(), "[[],[nested],[*nested.deeper]]")
         chkCompileTestModules(sourceDir, listOf(), listOf(""),
-                "[[module_test],[nested.deeper.deeper_test],[nested.test],[noparent.tests.bar_test],[noparent.tests.foo_test],[simple_test]]")
+                "[[*module_test],[*nested.deeper.deeper_test],[*nested.test],[*noparent.tests.bar_test],[*noparent.tests.foo_test],[*simple_test]]")
         chkCompileTestModules(sourceDir, listOf(), listOf("simple"), "[]")
-        chkCompileTestModules(sourceDir, listOf(), listOf("simple_test"), "[[simple_test]]")
-        chkCompileTestModules(sourceDir, listOf(), listOf("nested"), "[[nested.deeper.deeper_test],[nested.test]]")
-        chkCompileTestModules(sourceDir, listOf(), listOf("nested.test"), "[[nested.test]]")
-        chkCompileTestModules(sourceDir, listOf(), listOf("nested.deeper"), "[[nested.deeper.deeper_test]]")
-        chkCompileTestModules(sourceDir, listOf(), listOf("noparent"), "[[noparent.tests.bar_test],[noparent.tests.foo_test]]")
-        chkCompileTestModules(sourceDir, listOf(), listOf("noparent.tests"), "[[noparent.tests.bar_test],[noparent.tests.foo_test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("simple_test"), "[[*simple_test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("nested"), "[[*nested.deeper.deeper_test],[*nested.test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("nested.test"), "[[*nested.test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("nested.deeper"), "[[*nested.deeper.deeper_test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("noparent"), "[[*noparent.tests.bar_test],[*noparent.tests.foo_test]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("noparent.tests"), "[[*noparent.tests.bar_test],[*noparent.tests.foo_test]]")
         chkCompileTestModules(sourceDir, listOf(), listOf("nested", "noparent"),
-                "[[nested.deeper.deeper_test],[nested.test],[noparent.tests.bar_test],[noparent.tests.foo_test]]")
+                "[[*nested.deeper.deeper_test],[*nested.test],[*noparent.tests.bar_test],[*noparent.tests.foo_test]]")
     }
 
     @Test fun testCompileTestModulesEmptyDir() {
@@ -479,10 +479,35 @@ class ModuleTest: BaseRellTest(false) {
                 "app/tests/tests2.rell" to "@test module; import app; function test() { app.bar(); }"
         )
         chkCompileTestModules(sourceDir, listOf(""), listOf(""), "cm_err:import:not_found:")
-        chkCompileTestModules(sourceDir, listOf(), listOf(""), "[[app],[app.tests.tests1],[app.tests.tests2]]")
-        chkCompileTestModules(sourceDir, listOf("app"), listOf(""), "[[app],[app.tests.tests1],[app.tests.tests2]]")
-        chkCompileTestModules(sourceDir, listOf("app"), listOf("app.tests"), "[[app],[app.tests.tests1],[app.tests.tests2]]")
-        chkCompileTestModules(sourceDir, listOf("app"), listOf(), "[[app]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf(""), "[[app],[*app.tests.tests1],[*app.tests.tests2]]")
+        chkCompileTestModules(sourceDir, listOf("app"), listOf(""), "[[*app],[*app.tests.tests1],[*app.tests.tests2]]")
+        chkCompileTestModules(sourceDir, listOf("app"), listOf("app.tests"), "[[*app],[*app.tests.tests1],[*app.tests.tests2]]")
+        chkCompileTestModules(sourceDir, listOf("app"), listOf(), "[[*app]]")
+    }
+
+    @Test fun testCompileTestModulesImport() {
+        val sourceDir = C_SourceDir.mapDirOf(
+            "app/module.rell" to "module;",
+            "app/test/module.rell" to "@test module; import lib.test;",
+            "lib/module.rell" to "module;",
+            "lib/test/module.rell" to "@test module;",
+        )
+        chkCompileTestModules(sourceDir, listOf(), listOf("app"), "[[*app.test],[lib.test]]")
+    }
+
+    @Test fun testCompileTestModulesImport2() {
+        val sourceDir = C_SourceDir.mapDirOf(
+            "top1/module.rell" to "@test module;",
+            "top1/mid1/module.rell" to "@test module;",
+            "top1/mid1/sub1/module.rell" to "@test module; import top2;",
+            "top2/module.rell" to "@test module;",
+            "top2/mid2/module.rell" to "@test module;",
+            "top2/mid2/sub2/module.rell" to "@test module; import top1;",
+        )
+        chkCompileTestModules(sourceDir, listOf(), listOf("top1"), "[[*top1],[*top1.mid1],[*top1.mid1.sub1],[top2]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("top2"), "[[top1],[*top2],[*top2.mid2],[*top2.mid2.sub2]]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("top1", "top2"),
+            "[[*top1],[*top1.mid1],[*top1.mid1.sub1],[*top2],[*top2.mid2],[*top2.mid2.sub2]]")
     }
 
     private fun chkCompileTestModules(
@@ -514,7 +539,11 @@ class ModuleTest: BaseRellTest(false) {
         val app = res.app
         assertNotNull(app)
         assertTrue(app.valid)
-        return app.modules.map { it.name }.sorted().joinToString(",", "[", "]") { "[$it]" }
+
+        return app.modules.sortedBy { it.name } .joinToString(",", "[", "]") {
+            val sel = if (it.selected) "*" else ""
+            "[$sel${it.name}]"
+        }
     }
 
     @Test fun testParentModuleOfMainModule() {

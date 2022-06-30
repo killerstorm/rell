@@ -208,6 +208,14 @@ object Rt_Utils {
         return value
     }
 
+    fun <T> checkEquals(actual: T, expected: T) {
+        check(expected == actual) {
+            val code = "check_equals:$expected:$actual"
+            val msg = "expected <$expected> actual <$actual>"
+            code to msg
+        }
+    }
+
     fun evaluateInNewFrame(
             defCtx: Rt_DefinitionContext,
             frame: Rt_CallFrame?,

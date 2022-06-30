@@ -16,13 +16,13 @@ class LibGtvTest: BaseRellTest(false) {
 
         chkFromGtv("0", "boolean.from_gtv(g)", "boolean[false]")
         chkFromGtv("1", "boolean.from_gtv(g)", "boolean[true]")
-        chkFromGtv("-1", "boolean.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("2", "boolean.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("-1", "boolean.from_gtv(g)", "gtv_err:type:boolean:INTEGER")
+        chkFromGtv("2", "boolean.from_gtv(g)", "gtv_err:type:boolean:INTEGER")
 
         chkFromGtv("0", "boolean.from_gtv_pretty(g)", "boolean[false]")
         chkFromGtv("1", "boolean.from_gtv_pretty(g)", "boolean[true]")
-        chkFromGtv("-1", "boolean.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
-        chkFromGtv("2", "boolean.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("-1", "boolean.from_gtv_pretty(g)", "gtv_err:type:boolean:INTEGER")
+        chkFromGtv("2", "boolean.from_gtv_pretty(g)", "gtv_err:type:boolean:INTEGER")
     }
 
     @Test fun testToFromGtvInteger() {
@@ -37,12 +37,12 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("123", "integer.from_gtv_pretty(g)", "int[123]")
         chkFromGtv("-456", "integer.from_gtv_pretty(g)", "int[-456]")
 
-        chkFromGtv("'Hello'", "integer.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("'Hello'", "integer.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
-        chkFromGtv("[]", "integer.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[]", "integer.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
-        chkFromGtv("[123]", "integer.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[123]", "integer.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("'Hello'", "integer.from_gtv(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("'Hello'", "integer.from_gtv_pretty(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("[]", "integer.from_gtv(g)", "gtv_err:type:integer:ARRAY")
+        chkFromGtv("[]", "integer.from_gtv_pretty(g)", "gtv_err:type:integer:ARRAY")
+        chkFromGtv("[123]", "integer.from_gtv(g)", "gtv_err:type:integer:ARRAY")
+        chkFromGtv("[123]", "integer.from_gtv_pretty(g)", "gtv_err:type:integer:ARRAY")
     }
 
     @Test fun testToFromGtvDecimal() {
@@ -80,12 +80,12 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("123", "decimal.from_gtv(g)", "dec[123]")
         chkFromGtv("-456", "decimal.from_gtv(g)", "dec[-456]")
 
-        chkFromGtv("'Hello'", "decimal.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("'Hello'", "decimal.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
-        chkFromGtv("[]", "decimal.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[]", "decimal.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
-        chkFromGtv("[123]", "decimal.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[123]", "decimal.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("'Hello'", "decimal.from_gtv(g)", "rt_err:decimal:invalid:Hello")
+        chkFromGtv("'Hello'", "decimal.from_gtv_pretty(g)", "rt_err:decimal:invalid:Hello")
+        chkFromGtv("[]", "decimal.from_gtv(g)", "gtv_err:type:string:ARRAY")
+        chkFromGtv("[]", "decimal.from_gtv_pretty(g)", "gtv_err:type:string:ARRAY")
+        chkFromGtv("[123]", "decimal.from_gtv(g)", "gtv_err:type:string:ARRAY")
+        chkFromGtv("[123]", "decimal.from_gtv_pretty(g)", "gtv_err:type:string:ARRAY")
     }
 
     @Test fun testToFromGtvText() {
@@ -99,8 +99,8 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("''", "text.from_gtv_pretty(g)", "text[]")
         chkFromGtv("'Hello'", "text.from_gtv_pretty(g)", "text[Hello]")
 
-        chkFromGtv("123", "text.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("123", "text.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("123", "text.from_gtv(g)", "gtv_err:type:string:INTEGER")
+        chkFromGtv("123", "text.from_gtv_pretty(g)", "gtv_err:type:string:INTEGER")
     }
 
     @Test fun testToFromGtvByteArray() {
@@ -115,9 +115,9 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("''", "byte_array.from_gtv_pretty(g)", "byte_array[]")
         chkFromGtv("'0123abcd'", "byte_array.from_gtv_pretty(g)", "byte_array[0123abcd]")
 
-        chkFromGtv("'hello'", "byte_array.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("123", "byte_array.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("123", "byte_array.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("'hello'", "byte_array.from_gtv(g)", "gtv_err:type:byte_array:STRING")
+        chkFromGtv("123", "byte_array.from_gtv(g)", "gtv_err:type:byte_array:INTEGER")
+        chkFromGtv("123", "byte_array.from_gtv_pretty(g)", "gtv_err:type:byte_array:INTEGER")
     }
 
     @Test fun testToFromGtvRowid() {
@@ -132,16 +132,16 @@ class LibGtvTest: BaseRellTest(false) {
 
         chkFromGtv("0", "rowid.from_gtv(g)", "rowid[0]")
         chkFromGtv("123", "rowid.from_gtv(g)", "rowid[123]")
-        chkFromGtv("-456", "rowid.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("-456", "rowid.from_gtv(g)", "rt_err:fn:[from_gtv]:from_gtv:false")
         chkFromGtv("123", "rowid.from_gtv_pretty(g)", "rowid[123]")
-        chkFromGtv("-456", "rowid.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("-456", "rowid.from_gtv_pretty(g)", "rt_err:fn:[from_gtv_pretty]:from_gtv:true")
 
-        chkFromGtv("'Hello'", "rowid.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("'Hello'", "rowid.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
-        chkFromGtv("[]", "rowid.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[]", "rowid.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
-        chkFromGtv("[123]", "rowid.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[123]", "rowid.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("'Hello'", "rowid.from_gtv(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("'Hello'", "rowid.from_gtv_pretty(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("[]", "rowid.from_gtv(g)", "gtv_err:type:integer:ARRAY")
+        chkFromGtv("[]", "rowid.from_gtv_pretty(g)", "gtv_err:type:integer:ARRAY")
+        chkFromGtv("[123]", "rowid.from_gtv(g)", "gtv_err:type:integer:ARRAY")
+        chkFromGtv("[123]", "rowid.from_gtv_pretty(g)", "gtv_err:type:integer:ARRAY")
     }
 
     @Test fun testToFromGtvJson() {
@@ -160,12 +160,12 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("'[]'", "json.from_gtv_pretty(g)", "json[[]]")
         chkFromGtv("'[123]'", "json.from_gtv_pretty(g)", "json[[123]]")
 
-        chkFromGtv("{}", "json.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[]", "json.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[123]", "json.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("'Hello'", "json.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("{}", "json.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
-        chkFromGtv("[]", "json.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("{}", "json.from_gtv(g)", "gtv_err:type:json:DICT")
+        chkFromGtv("[]", "json.from_gtv(g)", "gtv_err:type:json:ARRAY")
+        chkFromGtv("[123]", "json.from_gtv(g)", "gtv_err:type:json:ARRAY")
+        chkFromGtv("'Hello'", "json.from_gtv(g)", "gtv_err:type:json:STRING")
+        chkFromGtv("{}", "json.from_gtv_pretty(g)", "gtv_err:type:json:DICT")
+        chkFromGtv("[]", "json.from_gtv_pretty(g)", "gtv_err:type:json:ARRAY")
     }
 
     @Test fun testToFromGtvEnum() {
@@ -182,14 +182,14 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("0", "E.from_gtv(g)", "E[A]")
         chkFromGtv("1", "E.from_gtv(g)", "E[B]")
         chkFromGtv("2", "E.from_gtv(g)", "E[C]")
-        chkFromGtv("-1", "E.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("3", "E.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("'A'", "E.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("-1", "E.from_gtv(g)", "gtv_err:type:enum[E]:INTEGER")
+        chkFromGtv("3", "E.from_gtv(g)", "gtv_err:type:enum[E]:INTEGER")
+        chkFromGtv("'A'", "E.from_gtv(g)", "gtv_err:type:integer:STRING")
 
         chkFromGtv("'A'", "E.from_gtv_pretty(g)", "E[A]")
         chkFromGtv("'B'", "E.from_gtv_pretty(g)", "E[B]")
         chkFromGtv("'C'", "E.from_gtv_pretty(g)", "E[C]")
-        chkFromGtv("'D'", "E.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("'D'", "E.from_gtv_pretty(g)", "gtv_err:type:enum[E]:STRING")
         chkFromGtv("0", "E.from_gtv_pretty(g)", "E[A]")
     }
 
@@ -213,14 +213,14 @@ class LibGtvTest: BaseRellTest(false) {
 
         chkFromGtv("[]", "list<integer>.from_gtv(g)", "list<integer>[]")
         chkFromGtv("[123]", "list<integer>.from_gtv(g)", "list<integer>[int[123]]")
-        chkFromGtv("['Hello']", "list<integer>.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("123", "list<integer>.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("['Hello']", "list<integer>.from_gtv(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("123", "list<integer>.from_gtv(g)", "gtv_err:type:array:INTEGER")
         chkFromGtv("[]", "list<range>.from_gtv(g)", "ct_err:fn:invalid:list<range>:from_gtv")
 
         chkFromGtv("[]", "list<integer>.from_gtv_pretty(g)", "list<integer>[]")
         chkFromGtv("[123]", "list<integer>.from_gtv_pretty(g)", "list<integer>[int[123]]")
-        chkFromGtv("['Hello']", "list<integer>.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
-        chkFromGtv("123", "list<integer>.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("['Hello']", "list<integer>.from_gtv_pretty(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("123", "list<integer>.from_gtv_pretty(g)", "gtv_err:type:array:INTEGER")
         chkFromGtv("[]", "list<range>.from_gtv_pretty(g)", "ct_err:fn:invalid:list<range>:from_gtv_pretty")
     }
 
@@ -232,14 +232,14 @@ class LibGtvTest: BaseRellTest(false) {
 
         chkFromGtv("[]", "set<integer>.from_gtv(g)", "set<integer>[]")
         chkFromGtv("[123]", "set<integer>.from_gtv(g)", "set<integer>[int[123]]")
-        chkFromGtv("[123,'Hello']", "set<integer>.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("['Hello']", "set<integer>.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("123", "set<integer>.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("[123,'Hello']", "set<integer>.from_gtv(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("['Hello']", "set<integer>.from_gtv(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("123", "set<integer>.from_gtv(g)", "gtv_err:type:array:INTEGER")
 
         chkFromGtv("[]", "set<integer>.from_gtv_pretty(g)", "set<integer>[]")
         chkFromGtv("[123,456]", "set<integer>.from_gtv_pretty(g)", "set<integer>[int[123],int[456]]")
-        chkFromGtv("['Hello']", "set<integer>.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
-        chkFromGtv("123", "set<integer>.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("['Hello']", "set<integer>.from_gtv_pretty(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("123", "set<integer>.from_gtv_pretty(g)", "gtv_err:type:array:INTEGER")
     }
 
     @Test fun testToFromGtvMap() {
@@ -257,8 +257,8 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("[]", "map<text,integer>.from_gtv(g)", "map<text,integer>[]")
         chkFromGtv("{'Hello':123}", "map<text,integer>.from_gtv(g)", "map<text,integer>[text[Hello]=int[123]]")
         chkFromGtv("[['Hello',123]]", "map<text,integer>.from_gtv(g)", "map<text,integer>[text[Hello]=int[123]]")
-        chkFromGtv("123", "map<text,integer>.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("'Hello'", "map<text,integer>.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("123", "map<text,integer>.from_gtv(g)", "gtv_err:type:array:INTEGER")
+        chkFromGtv("'Hello'", "map<text,integer>.from_gtv(g)", "gtv_err:type:array:STRING")
         chkFromGtv("{}", "map<text,integer>.from_gtv_pretty(g)", "map<text,integer>[]")
         chkFromGtv("[]", "map<text,integer>.from_gtv_pretty(g)", "map<text,integer>[]")
         chkFromGtv("{'Hello':123}", "map<text,integer>.from_gtv_pretty(g)", "map<text,integer>[text[Hello]=int[123]]")
@@ -267,13 +267,13 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("[[123,'Hello']]", "map<integer,text>.from_gtv(g)", "map<integer,text>[int[123]=text[Hello]]")
         chkFromGtv("[[123,'Hello'],[456,'Bye']]", "map<integer,text>.from_gtv(g)",
                 "map<integer,text>[int[123]=text[Hello],int[456]=text[Bye]]")
-        chkFromGtv("{}", "map<integer,text>.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[123]", "map<integer,text>.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[[]]", "map<integer,text>.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[[123]]", "map<integer,text>.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[['Hello',123]]", "map<integer,text>.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[[123,'Hello','Bye']]", "map<integer,text>.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("[[123,'Hello'],[123,'Bye']]", "map<integer,text>.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("{}", "map<integer,text>.from_gtv(g)", "gtv_err:type:array:DICT")
+        chkFromGtv("[123]", "map<integer,text>.from_gtv(g)", "gtv_err:type:array:INTEGER")
+        chkFromGtv("[[]]", "map<integer,text>.from_gtv(g)", "gtv_err:map_entry_size:2:0")
+        chkFromGtv("[[123]]", "map<integer,text>.from_gtv(g)", "gtv_err:map_entry_size:2:1")
+        chkFromGtv("[['Hello',123]]", "map<integer,text>.from_gtv(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("[[123,'Hello','Bye']]", "map<integer,text>.from_gtv(g)", "gtv_err:map_entry_size:2:3")
+        chkFromGtv("[[123,'Hello'],[123,'Bye']]", "map<integer,text>.from_gtv(g)", "gtv_err:map_dup_key:int[123]")
         chkFromGtv("[['Hello',123],['Bye',456]]", "map<text,integer>.from_gtv(g)",
                 "map<text,integer>[text[Hello]=int[123],text[Bye]=int[456]]")
         chkFromGtv("[['Hello',123],['Bye',456]]", "map<text,integer>.from_gtv_pretty(g)",
@@ -366,10 +366,10 @@ class LibGtvTest: BaseRellTest(false) {
         chk("(user@{}).to_gtv_pretty()", "gtv[5]")
 
         chkFromGtv("5", "user.from_gtv(g)", "user[5]")
-        chkFromGtv("'X'", "user.from_gtv(g)", "rt_err:from_gtv")
-        chkFromGtv("4", "user.from_gtv(g)", "rt_err:from_gtv")
+        chkFromGtv("'X'", "user.from_gtv(g)", "gtv_err:type:integer:STRING")
+        chkFromGtv("4", "user.from_gtv(g)", "gtv_err:obj_missing:[user]:4")
         chkFromGtv("5", "user.from_gtv_pretty(g)", "user[5]")
-        chkFromGtv("'X'", "user.from_gtv_pretty(g)", "rt_err:from_gtv_pretty")
+        chkFromGtv("'X'", "user.from_gtv_pretty(g)", "gtv_err:type:integer:STRING")
 
         chk("state.to_gtv()", "ct_err:unknown_member:[state]:to_gtv")
         chk("state.to_gtv_pretty()", "ct_err:unknown_member:[state]:to_gtv_pretty")
@@ -378,7 +378,7 @@ class LibGtvTest: BaseRellTest(false) {
     @Test fun testToGtvNull() {
         chk("null.to_gtv()", "gtv[null]")
         chk("null.to_gtv_prety()", "ct_err:unknown_member:[null]:to_gtv_prety")
-        chk("integer.from_gtv(null.to_gtv())", "rt_err:from_gtv")
+        chk("integer.from_gtv(null.to_gtv())", "gtv_err:type:integer:NULL")
     }
 
     private fun chkFromGtv(gtv: String, expr: String, expected: String) = chkFromGtv(tst, gtv, expr, expected)

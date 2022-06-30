@@ -59,7 +59,7 @@ class C_ExtReplCommand(
                 componentNsAssembler.futureNs()
         )
 
-        val fileCtx = C_FileContext(modCtx)
+        val fileCtx = C_FileContext(modCtx, C_NopSymbolContext)
 
         appCtx.executor.onPass(C_CompilerPass.MODULES) {
             val mntTables = fileCtx.mntBuilder.build()
@@ -130,13 +130,13 @@ object C_ReplCompiler {
 
         val controller = C_CompilerController(msgCtx)
         val res = C_LateInit.context(controller.executor) {
-            compile0(msgCtx, controller, extCommand, oldDefsState, oldCodeState)
+            compileExt(msgCtx, controller, extCommand, oldDefsState, oldCodeState)
         }
 
         return res
     }
 
-    private fun compile0(
+    private fun compileExt(
             msgCtx: C_MessageContext,
             controller: C_CompilerController,
             extCommand: C_ExtReplCommand,

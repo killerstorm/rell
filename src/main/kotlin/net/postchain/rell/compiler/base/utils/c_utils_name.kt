@@ -4,7 +4,7 @@
 
 package net.postchain.rell.compiler.base.utils
 
-import net.postchain.rell.compiler.ast.S_QualifiedName
+import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_QualifiedName
 import net.postchain.rell.utils.immListOf
@@ -66,33 +66,33 @@ protected constructor(parts: List<NameT>) {
     }
 }
 
-class C_RawQualifiedName private constructor(parts: List<String>): C_GenericQualifiedName<String, C_RawQualifiedName>(parts) {
-    override fun create(names: List<String>) = C_RawQualifiedName(names)
+class C_StringQualifiedName private constructor(parts: List<String>): C_GenericQualifiedName<String, C_StringQualifiedName>(parts) {
+    override fun create(names: List<String>) = C_StringQualifiedName(names)
 
     override fun checkName(name: String) {
         require(name.isNotBlank())
     }
 
     companion object {
-        fun of(parts: List<String>): C_RawQualifiedName = ofNames0(parts) { C_RawQualifiedName(it) }
-        fun of(name: String): C_RawQualifiedName = ofName0(name) { C_RawQualifiedName(it) }
-        fun of(sName: S_QualifiedName): C_RawQualifiedName = of(sName.parts.map { it.str })
+        fun of(parts: List<String>): C_StringQualifiedName = ofNames0(parts) { C_StringQualifiedName(it) }
+        fun of(name: String): C_StringQualifiedName = ofName0(name) { C_StringQualifiedName(it) }
+        fun of(cName: C_QualifiedName): C_StringQualifiedName = of(cName.parts.map { it.str })
+        fun of(parent: R_QualifiedName, name: R_Name): C_StringQualifiedName = of(parent.parts.map { it.str } + listOf(name.str))
     }
 }
 
-class C_QualifiedName private constructor(parts: List<R_Name>): C_GenericQualifiedName<R_Name, C_QualifiedName>(parts) {
+class C_RQualifiedName private constructor(parts: List<R_Name>): C_GenericQualifiedName<R_Name, C_RQualifiedName>(parts) {
     fun toRName() = R_QualifiedName(parts)
-    fun toCRawName() = C_RawQualifiedName.of(parts.map { it.str })
+    fun toCRawName() = C_StringQualifiedName.of(parts.map { it.str })
 
-    override fun create(names: List<R_Name>) = C_QualifiedName(names)
+    override fun create(names: List<R_Name>) = C_RQualifiedName(names)
 
     override fun checkName(name: R_Name) {
         // Nothing to check.
     }
 
     companion object {
-        fun of(parts: List<R_Name>): C_QualifiedName = ofNames0(parts) { C_QualifiedName(it) }
-        fun of(sName: S_QualifiedName): C_QualifiedName = of(sName.parts.map { it.rName })
-        fun of(name: R_Name): C_QualifiedName = ofName0(name) { C_QualifiedName(it) }
+        fun of(parts: List<R_Name>): C_RQualifiedName = ofNames0(parts) { C_RQualifiedName(it) }
+        fun of(name: R_Name): C_RQualifiedName = ofName0(name) { C_RQualifiedName(it) }
     }
 }

@@ -185,7 +185,6 @@ class ImportTest: BaseRellTest(false) {
         chkImport("namespace x { function g(): integer = 456; } import a.*;", "x.g()", "int[456]")
     }
 
-
     @Test fun testWildcardConflictInterFile() {
         file("a.rell", "module; function f(): integer = 123;")
         file("b.rell", "module; function f(): integer = 456;")

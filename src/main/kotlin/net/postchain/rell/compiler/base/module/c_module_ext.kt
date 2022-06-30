@@ -6,15 +6,16 @@ package net.postchain.rell.compiler.base.module
 
 import net.postchain.rell.compiler.ast.S_BasicDefinition
 import net.postchain.rell.compiler.ast.S_ImportTarget
-import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.modifier.C_MountAnnotationValue
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_LateInit
-import net.postchain.rell.compiler.base.utils.C_QualifiedName
+import net.postchain.rell.compiler.base.utils.C_RQualifiedName
 import net.postchain.rell.compiler.base.utils.C_SourcePath
+import net.postchain.rell.model.R_EnumDefinition
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
@@ -32,13 +33,18 @@ class C_ExtModule(
     fun compileFiles(modCtx: C_ModuleContext) = files.map { it.compile(modCtx) }
 }
 
-class C_ExtModuleFile(private val path: C_SourcePath, members: List<C_ExtModuleMember>) {
+class C_ExtModuleFile(
+        private val path: C_SourcePath,
+        members: List<C_ExtModuleMember>,
+        private val symCtx: C_SymbolContext
+) {
     private val members = members.toImmList()
 
     fun compile(modCtx: C_ModuleContext): C_CompiledRellFile {
         modCtx.executor.checkPass(C_CompilerPass.DEFINITIONS)
 
-        val fileCtx = C_FileContext(modCtx)
+        val actualSymCtx = if (modCtx.extChain != null) C_NopSymbolContext else symCtx
+        val fileCtx = C_FileContext(modCtx, actualSymCtx)
         val mntCtx = fileCtx.createMountContext()
 
         compileMembers(mntCtx)
@@ -69,6 +75,16 @@ sealed class C_ExtModuleMember {
 class C_ExtModuleMember_Basic(private val def: S_BasicDefinition): C_ExtModuleMember() {
     override fun compile0(mntCtx: C_MountContext) {
         def.compileBasic(mntCtx)
+    }
+}
+
+class C_ExtModuleMember_Enum(
+    private val cName: C_Name,
+    private val rEnum: R_EnumDefinition,
+    private val ideInfo: IdeSymbolInfo,
+): C_ExtModuleMember() {
+    override fun compile0(mntCtx: C_MountContext) {
+        mntCtx.nsBuilder.addEnum(cName, rEnum, ideInfo)
     }
 }
 
@@ -104,7 +120,7 @@ class C_ExtModuleMember_Import(
 }
 
 class C_ExtModuleMember_Namespace(
-        private val qualifiedName: S_QualifiedName?,
+        private val qualifiedName: C_QualifiedName?,
         members: List<C_ExtModuleMember>,
         private val mount: C_MountAnnotationValue?,
         private val extChainName: C_ExtChainName?
@@ -131,9 +147,9 @@ class C_ExtModuleMember_Namespace(
 
         for (name in qualifiedName.parts) {
             nsBuilder = nsBuilder.addNamespace(name, true)
-            val nsQualifiedName = nsCtx.namespaceName?.add(name.rName) ?: C_QualifiedName.of(name.rName)
+            val nsQualifiedName = nsCtx.namespaceName?.add(name.rName) ?: C_RQualifiedName.of(name.rName)
             val subScopeBuilder = nsCtx.scopeBuilder.nested(nsBuilder.futureNs())
-            nsCtx = C_NamespaceContext(mntCtx.modCtx, nsQualifiedName, subScopeBuilder)
+            nsCtx = C_NamespaceContext(mntCtx.modCtx, mntCtx.symCtx, nsQualifiedName, subScopeBuilder)
         }
 
         return C_MountContext(mntCtx.fileCtx, nsCtx, extChain, nsBuilder, subMountName)
@@ -192,7 +208,8 @@ class C_ExtModuleCompiler(
         val moduleKey = C_ModuleKey(midModule.moduleName, extChain)
 
         val internalsLate = C_LateInit(C_CompilerPass.MODULES, C_ModuleInternals.empty(moduleKey))
-        val descriptor = C_ModuleDescriptor(moduleKey, header, internalsLate.getter.transform { it.importsDescriptor })
+        val importsGetter = internalsLate.getter.transform { it.importsDescriptor }
+        val descriptor = C_ModuleDescriptor(moduleKey, header, midModule.isDirectory, importsGetter)
 
         val module = C_Module(
                 appCtx.executor,
@@ -217,7 +234,8 @@ private class C_ModuleBasis(
                 appCtx,
                 modProvider,
                 module,
-                isTestDependency = extModule.midModule.isTestDependency
+                selected = extModule.midModule.isSelected,
+                isTestDependency = extModule.midModule.isTestDependency,
         )
 
         val compiledFiles = extModule.compileFiles(modCtx)

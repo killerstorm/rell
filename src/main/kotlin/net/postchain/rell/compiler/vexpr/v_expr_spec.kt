@@ -4,21 +4,21 @@
 
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.C_LocalVarRef
+import net.postchain.rell.compiler.base.core.C_Name
+import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.R_Attribute
 import net.postchain.rell.model.R_ObjectDefinition
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_AssignStatement
 import net.postchain.rell.model.stmt.R_Statement
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmSet
 
@@ -36,7 +36,7 @@ class V_LocalVarExpr(
     override fun varId() = varRef.target.uid
 
     override fun isAtExprItem() = varRef.target.atExprId != null
-    override fun implicitAtWhereAttrName() = varRef.target.name
+    override fun implicitAtWhereAttrName() = varRef.target.rName
 
     override fun toRExpr0(): R_Expr {
         checkInitialized()
@@ -46,7 +46,7 @@ class V_LocalVarExpr(
     override fun destination(): C_Destination {
         if (!varRef.target.mutable) {
             if (exprCtx.factsCtx.inited(varRef.target.uid) != C_VarFact.NO) {
-                val name = varRef.target.name
+                val name = varRef.target.metaName
                 throw C_Error.stop(pos, "expr_assign_val:$name", "Value of '$name' cannot be changed")
             }
         }
@@ -55,7 +55,7 @@ class V_LocalVarExpr(
 
     private fun checkInitialized() {
         if (exprCtx.factsCtx.inited(varRef.target.uid) != C_VarFact.YES) {
-            val name = varRef.target.name
+            val name = varRef.target.metaName
             throw C_Error.stop(pos, "expr_var_uninit:$name", "Variable '$name' may be uninitialized")
         }
     }
@@ -145,25 +145,40 @@ class V_SmartNullableExpr(
 
 class V_ObjectExpr(
         exprCtx: C_ExprContext,
-        name: S_QualifiedName,
+        qName: C_QualifiedName,
         private val rObject: R_ObjectDefinition
-): V_Expr(exprCtx, name.pos) {
+): V_Expr(exprCtx, qName.pos) {
     override fun exprInfo0() = V_ExprInfo.simple(rObject.type)
 
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("object", null)
 
     override fun toRExpr0() = R_ObjectExpr(rObject.type)
-    override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
+    override fun toDbExpr0() = C_ExprUtils.toDbExpr(pos, toRExpr())
 
-    override fun member(ctx: C_ExprContext, memberName: S_Name, safe: Boolean): C_Expr {
-        val attr = rObject.rEntity.attributes[memberName.str]
-        val attrExpr = if (attr == null) null else C_VExpr(V_ObjectAttrExpr(ctx, memberName.pos, rObject, attr))
+    override fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
+        val valueMember = memberValue(ctx, memberName)
+        val fnMember = memberFunction(memberName, safe)
 
+        val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
+        if (res == null) {
+            C_Errors.errUnknownMember(ctx.msgCtx, rObject.type, memberName)
+            return C_ExprMember(C_ExprUtils.errorExpr(ctx, memberName.pos), IdeSymbolInfo.UNKNOWN)
+        }
+
+        return res
+    }
+
+    private fun memberValue(ctx: C_ExprContext, memberName: C_Name): C_ExprMember? {
+        val attr = rObject.rEntity.attributes[memberName.rName]
+        attr ?: return null
+        val attrExpr = C_VExpr(V_ObjectAttrExpr(ctx, memberName.pos, rObject, attr))
+        return C_ExprMember(attrExpr, attr.ideInfo)
+    }
+
+    private fun memberFunction(memberName: C_Name, safe: Boolean): C_ExprMember? {
         val memberRef = C_MemberRef(this, memberName, safe)
-        val fnExpr = C_MemberResolver.functionForType(ctx, rObject.type, memberRef)
-
-        val cExpr = C_ValueFunctionExpr.create(memberName, attrExpr, fnExpr)
-        return cExpr ?: throw C_Errors.errUnknownMember(rObject.type, memberName)
+        val res = C_MemberResolver.functionForType(rObject.type, memberRef)
+        return res
     }
 }
 
@@ -178,7 +193,7 @@ class V_ObjectAttrExpr(
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("object_attr", null)
 
     override fun toRExpr0() = createAccessExpr()
-    override fun toDbExpr0() = C_Utils.toDbExpr(pos, toRExpr())
+    override fun toDbExpr0() = C_ExprUtils.toDbExpr(pos, toRExpr())
 
     override fun destination(): C_Destination {
         if (!attr.mutable) {

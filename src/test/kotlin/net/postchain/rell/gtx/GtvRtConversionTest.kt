@@ -22,6 +22,10 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkQueryRes("= null;", "null")
         chkQueryRes("= 123.456;", "\"123.456\"")
         chkQueryRes("= 123.0;", "\"123\"")
+        chkQueryRes("= (123,[4,5,6]);", """[123,[4,5,6]]""")
+        chkQueryRes("= (x=123,y=[4,5,6]);", """{"x":123,"y":[4,5,6]}""")
+        chkQueryRes("= (x=123,[4,5,6]);", """[123,[4,5,6]]""")
+        chkQueryRes("= (123,y=[4,5,6]);", """[123,[4,5,6]]""")
     }
 
     @Test fun testQueryResultTuple() {

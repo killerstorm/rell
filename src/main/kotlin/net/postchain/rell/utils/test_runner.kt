@@ -112,7 +112,7 @@ class TestRunnerResults {
 object TestRunner {
     fun getTestFunctions(app: R_App, matcher: TestMatcher): List<R_FunctionDefinition> {
         val modules = app.modules
-            .filter { it.test }
+            .filter { it.test && it.selected }
             .sortedBy { it.name }
 
         val fns = modules.flatMap { getTestFunctions(it, matcher) }

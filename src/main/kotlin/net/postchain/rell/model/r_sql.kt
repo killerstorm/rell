@@ -95,7 +95,7 @@ class R_EntitySqlMapping_External(private val mountName: R_MountName, private va
 
 abstract class R_EntitySqlMapping_TxBlk(
         private val rowid: String,
-        private val chain: R_ExternalChainRef?
+        protected val chain: R_ExternalChainRef?
 ): R_EntitySqlMapping() {
     final override fun rowidColumn() = rowid
     final override fun autoCreateTable() = false
@@ -107,7 +107,7 @@ abstract class R_EntitySqlMapping_TxBlk(
         return res
     }
 
-    abstract fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr?
+    protected abstract fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr?
 
     final override fun extraWhereExpr(atEntity: R_DbAtEntity): Db_Expr? {
         check(atEntity.rEntity.sqlMapping === this)
@@ -115,8 +115,6 @@ abstract class R_EntitySqlMapping_TxBlk(
         val entityExpr = Db_EntityExpr(atEntity)
         return extraWhereExpr0(entity, entityExpr, chain)
     }
-
-    final override fun selectExistingObjects(sqlCtx: Rt_SqlContext, where: String) = throw UnsupportedOperationException()
 }
 
 class R_EntitySqlMapping_Transaction(chain: R_ExternalChainRef?): R_EntitySqlMapping_TxBlk("tx_iid", chain) {
@@ -126,6 +124,20 @@ class R_EntitySqlMapping_Transaction(chain: R_ExternalChainRef?): R_EntitySqlMap
         // Extra WHERE with block height check is needed only for external block/transaction entities.
         return if (chain == null) null else makeTransactionBlockHeightExpr(entity, entityExpr, chain)
     }
+
+    override fun selectExistingObjects(sqlCtx: Rt_SqlContext, where: String): String {
+        val txTbl = table(sqlCtx)
+        val rowid = rowidColumn()
+        return if (chain == null) {
+            """SELECT "$rowid" FROM "$txTbl" WHERE $where"""
+        } else {
+            val height = sqlCtx.linkedChain(chain).height
+            val blkTbl = sqlCtx.chainMapping(chain).blocksTable
+            """SELECT "$rowid" FROM "$txTbl" T JOIN "$blkTbl" B ON B.block_iid = T.block_iid
+                | WHERE ($where) AND (B.block_height <= $height)
+            """.trimMargin()
+        }
+    }
 }
 
 class R_EntitySqlMapping_Block(chain: R_ExternalChainRef?): R_EntitySqlMapping_TxBlk("block_iid", chain) {
@@ -134,5 +146,17 @@ class R_EntitySqlMapping_Block(chain: R_ExternalChainRef?): R_EntitySqlMapping_T
     override fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr? {
         // Extra WHERE with block height check is needed only for external block/transaction entities.
         return if (chain == null) null else makeBlockHeightExpr(entity, entityExpr, chain)
+    }
+
+    override fun selectExistingObjects(sqlCtx: Rt_SqlContext, where: String): String {
+        val tbl = table(sqlCtx)
+        val rowid = rowidColumn()
+        val commonSql = """SELECT "$rowid" FROM "$tbl""""
+        return if (chain == null) {
+            "$commonSql WHERE $where"
+        } else {
+            val height = sqlCtx.linkedChain(chain).height
+            "$commonSql WHERE ($where) AND (block_height <= $height)"
+        }
     }
 }

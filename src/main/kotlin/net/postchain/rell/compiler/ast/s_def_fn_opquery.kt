@@ -17,6 +17,8 @@ import net.postchain.rell.compiler.base.modifier.C_ModifierValues
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
 import net.postchain.rell.utils.*
@@ -32,12 +34,15 @@ class S_OperationDefinition(
         ctx.checkNotExternal(name.pos, C_DeclarationType.OPERATION)
         ctx.checkNotReplOrTest(name.pos, C_DeclarationType.OPERATION)
 
-        val mods = C_ModifierValues(C_ModifierTargetType.OPERATION, name)
+        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_OPERATION)
+        val cName = name.compile(ctx, ideInfo)
+
+        val mods = C_ModifierValues(C_ModifierTargetType.OPERATION, cName)
         val modMount = mods.field(C_ModifierFields.MOUNT)
         modifiers.compile(ctx, mods)
 
-        val names = ctx.nsCtx.defNames(name)
-        val mountName = ctx.mountName(modMount, name)
+        val names = ctx.nsCtx.defNames(cName)
+        val mountName = ctx.mountName(modMount, cName)
         checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.OPERATION, mountName, PostchainUtils.STD_OPS)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION, names.defId)
@@ -46,10 +51,10 @@ class S_OperationDefinition(
         val mirrorStructs = C_Utils.createMirrorStructs(ctx.appCtx, defBase, defCtx.definitionType, operation = mountName)
 
         val rOperation = R_OperationDefinition(defBase, mountName, mirrorStructs)
-        val cOperation = C_OperationGlobalFunction(rOperation)
+        val cOperation = C_OperationGlobalFunction(rOperation, ideInfo)
 
         ctx.appCtx.defsAdder.addOperation(rOperation)
-        ctx.nsBuilder.addOperation(name, cOperation)
+        ctx.nsBuilder.addOperation(cName, cOperation, ideInfo)
         ctx.mntBuilder.addOperation(name, rOperation)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -76,19 +81,19 @@ class S_OperationDefinition(
     private fun compileMirrorStructAttrs(mirrorStructs: R_MirrorStructs, forParams: C_FormalParameters, mutable: Boolean) {
         val struct = mirrorStructs.getStruct(mutable)
 
-        val attrMapMut = mutableMapOf<String, R_Attribute>()
-        val attrNames = forParams.list.map { it.name.str }.toImmSet()
+        val attrMapMut = mutableMapOf<R_Name, R_Attribute>()
+        val attrNames = forParams.list.map { it.name.rName }.toImmSet()
 
         for (param in forParams.list) {
             val attr = param.createMirrorAttr(mutable)
-            var name = attr.name
+            var name = attr.rName
             if (name in attrMapMut) {
                 // A workaround to handle parameter name conflict (multiple parameters with same name).
                 // Without it, there would be less struct attributes than parameters, what violates R_Struct's contract
                 // (see MirrorStructOperationTest.testBugParameterNameConflict).
                 var ctr = 0
                 while (true) {
-                    name = "${attr.name}__$ctr"
+                    name = R_Name.of("${attr.name}__$ctr")
                     if (name !in attrMapMut && name !in attrNames) {
                         break
                     }
@@ -138,22 +143,25 @@ class S_QueryDefinition(
         ctx.checkNotExternal(name.pos, C_DeclarationType.QUERY)
         ctx.checkNotReplOrTest(name.pos, C_DeclarationType.QUERY)
 
-        val mods = C_ModifierValues(C_ModifierTargetType.QUERY, name)
+        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_QUERY)
+        val cName = name.compile(ctx, ideInfo)
+
+        val mods = C_ModifierValues(C_ModifierTargetType.QUERY, cName)
         val modMount = mods.field(C_ModifierFields.MOUNT)
         modifiers.compile(ctx, mods)
 
-        val names = ctx.nsCtx.defNames(name)
-        val mountName = ctx.mountName(modMount, name)
+        val names = ctx.nsCtx.defNames(cName)
+        val mountName = ctx.mountName(modMount, cName)
         checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.QUERY, mountName, PostchainUtils.STD_QUERIES)
 
         val defCtx = C_DefinitionContext(ctx, C_DefinitionType.QUERY, names.defId)
         val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
 
         val rQuery = R_QueryDefinition(defBase, mountName)
-        val cQuery = C_QueryGlobalFunction(rQuery)
+        val cQuery = C_QueryGlobalFunction(rQuery, ideInfo)
 
         ctx.appCtx.defsAdder.addQuery(rQuery)
-        ctx.nsBuilder.addQuery(name, cQuery)
+        ctx.nsBuilder.addQuery(cName, cQuery, ideInfo)
         ctx.mntBuilder.addQuery(name, rQuery)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -185,8 +193,8 @@ class S_QueryDefinition(
     }
 
     private fun checkGtvResult(msgCtx: C_MessageContext, rType: R_Type) {
-        C_Utils.checkGtvCompatibility(msgCtx, name.pos, rType, false, "result_nogtv:${name.str}",
-                "Return type of query '${name.str}'")
+        C_Utils.checkGtvCompatibility(msgCtx, name.pos, rType, false, "result_nogtv:$name",
+                "Return type of query '$name'")
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {

@@ -4,11 +4,12 @@
 
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.ast.C_BinOp_EqNe
-import net.postchain.rell.model.*
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.model.R_BooleanType
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 
 class V_InCollectionExpr(
@@ -35,7 +36,7 @@ class V_InCollectionExpr(
 
         if (!C_BinOp_EqNe.checkTypesDb(elemType, elemType) || !elemType.sqlAdapter.isSqlCompatible()) {
             C_Errors.errExprNoDb(msgCtx, pos, elemType)
-            return C_Utils.errorDbExpr(R_BooleanType)
+            return C_ExprUtils.errorDbExpr(R_BooleanType)
         }
 
         return if (right.info.dependsOnDbAtEntity) {

@@ -4,8 +4,11 @@
 
 package net.postchain.rell.lib
 
+import net.postchain.rell.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
+import kotlin.test.assertEquals
+import kotlin.test.fail
 
 class LibTest: BaseRellTest(false) {
     @Test fun testAbs() {
@@ -338,5 +341,14 @@ class LibTest: BaseRellTest(false) {
         chk("_nullable(123)", "ct_err:unknown_name:_nullable")
         chk("_nullable_int(123)", "ct_err:unknown_name:_nullable_int")
         chk("_crash('hello')", "ct_err:unknown_name:_crash")
+    }
+
+    @Test fun testCrash() {
+        try {
+            chkEx("{ _crash('hello'); return 0; }", "...")
+            fail()
+        } catch (e: RellInterpreterCrashException) {
+            assertEquals("hello", e.message)
+        }
     }
 }

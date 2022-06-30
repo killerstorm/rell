@@ -8,9 +8,9 @@ import net.postchain.common.exception.UserMistake
 import net.postchain.gtv.*
 import net.postchain.gtv.merkle.proof.GtvMerkleProofTreeFactory
 import net.postchain.gtv.merkle.proof.toGtvVirtual
+import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
-import net.postchain.rell.runtime.utils.Rt_DecimalUtils
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.utils.checkEquals
 import org.apache.commons.collections4.MultiValuedMap
@@ -20,15 +20,15 @@ const val GTV_QUERY_PRETTY = true
 const val GTV_OPERATION_PRETTY = false
 
 class GtvToRtContext(val pretty: Boolean) {
-    private val objectIds: MultiValuedMap<R_EntityDefinition, Long> = HashSetValuedHashMap()
+    private val entityRowids: MultiValuedMap<R_EntityDefinition, Long> = HashSetValuedHashMap()
 
-    fun trackObject(entity: R_EntityDefinition, rowid: Long) {
-        objectIds.put(entity, rowid)
+    fun trackRecord(entity: R_EntityDefinition, rowid: Long) {
+        entityRowids.put(entity, rowid)
     }
 
     fun finish(exeCtx: Rt_ExecutionContext) {
-        for (rEntities in objectIds.keySet()) {
-            val rowids = objectIds.get(rEntities)
+        for (rEntities in entityRowids.keySet()) {
+            val rowids = entityRowids.get(rEntities)
             checkRowids(exeCtx.sqlExec, exeCtx.sqlCtx, rEntities, rowids)
         }
     }
@@ -103,7 +103,7 @@ object GtvRtConversion_Integer: GtvRtConversion() {
 
 object GtvRtConversion_Decimal: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
-    override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvFactory.gtv(Rt_DecimalUtils.toString(rt.asDecimal()))
+    override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvFactory.gtv(Lib_DecimalMath.toString(rt.asDecimal()))
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         return if (gtv.type == GtvType.INTEGER) {
@@ -148,7 +148,7 @@ class GtvRtConversion_Entity(val type: R_EntityType): GtvRtConversion() {
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         val rowid = GtvRtUtils.gtvToInteger(gtv)
-        ctx.trackObject(type.rEntity, rowid)
+        ctx.trackRecord(type.rEntity, rowid)
         return Rt_EntityValue(type, rowid)
     }
 }
@@ -369,7 +369,7 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
         checkEquals(rtFields.size, type.fields.size)
         val gtv = rtFields.mapIndexed { i, rtField ->
             val field = type.fields[i]
-            Pair(field.name!!, field.type.rtToGtv(rtField, true))
+            Pair(field.name!!.str, field.type.rtToGtv(rtField, true))
         }.toMap()
         return GtvFactory.gtv(gtv)
     }
@@ -397,10 +397,10 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
 
         val rtFields = type.fields.mapIndexed { _, field ->
             val key = field.name!!
-            if (key !in gtvFields) {
+            if (key.str !in gtvFields) {
                 throw GtvRtUtils.errGtv("tuple_nokey:$key", "Key missing in Gtv dictionary: '$key'")
             }
-            val gtvField = gtvFields.getValue(key)
+            val gtvField = gtvFields.getValue(key.str)
             field.type.gtvToRt(ctx, gtvField)
         }
 

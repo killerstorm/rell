@@ -22,6 +22,7 @@ import net.postchain.rell.compiler.vexpr.V_SysBasicGlobalCaseCallExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.Db_Expr
 import net.postchain.rell.model.expr.R_Expr
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 
@@ -184,26 +185,29 @@ class C_ArgsTypesMatch(private val match: List<C_TypeAdapter>) {
 sealed class C_FuncCaseCtx(val linkPos: S_Pos) {
     abstract fun simpleNameMsg(): String
     abstract fun qualifiedNameMsg(): String
+    abstract fun qualifiedNameMsgLazy(): LazyString
 }
 
 class C_GlobalFuncCaseCtx(
         linkPos: S_Pos,
-        private val simpleName: String,
-        private val fullName: String
+        private val simpleName: R_Name,
+        private val fullNameLazy: LazyString
 ): C_FuncCaseCtx(linkPos) {
-    override fun simpleNameMsg() = simpleName
-    override fun qualifiedNameMsg() = fullName
+    override fun simpleNameMsg() = simpleName.str
+    override fun qualifiedNameMsg() = fullNameLazy.value
+    override fun qualifiedNameMsgLazy() = fullNameLazy
     fun filePos() = linkPos.toFilePos()
 }
 
-class C_MemberFuncCaseCtx(val member: C_MemberLink, val memberName: String): C_FuncCaseCtx(member.linkPos) {
-    private val fullName by lazy {
+class C_MemberFuncCaseCtx(val member: C_MemberLink, val memberName: R_Name): C_FuncCaseCtx(member.linkPos) {
+    private val qualifiedNameMsgLazy: LazyString = LazyString.of {
         val baseType = C_Types.removeNullable(member.base.type)
         "${baseType.strCode()}.$memberName"
     }
 
-    override fun simpleNameMsg() = memberName
-    override fun qualifiedNameMsg() = fullName
+    override fun simpleNameMsg() = memberName.str
+    override fun qualifiedNameMsg() = qualifiedNameMsgLazy.value
+    override fun qualifiedNameMsgLazy() = qualifiedNameMsgLazy
 }
 
 abstract class C_FuncCase<CtxT: C_FuncCaseCtx> {
@@ -274,7 +278,7 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
             C_DefProxy.deprecatedMessage(
                     ctx.msgCtx,
                     callPos,
-                    fullName,
+                    fullName.value,
                     C_DefProxyDeprecation(C_DeclarationType.FUNCTION, deprecated)
             )
             return target.compileCall(ctx, args)

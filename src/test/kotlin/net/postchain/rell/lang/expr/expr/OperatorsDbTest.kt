@@ -5,6 +5,7 @@
 package net.postchain.rell.lang.expr.expr
 
 import net.postchain.rell.compiler.base.utils.C_Constants
+import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.RellTestContext
 import net.postchain.rell.test.SqlTestUtils
@@ -166,7 +167,7 @@ class OperatorsDbTest: OperatorsBaseTest() {
         }
 
         class Decimal(val v: BigDecimal): AtTstVal("d") {
-            override fun sql(): String = "('${v.toPlainString()}' :: ${C_Constants.DECIMAL_SQL_TYPE_STR})"
+            override fun sql(): String = "('${v.toPlainString()}' :: ${Lib_DecimalMath.DECIMAL_SQL_TYPE_STR})"
         }
 
         class Text(val v: String): AtTstVal("t") {

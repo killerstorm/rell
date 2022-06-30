@@ -396,4 +396,18 @@ class FunctionTypeTest: BaseRellTest(false) {
         chk("'' + g()", "text[f(*)]")
         chk("_strict_str(g())", "text[fn[f(list<()->text>[fn[...]])]]")
     }
+
+    @Test fun testStructAttribute() {
+        def("function g() = gtv.from_json('123');")
+        def("struct s1 { to_gtv: integer = 123; }")
+        def("struct s2 { to_gtv: ()->integer = integer.from_hex('7b',*); }")
+        def("struct s3 { to_gtv: ()->gtv = g(*); }")
+
+        chk("s1().to_gtv", "int[123]")
+        chk("s1().to_gtv()", "gtv[[123]]")
+        chk("s2().to_gtv", "fn[integer.from_hex(text[7b])]")
+        chk("s2().to_gtv()", "int[123]")
+        chk("s3().to_gtv", "fn[g()]")
+        chk("s3().to_gtv()", "gtv[123]")
+    }
 }

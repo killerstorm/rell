@@ -5,6 +5,7 @@
 package net.postchain.rell.compiler.base.module
 
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_SymbolContextProvider
 import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_SourceDir
@@ -13,49 +14,59 @@ import net.postchain.rell.utils.queueOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
 
-class C_ImportModuleLoader(private val loader: C_ModuleLoader) {
-    fun loadModule(name: R_ModuleName) {
-        loader.loadModule(name)
-    }
+sealed class C_ImportModuleLoader {
+    abstract fun loadModule(name: R_ModuleName): Boolean
 }
 
 class C_ModuleLoader(
         msgCtx: C_MessageContext,
+        symCtxProvider: C_SymbolContextProvider,
         sourceDir: C_SourceDir,
         preModuleNames: Set<R_ModuleName>
 ) {
     private val preModuleNames = preModuleNames.toImmSet()
 
-    val readerCtx = C_ModuleReaderContext(msgCtx, C_ImportModuleLoader(this))
+    val readerCtx = C_ModuleReaderContext(msgCtx, symCtxProvider, C_ImportModuleLoaderImpl())
     private val moduleReader = C_ModuleReader(readerCtx, sourceDir)
 
     private val testLoader = C_TestModuleLoader(moduleReader, this::loadTestModule)
 
     private val loadedModules = mutableMapOf<R_ModuleName, C_ModuleState>()
     private val moduleQueue = queueOf<C_ModuleState>()
-    private var loadingTestModules = false // Looks like a hack (depends on methods invocation order), but fine.
+    private val selectedModules = mutableSetOf<R_ModuleName>()
+    private var loadingTestDependencies = false // Looks like a hack (depends on methods invocation order), but fine.
 
-    private val midModules = mutableListOf<C_MidModule>()
+    private val loaderModules = mutableListOf<C_LoaderModule>()
     private var done = false
 
     fun finish(): List<C_MidModule> {
         check(!done)
         done = true
+        val midModules = loaderModules.map { it.toMidModule(it.moduleName in selectedModules) }
         return midModules.toImmList()
     }
 
-    fun loadModule(name: R_ModuleName) {
+    fun loadModule(name: R_ModuleName): Boolean {
+        return loadModule0(name, true)
+    }
+
+    private fun loadModule0(name: R_ModuleName, select: Boolean): Boolean {
         check(!done)
 
+        if (select) {
+            selectedModules.add(name)
+        }
+
         if (isModuleLoaded(name)) {
-            return
+            return true
         }
 
         val source = moduleReader.readModuleSource(name)
-        source ?: return
+        source ?: return false
 
         addModule(name, source)
         loadQueuedModules()
+        return true
     }
 
     private fun addModule(name: R_ModuleName, source: C_ModuleSource) {
@@ -66,20 +77,17 @@ class C_ModuleLoader(
 
     fun loadTestModules(rootModule: R_ModuleName) {
         check(!done)
-        loadingTestModules = true
+        loadingTestDependencies = true
         testLoader.compileTestModules(rootModule)
         loadQueuedModules()
     }
 
     private fun loadTestModule(source: C_ModuleSource) {
         val moduleName = source.moduleName
-        if (isModuleLoaded(moduleName)) {
-            return
-        }
-
         val header = source.compileHeader()
 
         if (header != null && header.test) {
+            selectedModules.add(moduleName)
             addModule(moduleName, source)
         }
     }
@@ -123,6 +131,12 @@ class C_ModuleLoader(
 
     private fun isModuleLoaded(name: R_ModuleName) = name in loadedModules || name in preModuleNames
 
+    private inner class C_ImportModuleLoaderImpl: C_ImportModuleLoader() {
+        override fun loadModule(name: R_ModuleName): Boolean {
+            return loadModule0(name, false)
+        }
+    }
+
     private inner class C_ModuleState(
             val moduleName: R_ModuleName,
             source: C_ModuleSource
@@ -137,13 +151,42 @@ class C_ModuleLoader(
             val parentName = if (header != null && header.test) null else findParentModule(moduleName)
 
             val midFiles = source.compile()
-            val midModule = C_MidModule(moduleName, parentName, header, midFiles, isTestDependency = loadingTestModules)
 
-            midModules.add(midModule)
+            val ldrModule = C_LoaderModule(
+                    moduleName,
+                    parentName,
+                    header,
+                    midFiles,
+                    isDirectory = source.isDirectory(),
+                    isTestDependency = loadingTestDependencies
+            )
+
+            loaderModules.add(ldrModule)
 
             if (parentName != null) {
-                loadModule(parentName)
+                loadModule0(parentName, false)
             }
+        }
+    }
+
+    private class C_LoaderModule(
+        val moduleName: R_ModuleName,
+        val parentName: R_ModuleName?,
+        val header: C_MidModuleHeader?,
+        val files: List<C_MidModuleFile>,
+        val isDirectory: Boolean,
+        val isTestDependency: Boolean
+    ) {
+        fun toMidModule(isSelected: Boolean): C_MidModule {
+            return C_MidModule(
+                moduleName = moduleName,
+                parentName = parentName,
+                header = header,
+                files = files,
+                isDirectory = isDirectory,
+                isTestDependency = isTestDependency,
+                isSelected = isSelected,
+            )
         }
     }
 }

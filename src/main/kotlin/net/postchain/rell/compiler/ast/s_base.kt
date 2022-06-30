@@ -11,12 +11,15 @@ import net.postchain.rell.compiler.base.modifier.*
 import net.postchain.rell.compiler.base.module.C_MidModuleFile
 import net.postchain.rell.compiler.base.module.C_MidModuleHeader
 import net.postchain.rell.compiler.base.module.C_ModuleSourceContext
+import net.postchain.rell.compiler.base.module.C_ModuleUtils
 import net.postchain.rell.compiler.base.namespace.C_NsAsm_ComponentAssembler
 import net.postchain.rell.compiler.base.namespace.C_UserNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
+import net.postchain.rell.tools.api.IdeModuleInfo
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
+import net.postchain.rell.utils.toImmSet
 
 class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
     fun compile(ctx: C_ModifierContext): C_MidModuleHeader {
@@ -51,24 +54,29 @@ class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition
     }
 
     fun compile(ctx: C_ModuleSourceContext, path: C_SourcePath): C_MidModuleFile {
-        val members = definitions.mapNotNull { it.compile(ctx) }
-        return C_MidModuleFile(path, members, startPos)
+        val defCtx = ctx.createDefinitionContext(path)
+        val members = definitions.mapNotNull { it.compile(defCtx) }
+        return C_MidModuleFile(path, members, startPos, defCtx.symCtx)
     }
 
-    fun ideGetImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
+    fun ideModuleInfo(path: C_SourcePath): IdeModuleInfo? {
+        val (moduleName, directory) = C_ModuleUtils.getModuleInfo(path, this)
+        moduleName ?: return null
+
+        val imports = mutableSetOf<R_ModuleName>()
         for (def in definitions) {
-            def.ideGetImportedModules(moduleName, res)
+            def.ideGetImportedModules(moduleName, imports)
         }
+
+        val test = header != null && header.ideIsTestFile()
+
+        return IdeModuleInfo(moduleName, directory, app = !test, test = test, imports = imports.toImmSet())
     }
 
     fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
         for (def in definitions) {
             def.ideBuildOutlineTree(b)
         }
-    }
-
-    fun ideIsTestFile(): Boolean {
-        return header != null && header.ideIsTestFile()
     }
 
     companion object {
@@ -80,7 +88,7 @@ class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition
             val modCtx = fileCtx.modCtx
             val nsBuilder = C_UserNsProtoBuilder(nsAssembler)
             val fileScopeBuilder = modCtx.scopeBuilder.nested(nsAssembler.futureNs())
-            val nsCtx = C_NamespaceContext(modCtx, null, fileScopeBuilder)
+            val nsCtx = C_NamespaceContext(modCtx, fileCtx.symCtx, null, fileScopeBuilder)
             return C_MountContext(fileCtx, nsCtx, modCtx.extChain, nsBuilder, mountName)
         }
     }

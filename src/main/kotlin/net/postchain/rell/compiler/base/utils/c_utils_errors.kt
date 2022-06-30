@@ -6,15 +6,13 @@ package net.postchain.rell.compiler.base.utils
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_Name
+import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.def.C_MntEntry
 import net.postchain.rell.compiler.base.expr.C_ExprContextAttr
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
-import net.postchain.rell.model.R_Definition
-import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.model.R_MountName
-import net.postchain.rell.model.R_Type
+import net.postchain.rell.model.*
 
 object C_Errors {
     fun errTypeMismatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
@@ -41,17 +39,12 @@ object C_Errors {
         return C_Error.stop(pos, "$errCode:$attrsCode", "$errMsg: $attrsText")
     }
 
-    fun errUnknownName(baseType: R_Type, name: S_Name): C_Error {
+    fun errUnknownName(baseType: R_Type, name: C_Name): C_Error {
         val baseName = baseType.name
-        return C_Error.stop(name.pos, "unknown_name:$baseName.${name.str}", "Unknown name: '$baseName.${name.str}'")
+        return C_Error.stop(name.pos, "unknown_name:$baseName.$name", "Unknown name: '$baseName.$name'")
     }
 
-    fun errUnknownName(baseName: S_QualifiedName, name: S_Name): C_Error {
-        val nameStr = baseName.add(name).str()
-        return errUnknownName(name.pos, nameStr)
-    }
-
-    fun errUnknownName(name: S_Name): C_Error {
+    fun errUnknownName(name: C_Name): C_Error {
         return errUnknownName(name.pos, name.str)
     }
 
@@ -59,24 +52,28 @@ object C_Errors {
         return C_Error.stop(pos, "unknown_name:$str", "Unknown name: '$str'")
     }
 
-    fun errUnknownAttr(name: S_Name): C_Error {
-        val nameStr = name.str
-        return C_Error.stop(name.pos, "expr_attr_unknown:$nameStr", "Unknown attribute: '$nameStr'")
+    fun errUnknownAttr(name: C_Name): C_Error {
+        return C_Error.stop(name.pos, "expr_attr_unknown:$name", "Unknown attribute: '$name'")
     }
 
-    fun errUnknownFunction(name: S_Name): C_Error {
-        return C_Error.stop(name.pos, "unknown_fn:${name.str}", "Unknown function: '${name.str}'")
+    fun errUnknownName(msgCtx: C_MessageContext, baseName: C_QualifiedName, name: C_Name) {
+        val nameStr = baseName.add(name).str()
+        errUnknownName(msgCtx, name.pos, nameStr)
     }
 
-    fun errUnknownMember(type: R_Type, name: S_Name): C_Error {
-        return C_Error.stop(name.pos, "unknown_member:[${type.strCode()}]:${name.str}",
-                "Type ${type.strCode()} has no member '${name.str}'")
+    fun errUnknownName(msgCtx: C_MessageContext, baseType: R_Type, name: C_Name) {
+        val baseName = baseType.name
+        msgCtx.error(name.pos, "unknown_name:$baseName.$name", "Unknown name: '$baseName.$name'")
     }
 
-    fun errUnknownMember(msgCtx: C_MessageContext, type: R_Type, name: S_Name) {
+    fun errUnknownName(msgCtx: C_MessageContext, pos: S_Pos, str: String) {
+        msgCtx.error(pos, "unknown_name:$str", "Unknown name: '$str'")
+    }
+
+    fun errUnknownMember(msgCtx: C_MessageContext, type: R_Type, name: C_Name) {
         if (type.isNotError()) {
-            msgCtx.error(name.pos, "unknown_member:[${type.strCode()}]:${name.str}",
-                    "Type ${type.strCode()} has no member '${name.str}'")
+            msgCtx.error(name.pos, "unknown_member:[${type.strCode()}]:$name",
+                    "Type ${type.strCode()} has no member '$name'")
         }
     }
 
@@ -93,22 +90,14 @@ object C_Errors {
         return C_CodeMsg("expr:call:sys_global_named_arg:$arg", "Named arguments not supported for function '$fnName'")
     }
 
-    fun errNamedArgsNotSupported(msgCtx: C_MessageContext, fn: String?, arg: S_Name) {
-        val fnCode = fn ?: ""
+    fun errNamedArgsNotSupported(msgCtx: C_MessageContext, fn: R_Name?, arg: C_Name) {
+        val fnCode = fn?.str ?: ""
         val fnMsg = if (fn == null) "this function" else "function '$fn'"
         msgCtx.error(arg.pos, "expr:call:named_args_not_allowed:$fnCode:$arg", "Named arguments not supported for $fnMsg")
     }
 
     fun errBadDestination(pos: S_Pos): C_Error {
         return C_Error.stop(pos, "expr_bad_dst", "Invalid assignment destination")
-    }
-
-    fun errBadDestination(name: S_Name): C_Error {
-        return errBadDestination(name.pos, name.str)
-    }
-
-    fun errBadDestination(pos: S_Pos, name: String): C_Error {
-        return C_Error.stop(pos, "expr_bad_dst:$name", "Cannot modify '$name'")
     }
 
     fun errAttrNotMutable(pos: S_Pos, name: String): C_Error {
@@ -141,21 +130,15 @@ object C_Errors {
         return C_Error.stop(pos, "stmt_delete_cant:$name", "Not allowed to delete objects of entity '$name'")
     }
 
-    fun errNameConflictAliasLocal(name: S_Name): C_Error {
-        val nameStr = name.str
-        throw C_Error.stop(name.pos, "expr_name_entity_local:$nameStr",
-                "Name '$nameStr' is ambiguous: can be entity alias or local variable")
-    }
-
-    fun errNameConflict(name: S_Name, otherType: C_DeclarationType, otherPos: S_Pos?): C_PosCodeMsg {
+    fun errNameConflict(name: C_Name, otherType: C_DeclarationType, otherPos: S_Pos?): C_PosCodeMsg {
         val baseCode = "name_conflict"
         val baseMsg = "Name conflict"
         val codeMsg = if (otherPos != null) {
-            val code = "$baseCode:user:${name.str}:$otherType:$otherPos"
-            val msg = "$baseMsg: ${otherType.msg} '${name.str}' defined at ${otherPos.strLine()}"
+            val code = "$baseCode:user:$name:$otherType:$otherPos"
+            val msg = "$baseMsg: ${otherType.msg} '$name' defined at ${otherPos.strLine()}"
             C_CodeMsg(code, msg)
         } else {
-            C_CodeMsg("$baseCode:sys:${name.str}:$otherType", "$baseMsg: system ${otherType.msg} '${name.str}'")
+            C_CodeMsg("$baseCode:sys:$name:$otherType", "$baseMsg: system ${otherType.msg} '$name'")
         }
         return C_PosCodeMsg(name.pos, codeMsg)
     }
@@ -193,13 +176,13 @@ object C_Errors {
         return C_Error.stop(pos, code, msg)
     }
 
-    fun errDuplicateAttribute(msgCtx: C_MessageContext, name: S_Name) {
+    fun errDuplicateAttribute(msgCtx: C_MessageContext, name: C_Name) {
         msgCtx.error(name.pos, "dup_attr:$name", "Duplicate attribute: '$name'")
     }
 
-    fun errAttributeTypeUnknown(msgCtx: C_MessageContext, name: S_Name) {
-        msgCtx.error(name.pos, "unknown_name_type:${name.str}",
-                "Cannot infer type for '${name.str}'; specify type explicitly")
+    fun errAttributeTypeUnknown(msgCtx: C_MessageContext, name: C_Name) {
+        msgCtx.error(name.pos, "unknown_name_type:$name",
+                "Cannot infer type for '$name'; specify type explicitly")
     }
 
     fun errAtPlaceholderNotDefined(pos: S_Pos): C_Error {

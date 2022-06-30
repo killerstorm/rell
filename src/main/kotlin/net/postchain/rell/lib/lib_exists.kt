@@ -5,25 +5,42 @@
 package net.postchain.rell.lib
 
 import net.postchain.rell.compiler.ast.S_Expr
-import net.postchain.rell.compiler.ast.S_Name
-import net.postchain.rell.compiler.ast.S_QualifiedName
+import net.postchain.rell.compiler.base.core.C_Name
+import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
 import net.postchain.rell.compiler.base.fn.C_FuncMatchUtils
 import net.postchain.rell.compiler.base.fn.C_SpecialSysGlobalFunction
-import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
+import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
+import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_ExprInfo
 import net.postchain.rell.model.R_BooleanType
 import net.postchain.rell.model.R_NullableType
-import net.postchain.rell.model.expr.*
-import net.postchain.rell.model.lib.R_SysFn_General
+import net.postchain.rell.model.R_SysFunction_1
+import net.postchain.rell.model.expr.Db_ExistsExpr
+import net.postchain.rell.model.expr.Db_Expr
+import net.postchain.rell.model.expr.R_Expr
+import net.postchain.rell.runtime.Rt_BooleanValue
+import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.checkEquals
 
-class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction() {
+object C_Lib_Exists {
+    fun bind(nsBuilder: C_SysNsProtoBuilder) {
+        val fb = C_GlobalFuncBuilder(null)
+        fb.add("exists", C_SysFn_Exists(false))
+        fb.add("empty", C_SysFn_Exists(true))
+        C_LibUtils.bindFunctions(nsBuilder, fb.build())
+    }
+}
+
+private class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction(IdeSymbolInfo.DEF_FUNCTION_SYSTEM) {
     override fun paramCount() = 1
 
-    override fun compileCall0(ctx: C_ExprContext, name: S_Name, args: List<S_Expr>): V_Expr {
+    override fun compileCall0(ctx: C_ExprContext, name: C_Name, args: List<S_Expr>): V_Expr {
         checkEquals(1, args.size)
 
         val arg = args[0]
@@ -39,7 +56,7 @@ class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction() {
         val condition = compileCondition(vArg)
         if (condition == null) {
             C_FuncMatchUtils.errNoMatch(ctx, name.pos, name.str, listOf(vArg.type))
-            return C_Utils.errorVExpr(ctx, name.pos, R_BooleanType)
+            return C_ExprUtils.errorVExpr(ctx, name.pos, R_BooleanType)
         }
 
         val preFacts = C_ExprVarFacts.forSubExpressions(listOf(vArg))
@@ -68,7 +85,7 @@ class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction() {
 
 private class V_ExistsExpr(
         exprCtx: C_ExprContext,
-        private val name: S_Name,
+        private val name: C_Name,
         private val subExpr: V_Expr,
         private val condition: R_RequireCondition,
         private val not: Boolean,
@@ -78,13 +95,22 @@ private class V_ExistsExpr(
     override fun varFacts0() = resVarFacts
 
     override fun toRExpr0(): R_Expr {
-        val fn = R_SysFn_General.Exists(condition, not)
+        val fn = R_SysFn_Exists(condition, not)
         val rArgs = listOf(subExpr.toRExpr())
-        return C_Utils.createSysCallRExpr(R_BooleanType, fn, rArgs, S_QualifiedName(name))
+        return C_ExprUtils.createSysCallRExpr(R_BooleanType, fn, rArgs, C_QualifiedName(name))
     }
 
     override fun toDbExpr0(): Db_Expr {
         val dbSubExpr = subExpr.toDbExpr()
         return Db_ExistsExpr(dbSubExpr, not)
+    }
+}
+
+private class R_SysFn_Exists(private val condition: R_RequireCondition, private val not: Boolean): R_SysFunction_1() {
+    override fun call(arg: Rt_Value): Rt_Value {
+        val value = condition.calculate(arg)
+        val exists = value != null
+        val res = if (not) !exists else exists
+        return Rt_BooleanValue(res)
     }
 }

@@ -10,15 +10,19 @@ import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_BooleanType
+import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.model.R_UnitType
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.model.stmt.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.MutableTypedKeyMap
 import net.postchain.rell.utils.TypedKey
+import net.postchain.rell.utils.immSetOf
 
 abstract class S_Statement(val pos: S_Pos) {
-    private val modifiedVars = TypedKey<Set<String>>()
+    private val modifiedVars = TypedKey<Set<R_Name>>()
 
     protected abstract fun compile0(ctx: C_StmtContext, repl: Boolean = false): C_Statement
 
@@ -44,7 +48,7 @@ abstract class S_Statement(val pos: S_Pos) {
 
     protected open fun discoverVars0(map: MutableTypedKeyMap) = C_StatementVars.EMPTY
 
-    fun getModifiedVars(ctx: C_FunctionContext): Set<String> {
+    fun getModifiedVars(ctx: C_FunctionContext): Set<R_Name> {
         val res = ctx.statementVars.get(modifiedVars)
         return res
     }
@@ -57,37 +61,43 @@ class S_EmptyStatement(pos: S_Pos): S_Statement(pos) {
 }
 
 sealed class S_VarDeclarator {
-    abstract fun discoverVars(vars: MutableSet<String>)
-    abstract fun compile(ctx: C_StmtContext): C_VarDeclarator
+    abstract fun discoverVars(vars: MutableSet<R_Name>)
+    abstract fun compile(ctx: C_StmtContext, mutable: Boolean, hasExpr: Boolean): C_VarDeclarator
 }
 
 class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarator() {
-    override fun discoverVars(vars: MutableSet<String>) {
-        vars.add(attrHeader.name.str)
+    override fun discoverVars(vars: MutableSet<R_Name>) {
+        vars.add(attrHeader.discoverVar())
     }
 
-    override fun compile(ctx: C_StmtContext): C_VarDeclarator {
-        val explicitType = attrHeader.compileExplicitType(ctx.nsCtx)
+    override fun compile(ctx: C_StmtContext, mutable: Boolean, hasExpr: Boolean): C_VarDeclarator {
+        val ideKind = if (mutable) IdeSymbolKind.LOC_VAR else IdeSymbolKind.LOC_VAL
+        val ideInfo = IdeSymbolInfo(ideKind)
 
-        val name = attrHeader.name
-        return if (name.str == "_") {
+        val cAttrHeader = attrHeader.compile(ctx.nsCtx, hasExpr, ideInfo)
+        val cName = cAttrHeader.name
+        val explicitType = if (cAttrHeader.isExplicitType) cAttrHeader.type else null
+
+        return if (cName.str == "_") {
             if (explicitType != null) {
-                ctx.msgCtx.error(name.pos, "var_wildcard_type", "Name '${name.str}' is a wildcard, it cannot have a type")
+                ctx.msgCtx.error(cName.pos, "var_wildcard_type", "Name '$cName' is a wildcard, it cannot have a type")
             }
-            C_WildcardVarDeclarator(ctx, name, explicitType != null)
+            C_WildcardVarDeclarator(ctx, mutable, cName, explicitType != null)
         } else {
-            C_SimpleVarDeclarator(ctx, attrHeader, explicitType)
+            C_SimpleVarDeclarator(ctx, mutable, cAttrHeader, cName, explicitType, ideInfo)
         }
     }
 }
 
 class S_TupleVarDeclarator(val pos: S_Pos, val subDeclarators: List<S_VarDeclarator>): S_VarDeclarator() {
-    override fun compile(ctx: C_StmtContext): C_VarDeclarator {
-        val cSubDeclarators = subDeclarators.map { it.compile(ctx) }
-        return C_TupleVarDeclarator(ctx, pos, cSubDeclarators)
+    override fun compile(ctx: C_StmtContext, mutable: Boolean, hasExpr: Boolean): C_VarDeclarator {
+        val cSubDeclarators = subDeclarators.map {
+            it.compile(ctx, mutable, hasExpr)
+        }
+        return C_TupleVarDeclarator(ctx, mutable, pos, cSubDeclarators)
     }
 
-    override fun discoverVars(vars: MutableSet<String>) {
+    override fun discoverVars(vars: MutableSet<R_Name>) {
         for (subDeclarator in subDeclarators) {
             subDeclarator.discoverVars(vars)
         }
@@ -101,36 +111,37 @@ class S_VarStatement(
         val mutable: Boolean
 ): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        val cDeclarator = declarator.compile(ctx)
+        val cDeclarator = declarator.compile(ctx, mutable, hasExpr = expr != null)
 
         val typeHint = cDeclarator.getTypeHint()
-        val cValue = expr?.compileSafe(ctx.exprCtx, typeHint)?.value()
+        val exprHint = C_ExprHint(typeHint)
+        val cValue = expr?.compileSafe(ctx.exprCtx, exprHint)?.value()
         val rExpr = cValue?.toRExpr()
 
         val varFacts = C_MutableVarFacts()
         varFacts.putFacts(cValue?.varFacts?.postFacts ?: C_VarFacts.EMPTY)
 
-        val rDeclarator = cDeclarator.compile(mutable, rExpr?.type, varFacts)
+        val rDeclarator = cDeclarator.compile(rExpr?.type, varFacts)
         val rStmt = R_VarStatement(rDeclarator, rExpr)
 
         return C_Statement(rStmt, false, varFacts.toVarFacts())
     }
 
     override fun discoverVars0(map: MutableTypedKeyMap): C_StatementVars {
-        val declaredVars = mutableSetOf<String>()
+        val declaredVars = mutableSetOf<R_Name>()
         declarator.discoverVars(declaredVars)
-        return C_StatementVars(declaredVars, setOf())
+        return C_StatementVars(declaredVars, immSetOf())
     }
 }
 
 class S_ReturnStatement(pos: S_Pos, val expr: S_Expr?): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
-        val rStmt = ctx.msgCtx.consumeError { compileInternal(ctx) } ?: C_Utils.ERROR_STATEMENT
+        val rStmt = ctx.msgCtx.consumeError { compileInternal(ctx) } ?: C_ExprUtils.ERROR_STATEMENT
         return C_Statement(rStmt, true)
     }
 
     private fun compileInternal(ctx: C_StmtContext): R_Statement {
-        val cExpr = expr?.compile(ctx, C_TypeHint.ofType(ctx.fnCtx.explicitReturnType))
+        val cExpr = expr?.compile(ctx, C_ExprHint.ofType(ctx.fnCtx.explicitReturnType))
         var vExpr = cExpr?.value()
 
         if (vExpr != null) {
@@ -196,7 +207,7 @@ class S_BlockStatement(pos: S_Pos, val stmts: List<S_Statement>): S_Statement(po
         }
 
         val modified = block.modified()
-        return C_StatementVars(setOf(), modified)
+        return C_StatementVars(immSetOf(), modified)
     }
 
     override fun returnsValue(): Boolean? {
@@ -224,8 +235,8 @@ class S_AssignStatement(val dstExpr: S_Expr, val op: S_PosValue<S_AssignOpCode>,
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
         val cDstExpr = dstExpr.compileOpt(ctx)
 
-        val typeHint = C_TypeHint.ofType(cDstExpr?.value()?.type)
-        val cSrcExpr = srcExpr.compileOpt(ctx, typeHint)
+        val exprHint = C_ExprHint.ofType(cDstExpr?.value()?.type)
+        val cSrcExpr = srcExpr.compileOpt(ctx, exprHint)
 
         if (cDstExpr == null || cSrcExpr == null) {
             return C_Statement.EMPTY
@@ -238,7 +249,10 @@ class S_AssignStatement(val dstExpr: S_Expr, val op: S_PosValue<S_AssignOpCode>,
 
     override fun discoverVars0(map: MutableTypedKeyMap): C_StatementVars {
         val name = dstExpr.asName()
-        return if (name == null) C_StatementVars.EMPTY else C_StatementVars(setOf(), setOf(name.str))
+        return if (name == null) C_StatementVars.EMPTY else {
+            val rName = name.getRNameSpecial()
+            C_StatementVars(immSetOf(), immSetOf(rName))
+        }
     }
 }
 
@@ -256,7 +270,7 @@ class S_IfStatement(pos: S_Pos, val expr: S_Expr, val trueStmt: S_Statement, val
             }
             exprVarFacts = value.varFacts
         } else {
-            rExpr = C_Utils.errorRExpr(R_BooleanType)
+            rExpr = C_ExprUtils.errorRExpr(R_BooleanType)
             exprVarFacts = C_ExprVarFacts.EMPTY
         }
 
@@ -320,12 +334,12 @@ class S_WhenStatement(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenState
     }
 
     override fun discoverVars0(map: MutableTypedKeyMap): C_StatementVars {
-        val modified = mutableSetOf<String>()
+        val modified = mutableSetOf<R_Name>()
         for (case in cases) {
             val caseVars = case.stmt.discoverVars(map)
             modified.addAll(caseVars.modified)
         }
-        return C_StatementVars(setOf(), modified)
+        return C_StatementVars(immSetOf(), modified)
     }
 
     override fun returnsValue(): Boolean? {
@@ -479,8 +493,8 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         val (loopCtx, loopBlkCtx) = loop.condCtx.subBlock(loopUid)
 
         val mutVarFacts = C_MutableVarFacts()
-        val cDeclarator = declarator.compile(loopCtx)
-        val rDeclarator = cDeclarator.compile(false, cIterator.itemType, mutVarFacts)
+        val cDeclarator = declarator.compile(loopCtx, mutable = false, hasExpr = true)
+        val rDeclarator = cDeclarator.compile(cIterator.itemType, mutVarFacts)
         val iterFactsCtx = loopCtx.updateFacts(mutVarFacts.toVarFacts())
 
         val bodyCtx = iterFactsCtx.updateFacts(loop.condFacts.postFacts)
@@ -497,7 +511,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
     override fun discoverVars0(map: MutableTypedKeyMap): C_StatementVars {
         val block = C_StatementVarsBlock()
 
-        val declared = mutableSetOf<String>()
+        val declared = mutableSetOf<R_Name>()
         declarator.discoverVars(declared)
         block.declared(declared)
 
@@ -506,7 +520,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         block.modified(bodyVars.modified)
 
         val modified = block.modified()
-        return C_StatementVars(setOf(), modified)
+        return C_StatementVars(immSetOf(), modified)
     }
 
     override fun returnsValue() = stmt.returnsValue()

@@ -6,10 +6,14 @@ package net.postchain.rell.compiler.base.module
 
 import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_NopSymbolContext
+import net.postchain.rell.compiler.base.core.C_SymbolContext
+import net.postchain.rell.compiler.base.core.C_SymbolContextProvider
 import net.postchain.rell.compiler.base.modifier.C_ModifierContext
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_Name
+import net.postchain.rell.model.R_QualifiedName
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
@@ -51,10 +55,11 @@ object C_ModuleUtils {
 
 class C_ModuleReaderContext(
         val msgCtx: C_MessageContext,
+        private val symCtxProvider: C_SymbolContextProvider,
         private val importLoader: C_ImportModuleLoader
 ) {
     fun createModuleSourceContext(moduleName: R_ModuleName): C_ModuleSourceContext {
-        return C_ModuleSourceContext(msgCtx, importLoader, moduleName)
+        return C_ModuleSourceContext(msgCtx, symCtxProvider, importLoader, moduleName)
     }
 }
 
@@ -353,11 +358,41 @@ private class C_ModuleDirTree(
 
 class C_ModuleSourceContext(
         val msgCtx: C_MessageContext,
+        val symCtxProvider: C_SymbolContextProvider,
         private val importLoader: C_ImportModuleLoader,
         val moduleName: R_ModuleName
 ) {
-    fun loadModule(name: R_ModuleName) {
-        importLoader.loadModule(name)
+    fun createDefinitionContext(path: C_SourcePath): C_ModuleDefinitionContext {
+        val symCtx = symCtxProvider.getSymbolContext(path)
+        return C_ModuleDefinitionContext.root(msgCtx, importLoader, moduleName, symCtx)
+    }
+}
+
+class C_ModuleDefinitionContext private constructor(
+    val msgCtx: C_MessageContext,
+    private val importLoader: C_ImportModuleLoader,
+    val moduleName: R_ModuleName,
+    val namespaceName: R_QualifiedName,
+    val symCtx: C_SymbolContext
+) {
+    fun loadModule(name: R_ModuleName): Boolean {
+        return importLoader.loadModule(name)
+    }
+
+    fun namespace(name: R_QualifiedName): C_ModuleDefinitionContext {
+        val subNamespaceName = namespaceName.child(name)
+        return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, subNamespaceName, symCtx)
+    }
+
+    companion object {
+        fun root(
+            msgCtx: C_MessageContext,
+            importLoader: C_ImportModuleLoader,
+            moduleName: R_ModuleName,
+            symCtx: C_SymbolContext
+        ): C_ModuleDefinitionContext {
+            return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, R_QualifiedName.EMPTY, symCtx)
+        }
     }
 }
 
@@ -365,15 +400,16 @@ sealed class C_ModuleSource(protected val ctx: C_ModuleSourceContext) {
     val moduleName = ctx.moduleName
 
     private val compiledHeader by lazy {
-        val modifierCtx = C_ModifierContext(ctx.msgCtx)
-        compileHeader0(modifierCtx)
+        compileHeader0()
     }
 
     private val compiledFiles by lazy {
         compile0()
     }
 
-    protected abstract fun compileHeader0(modifierCtx: C_ModifierContext): C_MidModuleHeader?
+    abstract fun isDirectory(): Boolean
+
+    protected abstract fun compileHeader0(): C_MidModuleHeader?
     protected abstract fun compile0(): List<C_MidModuleFile>
 
     fun compileHeader(): C_MidModuleHeader? = compiledHeader
@@ -384,7 +420,11 @@ class C_FileModuleSource(
         ctx: C_ModuleSourceContext,
         val file: C_ParsedRellFile
 ): C_ModuleSource(ctx) {
-    override fun compileHeader0(modifierCtx: C_ModifierContext): C_MidModuleHeader? {
+    override fun isDirectory() = false
+
+    override fun compileHeader0(): C_MidModuleHeader? {
+        val symCtx = ctx.symCtxProvider.getSymbolContext(file.path)
+        val modifierCtx = C_ModifierContext(ctx.msgCtx, symCtx)
         return file.compileHeader(modifierCtx)
     }
 
@@ -402,8 +442,13 @@ class C_DirModuleSource(
 ): C_ModuleSource(ctx) {
     private val files = files.toImmList()
 
-    override fun compileHeader0(modifierCtx: C_ModifierContext): C_MidModuleHeader? {
-        return mainFile?.compileHeader(modifierCtx)
+    override fun isDirectory() = true
+
+    override fun compileHeader0(): C_MidModuleHeader? {
+        mainFile ?: return null
+        val symCtx = ctx.symCtxProvider.getSymbolContext(mainFile.path)
+        val modifierCtx = C_ModifierContext(ctx.msgCtx, symCtx)
+        return mainFile.compileHeader(modifierCtx)
     }
 
     override fun compile0(): List<C_MidModuleFile> {
@@ -419,7 +464,7 @@ class C_ParsedRellFile(val path: C_SourcePath, private val ast: S_RellFile?) {
     }
 
     fun compile(ctx: C_ModuleSourceContext): C_MidModuleFile {
-        return ast?.compile(ctx, path) ?: C_MidModuleFile(path, listOf(), null)
+        return ast?.compile(ctx, path) ?: C_MidModuleFile(path, immListOf(), null, C_NopSymbolContext)
     }
 
     override fun toString() = path.toString()

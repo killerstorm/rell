@@ -8,19 +8,23 @@ import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
 import net.postchain.rell.compiler.base.def.C_SysAttribute
 import net.postchain.rell.compiler.base.namespace.C_Namespace
-import net.postchain.rell.compiler.base.namespace.C_NsEntry
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.R_ByteArrayType
-import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.Rt_ByteArrayValue
+import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_StructValue
+import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.runtime.utils.Rt_Utils
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.BytesKeyPair
 import net.postchain.rell.utils.toImmMap
 
-object C_Lib_Rell_Test_KeyPairs {
+object C_Lib_Test_KeyPairs {
     private val KEYPAIR_STRUCT = C_Utils.createSysStruct(
-            "${C_Lib_Rell_Test.MODULE}.keypair",
+            "${C_Lib_Test.MODULE}.keypair",
             C_SysAttribute("pub", R_ByteArrayType),
             C_SysAttribute("priv", R_ByteArrayType)
     )
@@ -65,16 +69,11 @@ object C_Lib_Rell_Test_KeyPairs {
             PREDEFINED_KEYPAIRS.mapValues { Rt_ByteArrayValue(it.value.priv.toByteArray()) }
     )
 
-    val NAMESPACE = createNamespace()
-
-    private fun createNamespace(): C_Namespace {
-        val b = C_SysNsProtoBuilder()
+    fun bind(b: C_SysNsProtoBuilder) {
         b.addNamespace("keypairs", KEYPAIRS_NAMESPACE)
         b.addNamespace("privkeys", PRIVKEYS_NAMESPACE)
         b.addNamespace("pubkeys", PUBKEYS_NAMESPACE)
-        b.addStruct("keypair", KEYPAIR_STRUCT)
-        val nsProto = b.build()
-        return C_NsEntry.createNamespace(nsProto.entries)
+        b.addStruct("keypair", KEYPAIR_STRUCT, IdeSymbolInfo(IdeSymbolKind.DEF_STRUCT))
     }
 
     private fun createPredefinedKeyPairs(): Map<String, BytesKeyPair> {

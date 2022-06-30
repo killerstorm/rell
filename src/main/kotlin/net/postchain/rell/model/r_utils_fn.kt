@@ -8,21 +8,11 @@ import net.postchain.rell.runtime.Rt_CallContext
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.checkEquals
 
-abstract class R_SysFunction {
-    abstract fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value
+fun interface R_SysFunction {
+    fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value
 }
 
-abstract class R_SysFunction_0: R_SysFunction() {
-    abstract fun call(): Rt_Value
-
-    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-        checkEquals(args.size, 0)
-        val res = call()
-        return res
-    }
-}
-
-abstract class R_SysFunction_1: R_SysFunction() {
+abstract class R_SysFunction_1: R_SysFunction {
     abstract fun call(arg: Rt_Value): Rt_Value
 
     final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
@@ -32,7 +22,7 @@ abstract class R_SysFunction_1: R_SysFunction() {
     }
 }
 
-abstract class R_SysFunction_2: R_SysFunction() {
+abstract class R_SysFunction_2: R_SysFunction {
     abstract fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value
 
     final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
@@ -42,27 +32,7 @@ abstract class R_SysFunction_2: R_SysFunction() {
     }
 }
 
-abstract class R_SysFunction_3: R_SysFunction() {
-    abstract fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value): Rt_Value
-
-    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-        checkEquals(args.size, 3)
-        val res = call(args[0], args[1], args[2])
-        return res
-    }
-}
-
-abstract class R_SysFunction_4: R_SysFunction() {
-    abstract fun call(arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value, arg4: Rt_Value): Rt_Value
-
-    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-        checkEquals(args.size, 4)
-        val res = call(args[0], args[1], args[2], args[3])
-        return res
-    }
-}
-
-abstract class R_SysFunction_N: R_SysFunction() {
+abstract class R_SysFunction_N: R_SysFunction {
     abstract fun call(args: List<Rt_Value>): Rt_Value
 
     final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
@@ -71,7 +41,7 @@ abstract class R_SysFunction_N: R_SysFunction() {
     }
 }
 
-abstract class R_SysFunctionEx_0: R_SysFunction() {
+abstract class R_SysFunctionEx_0: R_SysFunction {
     abstract fun call(ctx: Rt_CallContext): Rt_Value
 
     final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
@@ -81,7 +51,7 @@ abstract class R_SysFunctionEx_0: R_SysFunction() {
     }
 }
 
-abstract class R_SysFunctionEx_1: R_SysFunction() {
+abstract class R_SysFunctionEx_1: R_SysFunction {
     abstract fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value
 
     final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
@@ -91,7 +61,7 @@ abstract class R_SysFunctionEx_1: R_SysFunction() {
     }
 }
 
-abstract class R_SysFunctionEx_2: R_SysFunction() {
+abstract class R_SysFunctionEx_2: R_SysFunction {
     abstract fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value
 
     final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
@@ -101,17 +71,7 @@ abstract class R_SysFunctionEx_2: R_SysFunction() {
     }
 }
 
-abstract class R_SysFunctionEx_3: R_SysFunction() {
-    abstract fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value, arg3: Rt_Value): Rt_Value
-
-    final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-        checkEquals(args.size, 3)
-        val res = call(ctx, args[0], args[1], args[2])
-        return res
-    }
-}
-
-abstract class R_SysFunction_Generic<T>: R_SysFunction() {
+abstract class R_SysFunction_Generic<T>: R_SysFunction {
     abstract fun extract(v: Rt_Value): T
 
     open fun call(type: R_Type, obj: T): Rt_Value = call(obj)
@@ -143,8 +103,4 @@ abstract class R_SysFunction_Generic<T>: R_SysFunction() {
     }
 
     private fun errArgCnt(n: Int) = IllegalStateException("Wrong number of arguments for ${javaClass.simpleName}: $n")
-}
-
-abstract class R_SysFunction_Common: R_SysFunction_Generic<Rt_Value>() {
-    override fun extract(v: Rt_Value): Rt_Value = v
 }

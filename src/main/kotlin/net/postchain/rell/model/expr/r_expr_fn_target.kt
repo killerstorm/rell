@@ -12,6 +12,7 @@ import net.postchain.rell.runtime.Rt_FunctionValue
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 
 abstract class R_FunctionCallTarget {
@@ -104,7 +105,7 @@ class R_FunctionCallTarget_FunctionValue(
 
 class R_FunctionCallTarget_SysGlobalFunction(
         private val fn: R_SysFunction,
-        private val fullName: String
+        private val fullName: LazyString
 ): R_FunctionCallTarget() {
     override fun evaluateTarget(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_FunctionCallTarget {
         checkEquals(values.size, 0)
@@ -116,15 +117,15 @@ class R_FunctionCallTarget_SysGlobalFunction(
             return R_SysFunctionUtils.call(fn, fullName, frame, values)
         }
 
-        override fun str() = fullName
-        override fun strCode() = fullName
+        override fun str() = fullName.value
+        override fun strCode() = fullName.value
     }
 }
 
 class R_FunctionCallTarget_SysMemberFunction(
         private val safe: Boolean,
         private val fn: R_SysFunction,
-        private val fullName: String
+        private val fullName: LazyString
 ): R_FunctionCallTarget() {
     override fun evaluateTarget(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_FunctionCallTarget? {
         checkEquals(values.size, 1)
@@ -138,8 +139,8 @@ class R_FunctionCallTarget_SysMemberFunction(
             return R_SysFunctionUtils.call(fn, fullName, frame, values2)
         }
 
-        override fun str() = fullName
-        override fun strCode() = fullName
+        override fun str() = fullName.value
+        override fun strCode() = fullName.value
     }
 }
 

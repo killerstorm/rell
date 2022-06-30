@@ -10,9 +10,10 @@ import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.*
+import net.postchain.rell.lib.type.C_Lib_Type_Any
+import net.postchain.rell.lib.type.C_Lib_Type_Decimal
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
-import net.postchain.rell.model.lib.R_SysFn_Any
 import net.postchain.rell.model.stmt.R_UpdateStatementWhat
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
@@ -132,7 +133,7 @@ object S_AssignOp_Eq: S_AssignOp() {
             C_Errors.errTypeMismatch(ctx.msgCtx, pos, expr.type, attr.type) {
                 "stmt_assign_type" toCodeMsg "Type mismatch for '$name'"
             }
-            C_Utils.errorDbExpr(attr.type)
+            C_ExprUtils.errorDbExpr(attr.type)
         } else {
             adapter.adaptExprDb(expr)
         }
@@ -440,11 +441,11 @@ object C_BinOp_Plus: C_BinOp_Common() {
 
     private fun adaptToText(ctx: C_ExprContext, vExpr: V_Expr): V_Expr {
         val type = vExpr.type
-        val rFn: R_SysFunction = R_SysFn_Any.ToText
+        val rFn: R_SysFunction = C_Lib_Type_Any.ToText_R
         val dbFn = getDbToStringFunction(type)
 
         val resType: R_Type = R_TextType
-        val desc = V_SysFunctionTargetDescriptor(resType, rFn, dbFn, type.toTextFunction, pure = true)
+        val desc = V_SysFunctionTargetDescriptor(resType, rFn, dbFn, type.toTextFunctionLazy, pure = true)
         val vCallTarget: V_FunctionCallTarget = V_FunctionCallTarget_SysGlobalFunction(desc)
 
         val vCallArgs = V_FunctionCallArgs.positional(immListOf(vExpr))
@@ -453,9 +454,9 @@ object C_BinOp_Plus: C_BinOp_Common() {
 
     private fun getDbToStringFunction(type: R_Type): Db_SysFunction? {
         return when (type) {
-            R_BooleanType, R_IntegerType, R_RowidType, R_JsonType -> Db_SysFn_ToText
-            R_DecimalType -> Db_SysFn_Decimal.ToText
-            is R_EntityType -> Db_SysFn_ToText
+            R_BooleanType, R_IntegerType, R_RowidType, R_JsonType -> C_Lib_Type_Any.ToText_Db
+            R_DecimalType -> C_Lib_Type_Decimal.ToText_Db
+            is R_EntityType -> C_Lib_Type_Any.ToText_Db
             else -> null
         }
     }
@@ -615,7 +616,7 @@ object C_BinOp_Elvis: C_BinOp() {
 class S_BinaryExprTail(val op: S_PosValue<S_BinaryOp>, val expr: S_Expr)
 
 class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(head.startPos) {
-    override fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_Expr {
+    override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
         val queue = LinkedList(tail)
         val tree = buildTree(head, queue, 0)
         val value = tree.compile(ctx)
@@ -677,7 +678,7 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
             } else {
                 val pos = sOp.pos
                 C_BinOp.errTypeMismatch(ctx.msgCtx, pos, sOp.value.code, leftValue.type, rightValue.type)
-                C_Utils.errorVExpr(ctx, pos)
+                C_ExprUtils.errorVExpr(ctx, pos)
             }
         }
     }

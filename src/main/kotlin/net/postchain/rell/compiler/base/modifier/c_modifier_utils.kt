@@ -4,20 +4,20 @@
 
 package net.postchain.rell.compiler.base.modifier
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.base.core.C_ComparablePos
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.model.R_TextType
 
 object C_AnnUtils {
-    fun checkArgsNone(ctx: C_ModifierContext, name: S_Name, args: List<C_AnnotationArg>): Boolean {
+    fun checkArgsNone(ctx: C_ModifierContext, name: C_Name, args: List<C_AnnotationArg>): Boolean {
         return if (args.isEmpty()) true else {
             ctx.msgCtx.error(name.pos, "ann:$name:args:${args.size}", "Annotation @$name takes no arguments")
             false
         }
     }
 
-    fun checkArgsOne(ctx: C_ModifierContext, name: S_Name, args: List<C_AnnotationArg>): C_AnnotationArg? {
+    fun checkArgsOne(ctx: C_ModifierContext, name: C_Name, args: List<C_AnnotationArg>): C_AnnotationArg? {
         val expectedArgs = 1
         return if (args.size == expectedArgs) args[0] else {
             ctx.msgCtx.error(name.pos, "ann:$name:arg_count:${args.size}",
@@ -26,7 +26,7 @@ object C_AnnUtils {
         }
     }
 
-    fun checkArgsOneString(ctx: C_ModifierContext, name: S_Name, args: List<C_AnnotationArg>): String? {
+    fun checkArgsOneString(ctx: C_ModifierContext, name: C_Name, args: List<C_AnnotationArg>): String? {
         val arg = checkArgsOne(ctx, name, args)
         arg ?: return null
 

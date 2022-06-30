@@ -4,8 +4,8 @@
 
 package net.postchain.rell.compiler.base.def
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_GraphUtils
 import net.postchain.rell.compiler.base.utils.C_LateGetter
@@ -13,7 +13,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.utils.toImmSet
 
 class C_Struct(
-        val name: S_Name,
+        val name: C_Name,
         val structDef: R_StructDefinition,
         val attrsGetter: C_LateGetter<List<C_CompiledAttribute>>
 )
@@ -84,7 +84,7 @@ object C_StructUtils {
         for (cAttr in s.attrsGetter.get()) {
             val codeMsg = checker(cAttr)
             codeMsg ?: continue
-            val pos = cAttr.cDef?.name?.pos ?: s.name.pos
+            val pos = cAttr.defPos ?: s.name.pos
             val code = "${codeMsg.code}:${s.structDef.appLevelName}:${cAttr.rAttr.name}"
             val msg = "Attribute '${cAttr.rAttr.name}' of struct ${s.structDef.simpleName} ${codeMsg.msg}"
             msgCtx.error(pos, code, msg)

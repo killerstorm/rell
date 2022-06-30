@@ -4,12 +4,12 @@
 
 package net.postchain.rell.compiler.vexpr
 
-import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
-import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.ast.C_BinOp
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.model.*
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.runtime.Rt_Value
 
@@ -49,7 +49,7 @@ class V_BinaryExpr(
         val dbRight = right.toDbExpr()
         return if (op.dbOp == null) {
             C_BinOp.errTypeMismatch(msgCtx, pos, op.code, left.type, right.type)
-            C_Utils.errorDbExpr(op.resType)
+            C_ExprUtils.errorDbExpr(op.resType)
         } else {
             Db_BinaryExpr(op.resType, op.dbOp, dbLeft, dbRight)
         }

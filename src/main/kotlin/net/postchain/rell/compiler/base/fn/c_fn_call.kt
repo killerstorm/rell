@@ -4,8 +4,8 @@
 
 package net.postchain.rell.compiler.base.fn
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.expr.C_CallTypeHints
 import net.postchain.rell.compiler.base.expr.C_ExprContext
@@ -15,13 +15,16 @@ import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.R_CtErrorType
 import net.postchain.rell.model.R_FunctionType
+import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_Type
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
 abstract class C_FunctionCallTarget {
     abstract fun retType(): R_Type?
     abstract fun typeHints(): C_CallTypeHints
+    abstract fun hasParameter(name: R_Name): Boolean
     abstract fun compileFull(args: C_FullCallArguments): V_Expr?
     abstract fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr?
 }
@@ -35,6 +38,7 @@ abstract class C_FunctionCallTarget_Regular(
 
     final override fun retType() = retType
     final override fun typeHints() = callInfo.params.typeHints
+    final override fun hasParameter(name: R_Name) = name in callInfo.params.set
 
     final override fun compileFull(args: C_FullCallArguments): V_Expr? {
         retType ?: return null
@@ -64,21 +68,22 @@ class C_FunctionCallTarget_FunctionType(
     override fun createVTarget(): V_FunctionCallTarget = V_FunctionCallTarget_FunctionValue(fnExpr, safe)
 }
 
-abstract class C_PartialCallTarget(val callPos: S_Pos, val fullName: String, val params: C_FunctionCallParameters) {
+abstract class C_PartialCallTarget(val callPos: S_Pos, val fullName: LazyString, val params: C_FunctionCallParameters) {
     abstract fun matchesType(fnType: R_FunctionType): Boolean
     abstract fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): V_Expr
 }
 
 class C_FunctionCallInfo(
         val callPos: S_Pos,
-        val functionName: String?,
+        val functionName: LazyString?,
         val params: C_FunctionCallParameters
 ) {
-    fun functionNameCode() = functionName ?: "?"
+    fun functionNameCode() = functionName?.value ?: "?"
 
     companion object {
-        fun forDirectFunction(name: S_Name, params: C_FormalParameters): C_FunctionCallInfo {
-            return C_FunctionCallInfo(name.pos, name.str, params.callParameters)
+        fun forDirectFunction(name: C_Name, params: C_FormalParameters): C_FunctionCallInfo {
+            val nameLazy = LazyString.of(name.str)
+            return C_FunctionCallInfo(name.pos, nameLazy, params.callParameters)
         }
 
         fun forFunctionType(callPos: S_Pos, fnType: R_FunctionType): C_FunctionCallInfo {
@@ -89,6 +94,7 @@ class C_FunctionCallInfo(
 
 class C_FunctionCallParameters(list: List<C_FunctionCallParameter>) {
     val list = list.toImmList()
+    val set = list.mapNotNull { it.name }.toImmList()
     val typeHints: C_CallTypeHints = C_FunctionCallParametersTypeHints(this.list)
 
     companion object {
@@ -100,7 +106,7 @@ class C_FunctionCallParameters(list: List<C_FunctionCallParameter>) {
 }
 
 class C_FunctionCallParameter(
-        val name: String?,
+        val name: R_Name?,
         val type: R_Type,
         val index: Int,
         private val defaultValue: C_ParameterDefaultValue?
@@ -120,7 +126,7 @@ private class C_FunctionCallParametersTypeHints(params: List<C_FunctionCallParam
     private val list = params.toImmList()
     private val map = params.filter { it.name != null }.map { it.name!! to it }.toMap().toImmMap()
 
-    override fun getTypeHint(index: Int?, name: String?): C_TypeHint {
+    override fun getTypeHint(index: Int?, name: R_Name?): C_TypeHint {
         val byName = if (name != null) map[name] else null
         val byIndex = if (index != null && index >= 0 && index < list.size) list[index] else null
         val param = byName ?: byIndex

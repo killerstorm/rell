@@ -4,14 +4,16 @@
 
 package net.postchain.rell.lib
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.ast.S_QualifiedName
 import net.postchain.rell.compiler.base.core.C_DefinitionType
+import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.def.C_SysAttribute
 import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.compiler.base.namespace.C_NamespaceValueContext
 import net.postchain.rell.compiler.base.namespace.C_NamespaceValue_VExpr
+import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_SysFunction
@@ -20,67 +22,88 @@ import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
-import java.util.*
+
+private val GTX_OPERATION_STRUCT = C_Utils.createSysStruct(
+    "gtx_operation",
+    C_SysAttribute("name", R_TextType),
+    C_SysAttribute("args", R_ListType(R_GtvType))
+)
+
+private val GTX_TRANSACTION_BODY_STRUCT = C_Utils.createSysStruct(
+    "gtx_transaction_body",
+    C_SysAttribute("blockchain_rid", R_ByteArrayType),
+    C_SysAttribute("operations", R_ListType(GTX_OPERATION_STRUCT.type)),
+    C_SysAttribute("signers", R_ListType(R_GtvType))
+)
+
+private val GTX_TRANSACTION_STRUCT = C_Utils.createSysStruct(
+    "gtx_transaction",
+    C_SysAttribute("body", GTX_TRANSACTION_BODY_STRUCT.type),
+    C_SysAttribute("signatures", R_ListType(R_GtvType))
+)
+
+private val GET_SIGNERS_RETURN_TYPE: R_Type = R_ListType(R_ByteArrayType)
+private val GET_ALL_OPERATIONS_RETURN_TYPE: R_Type = R_ListType(GTX_OPERATION_STRUCT.type)
 
 object C_Lib_OpContext {
     const val NAMESPACE_NAME = "op_context"
 
-    private val GTX_OPERATION_STRUCT = C_Utils.createSysStruct(
-            "gtx_operation",
-            C_SysAttribute("name", R_TextType),
-            C_SysAttribute("args", R_ListType(R_GtvType))
-    )
-
-    private val GTX_TRANSACTION_BODY_STRUCT = C_Utils.createSysStruct(
-            "gtx_transaction_body",
-            C_SysAttribute("blockchain_rid", R_ByteArrayType),
-            C_SysAttribute("operations", R_ListType(GTX_OPERATION_STRUCT.type)),
-            C_SysAttribute("signers", R_ListType(R_GtvType))
-    )
-
-    private val GTX_TRANSACTION_STRUCT = C_Utils.createSysStruct(
-            "gtx_transaction",
-            C_SysAttribute("body", GTX_TRANSACTION_BODY_STRUCT.type),
-            C_SysAttribute("signatures", R_ListType(R_GtvType))
-    )
+    val NAMESPACE_QNAME = R_QualifiedName.of(NAMESPACE_NAME)
 
     val GLOBAL_STRUCTS = immListOf(GTX_OPERATION_STRUCT, GTX_TRANSACTION_BODY_STRUCT, GTX_TRANSACTION_STRUCT)
 
-    private val GET_SIGNERS_RETURN_TYPE: R_Type = R_ListType(R_ByteArrayType)
-    private val GET_ALL_OPERATIONS_RETURN_TYPE: R_Type = R_ListType(GTX_OPERATION_STRUCT.type)
-
     private val NAMESPACE_FNS = C_GlobalFuncBuilder(NAMESPACE_NAME)
-            .add("get_signers", GET_SIGNERS_RETURN_TYPE, listOf(), wrapFn(GetSigners))
-            .add("is_signer", R_BooleanType, listOf(R_ByteArrayType), wrapFn(IsSigner))
-            .add("get_all_operations", GET_ALL_OPERATIONS_RETURN_TYPE, listOf(), wrapFn(GetAllOperations))
-            .add("emit_event", R_UnitType, listOf(R_TextType, R_GtvType), wrapFn(EmitEvent))
+            .add("get_signers", GET_SIGNERS_RETURN_TYPE, listOf(), wrapFn(OpCtxFns.GetSigners))
+            .add("is_signer", R_BooleanType, listOf(R_ByteArrayType), wrapFn(OpCtxFns.IsSigner))
+            .add("get_all_operations", GET_ALL_OPERATIONS_RETURN_TYPE, listOf(), wrapFn(OpCtxFns.GetAllOperations))
+            .add("emit_event", R_UnitType, listOf(R_TextType, R_GtvType), wrapFn(OpCtxFns.EmitEvent))
             .build()
 
     val NAMESPACE = C_LibUtils.makeNs(
             NAMESPACE_FNS,
-            "last_block_time" to BaseNsValue(R_IntegerType, LastBlockTime),
-            "block_height" to BaseNsValue(R_IntegerType, BlockHeight),
+            "last_block_time" to BaseNsValue(R_IntegerType, OpCtxFns.LastBlockTime),
+            "block_height" to BaseNsValue(R_IntegerType, OpCtxFns.BlockHeight),
             "transaction" to Value_Transaction,
-            "op_index" to BaseNsValue(R_IntegerType, OpIndex)
+            "op_index" to BaseNsValue(R_IntegerType, OpCtxFns.OpIndex)
     )
 
-    val FN_IS_SIGNER: C_SysFunction = wrapFn(IsSigner)
+    val FN_IS_SIGNER: C_SysFunction = wrapFn(OpCtxFns.IsSigner)
 
-    private val TRANSACTION_FN = "$NAMESPACE_NAME.transaction"
+    private val TRANSACTION_FN_QNAME = NAMESPACE_QNAME.child("transaction")
+    private val TRANSACTION_FN = TRANSACTION_FN_QNAME.str()
+    private val TRANSACTION_FN_LAZY = LazyString.of(TRANSACTION_FN)
+
+    fun bind(nsBuilder: C_SysNsProtoBuilder, testLib: Boolean) {
+        val fb = C_GlobalFuncBuilder(null)
+        // When turning deprecated warning into error, keep backwards-compatibility (the function is used in existing code).
+        fb.add("is_signer", R_BooleanType, listOf(R_ByteArrayType), C_Lib_OpContext.FN_IS_SIGNER, depWarn("op_context.is_signer"))
+        C_LibUtils.bindFunctions(nsBuilder, fb.build())
+
+        for (struct in GLOBAL_STRUCTS) {
+            nsBuilder.addStruct(struct.name, struct, IdeSymbolInfo(IdeSymbolKind.DEF_STRUCT))
+        }
+
+        if (!testLib) {
+            nsBuilder.addNamespace(NAMESPACE_NAME, NAMESPACE)
+        }
+    }
 
     fun transactionRExpr(ctx: C_NamespaceValueContext, pos: S_Pos): R_Expr {
         val type = ctx.modCtx.sysDefs.transactionEntity.type
-        return C_Utils.createSysCallRExpr(type, Transaction(type), listOf(), pos, TRANSACTION_FN)
+        return C_ExprUtils.createSysCallRExpr(type, OpCtxFns.Transaction(type), listOf(), pos, TRANSACTION_FN_LAZY)
     }
 
     private fun transactionExpr(ctx: C_NamespaceValueContext, pos: S_Pos): V_Expr {
         val type = ctx.modCtx.sysDefs.transactionEntity.type
-        return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, type, Transaction(type), pos, TRANSACTION_FN, pure = false)
+        return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, type, OpCtxFns.Transaction(type), pos, TRANSACTION_FN, pure = false)
     }
 
-    private fun checkCtx(ctx: C_NamespaceValueContext, name: S_QualifiedName) {
+    private fun checkCtx(ctx: C_NamespaceValueContext, name: C_QualifiedName) {
         checkCtx(ctx.exprCtx, name.pos)
     }
 
@@ -92,27 +115,30 @@ object C_Lib_OpContext {
     }
 
     private fun wrapFn(rFn: R_SysFunction): C_SysFunction {
-        val cFn = C_SysFunction.direct(rFn)
-        return C_SysFunction.validating(cFn) { ctx, pos ->
-            checkCtx(ctx, pos)
+        return C_SysFunction.validating(rFn) { ctx ->
+            checkCtx(ctx.exprCtx, ctx.callPos)
         }
     }
 
-    private class BaseNsValue(val resType: R_Type, val rFn: R_SysFunction): C_NamespaceValue_VExpr() {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
+    private class BaseNsValue(val resType: R_Type, val rFn: R_SysFunction)
+        : C_NamespaceValue_VExpr(IdeSymbolInfo(IdeSymbolKind.MEM_SYS_PROPERTY))
+    {
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
             checkCtx(ctx, name)
-            return C_Utils.createSysGlobalPropExpr(ctx.exprCtx, resType, rFn, name, pure = false)
+            return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, resType, rFn, name, pure = false)
         }
     }
 
-    private object Value_Transaction: C_NamespaceValue_VExpr() {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: S_QualifiedName): V_Expr {
+    private object Value_Transaction: C_NamespaceValue_VExpr(IdeSymbolInfo(IdeSymbolKind.MEM_SYS_PROPERTY)) {
+        override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
             checkCtx(ctx, name)
             return transactionExpr(ctx, name.pos)
         }
     }
+}
 
-    private abstract class BaseFn(private val name: String): R_SysFunction() {
+private object OpCtxFns {
+    abstract class BaseFn(private val name: String): R_SysFunction {
         abstract fun call(opCtx: Rt_OpContext): Rt_Value
 
         final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
@@ -122,23 +148,23 @@ object C_Lib_OpContext {
         }
     }
 
-    private object LastBlockTime: BaseFn("last_block_time") {
+    object LastBlockTime: BaseFn("last_block_time") {
         override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.lastBlockTime)
     }
 
-    private class Transaction(private val type: R_EntityType): BaseFn("transaction") {
+    class Transaction(private val type: R_EntityType): BaseFn("transaction") {
         override fun call(opCtx: Rt_OpContext) = Rt_EntityValue(type, opCtx.transactionIid)
     }
 
-    private object BlockHeight: BaseFn("block_height") {
+    object BlockHeight: BaseFn("block_height") {
         override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.blockHeight)
     }
 
-    private object OpIndex: BaseFn("op_index") {
+    object OpIndex: BaseFn("op_index") {
         override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.opIndex.toLong())
     }
 
-    private object GetSigners: R_SysFunctionEx_0() {
+    object GetSigners: R_SysFunctionEx_0() {
         override fun call(ctx: Rt_CallContext): Rt_Value {
             val opCtx = getOpContext(ctx, "get_signers")
             val elements = opCtx.signers.map { Rt_ByteArrayValue(it) as Rt_Value }.toMutableList()
@@ -146,17 +172,17 @@ object C_Lib_OpContext {
         }
     }
 
-    private object IsSigner: R_SysFunction() {
+    object IsSigner: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 1)
             val a = args[0].asByteArray()
             val opCtx = ctx.exeCtx.opCtx
-            val r = if (opCtx == null) false else opCtx.signers.any { Arrays.equals(it, a) }
+            val r = if (opCtx == null) false else opCtx.signers.any { it.contentEquals(a) }
             return Rt_BooleanValue(r)
         }
     }
 
-    private object GetAllOperations: R_SysFunctionEx_0() {
+    object GetAllOperations: R_SysFunctionEx_0() {
         private val ARGS_LIST_TYPE = R_ListType(R_GtvType)
 
         override fun call(ctx: Rt_CallContext): Rt_Value {
@@ -170,7 +196,7 @@ object C_Lib_OpContext {
         }
     }
 
-    private object EmitEvent: R_SysFunctionEx_2() {
+    object EmitEvent: R_SysFunctionEx_2() {
         override fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
             val opCtx = getOpContext(ctx, "emit_event")
             val type = arg1.asString()
@@ -185,3 +211,5 @@ object C_Lib_OpContext {
         return opCtx ?: throw Rt_Error("fn:op_context.$fnName:noop", "Operation context not available")
     }
 }
+
+private fun depWarn(newName: String) = C_Deprecated(useInstead = newName, error = false)

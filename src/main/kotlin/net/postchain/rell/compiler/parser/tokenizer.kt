@@ -7,19 +7,18 @@ package net.postchain.rell.compiler.parser
 import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import com.github.h0tk3y.betterParse.lexer.Tokenizer
 import com.github.h0tk3y.betterParse.utils.cached
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.compiler.base.utils.C_Parser
 import net.postchain.rell.compiler.ast.S_BasicPos
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.utils.C_Parser
+import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.R_Name
-import net.postchain.rell.runtime.utils.Rt_DecimalUtils
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.CommonUtils
 import java.io.InputStream
 import java.math.BigInteger
 import java.util.*
-import kotlin.NoSuchElementException
 
 class RellTokenizerState {
     var lastRow = 1
@@ -35,7 +34,7 @@ class RellTokenizerState {
 
 class RellTokenizerError(val pos: S_Pos, val code: String, val msg: String, val eof: Boolean = false): RuntimeException(msg)
 
-class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
+class RellTokenizer(tokensEx: List<RellToken>) : Tokenizer {
     val tkIdentifier: RellToken
     val tkInteger: RellToken
     val tkDecimal: RellToken
@@ -453,7 +452,7 @@ class RellTokenizer(private val tokensEx: List<RellToken>) : Tokenizer {
             }
 
             val bd = try {
-                Rt_DecimalUtils.parse(s)
+                Lib_DecimalMath.parse(s)
             } catch (e: NumberFormatException) {
                 throw RellTokenizerError(pos, "lex:decimal:invalid:$s", "Invalid decimal literal: '$s'")
             }

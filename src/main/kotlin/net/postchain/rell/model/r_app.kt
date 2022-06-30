@@ -7,9 +7,10 @@ package net.postchain.rell.model
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.model.expr.R_Expr
-import net.postchain.rell.model.expr.R_FunctionExtensions
 import net.postchain.rell.model.expr.R_FunctionExtensionsTable
 import net.postchain.rell.runtime.utils.toGtv
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.MsgString
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
@@ -77,15 +78,27 @@ data class R_AtEntityId(val exprId: R_AtExprId, val id: Long) {
 
 class R_DefaultValue(val rExpr: R_Expr, val isDbModification: Boolean)
 
+enum class R_KeyIndexKind(nameMsg: String) {
+    KEY("key"),
+    INDEX("index"),
+    ;
+
+    val nameMsg = MsgString(nameMsg)
+}
+
 class R_Attribute(
         val index: Int,
-        val name: String,
+        val rName: R_Name,
         val type: R_Type,
         val mutable: Boolean,
+        val keyIndexKind: R_KeyIndexKind?,
+        val ideInfo: IdeSymbolInfo,
         val canSetInCreate: Boolean = true,
-        val sqlMapping: String = name,
+        val sqlMapping: String = rName.str,
         private val exprGetter: C_LateGetter<R_DefaultValue>?
 ) {
+    val name = rName.str
+
     val expr: R_Expr? get() = exprGetter?.get()?.rExpr
     val isExprDbModification: Boolean get() = exprGetter?.get()?.isDbModification ?: false
 
@@ -98,12 +111,14 @@ class R_Attribute(
         ).toGtv()
     }
 
-    fun copy(mutable: Boolean): R_Attribute {
+    fun copy(mutable: Boolean, ideInfo: IdeSymbolInfo): R_Attribute {
         return R_Attribute(
                 index = index,
-                name = name,
+                rName = rName,
                 type = type,
                 mutable = mutable,
+                keyIndexKind = keyIndexKind,
+                ideInfo = ideInfo,
                 canSetInCreate = true,
                 sqlMapping = sqlMapping,
                 exprGetter = if (canSetInCreate) exprGetter else null // Not copying default value e. g. for "transaction".
@@ -120,10 +135,12 @@ data class R_ModuleKey(val name: R_ModuleName, val externalChain: String?) {
 
 class R_Module(
         val name: R_ModuleName,
+        val directory: Boolean,
         val abstract: Boolean,
         val external: Boolean,
         val externalChain: String?,
         val test: Boolean,
+        val selected: Boolean,
         val entities: Map<String, R_EntityDefinition>,
         val objects: Map<String, R_ObjectDefinition>,
         val structs: Map<String, R_StructDefinition>,

@@ -6,6 +6,7 @@ package net.postchain.rell.lang.expr.expr
 
 import net.postchain.rell.compiler.base.utils.C_Constants
 import net.postchain.rell.lang.type.DecimalTest
+import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.test.BaseResourcefulTest
 import org.junit.Test
 import java.math.BigDecimal
@@ -40,8 +41,8 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkCmpCommon(vDec("1e500+55"), vDec("1e500+122"), vDec("1e500+123"), vDec("1e500+124"), vDec("1e500+456"))
 
         // Extreme values.
-        val maxp = C_Constants.DECIMAL_INT_DIGITS - 1
-        val minp = -C_Constants.DECIMAL_FRAC_DIGITS
+        val maxp = Lib_DecimalMath.DECIMAL_INT_DIGITS - 1
+        val minp = -Lib_DecimalMath.DECIMAL_FRAC_DIGITS
         chkCmpCommon(
                 vDec("1e$maxp+55e$minp"),
                 vDec("1e$maxp+122e$minp"),
@@ -1002,7 +1003,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkDecimalConstructor("0.${rep0}194", "dec[0.${rep0}19]")
         chkDecimalConstructor("0.${rep0}195", "dec[0.${rep0}2]")
 
-        val fracExp = C_Constants.DECIMAL_FRAC_DIGITS - 2
+        val fracExp = Lib_DecimalMath.DECIMAL_FRAC_DIGITS - 2
         chkDecimalConstructor("0.100e-$fracExp", "dec[0.${rep0}1]")
         chkDecimalConstructor("0.101e-$fracExp", "dec[0.${rep0}1]")
         chkDecimalConstructor("0.104e-$fracExp", "dec[0.${rep0}1]")
@@ -1015,7 +1016,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
     @Test fun testLibDecimalConstructorTextOverflow() {
         val limitMinusOne = DecimalTest.limitMinus(1)
         val overLimit = "" + (DecimalTest.LIMIT * BigInteger.valueOf(3))
-        val fracLimit = BigInteger.TEN.pow(C_Constants.DECIMAL_FRAC_DIGITS) - BigInteger.ONE
+        val fracLimit = BigInteger.TEN.pow(Lib_DecimalMath.DECIMAL_FRAC_DIGITS) - BigInteger.ONE
         val fracLimitMinusOne = fracLimit - BigInteger.ONE
 
         chkDecimalConstructor("$limitMinusOne", "dec[$limitMinusOne]")
@@ -1057,11 +1058,11 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("decimal(#0).ceil()", "dec[-1]", vText("-1.000"))
         chkExpr("decimal(#0).ceil()", "dec[-1]", vText("-1.999"))
 
-        val maxIntPart = "9".repeat(C_Constants.DECIMAL_INT_DIGITS)
-        chkExpr("#0.ceil()", errRt("decimal:overflow"), vDec(C_Constants.DECIMAL_MAX_VALUE))
-        chkExpr("(-#0).ceil()", "dec[-$maxIntPart]", vDec(C_Constants.DECIMAL_MAX_VALUE))
-        chkExpr("#0.ceil()", "dec[1]", vDec(C_Constants.DECIMAL_MIN_VALUE))
-        chkExpr("(-#0).ceil()", "dec[0]", vDec(C_Constants.DECIMAL_MIN_VALUE))
+        val maxIntPart = "9".repeat(Lib_DecimalMath.DECIMAL_INT_DIGITS)
+        chkExpr("#0.ceil()", errRt("decimal:overflow"), vDec(Lib_DecimalMath.DECIMAL_MAX_VALUE))
+        chkExpr("(-#0).ceil()", "dec[-$maxIntPart]", vDec(Lib_DecimalMath.DECIMAL_MAX_VALUE))
+        chkExpr("#0.ceil()", "dec[1]", vDec(Lib_DecimalMath.DECIMAL_MIN_VALUE))
+        chkExpr("(-#0).ceil()", "dec[0]", vDec(Lib_DecimalMath.DECIMAL_MIN_VALUE))
     }
 
     @Test fun testLibDecimalFloor() {
@@ -1081,11 +1082,11 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("decimal(#0).floor()", "dec[-1]", vText("-1.000"))
         chkExpr("decimal(#0).floor()", "dec[-2]", vText("-1.0000000000001"))
 
-        val maxIntPart = "9".repeat(C_Constants.DECIMAL_INT_DIGITS)
-        chkExpr("#0.floor()", "dec[$maxIntPart]", vDec(C_Constants.DECIMAL_MAX_VALUE))
-        chkExpr("(-#0).floor()", errRt("decimal:overflow"), vDec(C_Constants.DECIMAL_MAX_VALUE))
-        chkExpr("#0.floor()", "dec[0]", vDec(C_Constants.DECIMAL_MIN_VALUE))
-        chkExpr("(-#0).floor()", "dec[-1]", vDec(C_Constants.DECIMAL_MIN_VALUE))
+        val maxIntPart = "9".repeat(Lib_DecimalMath.DECIMAL_INT_DIGITS)
+        chkExpr("#0.floor()", "dec[$maxIntPart]", vDec(Lib_DecimalMath.DECIMAL_MAX_VALUE))
+        chkExpr("(-#0).floor()", errRt("decimal:overflow"), vDec(Lib_DecimalMath.DECIMAL_MAX_VALUE))
+        chkExpr("#0.floor()", "dec[0]", vDec(Lib_DecimalMath.DECIMAL_MIN_VALUE))
+        chkExpr("(-#0).floor()", "dec[-1]", vDec(Lib_DecimalMath.DECIMAL_MIN_VALUE))
     }
 
     @Test fun testLibDecimalRound() {
@@ -1104,10 +1105,10 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("decimal(#0).round()", "dec[-123457]", vText("-123456.5"))
         chkExpr("decimal(#0).round()", "dec[-123457]", vText("-123456.9"))
 
-        chkExpr("#0.round()", errRt("decimal:overflow"), vDec(C_Constants.DECIMAL_MAX_VALUE))
-        chkExpr("(-#0).round()", errRt("decimal:overflow"), vDec(C_Constants.DECIMAL_MAX_VALUE))
-        chkExpr("#0.round()", "dec[0]", vDec(C_Constants.DECIMAL_MIN_VALUE))
-        chkExpr("(-#0).round()", "dec[0]", vDec(C_Constants.DECIMAL_MIN_VALUE))
+        chkExpr("#0.round()", errRt("decimal:overflow"), vDec(Lib_DecimalMath.DECIMAL_MAX_VALUE))
+        chkExpr("(-#0).round()", errRt("decimal:overflow"), vDec(Lib_DecimalMath.DECIMAL_MAX_VALUE))
+        chkExpr("#0.round()", "dec[0]", vDec(Lib_DecimalMath.DECIMAL_MIN_VALUE))
+        chkExpr("(-#0).round()", "dec[0]", vDec(Lib_DecimalMath.DECIMAL_MIN_VALUE))
     }
 
     @Test fun testLibDecimalRoundScalePositive() {
@@ -1220,10 +1221,10 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("decimal(#0).to_integer()", "int[-9223372036854775808]", vText("-9223372036854775808"))
         chkExpr("decimal(#0).to_integer()", "int[-9223372036854775808]", vText("-9223372036854775808.999999999"))
         chkExpr("decimal(#0).to_integer()", errRt("decimal.to_integer:overflow:-9223372036854775809"), vText("-9223372036854775809"))
-        chkExpr("#0.to_integer()", "int[0]", vDec(C_Constants.DECIMAL_MIN_VALUE))
-        chkExpr("(-#0).to_integer()", "int[0]", vDec(C_Constants.DECIMAL_MIN_VALUE))
-        chkExpr("#0.to_integer()", errRt("decimal.to_integer:overflow:9.9999999999999999999E+131071"), vDec(C_Constants.DECIMAL_MAX_VALUE))
-        chkExpr("(-#0).to_integer()", errRt("decimal.to_integer:overflow:-9.9999999999999999999E+131071"), vDec(C_Constants.DECIMAL_MAX_VALUE))
+        chkExpr("#0.to_integer()", "int[0]", vDec(Lib_DecimalMath.DECIMAL_MIN_VALUE))
+        chkExpr("(-#0).to_integer()", "int[0]", vDec(Lib_DecimalMath.DECIMAL_MIN_VALUE))
+        chkExpr("#0.to_integer()", errRt("decimal.to_integer:overflow:9.9999999999999999999E+131071"), vDec(Lib_DecimalMath.DECIMAL_MAX_VALUE))
+        chkExpr("(-#0).to_integer()", errRt("decimal.to_integer:overflow:-9.9999999999999999999E+131071"), vDec(Lib_DecimalMath.DECIMAL_MAX_VALUE))
     }
 
     @Test open fun testLibDecimalToText() {

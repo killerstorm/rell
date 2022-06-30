@@ -906,6 +906,11 @@ class FunctionExtendTest: BaseRellTest(false) {
         )
     }
 
+    @Test fun testUnknownFunction() {
+        chkFull("@extend(foo) function g() {}", "ct_err:fn:extend:not_found:foo")
+        chkFull("@extend(foo.bar) function g() {}", "ct_err:fn:extend:not_found:foo.bar")
+    }
+
     private fun chkFullOut(code: String, expectedRes: String, vararg expectedOut: String) {
         chkOut()
         chkFull(code, expectedRes)

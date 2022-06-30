@@ -29,8 +29,8 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chkType("struct<integer>", "ct_err:type:struct:bad_type:integer")
 
         chkType("struct<my_struct>", "ct_err:type:struct:bad_type:my_struct")
-        chkType("struct<my_function>", "ct_err:unknown_type:my_function")
-        chkType("struct<my_query>", "ct_err:unknown_type:my_query")
+        chkType("struct<my_function>", "ct_err:unknown_def:type:my_function")
+        chkType("struct<my_query>", "ct_err:unknown_def:type:my_query")
         chkType("struct<my_enum>", "ct_err:type:struct:bad_type:my_enum")
         chkType("struct<my_entity?>", "ct_err:type:struct:bad_type:my_entity?")
 
@@ -146,10 +146,10 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chkStructAttr("block", "query w(): data? = null;", "0", "int[0]")
         chkStructAttr("block", "", "data(a = null)", "data[a=null]")
 
-        chkStructAttr("transaction", "operation op(d: data) {}", "0", "ct_err:param_nogtv:d:data")
-        chkStructAttr("transaction", "query w(d: data) = 0;", "0", "ct_err:param_nogtv:d:data")
-        chkStructAttr("transaction", "query w(): data? = null;", "0", "ct_err:result_nogtv:w:data?")
-        chkStructAttr("transaction", "", "data(a = null)", "ct_err:result_nogtv:q:data")
+        chkStructAttr("transaction", "operation op(d: data) {}", "0", "int[0]")
+        chkStructAttr("transaction", "query w(d: data) = 0;", "0", "int[0]")
+        chkStructAttr("transaction", "query w(): data? = null;", "0", "int[0]")
+        chkStructAttr("transaction", "", "data(a = null)", "data[a=null]")
     }
 
     private fun chkStructAttr(innerType: String, def: String, query: String, exp: String) {
@@ -386,6 +386,12 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("struct<user>('Bob')", "ct_err:attr_missing:transaction")
         chk("struct<user>('Bob', transaction @ {})", "rt_err:at:wrong_count:0")
         chk("struct<user>(transaction @ {})", "ct_err:attr_missing:name")
+    }
+
+    @Test fun testLogEntityGtvCompatibility() {
+        tst.gtv = true
+        def("@log entity user { name; value: integer = 123; }")
+        chkCompile("query qq(): struct<user> = user @ {} (user.to_struct());", "OK")
     }
 
     private fun chkType(typeCode: String, expected: String) {
