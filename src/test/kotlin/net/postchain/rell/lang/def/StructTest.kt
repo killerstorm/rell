@@ -480,4 +480,10 @@ class StructTest: BaseRellTest(false) {
         chk("'' + f()", "text[s{a=123,next=s{a=456,next=s{...}}}]")
         chk("_strict_str(f())", "text[s[a=int[123],next=s[a=int[456],next=s[...]]]]")
     }
+
+    @Test fun testBugConstructorAttrResolution() {
+        def("struct s { interface: name; name; }")
+        chkEx("{ val interface = 'foo'; return s(interface, name = 'bar'); }", "s[interface=text[foo],name=text[bar]]")
+        chkFull("val interface = 'foo'; query q() = s(interface, name = 'bar');", "s[interface=text[foo],name=text[bar]]")
+    }
 }

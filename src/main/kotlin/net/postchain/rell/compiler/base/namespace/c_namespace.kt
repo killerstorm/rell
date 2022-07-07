@@ -353,15 +353,15 @@ class C_NamespaceValueContext(val exprCtx: C_ExprContext) {
 }
 
 abstract class C_NamespaceValue(val ideInfo: IdeSymbolInfo) {
-    abstract fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr
+    abstract fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr
 }
 
 abstract class C_NamespaceValue_VExpr(ideInfo: IdeSymbolInfo): C_NamespaceValue(ideInfo) {
     protected abstract fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr
 
-    final override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
+    final override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
         val vExpr = toExpr0(ctx, name)
-        return C_VExpr(vExpr)
+        return C_VExpr(vExpr, implicitAttrMatchName = implicitAttrMatchName)
     }
 }
 
@@ -389,7 +389,7 @@ class C_NamespaceValue_Entity(
         ideInfo: IdeSymbolInfo,
         private val type: R_Type
 ): C_NamespaceValue(ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
         return C_TypeExpr(name.last.pos, type)
     }
 }
@@ -398,13 +398,13 @@ class C_NamespaceValue_Enum(
         ideInfo: IdeSymbolInfo,
         private val rEnum: R_EnumDefinition
 ): C_NamespaceValue(ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName) = C_EnumExpr(ctx.msgCtx, name, rEnum)
+    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName, implicitAttrMatchName: R_Name?) = C_EnumExpr(ctx.msgCtx, name, rEnum)
 }
 
 class C_NamespaceValue_Namespace(
         private val nsProxy: C_DefProxy<C_Namespace>
 ): C_NamespaceValue(nsProxy.ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
         val ns = nsProxy.getDef(ctx.msgCtx, name)
         val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, ns)
         return C_NamespaceExpr(name, nsRef)
@@ -415,7 +415,7 @@ class C_NamespaceValue_Object(
         ideInfo: IdeSymbolInfo,
         val rObject: R_ObjectDefinition
 ): C_NamespaceValue(ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
         return C_ObjectExpr(ctx.exprCtx, name, rObject)
     }
 }
@@ -424,7 +424,7 @@ class C_NamespaceValue_Struct(
         ideInfo: IdeSymbolInfo,
         private val struct: R_Struct
 ): C_NamespaceValue(ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
         val ns = C_Lib_Type_Struct.getNamespace(struct)
         val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, ns)
         return C_NamespaceStructExpr(name, struct, nsRef)

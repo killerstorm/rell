@@ -12,6 +12,7 @@ import net.postchain.rell.compiler.base.namespace.C_NamespaceValueContext
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
 import net.postchain.rell.model.R_EnumType
+import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.tools.api.IdeSymbolInfo
@@ -56,7 +57,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         val glob = ctx.nsCtx.getValueOpt(qNameHand)
         if (glob != null) {
             val qName = qNameHand.qName
-            return NameRes_Global(ctx, qName, glob)
+            return NameRes_Global(ctx, nameHand.rName, qName, glob)
         }
 
         return null
@@ -115,6 +116,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
 
     private class NameRes_Global(
             private val ctx: C_ExprContext,
+            private val rName: R_Name,
             private val qName: C_QualifiedName,
             private val defRes: C_DefResolution<C_NamespaceValue>
     ): NameRes() {
@@ -125,7 +127,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
         override fun compile(): C_Expr {
             val def = defRes.getDef()
             val memCtx = C_NamespaceValueContext(ctx)
-            val expr = def.toExpr(memCtx, qName)
+            val expr = def.toExpr(memCtx, qName, implicitAttrMatchName = rName)
             return expr
         }
     }

@@ -156,7 +156,7 @@ class C_NamespaceExpr(private val qName: C_QualifiedName, private val nsRef: C_N
 
         override fun toExpr(ctx: MemberCtx): C_Expr {
             val def = defRef.getDef()
-            return def.toExpr(ctx.valueCtx, ctx.qName)
+            return def.toExpr(ctx.valueCtx, ctx.qName, null)
         }
     }
 
