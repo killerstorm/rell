@@ -140,4 +140,28 @@ class IdeSymbolInfoLibTest: BaseIdeSymbolInfoTest() {
         file("module.rell", "struct rec { x: integer; } function g() = gtv.from_json('');")
         chkExpr("rec.from_gtv(g())", "rec:DEF_STRUCT", "from_gtv:DEF_FUNCTION_SYSTEM", "g:DEF_FUNCTION_REGULAR")
     }
+
+    @Test fun testCollectionType() {
+        chkType("list<integer>", "list:DEF_TYPE", "integer:DEF_TYPE")
+        chkType("set<integer>", "set:DEF_TYPE", "integer:DEF_TYPE")
+        chkType("map<integer,text>", "map:DEF_TYPE", "integer:DEF_TYPE", "text:DEF_TYPE")
+    }
+
+    @Test fun testCollectionConstructor() {
+        chkExpr("list<integer>()", "list:DEF_TYPE", "integer:DEF_TYPE")
+        chkExpr("set<integer>()", "set:DEF_TYPE", "integer:DEF_TYPE")
+        chkExpr("map<integer,text>()", "map:DEF_TYPE", "integer:DEF_TYPE", "text:DEF_TYPE")
+        chkExpr("list([123])", "list:DEF_TYPE")
+        chkExpr("set([123])", "set:DEF_TYPE")
+        chkExpr("map([123:'ABC'])", "map:DEF_TYPE")
+    }
+
+    @Test fun testCollectionStaticMethod() {
+        chkExpr("list<integer>.from_gtv(null.to_gtv())", "list:DEF_TYPE", "integer:DEF_TYPE",
+            "from_gtv:DEF_FUNCTION_SYSTEM", "to_gtv:DEF_FUNCTION_SYSTEM")
+        chkExpr("set<integer>.from_gtv(null.to_gtv())", "set:DEF_TYPE", "integer:DEF_TYPE",
+            "from_gtv:DEF_FUNCTION_SYSTEM", "to_gtv:DEF_FUNCTION_SYSTEM")
+        chkExpr("map<integer,text>.from_gtv(null.to_gtv())", "map:DEF_TYPE", "integer:DEF_TYPE", "text:DEF_TYPE",
+            "from_gtv:DEF_FUNCTION_SYSTEM", "to_gtv:DEF_FUNCTION_SYSTEM")
+    }
 }

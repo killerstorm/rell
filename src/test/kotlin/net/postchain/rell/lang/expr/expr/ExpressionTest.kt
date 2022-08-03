@@ -284,7 +284,7 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testNamespace() {
-        chk("integer", "ct_err:expr_novalue:namespace")
+        chk("integer", "ct_err:expr_novalue:type")
         chk("integer('123')", "int[123]")
         chk("integer.from_hex('1234')", "int[4660]")
         chk("integer.MAX_VALUE", "int[9223372036854775807]")
@@ -295,7 +295,7 @@ class ExpressionTest: BaseRellTest(false) {
         def("entity user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
-        chk("user @ { .score == integer }", "ct_err:expr_novalue:namespace")
+        chk("user @ { .score == integer }", "ct_err:expr_novalue:type")
         chk("user @ { .score == integer('-5678') } ( .name )", "text[Bob]")
         chk("user @ { .score == -5678 } ( .name, integer('1234') )", "(name=text[Bob],int[1234])")
         chk("user @ { .score == -integer.from_hex('162e') } ( .name )", "text[Bob]")
@@ -476,9 +476,9 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testVariables() {
-        chkEx("{ val x = integer; return 0; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ val x = integer; return 0; }", "ct_err:expr_novalue:type")
         chkEx("{ val x = chain_context; return 0; }", "ct_err:expr_novalue:namespace")
-        chkEx("{ var x: text; x = integer; return 0; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ var x: text; x = integer; return 0; }", "ct_err:expr_novalue:type")
         chkEx("{ var x: text; x = chain_context; return 0; }", "ct_err:expr_novalue:namespace")
     }
 

@@ -28,7 +28,7 @@ object C_Lib_Type_Integer: C_Lib_Type("integer", R_IntegerType) {
 
     override fun bindConstants() = immListOf(
         C_LibUtils.constValue("MIN_VALUE", Long.MIN_VALUE),
-        C_LibUtils.constValue("MAX_VALUE", Long.MAX_VALUE)
+        C_LibUtils.constValue("MAX_VALUE", Long.MAX_VALUE),
     )
 
     override fun bindStaticFunctions(b: C_GlobalFuncBuilder) {

@@ -37,7 +37,7 @@ object C_Lib_Type_Gtv: C_Lib_Type("gtv", R_GtvType) {
     }
 
     override fun bindAliases(b: C_SysNsProtoBuilder) {
-        bindAlias(b, "GTXValue", bindNamespace = true, deprecated = C_LibUtils.depError("gtv"))
+        bindAlias(b, "GTXValue", deprecated = C_LibUtils.depError("gtv"))
     }
 }
 

@@ -228,7 +228,9 @@ class R_StructDefinition(base: R_DefinitionBase, val struct: R_Struct): R_Defini
     override fun toMetaGtv() = struct.toMetaGtv()
 }
 
-class R_EnumAttr(val name: String, val value: Int, val ideInfo: IdeSymbolInfo) {
+class R_EnumAttr(val rName: R_Name, val value: Int, val ideInfo: IdeSymbolInfo) {
+    val name = rName.str
+
     // Currently returning an empty map, in the future there may be some values.
     fun toMetaGtv() = mapOf(
             "value" to value.toGtv()

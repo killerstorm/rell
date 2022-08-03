@@ -219,18 +219,19 @@ class LibTest: BaseRellTest(false) {
         chkCompile("struct rec { v: map<text,GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
         chkCompile("struct rec { v: map<text,list<GTXValue?>>?; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
 
-        chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
-        chkCompile("function f() { GTXValue.from_json(''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
+        chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("function f() { GTXValue.from_json(''); }", "ct_err:deprecated:TYPE:GTXValue:gtv")
     }
 
     @Test fun testDeprecatedDefaultMode() {
         chkCompile("function f(v: GTXValue){}", "ct_err:deprecated:TYPE:GTXValue:gtv")
         chkCompile("struct rec { v: list<GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
-        chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
+        chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:TYPE:GTXValue:gtv")
 
         chkWarn()
         chkFn("= is_signer(x'1234');", "boolean[false]")
         chkWarn("deprecated:FUNCTION:is_signer:op_context.is_signer")
+
         chkFn("= op_context.is_signer(x'1234');", "boolean[false]")
         chkWarn()
     }
@@ -269,6 +270,7 @@ class LibTest: BaseRellTest(false) {
         chk("[1,2,3].removeAll([1,2])", "ct_err:deprecated:FUNCTION:list<integer>.removeAll:remove_all")
         chk("[1,2,3].addAll([4,5,6])", "ct_err:deprecated:FUNCTION:list<integer>.addAll:add_all")
         chk("[1,2,3].len()", "ct_err:deprecated:FUNCTION:list<integer>.len:size")
+        chk("[1,2,3]._set(0, 1)", "ct_err:deprecated:FUNCTION:list<integer>._set:set")
 
         chk("set([1,2,3]).containsAll([1,3])", "ct_err:deprecated:FUNCTION:set<integer>.containsAll:contains_all")
         chk("set([1,2,3]).removeAll([1,2])", "ct_err:deprecated:FUNCTION:set<integer>.removeAll:remove_all")

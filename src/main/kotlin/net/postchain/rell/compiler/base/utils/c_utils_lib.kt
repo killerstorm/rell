@@ -145,6 +145,7 @@ object C_LibUtils {
         return Pair(name, C_NamespaceValue_RtValue(ideInfo, value))
     }
 
+    fun depWarn(newName: String) = C_Deprecated(useInstead = newName, error = false)
     fun depError(newName: String) = C_Deprecated(useInstead = newName, error = true)
 
     fun bindFunctions(nsBuilder: C_SysNsProtoBuilder, fns: C_GlobalFuncTable) {

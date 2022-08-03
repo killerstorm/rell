@@ -17,6 +17,7 @@ import net.postchain.rell.model.R_CtErrorType
 import net.postchain.rell.model.R_FunctionType
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_Type
+import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
@@ -81,9 +82,8 @@ class C_FunctionCallInfo(
     fun functionNameCode() = functionName?.value ?: "?"
 
     companion object {
-        fun forDirectFunction(name: C_Name, params: C_FormalParameters): C_FunctionCallInfo {
-            val nameLazy = LazyString.of(name.str)
-            return C_FunctionCallInfo(name.pos, nameLazy, params.callParameters)
+        fun forDirectFunction(name: LazyPosString, params: C_FormalParameters): C_FunctionCallInfo {
+            return C_FunctionCallInfo(name.pos, name.lazyStr, params.callParameters)
         }
 
         fun forFunctionType(callPos: S_Pos, fnType: R_FunctionType): C_FunctionCallInfo {

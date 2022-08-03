@@ -180,15 +180,7 @@ object SqlGen {
 }
 
 private fun getSqlType(t: R_Type): DataType<*> {
-    val st = getSqlType0(t)
-    return st.nullable(false)
-}
-
-private fun getSqlType0(t: R_Type): DataType<*> {
-    when (t) {
-        is R_PrimitiveType -> return t.sqlType
-        is R_EntityType -> return SQLDataType.BIGINT
-        is R_EnumType -> return SQLDataType.INTEGER
-        else -> throw Exception("SQL type not implemented for $t")
-    }
+    val sqlType = t.sqlAdapter.sqlType
+    sqlType ?: throw Exception("Type $t is not SQL-compatible")
+    return sqlType.nullable(false)
 }

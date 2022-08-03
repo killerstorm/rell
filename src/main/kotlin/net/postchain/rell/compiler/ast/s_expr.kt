@@ -9,14 +9,13 @@ import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.expr.*
-import net.postchain.rell.compiler.base.utils.*
+import net.postchain.rell.compiler.base.utils.C_CodeMsg
+import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.*
-import net.postchain.rell.lib.C_LibMemberFunctions
 import net.postchain.rell.lib.type.C_Lib_Type_Struct
 import net.postchain.rell.model.*
-import net.postchain.rell.model.expr.R_CollectionKind
-import net.postchain.rell.model.expr.R_CollectionKind_List
-import net.postchain.rell.model.expr.R_CollectionKind_Set
 import net.postchain.rell.model.stmt.R_ForIterator_Collection
 import net.postchain.rell.runtime.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
@@ -546,257 +545,6 @@ class S_MapLiteralExpr(startPos: S_Pos, val entries: List<Pair<S_Expr, S_Expr>>)
     }
 }
 
-sealed class S_CollectionExpr(pos: S_Pos, val type: S_Type?, val args: List<S_Expr>?, val colType: String): S_Expr(pos) {
-    abstract fun elementTypeFromTypeHint(typeHint: C_TypeHint): R_Type?
-    abstract fun makeKind(rElementType: R_Type): R_CollectionKind
-
-    open fun checkType(ctx: C_ExprContext, rType: R_Type) {
-    }
-
-    final override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
-        if (args == null) {
-            return compileNamespace(ctx)
-        } else {
-            return compileConstructor(ctx, hint.typeHint, args)
-        }
-    }
-
-    private fun compileNamespace(ctx: C_ExprContext): C_Expr {
-        val rElementTypeOpt = compileType(ctx)
-        val rElementType = requireType(rElementTypeOpt)
-        val rType = makeKind(rElementType).type
-        return C_TypeExpr(startPos, rType)
-    }
-
-    private fun compileConstructor(ctx: C_ExprContext, typeHint: C_TypeHint, args: List<S_Expr>): C_Expr {
-        val vArgs = args.map { it.compile(ctx).value() }
-        val vExpr = compileConstructor0(ctx, typeHint, vArgs)
-        return C_VExpr(vExpr)
-    }
-
-    private fun compileConstructor0(ctx: C_ExprContext, typeHint: C_TypeHint, vArgs: List<V_Expr>): V_Expr {
-        val rType = compileType(ctx)
-        if (vArgs.size == 0) {
-            return compileConstructorNoArgs(ctx, typeHint, rType)
-        } else if (vArgs.size == 1) {
-            val vArg = vArgs[0]
-            return compileConstructorOneArg(ctx, rType, vArg)
-        } else {
-            throw C_Error.more(startPos, "expr_${colType}_argcnt:${vArgs.size}",
-                    "Wrong number of arguments for $colType<>: ${vArgs.size}")
-        }
-    }
-
-    private fun compileConstructorNoArgs(
-            ctx: C_ExprContext,
-            typeHint: C_TypeHint,
-            rType: R_Type?
-    ): V_Expr {
-        val elemType = rType ?: elementTypeFromTypeHint(typeHint)
-        val rTypeReq = requireType(elemType)
-        val kind = makeKind(rTypeReq)
-        return V_EmptyCollectionConstructorExpr(ctx, startPos, kind)
-    }
-
-    private fun compileConstructorOneArg(
-            ctx: C_ExprContext,
-            rType: R_Type?,
-            vArg: V_Expr
-    ): V_Expr {
-        val rArgType = vArg.type
-        val cIterator = C_ForIterator.compile(ctx, rArgType, false)
-
-        if (cIterator == null) {
-            throw C_Error.more(startPos, "expr_${colType}_badtype:${rArgType.strCode()}",
-                    "Wrong argument type for $colType<>: ${rArgType.strCode()}")
-        }
-
-        val rElementType = checkElementType(
-                startPos,
-                rType,
-                cIterator.itemType,
-                "expr_${colType}_typemiss",
-                "Element type mismatch for $colType<>"
-        )
-
-        if (rType == null) {
-            checkType(ctx, cIterator.itemType)
-        }
-
-        val kind = makeKind(rElementType)
-        return V_CopyCollectionConstructorExpr(ctx, startPos, kind, vArg, cIterator)
-    }
-
-    private fun compileType(ctx: C_ExprContext): R_Type? {
-        val rType = type?.compile(ctx)
-        if (rType != null) {
-            checkType(ctx, rType)
-        }
-        return rType
-    }
-
-    private fun requireType(rType: R_Type?): R_Type {
-        return C_Errors.checkNotNull(rType, startPos) {
-            "expr_${colType}_notype" toCodeMsg "Element type not specified for $colType"
-        }
-    }
-
-    companion object {
-        fun checkElementType(pos: S_Pos, declaredType: R_Type?, argumentType: R_Type, errCode: String, errMsg: String): R_Type {
-            if (declaredType == null) {
-                return argumentType
-            }
-
-            C_Errors.check(declaredType.isAssignableFrom(argumentType), pos) {
-                "$errCode:${declaredType.strCode()}:${argumentType.strCode()}" toCodeMsg
-                "$errMsg: ${argumentType.strCode()} instead of ${declaredType.strCode()}"
-            }
-
-            return declaredType
-        }
-    }
-}
-
-class S_ListExpr(pos: S_Pos, type: S_Type?, args: List<S_Expr>?): S_CollectionExpr(pos, type, args, "list") {
-    override fun elementTypeFromTypeHint(typeHint: C_TypeHint) = typeHint.getListElementType()
-    override fun makeKind(rElementType: R_Type) = R_CollectionKind_List(R_ListType(rElementType))
-}
-
-class S_SetExpr(pos: S_Pos, type: S_Type?, args: List<S_Expr>?): S_CollectionExpr(pos, type, args, "set") {
-    override fun checkType(ctx: C_ExprContext, rType: R_Type) {
-        C_Utils.checkSetElementType(ctx.nsCtx, startPos, rType)
-    }
-
-    override fun elementTypeFromTypeHint(typeHint: C_TypeHint) = typeHint.getSetElementType()
-    override fun makeKind(rElementType: R_Type) = R_CollectionKind_Set(R_SetType(rElementType))
-}
-
-class S_MapExpr(pos: S_Pos, val keyValueTypes: Pair<S_Type, S_Type>?, val args: List<S_Expr>?): S_Expr(pos) {
-    override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
-        if (args == null) {
-            return compileNamespace(ctx)
-        } else {
-            return compileConstructor(ctx, hint.typeHint, args)
-        }
-    }
-
-    private fun compileNamespace(ctx: C_ExprContext): C_Expr {
-        val rKeyValueTypeOpt = compileTypes(ctx)
-        val rKeyValueTypes = requireTypes(rKeyValueTypeOpt)
-        val rType = R_MapType(rKeyValueTypes)
-        return C_TypeExpr(startPos, rType)
-    }
-
-    private fun compileConstructor(ctx: C_ExprContext, typeHint: C_TypeHint, args: List<S_Expr>): C_Expr {
-        val vArgs = args.map { it.compile(ctx).value() }
-
-        val rKeyValueTypes = compileTypes(ctx)
-
-        val vExpr = if (vArgs.isEmpty()) {
-            compileConstructorNoArgs(ctx, rKeyValueTypes, typeHint)
-        } else if (vArgs.size == 1) {
-            val vArg = vArgs[0]
-            compileConstructorOneArg(ctx, rKeyValueTypes, vArg)
-        } else {
-            throw C_Error.more(startPos, "expr_map_argcnt:${vArgs.size}", "Wrong number of arguments for map<>: ${vArgs.size}")
-        }
-
-        return C_VExpr(vExpr)
-    }
-
-    private fun compileConstructorNoArgs(ctx: C_ExprContext, rKeyValueType: R_MapKeyValueTypes?, typeHint: C_TypeHint): V_Expr {
-        val hintKeyValueTypes = typeHint.getMapKeyValueTypes()
-        val rKeyValueTypes = requireTypes(rKeyValueType ?: hintKeyValueTypes)
-        val rMapType = R_MapType(rKeyValueTypes)
-        return V_EmptyMapConstructorExpr(ctx, startPos, rMapType)
-    }
-
-    private fun compileConstructorOneArg(ctx: C_ExprContext, rKeyValueTypes: R_MapKeyValueTypes?, vArg: V_Expr): V_Expr {
-        val rArgType = vArg.type
-        if (rArgType is R_MapType) {
-            return compileConstructorOneArgMap(ctx, rKeyValueTypes, vArg, rArgType)
-        }
-
-        val cIterator = C_ForIterator.compile(ctx, rArgType, false)
-        if (cIterator != null) {
-            val vExpr = compileConstructorOneArgIterator(ctx, rKeyValueTypes, vArg, cIterator)
-            if (vExpr != null) {
-                return vExpr
-            }
-        }
-
-        throw C_Error.more(startPos, "expr_map_badtype:${rArgType.strCode()}",
-                "Wrong argument type for map<>: ${rArgType.strCode()}")
-    }
-
-    private fun compileConstructorOneArgMap(
-            ctx: C_ExprContext,
-            rKeyValueTypes: R_MapKeyValueTypes?,
-            vArg: V_Expr,
-            rMapType: R_MapType
-    ): V_Expr {
-        val resTypes = checkMapTypes(rKeyValueTypes, rMapType.keyValueTypes)
-        val rResMapType = R_MapType(resTypes)
-        return V_MapCopyMapConstructorExpr(ctx, startPos, rResMapType, vArg)
-    }
-
-    private fun compileConstructorOneArgIterator(
-            ctx: C_ExprContext,
-            rKeyValueTypes: R_MapKeyValueTypes?,
-            vArg: V_Expr,
-            cIterator: C_ForIterator
-    ): V_Expr? {
-        val itemType = cIterator.itemType
-        if (itemType !is R_TupleType || itemType.fields.size != 2) {
-            return null
-        }
-
-        val actualTypes = R_MapKeyValueTypes(itemType.fields[0].type, itemType.fields[1].type)
-        val resTypes = checkMapTypes(rKeyValueTypes, actualTypes)
-
-        val rResMapType = R_MapType(resTypes)
-        return V_IteratorCopyMapConstructorExpr(ctx, startPos, rResMapType, vArg, cIterator)
-    }
-
-    private fun checkMapTypes(formalTypes: R_MapKeyValueTypes?, actualTypes: R_MapKeyValueTypes): R_MapKeyValueTypes {
-        val rKeyType = S_CollectionExpr.checkElementType(
-                startPos,
-                formalTypes?.key,
-                actualTypes.key,
-                "expr_map_key_typemiss",
-                "Key type mismatch for map<>"
-        )
-
-        val rValueType = S_CollectionExpr.checkElementType(
-                startPos,
-                formalTypes?.value,
-                actualTypes.value,
-                "expr_map_value_typemiss",
-                "Value type mismatch for map<>"
-        )
-
-        return R_MapKeyValueTypes(rKeyType, rValueType)
-    }
-
-    private fun compileTypes(ctx: C_ExprContext): R_MapKeyValueTypes? {
-        if (keyValueTypes == null) {
-            return null
-        }
-
-        val rKeyType = keyValueTypes.first.compile(ctx)
-        val rValueType = keyValueTypes.second.compile(ctx)
-        C_Utils.checkMapKeyType(ctx.nsCtx, startPos, rKeyType)
-
-        return R_MapKeyValueTypes(rKeyType, rValueType)
-    }
-
-    private fun requireTypes(rKeyValueTypes: R_MapKeyValueTypes?): R_MapKeyValueTypes {
-        return C_Errors.checkNotNull(rKeyValueTypes, startPos) {
-            "expr_map_notype" toCodeMsg "Key/value types not specified for map"
-        }
-    }
-}
-
 sealed class S_CallArgumentValue {
     abstract fun compile(ctx: C_ExprContext, typeHint: C_TypeHint): C_CallArgumentValue
 }
@@ -848,7 +596,7 @@ class S_CallExpr(val base: S_Expr, val args: List<S_CallArgument>): S_Expr(base.
 class S_TypeExpr(val type: S_Type): S_Expr(type.pos) {
     override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
         val rType = type.compile(ctx)
-        return C_TypeExpr(type.pos, rType)
+        return C_SpecificTypeExpr(type.pos, rType)
     }
 }
 

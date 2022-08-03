@@ -202,7 +202,7 @@ object C_Types {
     }
 
     fun toNullable(type: R_Type): R_Type {
-        return if (type is R_NullableType) type else R_NullableType(type)
+        return if (type is R_NullableType || type.isError()) type else R_NullableType(type)
     }
 
     fun removeNullable(type: R_Type): R_Type {

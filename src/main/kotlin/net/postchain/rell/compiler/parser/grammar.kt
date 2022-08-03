@@ -97,8 +97,6 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val INDEX by relltok("index")
     private val KEY by relltok("key")
     private val LIMIT by relltok("limit")
-    private val LIST by relltok("list")
-    private val MAP by relltok("map")
     private val MODULE by relltok("module")
     private val MUTABLE by relltok("mutable")
     private val NAMESPACE by relltok("namespace")
@@ -110,7 +108,6 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val QUERY by relltok("query")
     private val RECORD by relltok("record")
     private val RETURN by relltok("return")
-    private val SET by relltok("set")
     private val STRUCT by relltok("struct")
     private val TRUE by relltok("true")
     private val UPDATE by relltok("update")
@@ -152,11 +149,9 @@ object S_Grammar : Grammar<S_RellFile>() {
         }
     }
 
-    private val listType by ( LIST * -LT * typeRef * -GT) map { (kw, type) -> S_ListType(kw.pos, type) }
-    private val setType by ( SET * -LT * typeRef * -GT) map { (kw, type) -> S_SetType(kw.pos, type) }
-
-    private val mapType by ( MAP * -LT * typeRef * -COMMA * typeRef * -GT) map { (kw, key, value ) ->
-        S_MapType(kw.pos, key, value)
+    private val genericType by ( qualifiedName * -LT * separatedTerms(typeRef, COMMA, false) * -GT ) map {
+        (name, args) ->
+        S_GenericType(name, args)
     }
 
     private val virtualType by ( VIRTUAL * -LT * typeRef * -GT ) map { (kw, type) -> S_VirtualType(kw.pos, type) }
@@ -169,11 +164,9 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 
     private val primaryType by (
-            nameType
+            genericType
+            or nameType
             or tupleType
-            or listType
-            or setType
-            or mapType
             or virtualType
             or mirrorStructType
     )
@@ -440,28 +433,6 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
     private val mapLiteralExpr by emptyMapLiteralExpr or nonEmptyMapLiteralExpr
 
-    private val listExprType by -LT * type * -GT
-
-    private val exprArgs by -LPAR * separatedTerms(expressionRef, COMMA, true) * -RPAR
-
-    private val listExpr by ( LIST * optional(listExprType) * optional(exprArgs) ) map {
-        (kw, type, args) ->
-        S_ListExpr(kw.pos, type, args)
-    }
-
-    private val setExpr by ( SET * optional(listExprType) * optional(exprArgs) ) map {
-        (kw, type, args) ->
-        S_SetExpr(kw.pos, type, args)
-    }
-
-    private val mapExprType by ( -LT * type * -COMMA * type * -GT)
-
-    private val mapExpr by ( MAP * optional(mapExprType) * optional(exprArgs) ) map {
-        ( kw, types, args ) ->
-        val keyValueTypes = if (types == null) null else Pair(types.t1, types.t2)
-        S_MapExpr(kw.pos, keyValueTypes, args)
-    }
-
     private val mirrorStructExpr by mirrorStructType0 map {
         (kw, mutable, type) ->
         S_MirrorStructExpr(kw.pos, mutable != null, type)
@@ -484,22 +455,6 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 
     private val virtualTypeExpr by virtualType map { S_TypeExpr(it) }
-
-    private val baseExprHead by (
-            nameExpr
-            or dollarExpr
-            or attrExpr
-            or literalExpr
-            or parenthesesExpr
-            or createExpr
-            or listLiteralExpr
-            or mapLiteralExpr
-            or listExpr
-            or setExpr
-            or mapExpr
-            or mirrorStructExpr
-            or virtualTypeExpr
-    )
 
     private val callArg by ( optional(name * -ASSIGN) * callArgValue) map {
         (name, value) ->
@@ -533,6 +488,26 @@ object S_Grammar : Grammar<S_RellFile>() {
     )
 
     private val baseExprTail by ( baseExprTailNoCallNoAt or baseExprTailCall or baseExprTailAt )
+
+    private val genericTypeExpr by ( genericType * ( baseExprTailMember or baseExprTailCall ) ) map {
+        (type, tail) ->
+        val baseExpr = S_TypeExpr(type)
+        tail.toExpr(baseExpr)
+    }
+
+    private val baseExprHead by (
+            genericTypeExpr
+            or nameExpr
+            or dollarExpr
+            or attrExpr
+            or literalExpr
+            or parenthesesExpr
+            or createExpr
+            or listLiteralExpr
+            or mapLiteralExpr
+            or mirrorStructExpr
+            or virtualTypeExpr
+    )
 
     private val baseExpr: Parser<S_Expr> by ( baseExprHead * zeroOrMore(baseExprTail) ) map {
         ( head, tails ) ->

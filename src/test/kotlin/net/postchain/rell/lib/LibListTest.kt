@@ -31,6 +31,17 @@ class LibListTest: BaseRellTest(false) {
         chk("list<integer>(set(['Hello']))", "ct_err:expr_list_typemiss:integer:text")
         chk("list(range(5))", "list<integer>[int[0],int[1],int[2],int[3],int[4]]")
         chk("list([1:'A',2:'B'])", "list<(integer,text)>[(int[1],text[A]),(int[2],text[B])]")
+        chk("list(x=[1,2,3])", "ct_err:expr:call:named_args_not_allowed:list:x")
+        chk("list<integer>(x=[1,2,3])", "ct_err:expr:call:named_args_not_allowed:list:x")
+    }
+
+    @Test fun testConstructorPartial() {
+        chk("list(*)", "ct_err:expr:call:partial_not_supported:list")
+        chk("list<integer>(*)", "ct_err:expr:call:partial_not_supported:list")
+        chkEx("{ val f: () -> list<integer> = list(*); return f; }", "ct_err:expr:call:partial_not_supported:list")
+        chkEx("{ val f: () -> list<integer> = list<integer>(*); return f; }", "ct_err:expr:call:partial_not_supported:list")
+        chkEx("{ val f: (list<integer>) -> list<integer> = list(*); return f; }", "ct_err:expr:call:partial_not_supported:list")
+        chkEx("{ val f: (list<integer>) -> list<integer> = list<integer>(*); return f; }", "ct_err:expr:call:partial_not_supported:list")
     }
 
     @Test fun testEmpty() {
@@ -221,11 +232,17 @@ class LibListTest: BaseRellTest(false) {
     @Test fun testSet() {
         tst.strictToString = false
         val init = "val x = [1, 2, 3];"
+        chkEx("{ $init val r = x.set(0, 5); return ''+r+' '+x; }", "1 [5, 2, 3]")
+        chkEx("{ $init val r = x.set(1, 5); return ''+r+' '+x; }", "2 [1, 5, 3]")
+        chkEx("{ $init val r = x.set(2, 5); return ''+r+' '+x; }", "3 [1, 2, 5]")
+        chkEx("{ $init val r = x.set(-1, 5); return ''+r+' '+x; }", "rt_err:fn:list.set:index:3:-1")
+        chkEx("{ $init val r = x.set(3, 5); return ''+r+' '+x; }", "rt_err:fn:list.set:index:3:3")
+
+        chkWarn()
         chkEx("{ $init val r = x._set(0, 5); return ''+r+' '+x; }", "1 [5, 2, 3]")
+        chkWarn("deprecated:FUNCTION:list<integer>._set:set")
         chkEx("{ $init val r = x._set(1, 5); return ''+r+' '+x; }", "2 [1, 5, 3]")
-        chkEx("{ $init val r = x._set(2, 5); return ''+r+' '+x; }", "3 [1, 2, 5]")
-        chkEx("{ $init val r = x._set(-1, 5); return ''+r+' '+x; }", "rt_err:fn:list.set:index:3:-1")
-        chkEx("{ $init val r = x._set(3, 5); return ''+r+' '+x; }", "rt_err:fn:list.set:index:3:3")
+        chkWarn("deprecated:FUNCTION:list<integer>._set:set")
     }
 
     @Test fun testSubscriptSet() {
@@ -250,8 +267,8 @@ class LibListTest: BaseRellTest(false) {
         tst.strictToString = false
         def("struct rec { x: integer; }")
 
-        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l._sort(); return l; }", "[1, 2, 3, 4, 5]")
-        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; return l._sort(); }", "ct_err:stmt_return_unit")
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l.sort(); return l; }", "[1, 2, 3, 4, 5]")
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; return l.sort(); }", "ct_err:stmt_return_unit")
         chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; return l.sorted(); }", "[1, 2, 3, 4, 5]")
         chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l.sorted(); return l; }", "[5, 4, 3, 2, 1]")
 
@@ -263,5 +280,9 @@ class LibListTest: BaseRellTest(false) {
         chk("[(2,'B'),(2,'A'),(1,'X')].sorted()", "[(1,X), (2,A), (2,B)]")
 
         chk("[rec(123), rec(456)].sorted()", "ct_err:unknown_member:[list<rec>]:sorted")
+
+        chkWarn()
+        chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l._sort(); return l; }", "[1, 2, 3, 4, 5]")
+        chkWarn("deprecated:FUNCTION:list<integer>._sort:sort")
     }
 }

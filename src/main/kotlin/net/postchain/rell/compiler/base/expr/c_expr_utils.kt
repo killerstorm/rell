@@ -20,6 +20,7 @@ import net.postchain.rell.model.stmt.R_ExprStatement
 import net.postchain.rell.runtime.Rt_Error
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.LazyString
 
 object C_ExprUtils {
@@ -57,9 +58,8 @@ object C_ExprUtils {
         return V_BinaryExpr(ctx, pos, vOp, left, right, C_ExprVarFacts.EMPTY)
     }
 
-    fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, qualifiedName: C_QualifiedName): R_Expr {
-        val nameLazy = LazyString.of { qualifiedName.str() }
-        return createSysCallRExpr(type, fn, args, qualifiedName.pos, nameLazy)
+    fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, nameMsg: LazyPosString): R_Expr {
+        return createSysCallRExpr(type, fn, args, nameMsg.pos, nameMsg.lazyStr)
     }
 
     fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, caseCtx: C_FuncCaseCtx): R_Expr {

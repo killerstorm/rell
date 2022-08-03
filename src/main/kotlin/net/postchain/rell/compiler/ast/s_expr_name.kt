@@ -17,6 +17,7 @@ import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
+import net.postchain.rell.utils.LazyPosString
 
 class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
     override fun asName() = name
@@ -140,7 +141,7 @@ class S_NameExpr(val name: S_Name): S_Expr(name.pos) {
 
         override fun compile(): C_Expr {
             val fn = defRes.getDef()
-            val expr: C_Expr = C_FunctionExpr(cName, fn)
+            val expr: C_Expr = C_FunctionExpr(LazyPosString.of(cName), fn)
             return expr
         }
     }

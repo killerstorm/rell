@@ -71,12 +71,6 @@ object C_LibMemberFunctions {
         return fn
     }
 
-    fun getTypeStaticFunction(type: R_Type, name: R_Name): C_GlobalFunction? {
-        val fns = type.getStaticFunctions()
-        val fn = fns.get(name)
-        return fn
-    }
-
     fun getEnumPropertyOpt(name: R_Name): C_SysMemberProperty? {
         return C_Lib_Type_Enum.PROPERTIES[name]
     }

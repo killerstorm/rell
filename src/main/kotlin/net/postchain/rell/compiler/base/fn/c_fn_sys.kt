@@ -8,7 +8,6 @@ import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_CallArgumentValue_Expr
 import net.postchain.rell.compiler.ast.S_CallArgumentValue_Wildcard
 import net.postchain.rell.compiler.ast.S_Expr
-import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.expr.C_CallTypeHints
@@ -25,6 +24,7 @@ import net.postchain.rell.model.R_FunctionType
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.LazyString
 
 abstract class C_FormalParamsFuncBody<CtxT: C_FuncCaseCtx>(val resType: R_Type) {
@@ -125,13 +125,13 @@ class C_RegularSysGlobalFunction(
 ): C_GlobalFunction(ideInfo) {
     private val fullNameLazy = LazyString.of(fullName)
 
-    override fun compileCall(ctx: C_ExprContext, name: C_Name, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
         val target = C_FunctionCallTarget_SysGlobalFunction(ctx, name)
         val vExpr = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
         return vExpr ?: C_ExprUtils.errorVExpr(ctx, name.pos)
     }
 
-    private fun matchCase(ctx: C_ExprContext, name: C_Name, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
+    private fun matchCase(ctx: C_ExprContext, name: LazyPosString, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         for (case in cases) {
             val res = case.match(ctx, args)
             if (res != null) {
@@ -146,15 +146,14 @@ class C_RegularSysGlobalFunction(
 
     private inner class C_FunctionCallTarget_SysGlobalFunction(
             val ctx: C_ExprContext,
-            val name: C_Name
+            val name: LazyPosString
     ): C_FunctionCallTarget() {
         override fun retType() = null
         override fun typeHints() = C_SysFunctionParamHints(cases)
         override fun hasParameter(name: R_Name) = false
 
         override fun compileFull(args: C_FullCallArguments): V_Expr? {
-            val vArgs = args.compileSimpleArgs(name.rName)
-            vArgs ?: return null
+            val vArgs = args.compileSimpleArgs(name.lazyStr)
             val match = matchCase(ctx, name, vArgs)
             match ?: return null
             val caseCtx = C_GlobalFuncCaseCtx(name.pos, simpleName, fullNameLazy)
@@ -204,11 +203,11 @@ class C_RegularSysGlobalFunction(
 
 abstract class C_SpecialSysGlobalFunction(ideInfo: IdeSymbolInfo): C_GlobalFunction(ideInfo) {
     protected open fun paramCount(): Int? = null
-    protected abstract fun compileCall0(ctx: C_ExprContext, name: C_Name, args: List<S_Expr>): V_Expr
+    protected abstract fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr
 
     final override fun compileCall(
             ctx: C_ExprContext,
-            name: C_Name,
+            name: LazyPosString,
             args: List<S_CallArgument>,
             resTypeHint: C_TypeHint
     ): V_Expr {

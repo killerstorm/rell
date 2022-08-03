@@ -7,7 +7,6 @@ package net.postchain.rell.compiler.base.def
 import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_CompilerPass
-import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.expr.C_AttributeResolver
 import net.postchain.rell.compiler.base.expr.C_CallArgument
@@ -18,9 +17,10 @@ import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_StructExpr
 import net.postchain.rell.model.R_Struct
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.LazyPosString
 
 class C_StructGlobalFunction(private val struct: R_Struct, ideInfo: IdeSymbolInfo): C_GlobalFunction(ideInfo) {
-    override fun compileCall(ctx: C_ExprContext, name: C_Name, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
         return compileCall(ctx, struct, name.pos, args)
     }
 

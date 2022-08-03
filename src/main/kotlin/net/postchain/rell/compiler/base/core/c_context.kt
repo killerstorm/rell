@@ -6,10 +6,7 @@ package net.postchain.rell.compiler.base.core
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
-import net.postchain.rell.compiler.base.def.C_AbstractFunctionDescriptor
-import net.postchain.rell.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.compiler.base.def.C_MountTablesBuilder
-import net.postchain.rell.compiler.base.def.C_OverrideFunctionDescriptor
+import net.postchain.rell.compiler.base.def.*
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.fn.C_FormalParameters
 import net.postchain.rell.compiler.base.modifier.C_ModifierValue
@@ -290,11 +287,11 @@ class C_NamespaceContext(
         return scope.getDef(name, selector)
     }
 
-    fun getType(name: C_QualifiedNameHandle): R_Type {
+    fun getType(name: C_QualifiedNameHandle): C_TypeDef {
         return getDef(name, C_ScopeDefSelector.TYPE)
     }
 
-    fun getTypeOpt(name: C_QualifiedNameHandle): C_DefResolution<R_Type>? {
+    fun getTypeOpt(name: C_QualifiedNameHandle): C_DefResolution<C_TypeDef>? {
         return getDefOpt(name, C_ScopeDefSelector.TYPE)
     }
 

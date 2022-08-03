@@ -12,7 +12,11 @@ import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.def.C_MntEntry
 import net.postchain.rell.compiler.base.expr.C_ExprContextAttr
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_Definition
+import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.model.R_MountName
+import net.postchain.rell.model.R_Type
+import net.postchain.rell.utils.LazyString
 
 object C_Errors {
     fun errTypeMismatch(pos: S_Pos, srcType: R_Type, dstType: R_Type, errCode: String, errMsg: String): C_Error {
@@ -39,11 +43,6 @@ object C_Errors {
         return C_Error.stop(pos, "$errCode:$attrsCode", "$errMsg: $attrsText")
     }
 
-    fun errUnknownName(baseType: R_Type, name: C_Name): C_Error {
-        val baseName = baseType.name
-        return C_Error.stop(name.pos, "unknown_name:$baseName.$name", "Unknown name: '$baseName.$name'")
-    }
-
     fun errUnknownName(name: C_Name): C_Error {
         return errUnknownName(name.pos, name.str)
     }
@@ -62,8 +61,10 @@ object C_Errors {
     }
 
     fun errUnknownName(msgCtx: C_MessageContext, baseType: R_Type, name: C_Name) {
-        val baseName = baseType.name
-        msgCtx.error(name.pos, "unknown_name:$baseName.$name", "Unknown name: '$baseName.$name'")
+        if (baseType.isNotError()) {
+            val baseName = baseType.name
+            msgCtx.error(name.pos, "unknown_name:$baseName.$name", "Unknown name: '$baseName.$name'")
+        }
     }
 
     fun errUnknownName(msgCtx: C_MessageContext, pos: S_Pos, str: String) {
@@ -90,8 +91,8 @@ object C_Errors {
         return C_CodeMsg("expr:call:sys_global_named_arg:$arg", "Named arguments not supported for function '$fnName'")
     }
 
-    fun errNamedArgsNotSupported(msgCtx: C_MessageContext, fn: R_Name?, arg: C_Name) {
-        val fnCode = fn?.str ?: ""
+    fun errNamedArgsNotSupported(msgCtx: C_MessageContext, fn: LazyString?, arg: C_Name) {
+        val fnCode = fn?.value ?: ""
         val fnMsg = if (fn == null) "this function" else "function '$fn'"
         msgCtx.error(arg.pos, "expr:call:named_args_not_allowed:$fnCode:$arg", "Named arguments not supported for $fnMsg")
     }

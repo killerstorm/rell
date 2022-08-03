@@ -6,7 +6,8 @@ package net.postchain.rell.lib.type
 
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
-import net.postchain.rell.compiler.base.utils.C_MemberFuncBuilder
+import net.postchain.rell.compiler.base.utils.C_LibUtils
+import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
 import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_UnitValue
@@ -15,7 +16,6 @@ import net.postchain.rell.utils.immListOf
 object C_Lib_Types {
     private val TYPES = immListOf(
         C_Lib_Type_Unit,
-        C_Lib_Type_Null,
         C_Lib_Type_Boolean,
         C_Lib_Type_Integer,
         C_Lib_Type_Decimal,
@@ -33,6 +33,10 @@ object C_Lib_Types {
         for (type in TYPES) {
             type.bind(b)
         }
+
+        C_Lib_Type_List.bind(b)
+        C_Lib_Type_Set.bind(b)
+        C_Lib_Type_Map.bind(b)
     }
 }
 
@@ -54,8 +58,10 @@ object C_Lib_Type_Unit: C_Lib_Type("unit", R_UnitType, defaultMemberFns = false)
     }
 }
 
-object C_Lib_Type_Null: C_Lib_Type("null", R_NullType, bindType = false, defaultMemberFns = false) {
-    override fun bindMemberFunctions(b: C_MemberFuncBuilder) {
+object C_Lib_Type_Null {
+    val memberFns: C_MemberFuncTable = let {
+        val b = C_LibUtils.typeMemFuncBuilder(R_NullType, default = false)
         b.add("to_gtv", R_GtvType, listOf(), C_Lib_Type_Any.ToGtv(R_NullType, false, "to_gtv"))
+        b.build()
     }
 }

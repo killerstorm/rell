@@ -17,6 +17,8 @@ import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.R_PartialArgMapping
 import net.postchain.rell.model.expr.R_PartialCallMapping
+import net.postchain.rell.utils.LazyPosString
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import org.apache.commons.lang3.mutable.MutableBoolean
@@ -37,7 +39,7 @@ class C_EffectivePartialArguments(
 }
 
 sealed class C_FullCallArguments(protected val ctx: C_ExprContext) {
-    abstract fun compileSimpleArgs(functionName: R_Name): List<V_Expr>?
+    abstract fun compileSimpleArgs(functionName: LazyString): List<V_Expr>
     abstract fun compileComplexArgs(callInfo: C_FunctionCallInfo): V_FunctionCallArgs?
 }
 
@@ -85,7 +87,7 @@ private class C_GenericCallArgs<T>(
     val positional = positional.toImmList()
     val named = named.toImmList()
 
-    fun checkNoNamedArgs(ctx: C_ExprContext, fnName: R_Name?) {
+    fun checkNoNamedArgs(ctx: C_ExprContext, fnName: LazyString?) {
         val arg = named.firstOrNull()
         if (arg != null) {
             C_Errors.errNamedArgsNotSupported(ctx.msgCtx, fnName, arg.name)
@@ -164,7 +166,7 @@ private class C_FullCallArguments_Impl(
         ctx: C_ExprContext,
         private val args: C_InternalCallArguments_Full
 ): C_FullCallArguments(ctx) {
-    override fun compileSimpleArgs(functionName: R_Name): List<V_Expr> {
+    override fun compileSimpleArgs(functionName: LazyString): List<V_Expr> {
         return args.compileSimplePositionalArgs(ctx, functionName)
     }
 
@@ -195,7 +197,7 @@ private sealed class C_InternalCallArguments
 private class C_InternalCallArguments_Full(
         private val genArgs: C_GenericCallArgs<V_Expr>
 ): C_InternalCallArguments() {
-    fun compileSimplePositionalArgs(ctx: C_ExprContext, fnName: R_Name?): List<V_Expr> {
+    fun compileSimplePositionalArgs(ctx: C_ExprContext, fnName: LazyString?): List<V_Expr> {
         genArgs.checkNoNamedArgs(ctx, fnName)
         return genArgs.mixed
     }

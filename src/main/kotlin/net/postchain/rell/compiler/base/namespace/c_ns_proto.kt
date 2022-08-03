@@ -62,14 +62,17 @@ private class C_NsDef_SysNamespace(ns: C_DefProxy<C_Namespace>): C_NsDef_Namespa
 
 class C_NsDef_UserNamespace(ns: C_DefProxy<C_Namespace>): C_NsDef_Namespace(ns)
 
-private class C_NsDef_Type(private val type: C_DefProxy<R_Type>): C_NsDef(type.ideInfo) {
+private class C_NsDef_Type(private val type: C_DefProxy<C_TypeDef>): C_NsDef(type.ideInfo) {
     override fun type() = C_DeclarationType.TYPE
-    override fun toNamespaceElement() = C_NamespaceElement(type = type)
+    override fun toNamespaceElement() = C_NamespaceElement.create(
+        type = type,
+        value = C_NamespaceValue_Type(type),
+    )
 }
 
 private sealed class C_NsDef_Entity(
         ideInfo: IdeSymbolInfo,
-        private val entity: R_EntityDefinition
+        private val entity: R_EntityDefinition,
 ): C_NsDef(ideInfo) {
     final override fun type() = C_DeclarationType.ENTITY
 
@@ -138,10 +141,13 @@ private class C_NsDef_Enum(
 ): C_NsDef(ideInfo) {
     override fun type() = C_DeclarationType.ENUM
 
-    override fun toNamespaceElement() = C_NamespaceElement.create(
-            type = C_DefProxy.create(e.type, IdeSymbolInfo(IdeSymbolKind.DEF_ENUM)),
-            value = C_NamespaceValue_Enum(ideInfo, e)
-    )
+    override fun toNamespaceElement(): C_NamespaceElement {
+        val typeProxy = C_DefProxy.create(e.type, ideInfo)
+        return C_NamespaceElement.create(
+            type = typeProxy,
+            value = C_NamespaceValue_Type(typeProxy)
+        )
+    }
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         b.enums.add(e.moduleLevelName, e)
@@ -254,7 +260,13 @@ class C_SysNsProtoBuilder {
         addType(rName, proxy)
     }
 
-    fun addType(name: R_Name, type: C_DefProxy<R_Type>) {
+    fun addType(name: String, type: C_GenericType) {
+        val rName = R_Name.of(name)
+        val proxy = C_DefProxy.create(type, IdeSymbolInfo.DEF_TYPE)
+        addType(rName, proxy)
+    }
+
+    fun addType(name: R_Name, type: C_DefProxy<C_TypeDef>) {
         addDef(name, C_NsDef_Type(type))
     }
 

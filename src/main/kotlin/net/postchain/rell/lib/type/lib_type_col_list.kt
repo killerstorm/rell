@@ -4,21 +4,37 @@
 
 package net.postchain.rell.lib.type
 
+import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_PosValue
+import net.postchain.rell.compiler.base.core.C_NamespaceContext
+import net.postchain.rell.compiler.base.core.C_TypeHint
+import net.postchain.rell.compiler.base.def.C_GenericType
+import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_CollectionSub
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_Simple
+import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_LibUtils.depError
+import net.postchain.rell.compiler.base.utils.C_LibUtils.depWarn
 import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
 import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.R_CollectionKind_List
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.lib.type.C_Lib_Type_Collection as ColFns
 
 private fun matcher(type: R_Type): C_ArgTypeMatcher = C_ArgTypeMatcher_Simple(type)
 private fun matcherColSub(elementType: R_Type): C_ArgTypeMatcher = C_ArgTypeMatcher_CollectionSub(elementType)
 
 object C_Lib_Type_List {
+    const val TYPE_NAME = "list"
+
+    fun getConstructorFn(listType: R_ListType): C_GlobalFunction {
+        return C_CollectionConstructorFunction(C_CollectionKindAdapter_List, listType.elementType)
+    }
+
     fun getMemberFns(listType: R_ListType): C_MemberFuncTable {
         val elemType = listType.elementType
 
@@ -36,7 +52,8 @@ object C_Lib_Type_List {
         b.add("sub", listType, listOf(R_IntegerType), ListFns.Sub_2)
         b.add("sub", listType, listOf(R_IntegerType, R_IntegerType), ListFns.Sub_3)
 
-        b.add("_set", elemType, listOf(R_IntegerType, elemType), ListFns.Set)
+        b.add("set", elemType, listOf(R_IntegerType, elemType), ListFns.Set)
+        b.add("_set", elemType, listOf(R_IntegerType, elemType), ListFns.Set, depWarn("set"))
 
         b.add("add", R_BooleanType, listOf(R_IntegerType, elemType), ListFns.Add)
         b.addEx("addAll", R_BooleanType, listOf(matcher(R_IntegerType), matcherColSub(elemType)), ListFns.AddAll, depError("add_all"))
@@ -44,11 +61,34 @@ object C_Lib_Type_List {
 
         val comparator = elemType.comparator()
         if (comparator != null) {
-            b.add("_sort", R_UnitType, listOf(), ListFns.Sort(comparator))
+            val fn = ListFns.Sort(comparator)
+            b.add("sort", R_UnitType, listOf(), fn)
+            b.add("_sort", R_UnitType, listOf(), fn, depWarn("sort"))
         }
 
         return b.build()
     }
+
+    fun bind(b: C_SysNsProtoBuilder) {
+        b.addType(TYPE_NAME, C_GenericType_List)
+    }
+}
+
+private object C_GenericType_List: C_GenericType(C_Lib_Type_List.TYPE_NAME, 1) {
+    override val rawConstructorFn: C_GlobalFunction = C_CollectionConstructorFunction(C_CollectionKindAdapter_List, null)
+
+    override fun compileType0(ctx: C_NamespaceContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type {
+        checkEquals(args.size, 1)
+        val elemEntry = args[0]
+        C_CollectionKindAdapter_List.checkElementType(ctx, pos, elemEntry.pos, elemEntry.value)
+        return R_ListType(elemEntry.value)
+    }
+}
+
+private object C_CollectionKindAdapter_List: C_CollectionKindAdapter(C_Lib_Type_List.TYPE_NAME) {
+    override fun elementTypeFromTypeHint(typeHint: C_TypeHint) = typeHint.getListElementType()
+    override fun makeKind(rElementType: R_Type) = R_CollectionKind_List(R_ListType(rElementType))
+    override fun checkElementType0(ctx: C_NamespaceContext, pos: S_Pos, elemTypePos: S_Pos, rElemType: R_Type) {}
 }
 
 private object ListFns {

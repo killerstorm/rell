@@ -5,6 +5,7 @@
 package net.postchain.rell.compiler.base.core
 
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
+import net.postchain.rell.compiler.base.def.C_TypeDef
 import net.postchain.rell.compiler.base.namespace.*
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Error
@@ -13,7 +14,6 @@ import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_ObjectDefinition
 import net.postchain.rell.model.R_OperationDefinition
-import net.postchain.rell.model.R_Type
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.Getter
 import net.postchain.rell.utils.checkEquals
@@ -63,7 +63,7 @@ class C_DefResolution<T>(
 
 sealed class C_ScopeDefSelector<T> {
     companion object {
-        val TYPE: C_ScopeDefSelector<R_Type> = C_ScopeDefSelector_Type
+        val TYPE: C_ScopeDefSelector<C_TypeDef> = C_ScopeDefSelector_Type
         val ENTITY: C_ScopeDefSelector<R_EntityDefinition> = C_ScopeDefSelector_Entity
         val OBJECT: C_ScopeDefSelector<R_ObjectDefinition> = C_ScopeDefSelector_Object
         val VALUE: C_ScopeDefSelector<C_NamespaceValue> = C_ScopeDefSelector_Value
@@ -132,7 +132,7 @@ private sealed class C_GenericScopeDefSelector<T, P>(
     }
 }
 
-private object C_ScopeDefSelector_Type: C_GenericScopeDefSelector<R_Type, R_Type>(
+private object C_ScopeDefSelector_Type: C_GenericScopeDefSelector<C_TypeDef, C_TypeDef>(
         C_CompilerPass.MEMBERS,
         "type" toCodeMsg "type",
         C_DefTransformer_None()
@@ -140,7 +140,7 @@ private object C_ScopeDefSelector_Type: C_GenericScopeDefSelector<R_Type, R_Type
     override fun getDef(ns: C_ScopeNs, name: C_Name) = ns.type(name)
 }
 
-private object C_ScopeDefSelector_Entity: C_GenericScopeDefSelector<R_EntityDefinition, R_Type>(
+private object C_ScopeDefSelector_Entity: C_GenericScopeDefSelector<R_EntityDefinition, C_TypeDef>(
         C_CompilerPass.MEMBERS,
         "entity" toCodeMsg "entity",
         C_DefTransformer_Entity
@@ -187,7 +187,7 @@ private interface C_ScopeNsAdapter {
 private abstract class C_ScopeNs(qName: List<C_Name>) {
     private val qName = qName.toImmList()
 
-    abstract fun type(name: C_Name): C_DefRef<R_Type>?
+    abstract fun type(name: C_Name): C_DefRef<C_TypeDef>?
     abstract fun namespace(name: C_Name): C_DefRef<C_Namespace>?
     abstract fun value(name: C_Name): C_DefRef<C_NamespaceValue>?
     abstract fun function(name: C_Name): C_DefRef<C_GlobalFunction>?

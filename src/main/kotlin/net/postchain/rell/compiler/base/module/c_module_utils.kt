@@ -14,6 +14,7 @@ import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_QualifiedName
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
@@ -335,8 +336,9 @@ private class C_ModuleDirTree(
                 readerCtx.msgCtx.error(e)
                 null
             } catch (e: Throwable) {
-                // The file may be provided also by IDE, so all kinds of errors shall be handled.
-                null
+                if (CommonUtils.IS_UNIT_TEST) throw e else null
+                // This code might be called from IDE, for which reason it's better to suppress an error.
+                // TODO Suppress the error only when called from IDE
             }
         }
 

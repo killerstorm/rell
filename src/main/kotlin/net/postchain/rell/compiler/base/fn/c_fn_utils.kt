@@ -12,6 +12,7 @@ import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
+import net.postchain.rell.utils.LazyPosString
 
 object C_FunctionUtils {
     fun compileFunctionHeader(
@@ -83,7 +84,7 @@ object C_FunctionUtils {
         return res ?: C_ExprUtils.errorVExpr(ctx, callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
     }
 
-    fun compileReturnType(ctx: C_ExprContext, name: C_Name, header: C_FunctionHeader): R_Type? {
+    fun compileReturnType(ctx: C_ExprContext, name: LazyPosString, header: C_FunctionHeader): R_Type? {
         if (header.explicitType != null) {
             return header.explicitType
         } else if (header.body == null) {
@@ -94,11 +95,11 @@ object C_FunctionUtils {
         val retTypeRes = header.body.returnType()
 
         if (retTypeRes.recursion) {
-            val nameStr = name.str
+            val nameStr = name.lazyStr.value
             ctx.msgCtx.error(name.pos, "fn_type_recursion:$decType:$nameStr",
                     "${decType.capitalizedMsg} '$nameStr' is recursive, cannot infer the type; specify type explicitly")
         } else if (retTypeRes.stackOverflow) {
-            val nameStr = name.str
+            val nameStr = name.lazyStr.value
             ctx.msgCtx.error(name.pos, "fn_type_stackoverflow:$decType:$nameStr",
                     "Cannot infer type for ${decType.msg} '$nameStr': call chain is too long; specify type explicitly")
         }

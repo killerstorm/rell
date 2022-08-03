@@ -43,6 +43,18 @@ class LibMapTest: BaseRellTest(false) {
 
         chk("map([('Bob',123),('Bob',456)])", "rt_err:map:new:iterator:dupkey:text[Bob]")
         chk("map([('Bob',123),('Bob',123)])", "rt_err:map:new:iterator:dupkey:text[Bob]")
+
+        chk("map(x=[123:'Bob'])", "ct_err:expr:call:named_args_not_allowed:map:x")
+        chk("map<integer,text>(x=[123:'Bob'])", "ct_err:expr:call:named_args_not_allowed:map:x")
+    }
+
+    @Test fun testConstructorPartial() {
+        chk("map(*)", "ct_err:expr:call:partial_not_supported:map")
+        chk("map<integer,text>(*)", "ct_err:expr:call:partial_not_supported:map")
+        chkEx("{ val f: () -> map<integer,text> = map(*); return f; }", "ct_err:expr:call:partial_not_supported:map")
+        chkEx("{ val f: () -> map<integer,text> = map<integer,text>(*); return f; }", "ct_err:expr:call:partial_not_supported:map")
+        chkEx("{ val f: (map<integer,text>) -> map<integer,text> = map(*); return f; }", "ct_err:expr:call:partial_not_supported:map")
+        chkEx("{ val f: (map<integer,text>) -> map<integer,text> = map<integer,text>(*); return f; }", "ct_err:expr:call:partial_not_supported:map")
     }
 
     @Test fun testEmpty() {

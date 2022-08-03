@@ -571,7 +571,7 @@ class S_EnumDefinition(
             val attrIdeInfo = IdeSymbolInfo(IdeSymbolKind.MEM_ENUM_ATTR)
             val cAttrName = attr.compile(ctx.symCtx, attrIdeInfo)
             if (set.add(cAttrName.str)) {
-                rAttrs.add(R_EnumAttr(cAttrName.str, rAttrs.size, attrIdeInfo))
+                rAttrs.add(R_EnumAttr(cAttrName.rName, rAttrs.size, attrIdeInfo))
             } else {
                 ctx.msgCtx.error(attr.pos, "enum_dup:$attr", "Duplicate enum constant: '$cAttrName'")
             }

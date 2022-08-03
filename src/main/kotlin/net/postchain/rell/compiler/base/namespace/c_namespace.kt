@@ -6,9 +6,7 @@ package net.postchain.rell.compiler.base.namespace
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
-import net.postchain.rell.compiler.base.def.C_GlobalConstantDefinition
-import net.postchain.rell.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.compiler.base.def.C_OperationGlobalFunction
+import net.postchain.rell.compiler.base.def.*
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_MessageType
 import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
@@ -92,8 +90,14 @@ class C_DefProxy<T> private constructor(
     }
 
     companion object {
-        fun create(type: R_Type, ideInfo: IdeSymbolInfo, deprecated: C_Deprecated? = null): C_DefProxy<R_Type> {
-            return createGeneric(type, ideInfo, C_DeclarationType.TYPE, deprecated)
+        fun create(type: R_Type, ideInfo: IdeSymbolInfo, deprecated: C_Deprecated? = null): C_DefProxy<C_TypeDef> {
+            val typeDef = C_TypeDef_Normal(type)
+            return createGeneric(typeDef, ideInfo, C_DeclarationType.TYPE, deprecated)
+        }
+
+        fun create(type: C_GenericType, ideInfo: IdeSymbolInfo, deprecated: C_Deprecated? = null): C_DefProxy<C_TypeDef> {
+            val typeDef = C_TypeDef_Generic(type)
+            return createGeneric(typeDef, ideInfo, C_DeclarationType.TYPE, deprecated)
         }
 
         fun create(
@@ -157,8 +161,13 @@ class C_DefTransformer_None<T>: C_DefTransformer<T, T>() {
     override fun transform(def: T) = def
 }
 
-object C_DefTransformer_Entity: C_DefTransformer<R_Type, R_EntityDefinition>() {
-    override fun transform(def: R_Type) = (def as? R_EntityType)?.rEntity
+object C_DefTransformer_Entity: C_DefTransformer<C_TypeDef, R_EntityDefinition>() {
+    override fun transform(def: C_TypeDef): R_EntityDefinition? {
+        return when (def) {
+            is C_TypeDef_Normal -> (def.type as? R_EntityType)?.rEntity
+            is C_TypeDef_Generic -> null
+        }
+    }
 }
 
 object C_DefTransformer_Object: C_DefTransformer<C_NamespaceValue, R_ObjectDefinition>() {
@@ -228,7 +237,7 @@ class C_NamespaceRef(
 
 sealed class C_Namespace {
     abstract fun namespace(name: R_Name): C_DefProxy<C_Namespace>?
-    abstract fun type(name: R_Name): C_DefProxy<R_Type>?
+    abstract fun type(name: R_Name): C_DefProxy<C_TypeDef>?
     abstract fun value(name: R_Name): C_DefProxy<C_NamespaceValue>?
     abstract fun function(name: R_Name): C_DefProxy<C_GlobalFunction>?
 
@@ -250,7 +259,7 @@ sealed class C_Namespace {
 
 private class C_BasicNamespace(
         namespaces: Map<R_Name, C_DefProxy<C_Namespace>>,
-        types: Map<R_Name, C_DefProxy<R_Type>>,
+        types: Map<R_Name, C_DefProxy<C_TypeDef>>,
         values: Map<R_Name, C_DefProxy<C_NamespaceValue>>,
         functions: Map<R_Name, C_DefProxy<C_GlobalFunction>>
 ): C_Namespace() {
@@ -282,7 +291,7 @@ private class C_LateNamespace(private val getter: LateGetter<C_Namespace>): C_Na
 
 class C_NamespaceElement(
         val namespace: C_DefProxy<C_Namespace>? = null,
-        val type: C_DefProxy<R_Type>? = null,
+        val type: C_DefProxy<C_TypeDef>? = null,
         val value: C_DefProxy<C_NamespaceValue>? = null,
         val function: C_DefProxy<C_GlobalFunction>? = null
 ) {
@@ -303,7 +312,7 @@ class C_NamespaceElement(
     companion object {
         fun create(
                 namespace: C_DefProxy<C_Namespace>? = null,
-                type: C_DefProxy<R_Type>? = null,
+                type: C_DefProxy<C_TypeDef>? = null,
                 value: C_NamespaceValue? = null,
                 function: C_GlobalFunction? = null
         ): C_NamespaceElement {
@@ -319,7 +328,7 @@ class C_NamespaceElement(
 
 class C_NamespaceBuilder {
     private val namespaces = mutableMapOf<R_Name, C_DefProxy<C_Namespace>>()
-    private val types = mutableMapOf<R_Name, C_DefProxy<R_Type>>()
+    private val types = mutableMapOf<R_Name, C_DefProxy<C_TypeDef>>()
     private val values = mutableMapOf<R_Name, C_DefProxy<C_NamespaceValue>>()
     private val functions = mutableMapOf<R_Name, C_DefProxy<C_GlobalFunction>>()
 
@@ -331,7 +340,7 @@ class C_NamespaceBuilder {
     }
 
     fun addNamespace(name: R_Name, ns: C_DefProxy<C_Namespace>) = addDef(namespaces, name, ns)
-    fun addType(name: R_Name, type: C_DefProxy<R_Type>) = addDef(types, name, type)
+    fun addType(name: R_Name, type: C_DefProxy<C_TypeDef>) = addDef(types, name, type)
     fun addValue(name: R_Name, value: C_DefProxy<C_NamespaceValue>) = addDef(values, name, value)
     fun addFunction(name: R_Name, function: C_DefProxy<C_GlobalFunction>) = addDef(functions, name, function)
 
@@ -390,15 +399,17 @@ class C_NamespaceValue_Entity(
         private val type: R_Type
 ): C_NamespaceValue(ideInfo) {
     override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
-        return C_TypeExpr(name.last.pos, type)
+        return C_SpecificTypeExpr(name.last.pos, type)
     }
 }
 
-class C_NamespaceValue_Enum(
-        ideInfo: IdeSymbolInfo,
-        private val rEnum: R_EnumDefinition
-): C_NamespaceValue(ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName, implicitAttrMatchName: R_Name?) = C_EnumExpr(ctx.msgCtx, name, rEnum)
+class C_NamespaceValue_Type(
+    private val defProxy: C_DefProxy<C_TypeDef>
+): C_NamespaceValue(defProxy.ideInfo) {
+    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+        val typeDef = defProxy.getDef(ctx.msgCtx, name)
+        return typeDef.toExpr(name.pos)
+    }
 }
 
 class C_NamespaceValue_Namespace(

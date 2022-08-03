@@ -79,7 +79,8 @@ class C_AnonAttrHeaderHandle(
     private fun compileType(): R_Type? {
         val typeRes = ctx.getTypeOpt(typeNameHand)
 
-        val baseType = typeRes?.getDef()
+        val baseType = typeRes?.getDef()?.toRType(ctx.msgCtx, typeNameHand.pos)
+
         var type = when {
             baseType == null -> null
             nullable -> C_Types.toNullable(baseType)

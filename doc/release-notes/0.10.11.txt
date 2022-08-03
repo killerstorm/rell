@@ -1,1 +1,17 @@
 RELEASE NOTES 0.10.11 (2022-??-??)
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+1. Language: "list", "set", "map" keywords removed.
+
+Words "list", "set" and "map" are now regular names, not keywords. Not a significant change, but a step towards
+supporting arbitrary generic library types in the future.
+
+Practical implication: names "list", "set", "map" can be used in code (for variables, attributes, etc.).
+
+Method ._set() of type list<T> was deprecated (with warning) and a new method .set() added to be used instead.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Library: new method "sort" instead of the old "_sort" one.
+
+As keyword "sort" was removed in 0.10.10 (and word "sort" became a regular name), a new method .sort() was added to
+replace the old method ._sort() of list<T>. The old method was deprecated (with warning).

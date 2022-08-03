@@ -21,6 +21,17 @@ class LibSetTest: BaseRellTest(false) {
         chk("set([1:'A',2:'B'])", "set<(integer,text)>[(int[1],text[A]),(int[2],text[B])]")
         chk("set<list<integer>>()", "ct_err:expr_set_type:list<integer>")
         chk("set([[123]])", "ct_err:expr_set_type:list<integer>")
+        chk("set(x=[1,2,3])", "ct_err:expr:call:named_args_not_allowed:set:x")
+        chk("set<integer>(x=[1,2,3])", "ct_err:expr:call:named_args_not_allowed:set:x")
+    }
+
+    @Test fun testConstructorPartial() {
+        chk("set(*)", "ct_err:expr:call:partial_not_supported:set")
+        chk("set<integer>(*)", "ct_err:expr:call:partial_not_supported:set")
+        chkEx("{ val f: () -> set<integer> = set(*); return f; }", "ct_err:expr:call:partial_not_supported:set")
+        chkEx("{ val f: () -> set<integer> = set<integer>(*); return f; }", "ct_err:expr:call:partial_not_supported:set")
+        chkEx("{ val f: (list<integer>) -> set<integer> = set(*); return f; }", "ct_err:expr:call:partial_not_supported:set")
+        chkEx("{ val f: (list<integer>) -> set<integer> = set<integer>(*); return f; }", "ct_err:expr:call:partial_not_supported:set")
     }
 
     @Test fun testEmpty() {

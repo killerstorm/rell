@@ -5,6 +5,8 @@
 package net.postchain.rell.lib.type
 
 import net.postchain.rell.compiler.base.fn.C_SysMemberProperty
+import net.postchain.rell.compiler.base.namespace.C_NamespaceValue
+import net.postchain.rell.compiler.base.namespace.C_NamespaceValue_RtValue
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncTable
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
@@ -20,6 +22,15 @@ object C_Lib_Type_Enum {
             "value" to C_SysMemberProperty(R_IntegerType, EnumFns.Value, pure = true)
         )
         .mapKeys { R_Name.of(it.key) }.toImmMap()
+
+    fun getStaticValues(type: R_EnumType): Map<R_Name, C_NamespaceValue> {
+        return type.enum.attrs
+                .map {
+                it.rName to C_NamespaceValue_RtValue(it.ideInfo, Rt_EnumValue(type, it))
+            }
+            .toMap()
+            .toImmMap()
+    }
 
     fun getStaticFns(type: R_EnumType): C_GlobalFuncTable {
         val b = C_LibUtils.typeGlobalFuncBuilder(type)

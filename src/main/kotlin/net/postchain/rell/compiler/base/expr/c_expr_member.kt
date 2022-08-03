@@ -20,6 +20,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.toImmList
 
 class C_MemberRef(val base: V_Expr, val name: C_Name, val safe: Boolean) {
@@ -466,8 +467,7 @@ private class C_MemberFunctionExpr(
         override fun hasParameter(name: R_Name) = false
 
         override fun compileFull(args: C_FullCallArguments): V_Expr? {
-            val vArgs = args.compileSimpleArgs(fnName)
-            vArgs ?: return null
+            val vArgs = args.compileSimpleArgs(LazyString.of(fnName.str))
             val callCtx = C_MemberFuncCaseCtx(memberLink, fnName)
             return fn.compileCallFull(ctx, callCtx, vArgs)
         }

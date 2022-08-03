@@ -7,22 +7,20 @@ package net.postchain.rell.compiler.base.expr
 import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.base.core.C_MessageContext
 import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.def.C_StructGlobalFunction
+import net.postchain.rell.compiler.base.def.C_TypeDef
 import net.postchain.rell.compiler.base.namespace.*
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_ObjectExpr
-import net.postchain.rell.lib.C_LibMemberFunctions
 import net.postchain.rell.model.*
-import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.LazyPosString
 
 class C_ExprHint(val typeHint: C_TypeHint, val callable: Boolean = false) {
     companion object {
@@ -160,12 +158,12 @@ class C_NamespaceExpr(private val qName: C_QualifiedName, private val nsRef: C_N
         }
     }
 
-    private class MemberRes_Type(defRef: C_DefRef<R_Type>): MemberRes_Generic<R_Type>(defRef) {
+    private class MemberRes_Type(defRef: C_DefRef<C_TypeDef>): MemberRes_Generic<C_TypeDef>(defRef) {
         override fun isCallable() = false
 
         override fun toExpr(ctx: MemberCtx): C_Expr {
             val def = defRef.getDef()
-            return C_TypeExpr(ctx.memberName.pos, def)
+            return def.toExpr(ctx.memberName.pos)
         }
     }
 
@@ -174,7 +172,7 @@ class C_NamespaceExpr(private val qName: C_QualifiedName, private val nsRef: C_N
 
         override fun toExpr(ctx: MemberCtx): C_Expr {
             val def = defRef.getDef()
-            return C_FunctionExpr(ctx.memberName, def)
+            return C_FunctionExpr(LazyPosString.of(ctx.memberName), def)
         }
     }
 }
@@ -216,7 +214,8 @@ class C_NamespaceStructExpr(
     override fun memberFunction(ctx: C_ExprContext, memberName: C_Name): C_ExprMember? {
         val fnRef = nsRef.function(memberName)
         fnRef ?: return null
-        val expr: C_Expr = C_FunctionRefExpr(memberName, fnRef)
+        val lazyMemberName = LazyPosString.of(memberName)
+        val expr: C_Expr = C_FunctionRefExpr(lazyMemberName, fnRef)
         return C_ExprMember(expr, fnRef.ideSymbolInfo())
     }
 }
@@ -229,7 +228,8 @@ class C_MirrorStructExpr(pos: S_Pos, struct: R_Struct, private val ns: C_Namespa
         fnProxy ?: return null
 
         val fnRef = C_DefRef(ctx.msgCtx, C_QualifiedName(memberName), fnProxy)
-        val expr: C_Expr = C_FunctionRefExpr(memberName, fnRef)
+        val lazyMemberName = LazyPosString.of(memberName)
+        val expr: C_Expr = C_FunctionRefExpr(lazyMemberName, fnRef)
         return C_ExprMember(expr, fnProxy.ideInfo)
     }
 }
@@ -246,45 +246,7 @@ class C_ObjectExpr(exprCtx: C_ExprContext, qName: C_QualifiedName, rObject: R_Ob
     }
 }
 
-class C_EnumExpr(
-        private val msgCtx: C_MessageContext,
-        private val qName: C_QualifiedName,
-        private val rEnum: R_EnumDefinition
-): C_Expr() {
-    override fun kind() = C_ExprKind.ENUM
-    override fun startPos() = qName.pos
-
-    override fun member0(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
-        val valueMember = memberValue(ctx, memberName)
-        val fnMember = memberFunction(memberName)
-
-        val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
-        if (res == null) {
-            C_Errors.errUnknownName(ctx.msgCtx, qName, memberName)
-            return C_ExprUtils.errorMember(ctx, memberName.pos)
-        }
-
-        return res
-    }
-
-    private fun memberValue(ctx: C_ExprContext, memberName: C_Name): C_ExprMember? {
-        val attr = rEnum.attr(memberName.str)
-        attr ?: return null
-
-        val rValue = Rt_EnumValue(rEnum.type, attr)
-        val vExpr = V_ConstantValueExpr(ctx, startPos(), rValue)
-        return C_ExprMember(C_VExpr(vExpr), attr.ideInfo)
-    }
-
-    private fun memberFunction(memberName: C_Name): C_ExprMember? {
-        val fn = C_LibMemberFunctions.getTypeStaticFunction(rEnum.type, memberName.rName)
-        fn ?: return null
-        val fnExpr = C_FunctionExpr(memberName, fn)
-        return C_ExprMember(fnExpr, fn.ideInfo)
-    }
-}
-
-class C_FunctionExpr(private val name: C_Name, private val fn: C_GlobalFunction): C_Expr() {
+class C_FunctionExpr(private val name: LazyPosString, private val fn: C_GlobalFunction): C_Expr() {
     override fun kind() = C_ExprKind.FUNCTION
     override fun startPos() = name.pos
     override fun isCallable() = true
@@ -295,7 +257,7 @@ class C_FunctionExpr(private val name: C_Name, private val fn: C_GlobalFunction)
     }
 }
 
-class C_FunctionRefExpr(private val name: C_Name, private val fnRef: C_DefRef<C_GlobalFunction>): C_Expr() {
+class C_FunctionRefExpr(private val name: LazyPosString, private val fnRef: C_DefRef<C_GlobalFunction>): C_Expr() {
     override fun kind() = C_ExprKind.FUNCTION
     override fun startPos() = name.pos
     override fun isCallable() = true
@@ -304,21 +266,5 @@ class C_FunctionRefExpr(private val name: C_Name, private val fnRef: C_DefRef<C_
         val fn = fnRef.getDef()
         val vExpr = fn.compileCall(ctx, name, args, resTypeHint)
         return C_VExpr(vExpr)
-    }
-}
-
-class C_TypeExpr(private val pos: S_Pos, private val type: R_Type): C_Expr() {
-    override fun kind() = C_ExprKind.TYPE
-    override fun startPos() = pos
-
-    override fun member0(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
-        val fn = C_LibMemberFunctions.getTypeStaticFunction(type, memberName.rName)
-        if (fn == null) {
-            C_Errors.errUnknownName(ctx.msgCtx, type, memberName)
-            return C_ExprUtils.errorMember(ctx, memberName.pos)
-        }
-
-        val fnExpr: C_Expr = C_FunctionExpr(memberName, fn)
-        return C_ExprMember(fnExpr, fn.ideInfo)
     }
 }
