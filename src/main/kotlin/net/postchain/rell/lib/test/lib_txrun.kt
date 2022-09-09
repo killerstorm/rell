@@ -18,7 +18,7 @@ import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.mapper.GtvObjectMapper
 import net.postchain.gtx.GTXBlockchainConfigurationFactory
-import net.postchain.gtx.data.GTXDataBuilder
+import net.postchain.gtx.GtxBuilder
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
@@ -108,22 +108,22 @@ object UnitTestBlockRunner {
     }
 
     private fun prepareTxBytes(bcConfig: BlockchainConfiguration, tx: RawTestTxValue): ByteArray {
-        val signers = tx.signers.map { it.pub.toByteArray() }.toTypedArray()
-        val dataBuilder = GTXDataBuilder(bcConfig.blockchainRid, signers, PostchainUtils.cryptoSystem)
+        val signers = tx.signers.map { it.pub.toByteArray() }
+        val dataBuilder = GtxBuilder(bcConfig.blockchainRid, signers, PostchainUtils.cryptoSystem)
 
         for (op in tx.ops) {
-            dataBuilder.addOperation(op.name.str(), op.args.toTypedArray())
+            dataBuilder.addOperation(op.name.str(), *op.args.toTypedArray())
         }
-        dataBuilder.finish()
+        val sigBuilder = dataBuilder.finish()
 
         for (keyPair in tx.signers) {
             val pubKey = keyPair.pub.toByteArray()
             val privKey = keyPair.priv.toByteArray()
             val sigMaker = PostchainUtils.cryptoSystem.buildSigMaker(pubKey, privKey)
-            dataBuilder.sign(sigMaker)
+            sigBuilder.sign(sigMaker)
         }
 
-        return dataBuilder.serialize()
+        return sigBuilder.buildGtx().encode()
     }
 
     private fun getBlockchainContext(ctx: Rt_CallContext): BlockchainContext {

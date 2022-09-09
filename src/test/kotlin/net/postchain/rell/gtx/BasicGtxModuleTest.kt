@@ -11,7 +11,7 @@ import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
-import net.postchain.gtx.data.GTXDataBuilder
+import net.postchain.gtx.GtxBuilder
 import org.junit.After
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -90,12 +90,12 @@ class BasicGtxModuleTest : IntegrationTest() {
 
     private fun makeTx(ownerIdx: Int, opName: String, vararg opArgs: Gtv): ByteArray {
         val owner = KeyPairHelper.pubKey(ownerIdx)
-        return GTXDataBuilder(blockchainRid!!, arrayOf(owner), myCS).run {
-            addOperation(opName, opArgs.toList().toTypedArray())
-            finish()
-            sign(myCS.buildSigMaker(owner, KeyPairHelper.privKey(ownerIdx)))
-            serialize()
-        }
+        return GtxBuilder(blockchainRid!!, listOf(owner), myCS)
+            .addOperation(opName, *opArgs.toList().toTypedArray())
+            .finish()
+            .sign(myCS.buildSigMaker(owner, KeyPairHelper.privKey(ownerIdx)))
+            .buildGtx()
+            .encode()
     }
 
     private fun makeTx_insertCity(ownerIdx: Int, name: String): ByteArray {
