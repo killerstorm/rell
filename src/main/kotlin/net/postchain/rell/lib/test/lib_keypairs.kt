@@ -77,7 +77,8 @@ object C_Lib_Test_KeyPairs {
     }
 
     private fun createPredefinedKeyPairs(): Map<String, BytesKeyPair> {
-        val names = listOf("bob", "alice", "trudy")
+        // Names are taken from https://en.wikipedia.org/wiki/Alice_and_Bob
+        val names = listOf("bob", "alice", "trudy", "charlie", "dave", "eve", "frank", "grace", "heidi")
         return names.mapIndexed { i, name ->
             val privKeyBytes = (i + 1).toString().repeat(64).hexStringToByteArray()
             val pubKeyBytes = secp256k1_derivePubKey(privKeyBytes)
