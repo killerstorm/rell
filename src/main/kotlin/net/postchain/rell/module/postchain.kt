@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.module
@@ -58,8 +58,10 @@ object ConfigConstants {
 
 private fun convertArgs(ctx: GtvToRtContext, params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
-        val type = params[index].type
-        type.gtvToRt(ctx, arg)
+        val param = params[index]
+        val type = param.type
+        val subCtx = ctx.update(param)
+        type.gtvToRt(subCtx, arg)
     }
 }
 
@@ -156,10 +158,11 @@ private class RellGTXOperation(
         handleError {
             val params = rOperation.params()
             if (data.args.size != params.size) {
-                throw UserMistake("Wrong argument count: ${data.args.size} instead of ${params.size}")
+                throw Rt_Error("operation:[${rOperation.appLevelName}]:arg_count:${data.args.size}:${params.size}",
+                    "Wrong argument count: ${data.args.size} instead of ${params.size}")
             }
             if (!gtvToRtCtx.isSet()) {
-                gtvToRtCtx.set(GtvToRtContext(GTV_OPERATION_PRETTY))
+                gtvToRtCtx.set(GtvToRtContext.make(GTV_OPERATION_PRETTY))
             }
             if (!args.isSet()) {
                 args.set(convertArgs(gtvToRtCtx.get(), params, data.args.toList()))
@@ -320,10 +323,13 @@ private class RellPostchainModule(
         val actArgNames = argMap.keys
         val expArgNames = params.map { it.name }.toSet()
         if (actArgNames != expArgNames) {
-            throw UserMistake("Wrong arguments: $actArgNames instead of $expArgNames")
+            val exp = expArgNames.joinToString(",")
+            val act = actArgNames.joinToString(",")
+            val code = "query:wrong_arg_names:${rQuery.appLevelName}:$exp:$act"
+            throw Rt_Error(code, "Wrong arguments: $actArgNames instead of $expArgNames")
         }
 
-        val gtvToRtCtx = GtvToRtContext(GTV_QUERY_PRETTY)
+        val gtvToRtCtx = GtvToRtContext.make(GTV_QUERY_PRETTY)
         val args = params.map { argMap.getValue(it.name) }
         val rtArgs = convertArgs(gtvToRtCtx, params, args)
         gtvToRtCtx.finish(exeCtx)

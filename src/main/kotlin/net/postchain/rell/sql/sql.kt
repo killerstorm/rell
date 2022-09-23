@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.sql
 
-import net.postchain.base.Storage
 import net.postchain.base.withReadConnection
 import net.postchain.base.withWriteConnection
+import net.postchain.core.Storage
 import net.postchain.rell.runtime.Rt_Error
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immSetOf

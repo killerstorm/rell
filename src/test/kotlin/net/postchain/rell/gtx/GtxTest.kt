@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
@@ -78,5 +78,45 @@ class GtxTest : BaseGtxTest() {
         chkCallQuery("tx", "v:203", "gtv_err:obj_missing:[transaction]:203")
         chkCallQuery("tx", "v:101", "gtv_err:obj_missing:[transaction]:101")
         chkCallQuery("tx", "v:102", "gtv_err:obj_missing:[transaction]:102")
+    }
+
+    @Test fun testArgumentErrorsQuery() {
+        tst.gtv = true
+        tst.wrapRtErrors = false
+        def("query qint(x: integer) = 123;")
+        def("query qtext(x: text) = 123;")
+
+        chkCallQuery("qint", "x:321", "123")
+        chkCallQuery("qint", "a:321", "rt_err:query:wrong_arg_names:qint:x:a")
+        chkCallQuery("qint", "x:321,a:654", "rt_err:query:wrong_arg_names:qint:x:a,x")
+        chkCallQuery("qint", "x:'abc'", "gtv_err:type:[integer]:INTEGER:STRING:x")
+        chkCallQuery("qint", "x:[]", "gtv_err:type:[integer]:INTEGER:ARRAY:x")
+        chkCallQuery("qint", "x:{}", "gtv_err:type:[integer]:INTEGER:DICT:x")
+
+        chkCallQuery("qtext", "x:'abc'", "123")
+        chkCallQuery("qtext", "a:'abc'", "rt_err:query:wrong_arg_names:qtext:x:a")
+        chkCallQuery("qtext", "x:'abc',a:'def'", "rt_err:query:wrong_arg_names:qtext:x:a,x")
+        chkCallQuery("qtext", "x:123", "gtv_err:type:[text]:STRING:INTEGER:x")
+        chkCallQuery("qtext", "x:[]", "gtv_err:type:[text]:STRING:ARRAY:x")
+        chkCallQuery("qtext", "x:{}", "gtv_err:type:[text]:STRING:DICT:x")
+    }
+
+    @Test fun testArgumentErrorsOperation() {
+        tst.gtv = true
+        tst.wrapRtErrors = false
+        def("operation oint(x: integer) {}")
+        def("operation otext(x: text) {}")
+
+        chkCallOperation("oint", listOf("321"), "OK")
+        chkCallOperation("oint", listOf("321","654"), "rt_err:operation:[oint]:arg_count:2:1")
+        chkCallOperation("oint", listOf("'abc'"), "gtv_err:type:[integer]:INTEGER:STRING:x")
+        chkCallOperation("oint", listOf("[]"), "gtv_err:type:[integer]:INTEGER:ARRAY:x")
+        chkCallOperation("oint", listOf("{}"), "gtv_err:type:[integer]:INTEGER:DICT:x")
+
+        chkCallOperation("otext", listOf("'abc'"), "OK")
+        chkCallOperation("otext", listOf("'abc'","'def'"), "rt_err:operation:[otext]:arg_count:2:1")
+        chkCallOperation("otext", listOf("123"), "gtv_err:type:[text]:STRING:INTEGER:x")
+        chkCallOperation("otext", listOf("[]"), "gtv_err:type:[text]:STRING:ARRAY:x")
+        chkCallOperation("otext", listOf("{}"), "gtv_err:type:[text]:STRING:DICT:x")
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.utils
@@ -86,7 +86,7 @@ object PostchainUtils {
                             "but type ${argsStruct.moduleLevelName} defined in the code")
                 }
 
-                val convCtx = GtvToRtContext(true)
+                val convCtx = GtvToRtContext.make(true)
                 val rtArgs = argsStruct.type.gtvToRt(convCtx, gtvArgs)
                 moduleArgs[rModule.name] = rtArgs
             }

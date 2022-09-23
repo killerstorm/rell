@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
@@ -35,13 +35,13 @@ class ChainContextTest : BaseGtxTest() {
         chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration")
 
         tst.moduleArgs("" to "12345")
-        chkUserMistake("", "Module initialization failed: Type error: ")
+        chkUserMistake("", "Module initialization failed: decoding type 'module_args': expected ARRAY, actual INTEGER")
 
         tst.moduleArgs("" to "{'p':'Hello','q':123}")
         chkUserMistake("", "Module initialization failed: Key missing in Gtv dictionary: ")
 
         tst.moduleArgs("" to "{'n':'Hello','s':123}")
-        chkUserMistake("", "Module initialization failed: Type error: ")
+        chkUserMistake("", "Module initialization failed: decoding type 'text': expected STRING, actual INTEGER")
 
         tst.moduleArgs("" to "{'s':'Hello','n':123}")
         chk("chain_context.args", "{'n':123,'s':'Hello'}")

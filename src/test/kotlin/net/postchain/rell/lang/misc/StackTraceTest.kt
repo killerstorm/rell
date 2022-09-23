@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.misc
@@ -181,7 +181,7 @@ class StackTraceTest: BaseRellTest(false) {
         chkSpecificError("ee.value('Hello');", 3, "rt_err:enum_badname:lib:ee:Hello")
         chkSpecificError("ee.value(123);", 3, "rt_err:enum_badvalue:lib:ee:123")
 
-        chkSpecificError("val g = gtv.from_json('[{}]');\ninteger.from_gtv(g);", 4, "gtv_err:type:integer:ARRAY")
+        chkSpecificError("val g = gtv.from_json('[{}]');\ninteger.from_gtv(g);", 4, "gtv_err:type:[integer]:INTEGER:ARRAY")
     }
 
     private fun chkSpecificError(code: String, line: Int, error: String) {

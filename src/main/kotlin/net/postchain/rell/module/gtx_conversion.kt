@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.module
@@ -13,13 +13,14 @@ import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.immListOf
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
 
 const val GTV_QUERY_PRETTY = true
 const val GTV_OPERATION_PRETTY = false
 
-class GtvToRtContext(val pretty: Boolean) {
+private class GtvToRtState(val pretty: Boolean) {
     private val entityRowids: MultiValuedMap<R_EntityDefinition, Long> = HashSetValuedHashMap()
 
     fun trackRecord(entity: R_EntityDefinition, rowid: Long) {
@@ -39,7 +40,7 @@ class GtvToRtContext(val pretty: Boolean) {
         if (!missingIds.isEmpty()) {
             val s = missingIds.toList().sorted()
             val name = rEntity.appLevelName
-            throw GtvRtUtils.errGtv("obj_missing:[$name]:${missingIds.joinToString(",")}", "Missing objects of entity '$name': $s")
+            throw Rt_GtvError("obj_missing:[$name]:${missingIds.joinToString(",")}", "Missing objects of entity '$name': $s")
         }
     }
 
@@ -54,6 +55,24 @@ class GtvToRtContext(val pretty: Boolean) {
         val existingIds = mutableSetOf<Long>()
         sqlExec.executeQuery(sql, {}) { existingIds.add(it.getLong(1)) }
         return existingIds
+    }
+}
+
+class GtvToRtContext private constructor(private val state: GtvToRtState, val param: R_Param?) {
+    val pretty = state.pretty
+
+    fun update(param: R_Param?): GtvToRtContext {
+        return if (param === this.param) this else GtvToRtContext(state, param)
+    }
+
+    fun trackRecord(entity: R_EntityDefinition, rowid: Long) = state.trackRecord(entity, rowid)
+    fun finish(exeCtx: Rt_ExecutionContext) = state.finish(exeCtx)
+
+    companion object {
+        fun make(pretty: Boolean): GtvToRtContext {
+            val state = GtvToRtState(pretty)
+            return GtvToRtContext(state, null)
+        }
     }
 }
 
@@ -86,19 +105,19 @@ object GtvRtConversion_Null: GtvRtConversion() {
 object GtvRtConversion_Boolean: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvInteger(if (rt.asBoolean()) 1L else 0L)
-    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_BooleanValue(GtvRtUtils.gtvToBoolean(gtv))
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_BooleanValue(GtvRtUtils.gtvToBoolean(ctx, gtv, R_BooleanType))
 }
 
 object GtvRtConversion_Text: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvString(rt.asString())
-    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_TextValue(GtvRtUtils.gtvToString(gtv))
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_TextValue(GtvRtUtils.gtvToString(ctx, gtv, R_TextType))
 }
 
 object GtvRtConversion_Integer: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvInteger(rt.asInteger())
-    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_IntValue(GtvRtUtils.gtvToInteger(gtv))
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_IntValue(GtvRtUtils.gtvToInteger(ctx, gtv, R_IntegerType))
 }
 
 object GtvRtConversion_Decimal: GtvRtConversion() {
@@ -107,10 +126,10 @@ object GtvRtConversion_Decimal: GtvRtConversion() {
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         return if (gtv.type == GtvType.INTEGER) {
-            val v = GtvRtUtils.gtvToInteger(gtv)
+            val v = GtvRtUtils.gtvToInteger(ctx, gtv, R_DecimalType)
             Rt_DecimalValue.of(v)
         } else {
-            val s = GtvRtUtils.gtvToString(gtv)
+            val s = GtvRtUtils.gtvToString(ctx, gtv, R_DecimalType)
             Rt_DecimalValue.of(s)
         }
     }
@@ -119,7 +138,7 @@ object GtvRtConversion_Decimal: GtvRtConversion() {
 object GtvRtConversion_ByteArray: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvByteArray(rt.asByteArray())
-    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_ByteArrayValue(GtvRtUtils.gtvToByteArray(gtv))
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_ByteArrayValue(GtvRtUtils.gtvToByteArray(ctx, gtv, R_ByteArrayType))
 }
 
 object GtvRtConversion_Rowid: GtvRtConversion() {
@@ -127,9 +146,9 @@ object GtvRtConversion_Rowid: GtvRtConversion() {
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvInteger(rt.asRowid())
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val v = GtvRtUtils.gtvToInteger(gtv)
+        val v = GtvRtUtils.gtvToInteger(ctx, gtv, R_RowidType)
         if (v < 0) {
-            throw GtvRtUtils.errGtv("rowid:negative:$v", "Negative value of $R_RowidType type: $v")
+            throw GtvRtUtils.errGtv(ctx, "rowid:negative:$v", "Negative value of $R_RowidType type: $v")
         }
         return Rt_RowidValue(v)
     }
@@ -138,7 +157,7 @@ object GtvRtConversion_Rowid: GtvRtConversion() {
 object GtvRtConversion_Json: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvString(rt.asJsonString())
-    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = GtvRtUtils.gtvToJson(gtv)
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = GtvRtUtils.gtvToJson(ctx, gtv, R_JsonType)
 }
 
 class GtvRtConversion_Entity(val type: R_EntityType): GtvRtConversion() {
@@ -147,7 +166,7 @@ class GtvRtConversion_Entity(val type: R_EntityType): GtvRtConversion() {
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvInteger(rt.asObjectId())
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val rowid = GtvRtUtils.gtvToInteger(gtv)
+        val rowid = GtvRtUtils.gtvToInteger(ctx, gtv, type)
         ctx.trackRecord(type.rEntity, rowid)
         return Rt_EntityValue(type, rowid)
     }
@@ -175,15 +194,15 @@ class GtvRtConversion_Struct(private val struct: R_Struct): GtvRtConversion() {
 
     private fun gtvToRtDict(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         val type = struct.type
-        val gtvFields = GtvRtUtils.gtvToMap(gtv)
-        checkFieldCount(type, struct, gtvFields.size)
+        val gtvFields = GtvRtUtils.gtvToMap(ctx, gtv, type)
+        checkFieldCount(ctx, type, struct, gtvFields.size)
 
         val attrs = struct.attributesList
         val rtFields = attrs.map { attr ->
             val key = attr.name
             if (key !in gtvFields) {
                 val typeName = struct.name
-                throw GtvRtUtils.errGtv("struct_nokey:$typeName:$key", "Key missing in Gtv dictionary: field '$typeName.$key'")
+                throw GtvRtUtils.errGtv(ctx, "struct_nokey:$typeName:$key", "Key missing in Gtv dictionary: field '$typeName.$key'")
             }
             val gtvField = gtvFields.getValue(key)
             attr.type.gtvToRt(ctx, gtvField)
@@ -194,29 +213,29 @@ class GtvRtConversion_Struct(private val struct: R_Struct): GtvRtConversion() {
 
     private fun gtvToRtArray(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         val type = struct.type
-        val gtvAttrValues = gtvToAttrValues(type, struct, gtv)
+        val gtvAttrValues = gtvToAttrValues(ctx, type, struct, gtv)
         val attrs = struct.attributesList
         val rtAttrValues = gtvAttrValues.mapIndexed { i, gtvField -> attrs[i].type.gtvToRt(ctx, gtvField) }.toMutableList()
         return Rt_StructValue(type, rtAttrValues)
     }
 
     companion object {
-        fun gtvToAttrValues(type: R_Type, struct: R_Struct, gtv: Gtv): List<Gtv> {
-            val gtvFields = GtvRtUtils.gtvToArray(gtv)
-            checkFieldCount(type, struct, gtvFields.size)
+        fun gtvToAttrValues(ctx: GtvToRtContext, type: R_Type, struct: R_Struct, gtv: Gtv): List<Gtv> {
+            val gtvFields = GtvRtUtils.gtvToArray(ctx, gtv, type)
+            checkFieldCount(ctx, type, struct, gtvFields.size)
             return gtvFields.toList()
         }
 
-        private fun checkFieldCount(type: R_Type, struct: R_Struct, actualCount: Int) {
+        private fun checkFieldCount(ctx: GtvToRtContext, type: R_Type, struct: R_Struct, actualCount: Int) {
             val expectedCount = struct.attributesList.size
             if (actualCount != expectedCount) {
-                throw errWrongSize(type, expectedCount, actualCount)
+                throw errWrongSize(ctx, type, expectedCount, actualCount)
             }
         }
 
-        fun errWrongSize(type: R_Type, expectedCount: Int, actualCount: Int): Rt_BaseError {
+        fun errWrongSize(ctx: GtvToRtContext, type: R_Type, expectedCount: Int, actualCount: Int): Rt_BaseError {
             val typeName = type.name
-            return GtvRtUtils.errGtv("struct_size:$typeName:$expectedCount:$actualCount",
+            return GtvRtUtils.errGtv(ctx, "struct_size:$typeName:$expectedCount:$actualCount",
                     "Wrong Gtv array size for struct '$typeName': $actualCount instead of $expectedCount")
         }
     }
@@ -237,17 +256,19 @@ class GtvRtConversion_Enum(private val enum: R_EnumDefinition): GtvRtConversion(
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         val enumName = enum.appLevelName
         val attr = if (ctx.pretty && gtv.type == GtvType.STRING) {
-            val name = GtvRtUtils.gtvToString(gtv)
+            val name = GtvRtUtils.gtvToString(ctx, gtv, enum.type)
             val attr = enum.attr(name)
             if (attr == null) {
-                throw GtvRtUtils.errGtvType("enum[$enumName]", gtv, "Invalid value for enum '$enumName': '$name'")
+                val code = "enum:bad_value:$name"
+                throw GtvRtUtils.errGtvType(ctx, enum.type, code, "invalid value for enum '$enumName': '$name'")
             }
             attr
         } else {
-            val value = GtvRtUtils.gtvToInteger(gtv)
+            val value = GtvRtUtils.gtvToInteger(ctx, gtv, enum.type)
             val attr = enum.attr(value)
             if (attr == null) {
-                throw GtvRtUtils.errGtvType("enum[$enumName]", gtv, "Invalid value for enum '$enumName': $value")
+                val code = "enum:bad_value:$value"
+                throw GtvRtUtils.errGtvType(ctx, enum.type, code, "Invalid value for enum '$enumName': $value")
             }
             attr
         }
@@ -287,24 +308,26 @@ sealed class GtvRtConversion_Collection(val type: R_CollectionType): GtvRtConver
 class GtvRtConversion_List(type: R_ListType): GtvRtConversion_Collection(type) {
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         val elementType = type.elementType
-        val lst = GtvRtUtils.gtvToArray(gtv).map { elementType.gtvToRt(ctx, it) }.toMutableList()
-        return Rt_ListValue(type, lst)
+        val array = GtvRtUtils.gtvToArray(ctx, gtv, type)
+        val list = array.map { elementType.gtvToRt(ctx, it) }.toMutableList()
+        return Rt_ListValue(type, list)
     }
 }
 
 class GtvRtConversion_Set(type: R_SetType): GtvRtConversion_Collection(type) {
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val list = GtvRtUtils.gtvToArray(gtv).map { type.elementType.gtvToRt(ctx, it) }
-        val set = listToSet(list)
+        val array = GtvRtUtils.gtvToArray(ctx, gtv, type)
+        val list = array.map { type.elementType.gtvToRt(ctx, it) }
+        val set = listToSet(ctx, list)
         return Rt_SetValue(type, set)
     }
 
     companion object {
-        fun listToSet(elements: Iterable<Rt_Value>): MutableSet<Rt_Value> {
+        fun listToSet(ctx: GtvToRtContext, elements: Iterable<Rt_Value>): MutableSet<Rt_Value> {
             val set = mutableSetOf<Rt_Value>()
             for (elem in elements) {
                 if (!set.add(elem)) {
-                    throw GtvRtUtils.errGtv("set_dup:${elem.strCode()}", "Duplicate set element: ${elem.str()}")
+                    throw GtvRtUtils.errGtv(ctx, "set_dup:${elem.strCode()}", "Duplicate set element: ${elem.str()}")
                 }
             }
             return set
@@ -331,16 +354,16 @@ class GtvRtConversion_Map(val type: R_MapType): GtvRtConversion() {
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         val map = if (type.keyType == R_TextType && gtv.type == GtvType.DICT) {
-            GtvRtUtils.gtvToMap(gtv)
+            GtvRtUtils.gtvToMap(ctx, gtv, type)
                     .mapKeys { (k, _) -> Rt_TextValue(k) as Rt_Value }
                     .mapValues { (_, v) -> type.valueType.gtvToRt(ctx, v) }
                     .toMutableMap()
         } else {
             val tmp = mutableMapOf<Rt_Value, Rt_Value>()
-            for (gtvEntry in GtvRtUtils.gtvToArray(gtv)) {
+            for (gtvEntry in GtvRtUtils.gtvToArray(ctx, gtv, type)) {
                 val (key, value) = gtvToRtEntry(ctx, gtvEntry)
                 if (key in tmp) {
-                    throw GtvRtUtils.errGtv("map_dup_key:${key.strCode()}", "Map duplicate key: ${key.str()}")
+                    throw GtvRtUtils.errGtv(ctx, "map_dup_key:${key.strCode()}", "Map duplicate key: ${key.str()}")
                 }
                 tmp[key] = value
             }
@@ -350,7 +373,7 @@ class GtvRtConversion_Map(val type: R_MapType): GtvRtConversion() {
     }
 
     private fun gtvToRtEntry(ctx: GtvToRtContext, gtv: Gtv): Pair<Rt_Value, Rt_Value> {
-        val array = GtvRtUtils.gtvToArray(gtv, 2, "map_entry_size")
+        val array = GtvRtUtils.gtvToArray(ctx, gtv, 2, "map_entry_size", type)
         val key = type.keyType.gtvToRt(ctx, array[0])
         val value = type.valueType.gtvToRt(ctx, array[1])
         return Pair(key, value)
@@ -392,13 +415,13 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
     }
 
     private fun gtvToRtDict(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val gtvFields = GtvRtUtils.gtvToMap(gtv)
-        checkFieldCount(type, gtvFields.size, "dictionary")
+        val gtvFields = GtvRtUtils.gtvToMap(ctx, gtv, type)
+        checkFieldCount(ctx, type, gtvFields.size, "dictionary")
 
         val rtFields = type.fields.mapIndexed { _, field ->
             val key = field.name!!
             if (key.str !in gtvFields) {
-                throw GtvRtUtils.errGtv("tuple_nokey:$key", "Key missing in Gtv dictionary: '$key'")
+                throw GtvRtUtils.errGtv(ctx, "tuple_nokey:$key", "Key missing in Gtv dictionary: '$key'")
             }
             val gtvField = gtvFields.getValue(key.str)
             field.type.gtvToRt(ctx, gtvField)
@@ -408,7 +431,7 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
     }
 
     private fun gtvToRtArray(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val gtvFields = gtvArrayToFields(type, gtv)
+        val gtvFields = gtvArrayToFields(ctx, type, gtv)
         val rtFields = gtvFields.mapIndexed { i, gtvField ->
             type.fields[i].type.gtvToRt(ctx, gtvField)
         }
@@ -416,16 +439,16 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
     }
 
     companion object {
-        fun gtvArrayToFields(type: R_TupleType, gtv: Gtv): List<Gtv> {
-            val gtvFields = GtvRtUtils.gtvToArray(gtv)
-            checkFieldCount(type, gtvFields.size, "array")
+        fun gtvArrayToFields(ctx: GtvToRtContext, type: R_TupleType, gtv: Gtv): List<Gtv> {
+            val gtvFields = GtvRtUtils.gtvToArray(ctx, gtv, type)
+            checkFieldCount(ctx, type, gtvFields.size, "array")
             return gtvFields.toList()
         }
 
-        private fun checkFieldCount(type: R_TupleType, actualCount: Int, structure: String) {
+        private fun checkFieldCount(ctx: GtvToRtContext, type: R_TupleType, actualCount: Int, structure: String) {
             val expectedCount = type.fields.size
             if (actualCount != expectedCount) {
-                throw GtvRtUtils.errGtv("tuple_count:$expectedCount:$actualCount",
+                throw GtvRtUtils.errGtv(ctx, "tuple_count:$expectedCount:$actualCount",
                         "Wrong Gtv $structure size: $actualCount instead of $expectedCount")
             }
         }
@@ -441,19 +464,19 @@ object GtvRtConversion_Gtv: GtvRtConversion() {
 sealed class GtvRtConversion_Virtual: GtvRtConversion() {
     final override fun directCompatibility() = R_GtvCompatibility(true, false)
     final override fun rtToGtv(rt: Rt_Value, pretty: Boolean) =
-            throw GtvRtUtils.errGtv("virtual:to_gtv", "Cannot convert virtual to Gtv")
+            throw Rt_GtvError("virtual:to_gtv", "Cannot convert virtual to Gtv")
 
     companion object {
-        fun deserialize(gtv: Gtv): Gtv {
+        fun deserialize(ctx: GtvToRtContext, gtv: Gtv): Gtv {
             if (gtv !is GtvArray) {
                 val cls = gtv.javaClass.simpleName
-                throw GtvRtUtils.errGtv("virtual:type:$cls", "Wrong Gtv type: $cls")
+                throw GtvRtUtils.errGtv(ctx, "virtual:type:$cls", "Wrong Gtv type: $cls")
             }
 
             val proof = try {
                 GtvMerkleProofTreeFactory().deserialize(gtv)
             } catch (e: Exception) {
-                throw GtvRtUtils.errGtv("virtual:deserialize:${e.javaClass.canonicalName}",
+                throw GtvRtUtils.errGtv(ctx, "virtual:deserialize:${e.javaClass.canonicalName}",
                         "Virtual proof deserialization failed: ${e.message}")
             }
 
@@ -477,13 +500,13 @@ sealed class GtvRtConversion_Virtual: GtvRtConversion() {
 
 class GtvRtConversion_VirtualStruct(private val type: R_VirtualStructType): GtvRtConversion_Virtual() {
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val virtual = deserialize(gtv)
+        val virtual = deserialize(ctx, gtv)
         return decodeVirtualStruct(ctx, type, virtual)
     }
 
     companion object {
         fun decodeVirtualStruct(ctx: GtvToRtContext, type: R_VirtualStructType, v: Gtv): Rt_Value {
-            val attrValues = decodeAttrs(type, v)
+            val attrValues = decodeAttrs(ctx, type, v)
             val rtAttrValues = type.innerType.struct.attributesList.mapIndexed { i, attr ->
                 val gtvAttr = if (i < attrValues.size) attrValues[i] else null
                 if (gtvAttr == null) null else decodeVirtualElement(ctx, attr.type, gtvAttr)
@@ -491,23 +514,23 @@ class GtvRtConversion_VirtualStruct(private val type: R_VirtualStructType): GtvR
             return Rt_VirtualStructValue(v, type, rtAttrValues)
         }
 
-        private fun decodeAttrs(type: R_VirtualStructType, v: Gtv): List<Gtv?> {
+        private fun decodeAttrs(ctx: GtvToRtContext, type: R_VirtualStructType, v: Gtv): List<Gtv?> {
             return if (v !is GtvVirtual) {
-                GtvRtConversion_Struct.gtvToAttrValues(type, type.innerType.struct, v)
+                GtvRtConversion_Struct.gtvToAttrValues(ctx, type, type.innerType.struct, v)
             } else {
-                decodeVirtualArray(type, v, type.innerType.struct.attributes.size)
+                decodeVirtualArray(ctx, type, v, type.innerType.struct.attributes.size)
             }
         }
 
-        fun decodeVirtualArray(type: R_Type, v: Gtv, maxSize: Int): List<Gtv?> {
+        fun decodeVirtualArray(ctx: GtvToRtContext, type: R_Type, v: Gtv, maxSize: Int): List<Gtv?> {
             if (v !is GtvVirtualArray) {
                 val cls = v.javaClass.simpleName
-                throw GtvRtUtils.errGtv("virtual:deserialized_type:$cls", "Wrong deserialized Gtv type: $cls")
+                throw GtvRtUtils.errGtv(ctx, "virtual:deserialized_type:$cls", "Wrong deserialized Gtv type: $cls")
             }
 
             val actualCount = v.array.size
             if (actualCount > maxSize) {
-                throw GtvRtConversion_Struct.errWrongSize(type, maxSize, actualCount)
+                throw GtvRtConversion_Struct.errWrongSize(ctx, type, maxSize, actualCount)
             }
 
             return v.array.toList()
@@ -517,7 +540,7 @@ class GtvRtConversion_VirtualStruct(private val type: R_VirtualStructType): GtvR
 
 class GtvRtConversion_VirtualList(private val type: R_VirtualListType): GtvRtConversion_Virtual() {
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val virtual = deserialize(gtv)
+        val virtual = deserialize(ctx, gtv)
         return decodeVirtualList(ctx, type, virtual)
     }
 
@@ -528,20 +551,20 @@ class GtvRtConversion_VirtualList(private val type: R_VirtualListType): GtvRtCon
         }
 
         fun decodeVirtualElements(ctx: GtvToRtContext, innerType: R_CollectionType, v: Gtv): List<Rt_Value?> {
-            val gtvElements = decodeElements(v)
+            val gtvElements = decodeElements(ctx, v, innerType)
             val rtElements = gtvElements.map {
                 if (it == null) null else decodeVirtualElement(ctx, innerType.elementType, it)
             }
             return rtElements
         }
 
-        private fun decodeElements(v: Gtv): List<Gtv?> {
+        private fun decodeElements(ctx: GtvToRtContext, v: Gtv, type: R_Type): List<Gtv?> {
             if (v !is GtvVirtual) {
-                return GtvRtUtils.gtvToArray(v).toList()
+                return GtvRtUtils.gtvToArray(ctx, v, type).toList()
             }
             if (v !is GtvVirtualArray) {
                 val cls = v.javaClass.simpleName
-                throw GtvRtUtils.errGtv("virtual:deserialized_type:$cls", "Wrong deserialized Gtv type: $cls")
+                throw GtvRtUtils.errGtv(ctx, "virtual:deserialized_type:$cls", "Wrong deserialized Gtv type: $cls")
             }
             return v.array.toList()
         }
@@ -550,14 +573,14 @@ class GtvRtConversion_VirtualList(private val type: R_VirtualListType): GtvRtCon
 
 class GtvRtConversion_VirtualSet(private val type: R_VirtualSetType): GtvRtConversion_Virtual() {
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val virtual = deserialize(gtv)
+        val virtual = deserialize(ctx, gtv)
         return decodeVirtualSet(ctx, type, virtual)
     }
 
     companion object {
         fun decodeVirtualSet(ctx: GtvToRtContext, type: R_VirtualSetType, v: Gtv): Rt_Value {
             val rtList = GtvRtConversion_VirtualList.decodeVirtualElements(ctx, type.innerType, v)
-            val rtSet = GtvRtConversion_Set.listToSet(rtList.filterNotNull())
+            val rtSet = GtvRtConversion_Set.listToSet(ctx, rtList.filterNotNull())
             return Rt_VirtualSetValue(v, type, rtSet)
         }
     }
@@ -565,26 +588,26 @@ class GtvRtConversion_VirtualSet(private val type: R_VirtualSetType): GtvRtConve
 
 class GtvRtConversion_VirtualMap(private val type: R_VirtualMapType): GtvRtConversion_Virtual() {
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val virtual = deserialize(gtv)
+        val virtual = deserialize(ctx, gtv)
         return decodeVirtualMap(ctx, type, virtual)
     }
 
     companion object {
         fun decodeVirtualMap(ctx: GtvToRtContext, type: R_VirtualMapType, v: Gtv): Rt_Value {
-            val gtvMap = decodeMap(v)
+            val gtvMap = decodeMap(ctx, v, type)
             val rtMap = gtvMap
                     .mapValues { (_, v) -> decodeVirtualElement(ctx, type.innerType.valueType, v) }
                     .mapKeys { (k, _) -> Rt_TextValue(k) as Rt_Value }
             return Rt_VirtualMapValue(v, type, rtMap)
         }
 
-        private fun decodeMap(v: Gtv): Map<String, Gtv> {
+        private fun decodeMap(ctx: GtvToRtContext, v: Gtv, type: R_Type): Map<String, Gtv> {
             if (v !is GtvVirtual) {
-                return GtvRtUtils.gtvToMap(v)
+                return GtvRtUtils.gtvToMap(ctx, v, type)
             }
             if (v !is GtvVirtualDictionary) {
                 val cls = v.javaClass.simpleName
-                throw GtvRtUtils.errGtv("virtual:deserialized_type:$cls", "Wrong deserialized Gtv type: $cls")
+                throw GtvRtUtils.errGtv(ctx, "virtual:deserialized_type:$cls", "Wrong deserialized Gtv type: $cls")
             }
             return v.dict
         }
@@ -593,13 +616,13 @@ class GtvRtConversion_VirtualMap(private val type: R_VirtualMapType): GtvRtConve
 
 class GtvRtConversion_VirtualTuple(val type: R_VirtualTupleType): GtvRtConversion_Virtual() {
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val virtual = deserialize(gtv)
+        val virtual = deserialize(ctx, gtv)
         return decodeVirtualTuple(ctx, type, virtual)
     }
 
     companion object {
         fun decodeVirtualTuple(ctx: GtvToRtContext, type: R_VirtualTupleType, v: Gtv): Rt_Value {
-            val fieldValues = decodeFields(type, v)
+            val fieldValues = decodeFields(ctx, type, v)
             val rtFieldValues = type.innerType.fields.mapIndexed { i, attr ->
                 val gtvAttr = if (i < fieldValues.size) fieldValues[i] else null
                 if (gtvAttr == null) null else decodeVirtualElement(ctx, attr.type, gtvAttr)
@@ -607,104 +630,127 @@ class GtvRtConversion_VirtualTuple(val type: R_VirtualTupleType): GtvRtConversio
             return Rt_VirtualTupleValue(v, type, rtFieldValues)
         }
 
-        private fun decodeFields(type: R_VirtualTupleType, v: Gtv): List<Gtv?> {
+        private fun decodeFields(ctx: GtvToRtContext, type: R_VirtualTupleType, v: Gtv): List<Gtv?> {
             return if (v !is GtvVirtual) {
-                GtvRtConversion_Tuple.gtvArrayToFields(type.innerType, v)
+                GtvRtConversion_Tuple.gtvArrayToFields(ctx, type.innerType, v)
             } else {
-                GtvRtConversion_VirtualStruct.decodeVirtualArray(type, v, type.innerType.fields.size)
+                GtvRtConversion_VirtualStruct.decodeVirtualArray(ctx, type, v, type.innerType.fields.size)
             }
         }
     }
 }
 
 object GtvRtUtils {
-    fun gtvToInteger(gtv: Gtv): Long {
+    fun gtvToInteger(ctx: GtvToRtContext, gtv: Gtv, rellType: R_Type): Long {
         try {
             return gtv.asInteger()
         } catch (e: UserMistake) {
-            throw errGtvType("integer", gtv, e)
+            throw errGtvType(ctx, rellType, gtv, GtvType.INTEGER, e)
         }
     }
 
-    fun gtvToBoolean(gtv: Gtv): Boolean {
+    fun gtvToBoolean(ctx: GtvToRtContext, gtv: Gtv, rellType: R_Type): Boolean {
         val i = try {
             gtv.asInteger()
         } catch (e: UserMistake) {
-            throw errGtvType("boolean", gtv, e)
+            throw errGtvType(ctx, rellType, gtv, GtvType.INTEGER, e)
         }
-        if (i == 0L) {
-            return false
-        } else if (i == 1L) {
-            return true
-        } else {
-            throw errGtvType("boolean", gtv, "Type error: expected boolean (0, 1), was $i")
+
+        return when (i) {
+            0L -> false
+            1L -> true
+            else -> throw errGtvType(ctx, rellType, "bad_value:$i", "expected 0 or 1, actual $i")
         }
     }
 
-    fun gtvToString(gtv: Gtv): String {
+    fun gtvToString(ctx: GtvToRtContext, gtv: Gtv, rellType: R_Type): String {
         try {
             return gtv.asString()
         } catch (e: UserMistake) {
-            throw errGtvType("string", gtv, e)
+            throw errGtvType(ctx, rellType, gtv, GtvType.STRING, e)
         }
     }
 
-    fun gtvToByteArray(gtv: Gtv): ByteArray {
+    fun gtvToByteArray(ctx: GtvToRtContext, gtv: Gtv, rellType: R_Type): ByteArray {
         try {
             // TODO: This allows interpreting string as byte array.
             // This is a temporary measure needed because of deficiency of the query API.
             // Auto-conversion should be removed later.
             return gtv.asByteArray(true)
         } catch (e: UserMistake) {
-            throw errGtvType("byte_array", gtv, e)
+            val exp = immListOf(GtvType.BYTEARRAY, GtvType.STRING)
+            if (gtv.type in exp) {
+                throw errGtvType(ctx, rellType, "bad_value:${gtv.type}", e.message ?: "invalid value")
+            } else {
+                val code = "${exp.joinToString(",")}:${gtv.type}"
+                val msg = "expected $exp, actual ${gtv.type}"
+                throw errGtvType(ctx, rellType, code, msg)
+            }
         }
     }
 
-    fun gtvToJson(gtv: Gtv): Rt_Value {
+    fun gtvToJson(ctx: GtvToRtContext, gtv: Gtv, rellType: R_Type): Rt_Value {
         val str = try {
             gtv.asString()
         } catch (e: UserMistake) {
-            throw errGtvType("json", gtv, e)
+            throw errGtvType(ctx, rellType, gtv, GtvType.STRING, e)
         }
         try {
             return Rt_JsonValue.parse(str)
         } catch (e: IllegalArgumentException) {
-            throw errGtvType("json", gtv, "Type error: invalid JSON string")
+            throw errGtvType(ctx, rellType, "bad_value", e.message ?: "invalid value")
         }
     }
 
-    fun gtvToArray(gtv: Gtv, size: Int, errCode: String): Array<out Gtv> {
-        val array = gtvToArray(gtv)
+    fun gtvToArray(ctx: GtvToRtContext, gtv: Gtv, size: Int, errCode: String, rellType: R_Type): Array<out Gtv> {
+        val array = gtvToArray(ctx, gtv, rellType)
         val actSize = array.size
         if (actSize != size) {
-            throw errGtv("$errCode:$size:$actSize", "Wrong gtv array size: $actSize instead of $size")
+            throw errGtvType(ctx, rellType, "$errCode:$size:$actSize", "wrong gtv array size: $actSize instead of $size")
         }
         return array
     }
 
-    fun gtvToArray(gtv: Gtv): Array<out Gtv> {
+    fun gtvToArray(ctx: GtvToRtContext, gtv: Gtv, rellType: R_Type): Array<out Gtv> {
         try {
             return gtv.asArray()
         } catch (e: UserMistake) {
-            throw errGtvType("array", gtv, e)
+            throw errGtvType(ctx, rellType, gtv, GtvType.ARRAY, e)
         }
     }
 
-    fun gtvToMap(gtv: Gtv): Map<String, Gtv> {
+    fun gtvToMap(ctx: GtvToRtContext, gtv: Gtv, rellType: R_Type): Map<String, Gtv> {
         try {
             return gtv.asDict()
         } catch (e: UserMistake) {
-            throw errGtvType("dict", gtv, e)
+            throw errGtvType(ctx, rellType, gtv, GtvType.DICT, e)
         }
     }
 
-    fun errGtvType(expected: String, actual: Gtv, e: UserMistake): Rt_BaseError {
-        return errGtvType(expected, actual, e.message ?: "")
+    private fun errGtvType(ctx: GtvToRtContext, rellType: R_Type, actualGtv: Gtv, expectedGtvType: GtvType, e: UserMistake): Rt_BaseError {
+        val code = "$expectedGtvType:${actualGtv.type}"
+        val emsg = e.message
+        val msg = when {
+            actualGtv.type != expectedGtvType -> "expected $expectedGtvType, actual ${actualGtv.type}"
+            !emsg.isNullOrBlank() -> emsg
+            else -> e.javaClass.simpleName
+        }
+        return errGtvType(ctx, rellType, code, msg)
     }
 
-    fun errGtvType(expected: String, actual: Gtv, message: String): Rt_BaseError {
-        return errGtv("type:$expected:${actual.type}", message)
+    fun errGtvType(ctx: GtvToRtContext, rellType: R_Type, code: String, msg: String): Rt_BaseError {
+        val fullCode = "type:[${rellType.strCode()}]:$code"
+        val fullMsg = "decoding type '${rellType.str()}': $msg"
+        return errGtv(ctx, fullCode, fullMsg)
     }
 
-    fun errGtv(code: String, msg: String) = Rt_GtvError(code, msg)
+    fun errGtv(ctx: GtvToRtContext, code: String, msg: String): Rt_BaseError {
+        var code2 = code
+        var msg2 = msg
+        if (ctx.param != null) {
+            code2 = "$code:${ctx.param.name}"
+            msg2 = "$msg (parameter: ${ctx.param.name})"
+        }
+        return Rt_GtvError(code2, msg2)
+    }
 }

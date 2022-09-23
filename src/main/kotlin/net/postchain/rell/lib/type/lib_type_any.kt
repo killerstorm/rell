@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -49,7 +49,7 @@ object C_Lib_Type_Any {
         val gtv = a.asGtv()
         //TODO FIXME construct error code only on error
         Rt_Utils.wrapErr("fn:[$name]:from_gtv:$pretty") {
-            val convCtx = GtvToRtContext(pretty)
+            val convCtx = GtvToRtContext.make(pretty)
             val res = type.gtvToRt(convCtx, gtv)
             convCtx.finish(ctx.exeCtx)
             res

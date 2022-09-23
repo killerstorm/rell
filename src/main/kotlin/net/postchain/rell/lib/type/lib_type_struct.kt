@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -108,7 +108,7 @@ private object StructFns {
         val bytes = a.asByteArray()
         Rt_Utils.wrapErr("fn:struct:from_bytes") {
             val gtv = PostchainUtils.bytesToGtv(bytes)
-            val convCtx = GtvToRtContext(false)
+            val convCtx = GtvToRtContext.make(false)
             val res = struct.type.gtvToRt(convCtx, gtv)
             convCtx.finish(ctx.exeCtx)
             res
@@ -121,7 +121,7 @@ private object StructFns {
     ) { ctx, a ->
         val gtv = a.asGtv()
         Rt_Utils.wrapErr("fn:struct:from_gtv:$pretty") {
-            val convCtx = GtvToRtContext(pretty)
+            val convCtx = GtvToRtContext.make(pretty)
             val res = struct.type.gtvToRt(convCtx, gtv)
             convCtx.finish(ctx.exeCtx)
             res

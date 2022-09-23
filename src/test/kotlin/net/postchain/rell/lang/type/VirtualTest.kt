@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.type
@@ -1176,14 +1176,14 @@ class VirtualTest: BaseGtxTest(false) {
         val expr = "_strict_str(virtual<list<integer>>.from_gtv(x))"
         chkVirtual("gtv", expr, argToGtv("[123,456]"), "gtv_err:virtual:deserialize:java.lang.IllegalStateException")
         chkVirtual("gtv", expr, argToGtv("{'A':123}"), "gtv_err:virtual:type:GtvDictionary")
-        chkVirtual("gtv", expr, argToGtv("['A','B']", "[[0]]"), "gtv_err:type:integer:STRING")
+        chkVirtual("gtv", expr, argToGtv("['A','B']", "[[0]]"), "gtv_err:type:[integer]:INTEGER:STRING")
 
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("[123,456]"),
-                "gtv_err:virtual:deserialize:java.lang.IllegalStateException")
+                "gtv_err:virtual:deserialize:java.lang.IllegalStateException:x")
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("{'A':123}"),
-                "gtv_err:virtual:type:GtvDictionary")
+                "gtv_err:virtual:type:GtvDictionary:x")
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("['A','B']", "[[0]]"),
-                "gtv_err:type:integer:STRING")
+                "gtv_err:type:[integer]:INTEGER:STRING:x")
     }
 
     @Test fun testOperatorsErr() {

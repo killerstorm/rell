@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -409,7 +409,7 @@ class RellCodeTester(
             val module = app.moduleMap.getValue(modName)
             val struct = module.moduleArgs!!
             val gtv = GtvTestUtils.strToGtv(it.value)
-            val value = struct.type.gtvToRt(GtvToRtContext(pretty = true), gtv)
+            val value = struct.type.gtvToRt(GtvToRtContext.make(pretty = true), gtv)
             modName to value
         }.toMap().toImmMap()
     }
