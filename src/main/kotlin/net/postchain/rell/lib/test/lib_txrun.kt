@@ -52,10 +52,9 @@ object UnitTestBlockRunner {
 
             val bcData = GtvObjectMapper.fromGtv(gtvConfig, BlockchainConfigurationData::class, mapOf("partialContext" to bcCtx, "sigmaker" to sigMaker))
             val bcConfigFactory: BlockchainConfigurationFactory = GTXBlockchainConfigurationFactory()
-            val bcConfig = bcConfigFactory.makeBlockchainConfiguration(bcData)
-
             ctx.exeCtx.sqlExec.connection { con ->
                 val eCtx = createEContext(con, bcCtx)
+                val bcConfig = bcConfigFactory.makeBlockchainConfiguration(bcData, eCtx)
                 withSavepoint(con) {
                     processBlock(bcConfig, eCtx, block)
                 }
@@ -90,7 +89,6 @@ object UnitTestBlockRunner {
     private fun processBlock(bcConfig: BlockchainConfiguration, eCtx: EContext, block: Rt_TestBlockValue) {
         val txFactory = bcConfig.getTransactionFactory()
 
-        bcConfig.initializeDB(eCtx)
         val blockBuilder = bcConfig.makeBlockBuilder(eCtx)
 
         blockBuilder.begin(null)
