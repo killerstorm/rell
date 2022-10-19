@@ -7,7 +7,7 @@ package net.postchain.rell.runtime
 import com.google.common.collect.Sets
 import mu.KLogging
 import net.postchain.common.BlockchainRid
-import net.postchain.common.data.ByteArrayKey
+import net.postchain.common.types.WrappedByteArray
 import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtx.data.OpData
@@ -122,7 +122,7 @@ class Rt_RegularSqlContext private constructor(
                             "External chain '$name' not found in the database by RID 0x$ridStr")
                 }
 
-                val ridKey = ByteArrayKey(dep.rid)
+                val ridKey = WrappedByteArray(dep.rid)
                 val height = heightProvider.getChainHeight(ridKey, chainId)
                 if (height == null) {
                     throw errInit("external_chain_no_height:$name:$ridStr:$chainId",

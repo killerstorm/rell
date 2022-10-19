@@ -8,9 +8,9 @@ import mu.KLogging
 import net.postchain.base.BaseBlockBuilderExtension
 import net.postchain.base.data.DatabaseAccess
 import net.postchain.common.BlockchainRid
-import net.postchain.common.data.ByteArrayKey
 import net.postchain.common.exception.ProgrammerMistake
 import net.postchain.common.exception.UserMistake
+import net.postchain.common.types.WrappedByteArray
 import net.postchain.core.EContext
 import net.postchain.core.Transactor
 import net.postchain.core.TxEContext
@@ -200,7 +200,7 @@ private class RellGTXOperation(
     }
 
     private class Rt_TxChainHeightProvider(private val ctx: TxEContext): Rt_ChainHeightProvider {
-        override fun getChainHeight(rid: ByteArrayKey, id: Long): Long? {
+        override fun getChainHeight(rid: WrappedByteArray, id: Long): Long? {
             return try {
                 ctx.getChainDependencyHeight(id)
             } catch (e: Exception) {
