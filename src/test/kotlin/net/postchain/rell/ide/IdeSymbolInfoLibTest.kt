@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.ide
@@ -9,7 +9,7 @@ import org.junit.Test
 class IdeSymbolInfoLibTest: BaseIdeSymbolInfoTest() {
     @Test fun testChainContext() {
         file("module.rell", "struct module_args { x: integer; }")
-        chkExprErr("chain_context", "expr_novalue:namespace", "chain_context:DEF_NAMESPACE")
+        chkExprErr("chain_context", "expr_novalue:namespace:[chain_context]", "chain_context:DEF_NAMESPACE")
         chkExpr("chain_context.args", "chain_context:DEF_NAMESPACE", "args:DEF_CONSTANT")
         chkExpr("chain_context.args.x", "chain_context:DEF_NAMESPACE", "args:DEF_CONSTANT", "x:MEM_STRUCT_ATTR")
         chkExpr("chain_context.blockchain_rid", "chain_context:DEF_NAMESPACE", "blockchain_rid:DEF_CONSTANT")
@@ -115,22 +115,22 @@ class IdeSymbolInfoLibTest: BaseIdeSymbolInfoTest() {
 
         val rellTest = arrayOf("rell:DEF_NAMESPACE", "test:DEF_NAMESPACE")
 
-        chkExprErr("rell.test", "expr_novalue:namespace", *rellTest)
+        chkExprErr("rell.test", "expr_novalue:namespace:[rell.test]", *rellTest)
         chkExprErr("rell.test.keypair()", "attr_missing:pub,priv", *rellTest, "keypair:DEF_STRUCT")
         chkExpr("kp().pub", "kp:DEF_FUNCTION_REGULAR", "pub:MEM_STRUCT_ATTR")
         chkExpr("kp().priv", "kp:DEF_FUNCTION_REGULAR", "priv:MEM_STRUCT_ATTR")
 
-        chkExprErr("rell.test.keypairs", "expr_novalue:namespace", *rellTest, "keypairs:DEF_NAMESPACE")
+        chkExprErr("rell.test.keypairs", "expr_novalue:namespace:[rell.test.keypairs]", *rellTest, "keypairs:DEF_NAMESPACE")
         chkExpr("rell.test.keypairs.bob", *rellTest, "keypairs:DEF_NAMESPACE", "bob:DEF_CONSTANT")
         chkExpr("rell.test.keypairs.alice", *rellTest, "keypairs:DEF_NAMESPACE", "alice:DEF_CONSTANT")
         chkExpr("rell.test.keypairs.trudy", *rellTest, "keypairs:DEF_NAMESPACE", "trudy:DEF_CONSTANT")
 
-        chkExprErr("rell.test.privkeys", "expr_novalue:namespace", *rellTest, "privkeys:DEF_NAMESPACE")
+        chkExprErr("rell.test.privkeys", "expr_novalue:namespace:[rell.test.privkeys]", *rellTest, "privkeys:DEF_NAMESPACE")
         chkExpr("rell.test.privkeys.bob", *rellTest, "privkeys:DEF_NAMESPACE", "bob:DEF_CONSTANT")
         chkExpr("rell.test.privkeys.alice", *rellTest, "privkeys:DEF_NAMESPACE", "alice:DEF_CONSTANT")
         chkExpr("rell.test.privkeys.trudy", *rellTest, "privkeys:DEF_NAMESPACE", "trudy:DEF_CONSTANT")
 
-        chkExprErr("rell.test.pubkeys", "expr_novalue:namespace", *rellTest, "pubkeys:DEF_NAMESPACE")
+        chkExprErr("rell.test.pubkeys", "expr_novalue:namespace:[rell.test.pubkeys]", *rellTest, "pubkeys:DEF_NAMESPACE")
         chkExpr("rell.test.pubkeys.bob", *rellTest, "pubkeys:DEF_NAMESPACE", "bob:DEF_CONSTANT")
         chkExpr("rell.test.pubkeys.alice", *rellTest, "pubkeys:DEF_NAMESPACE", "alice:DEF_CONSTANT")
         chkExpr("rell.test.pubkeys.trudy", *rellTest, "pubkeys:DEF_NAMESPACE", "trudy:DEF_CONSTANT")

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -99,8 +99,8 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         chk("$fromSingle @* { true } ( .id.s )", "[Bob, Alice]")
 
         val fromDouble = impFrom("double")
-        chk("$fromDouble @* { 123 } ( .id.s )", "ct_err:at_attr_type_ambig:0:integer:double.i1,double.i2")
-        chk("$fromDouble @* { 'A' } ( .id.s )", "ct_err:at_attr_type_ambig:0:text:double.t1,double.t2")
+        chk("(v:$fromDouble) @* { 123 } ( .id.s )", "ct_err:at_attr_type_ambig:0:integer:[v:double.i1,v:double.i2]")
+        chk("(v:$fromDouble) @* { 'A' } ( .id.s )", "ct_err:at_attr_type_ambig:0:text:[v:double.t1,v:double.t2]")
         chk("$fromDouble @* { false } ( .id.s )", "[]")
         chk("$fromDouble @* { true } ( .id.s )", "[Bob, Alice]")
     }
@@ -166,14 +166,14 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
 
         chk("$fromUser @* {} ( (c:$fromCompany) @ {} (c.name) limit 1 )", "[Adidas, Adidas, Adidas]")
 
-        chkNestedAttributes("$fromUser @* {} ( _=.name, $fromCompany @ {} (.name) limit 1 )",
-                "ct_err:at_attr_name_ambig:name:company.name,user.name",
+        chkNestedAttributes("(u:$fromUser) @* {} ( _=.name, (c:$fromCompany) @ {} (.name) limit 1 )",
+                "ct_err:at_attr_name_ambig:name:[c:company:name,u:user:name]",
                 "[(Bob,Adidas), (Alice,Adidas), (Trudy,Adidas)]",
                 "[(Bob,Adidas), (Alice,Adidas), (Trudy,Adidas)]"
         )
 
-        chkNestedAttributes("$fromUser @* {} ( _=.name, $fromCompany @ {} (.city) limit 1 )",
-                "ct_err:at_attr_name_ambig:city:company.city,user.city",
+        chkNestedAttributes("(u:$fromUser) @* {} ( _=.name, (c:$fromCompany) @ {} (.city) limit 1 )",
+                "ct_err:at_attr_name_ambig:city:[c:company:city,u:user:city]",
                 "[(Bob,London), (Alice,London), (Trudy,London)]",
                 "[(Bob,London), (Alice,London), (Trudy,London)]"
         )
@@ -195,15 +195,15 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         chk("(u:$fromUser) @* {exists( (c:$fromCompany) @* {} (c.name) )} ( .name )", "[Bob, Alice, Trudy]")
         chk("(u:$fromUser) @* {exists( (c:$fromCompany) @* {} (u.user_attr) )} ( .name )", "[Bob, Alice, Trudy]")
 
-        chkNestedAttributes("$fromUser @* {exists( $fromCompany @* {} (.name) )} ( .name )",
-                "ct_err:at_attr_name_ambig:name:company.name,user.name",
-                "ct_err:at_attr_name_ambig:name:company.name,user.name",
+        chkNestedAttributes("(u:$fromUser) @* {exists( (c:$fromCompany) @* {} (.name) )} ( .name )",
+                "ct_err:at_attr_name_ambig:name:[c:company:name,u:user:name]",
+                "ct_err:at_attr_name_ambig:name:[c:company:name,u:user:name]",
                 "[Bob, Alice, Trudy]"
         )
 
-        chkNestedAttributes("$fromUser @* {exists( $fromCompany @* {} (.city) )} ( .name )",
-                "ct_err:at_attr_name_ambig:city:company.city,user.city",
-                "ct_err:at_attr_name_ambig:city:company.city,user.city",
+        chkNestedAttributes("(u:$fromUser) @* {exists( (c:$fromCompany) @* {} (.city) )} ( .name )",
+                "ct_err:at_attr_name_ambig:city:[c:company:city,u:user:city]",
+                "ct_err:at_attr_name_ambig:city:[c:company:city,u:user:city]",
                 "[Bob, Alice, Trudy]"
         )
 
@@ -213,10 +213,10 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
                 "[Bob, Alice, Trudy]"
         )
 
-        chkNestedAttributes("$fromUser @* {exists( $fromCompany @* {} (.user_attr) )} ( .name )",
-                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user",
-                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user",
-                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user"
+        chkNestedAttributes("(u:$fromUser) @* {exists( (c:$fromCompany) @* {} (.user_attr) )} ( .name )",
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:u:user",
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:u:user",
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:u:user"
         )
     }
 
@@ -230,15 +230,15 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         chk("(u:$fromUser) @* { .city in $fromCompany @* {} (u.city) } ( .name )", "[Bob, Alice, Trudy]")
         chk("$fromUser @* { .city in (c:$fromCompany) @* {} (c.city) } ( .name )", "[Bob, Alice]")
 
-        chkNestedAttributes("$fromUser @* { .city in $fromCompany @* {} (.name) } ( .name )",
-                "ct_err:at_attr_name_ambig:name:company.name,user.name",
-                "ct_err:at_attr_name_ambig:name:company.name,user.name",
+        chkNestedAttributes("(u:$fromUser) @* { .city in (c:$fromCompany) @* {} (.name) } ( .name )",
+                "ct_err:at_attr_name_ambig:name:[c:company:name,u:user:name]",
+                "ct_err:at_attr_name_ambig:name:[c:company:name,u:user:name]",
                 "[]"
         )
 
-        chkNestedAttributes("$fromUser @* { .city in $fromCompany @* {} (.city) } ( .name )",
-                "ct_err:at_attr_name_ambig:city:company.city,user.city",
-                "ct_err:at_attr_name_ambig:city:company.city,user.city",
+        chkNestedAttributes("(u:$fromUser) @* { .city in (c:$fromCompany) @* {} (.city) } ( .name )",
+                "ct_err:at_attr_name_ambig:city:[c:company:city,u:user:city]",
+                "ct_err:at_attr_name_ambig:city:[c:company:city,u:user:city]",
                 "[Bob, Alice]"
         )
 
@@ -248,20 +248,82 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
                 "[]"
         )
 
-        chkNestedAttributes("$fromUser @* { .city in $fromCompany @* {} (.user_attr) } ( .name )",
-                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user",
-                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user",
-                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user"
+        chkNestedAttributes("(u:$fromUser) @* { .city in (c:$fromCompany) @* {} (.user_attr) } ( .name )",
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:u:user",
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:u:user",
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:u:user"
+        )
+    }
+
+    @Test fun testNestedAttributesImplicitByType() {
+        impDefType("user", "name", "value:integer")
+        impDefType("company", "name", "value:integer")
+        impCreateObjs("user", "name = 'Adidas', value = 100", "name = 'Reebok', value = 101")
+        impCreateObjs("company", "name = 'Puma', value = 200", "name = 'Adidas', value = 201")
+
+        val err = "ct_err:at_attr_name_ambig:value:[c:company:value,u:user:value]"
+
+        chkNestedAttributes("(u:$fromUser) @* {} ( (c:$fromCompany) @* { 201 } (c.name) )",
+            "[[Adidas], [Adidas]]", "[[Adidas], [Adidas]]", "[[Adidas], [Adidas]]",
+        )
+
+        chkNestedAttributes("(u:$fromUser) @* {} ( (c:$fromCompany) @* { .value == 201 } (c.name) )",
+            err,
+            "[[Adidas], [Adidas]]",
+            "[[Adidas], [Adidas]]",
+        )
+
+        chkNestedAttributes("(u:$fromUser) @* { exists( (c:$fromCompany) @* { 201 } ) } (.name)",
+            "[Adidas, Reebok]", "[Adidas, Reebok]", "[Adidas, Reebok]"
+        )
+
+        chkNestedAttributes("(u:$fromUser) @* { exists( (c:$fromCompany) @* { .value == 201 } ) } (.name)",
+            err,
+            err,
+            "[Adidas, Reebok]",
+        )
+
+        chkNestedAttributes("(u:$fromUser) @* { .name in (c:$fromCompany) @* { 201 } (c.name) } (.name)",
+            "[Adidas]", "[Adidas]", "[Adidas]"
+        )
+
+        chkNestedAttributes("(u:$fromUser) @* { .name in (c:$fromCompany) @* { .value == 201 } (c.name) } (.name)",
+            err,
+            err,
+            "[Adidas]",
+        )
+    }
+
+    @Test fun testNestedAttributesImplicitByName() {
+        impDefType("user", "name", "value:integer")
+        impDefType("company", "name", "value:integer")
+        impCreateObjs("user", "name = 'Adidas', value = 100", "name = 'Reebok', value = 101")
+        impCreateObjs("company", "name = 'Puma', value = 200", "name = 'Adidas', value = 201")
+
+        chkNestedAttributesEx("{ val value = 201; return (u:$fromUser) @* {} ( (c:$fromCompany) @* { value } (c.name) ); }",
+            "[[Adidas], [Adidas]]", "[[Adidas], [Adidas]]", "[[Adidas], [Adidas]]",
+        )
+
+        chkNestedAttributesEx("{ val value = 201; return (u:$fromUser) @* { exists( (c:$fromCompany) @* { value } ) } (.name); }",
+            "[Adidas, Reebok]", "[Adidas, Reebok]", "[Adidas, Reebok]"
+        )
+
+        chkNestedAttributesEx("{ val value = 201; return (u:$fromUser) @* { .name in (c:$fromCompany) @* { value } (c.name) } (.name); }",
+            "[Adidas]", "[Adidas]", "[Adidas]"
         )
     }
 
     protected fun chkNestedAttributes(expr: String, expectedNone: String, expectedPartial: String, expectedFull: String) {
+        chkNestedAttributesEx("= $expr;", expectedNone, expectedPartial, expectedFull)
+    }
+
+    private fun chkNestedAttributesEx(code: String, expectedNone: String, expectedPartial: String, expectedFull: String) {
         tst.atAttrShadowing = C_AtAttrShadowing.NONE
-        chk(expr, expectedNone)
+        chkEx(code, expectedNone)
         tst.atAttrShadowing = C_AtAttrShadowing.PARTIAL
-        chk(expr, expectedPartial)
+        chkEx(code, expectedPartial)
         tst.atAttrShadowing = C_AtAttrShadowing.FULL
-        chk(expr, expectedFull)
+        chkEx(code, expectedFull)
     }
 
     @Test fun testAliasLocalVarConflict() {
@@ -367,7 +429,7 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         f("inner1", "o.ref.foo_value", "O")
         f("inner1", "o.ref.bar_value", "O")
 
-        f("inner2", "o.value", "ct_err:at_where:var_manyattrs_type:0:value:value:i.foo_value,i.bar_value")
+        f("inner2", "o.value", "ct_err:at_where:var_manyattrs_type:0:value:value:[i:inner2.foo_value,i:inner2.bar_value]")
         f("inner2", "i.foo_value == o.value", "O")
         f("inner2", "i.bar_value == o.value", "O")
         f("inner2", "o.foo_value", "O")
@@ -375,9 +437,9 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         f("inner2", "i.foo_value", "ct_err:at_where:type:0:[boolean]:[value]")
         f("inner2", "i.bar_value", "ct_err:at_where:type:0:[boolean]:[value]")
 
-        f("inner2", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:i.foo_value,i.bar_value")
-        f("inner2", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:i.foo_value,i.bar_value")
-        f("inner2", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:i.foo_value,i.bar_value")
+        f("inner2", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:[i:inner2.foo_value,i:inner2.bar_value]")
+        f("inner2", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:[i:inner2.foo_value,i:inner2.bar_value]")
+        f("inner2", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:[i:inner2.foo_value,i:inner2.bar_value]")
         f("inner2", "i.foo_value == o.ref.foo_value", "O")
         f("inner2", "i.bar_value == o.ref.bar_value", "O")
         f("inner2", "i.foo_value == o.ref.value", "O")
@@ -390,9 +452,9 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         f("inner3", "i.foo_value", "ct_err:at_where:type:0:[boolean]:[value]")
         f("inner3", "i.bar_value", "ct_err:at_where:type:0:[boolean]:[value]")
 
-        f("inner3", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:i.value,i.foo_value,i.bar_value")
-        f("inner3", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:i.value,i.foo_value,i.bar_value")
-        f("inner3", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:i.value,i.foo_value,i.bar_value")
+        f("inner3", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:[i:inner3.value,i:inner3.foo_value,i:inner3.bar_value]")
+        f("inner3", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:[i:inner3.value,i:inner3.foo_value,i:inner3.bar_value]")
+        f("inner3", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:[i:inner3.value,i:inner3.foo_value,i:inner3.bar_value]")
         f("inner3", "i.value == o.ref.value", "O")
         f("inner3", "i.foo_value == o.ref.foo_value", "O")
         f("inner3", "i.bar_value == o.ref.bar_value", "O")
@@ -412,7 +474,7 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         f("inner1", "o.ref.foo_value", "O")
         f("inner1", "o.ref.bar_value", "O")
 
-        f("inner2", "o.value", "ct_err:at_where:var_manyattrs_type:0:value:value:i.foo_value,i.bar_value")
+        f("inner2", "o.value", "ct_err:at_where:var_manyattrs_type:0:value:value:[i:inner2.foo_value,i:inner2.bar_value]")
         f("inner2", "i.foo_value == o.value", "O")
         f("inner2", "i.bar_value == o.value", "O")
         f("inner2", "o.foo_value", "O")
@@ -420,9 +482,9 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         f("inner2", "i.foo_value", "ct_err:at_where:type:0:[boolean]:[value]")
         f("inner2", "i.bar_value", "ct_err:at_where:type:0:[boolean]:[value]")
 
-        f("inner2", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:i.foo_value,i.bar_value")
-        f("inner2", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:i.foo_value,i.bar_value")
-        f("inner2", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:i.foo_value,i.bar_value")
+        f("inner2", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:[i:inner2.foo_value,i:inner2.bar_value]")
+        f("inner2", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:[i:inner2.foo_value,i:inner2.bar_value]")
+        f("inner2", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:[i:inner2.foo_value,i:inner2.bar_value]")
         f("inner2", "i.foo_value == o.foo_value", "O")
         f("inner2", "i.bar_value == o.bar_value", "O")
 
@@ -433,9 +495,9 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         f("inner3", "i.foo_value", "ct_err:at_where:type:0:[boolean]:[value]")
         f("inner3", "i.bar_value", "ct_err:at_where:type:0:[boolean]:[value]")
 
-        f("inner3", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:i.value,i.foo_value,i.bar_value")
-        f("inner3", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:i.value,i.foo_value,i.bar_value")
-        f("inner3", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:i.value,i.foo_value,i.bar_value")
+        f("inner3", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:[i:inner3.value,i:inner3.foo_value,i:inner3.bar_value]")
+        f("inner3", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:[i:inner3.value,i:inner3.foo_value,i:inner3.bar_value]")
+        f("inner3", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:[i:inner3.value,i:inner3.foo_value,i:inner3.bar_value]")
         f("inner3", "i.value == o.ref.value", "O")
         f("inner3", "i.foo_value == o.ref.foo_value", "O")
         f("inner3", "i.bar_value == o.ref.bar_value", "O")

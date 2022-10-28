@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -69,20 +69,20 @@ class FunctionTest: BaseRellTest(false) {
     }
 
     @Test fun testWrongArgs() {
-        chkFnErr("function f(){}", "f(123)", "ct_err:expr:call:too_many_args:f:0:1")
-        chkFnErr("function f(x:integer){}", "f()", "ct_err:expr:call:missing_args:f:0:x")
-        chkFnErr("function f(x:integer){}", "f(123, 456)", "ct_err:expr:call:too_many_args:f:1:2")
-        chkFnErr("function f(x:integer,y:text){}", "f()", "ct_err:expr:call:missing_args:f:0:x,1:y")
-        chkFnErr("function f(x:integer,y:text){}", "f(123)", "ct_err:expr:call:missing_args:f:1:y")
-        chkFnErr("function f(x:integer,y:text){}", "f(123,'Hello','World')", "ct_err:expr:call:too_many_args:f:2:3")
+        chkFnErr("function f(){}", "f(123)", "ct_err:expr:call:too_many_args:[f]:0:1")
+        chkFnErr("function f(x:integer){}", "f()", "ct_err:expr:call:missing_args:[f]:0:x")
+        chkFnErr("function f(x:integer){}", "f(123, 456)", "ct_err:expr:call:too_many_args:[f]:1:2")
+        chkFnErr("function f(x:integer,y:text){}", "f()", "ct_err:expr:call:missing_args:[f]:0:x,1:y")
+        chkFnErr("function f(x:integer,y:text){}", "f(123)", "ct_err:expr:call:missing_args:[f]:1:y")
+        chkFnErr("function f(x:integer,y:text){}", "f(123,'Hello','World')", "ct_err:expr:call:too_many_args:[f]:2:3")
 
-        chkFnErr("function f(x:integer){}", "f('Hello')", "ct_err:expr_call_argtype:f:0:x:integer:text")
-        chkFnErr("function f(x:integer,y:text){}", "f('Hello','World')", "ct_err:expr_call_argtype:f:0:x:integer:text")
-        chkFnErr("function f(x:integer,y:text){}", "f(123,456)", "ct_err:expr_call_argtype:f:1:y:text:integer")
+        chkFnErr("function f(x:integer){}", "f('Hello')", "ct_err:expr_call_argtype:[f]:0:x:integer:text")
+        chkFnErr("function f(x:integer,y:text){}", "f('Hello','World')", "ct_err:expr_call_argtype:[f]:0:x:integer:text")
+        chkFnErr("function f(x:integer,y:text){}", "f(123,456)", "ct_err:expr_call_argtype:[f]:1:y:text:integer")
 
         chkFnErr("function f(x:integer,y:text){}", "f('Hello',123)", """ct_err:
-            [expr_call_argtype:f:0:x:integer:text]
-            [expr_call_argtype:f:1:y:text:integer]
+            [expr_call_argtype:[f]:0:x:integer:text]
+            [expr_call_argtype:[f]:1:y:text:integer]
         """)
     }
 
@@ -226,9 +226,9 @@ class FunctionTest: BaseRellTest(false) {
         file("lib/f3.rell", "function h(x: integer) = f(x);")
 
         chkCompile("import lib;", """ct_err:
-            [lib/f1.rell:fn_type_recursion:FUNCTION:g]
-            [lib/f2.rell:fn_type_recursion:FUNCTION:h]
-            [lib/f3.rell:fn_type_recursion:FUNCTION:f]
+            [lib/f1.rell:fn_type_recursion:FUNCTION:lib:g]
+            [lib/f2.rell:fn_type_recursion:FUNCTION:lib:h]
+            [lib/f3.rell:fn_type_recursion:FUNCTION:lib:f]
         """)
     }
 
@@ -238,9 +238,9 @@ class FunctionTest: BaseRellTest(false) {
         file("lib3.rell", "module; import lib1; function h(x: integer) = lib1.f(x);")
 
         chkCompile("import lib1;", """ct_err:
-            [lib1.rell:fn_type_recursion:FUNCTION:g]
-            [lib2.rell:fn_type_recursion:FUNCTION:h]
-            [lib3.rell:fn_type_recursion:FUNCTION:f]
+            [lib1.rell:fn_type_recursion:FUNCTION:lib2:g]
+            [lib2.rell:fn_type_recursion:FUNCTION:lib3:h]
+            [lib3.rell:fn_type_recursion:FUNCTION:lib1:f]
         """)
     }
 
@@ -271,10 +271,10 @@ class FunctionTest: BaseRellTest(false) {
     }
 
     @Test fun testReturnTypeCtError() {
-        chkCompile("function f(): unknown_type { return 123; }", "ct_err:unknown_def:type:unknown_type")
-        chkCompile("function f(): unknown_type {}", "ct_err:[fun_noreturn:f][unknown_def:type:unknown_type]")
+        chkCompile("function f(): unknown_type { return 123; }", "ct_err:unknown_name:unknown_type")
+        chkCompile("function f(): unknown_type {}", "ct_err:[fun_noreturn:f][unknown_name:unknown_type]")
         chkCompile("function f(): unknown_type { val x: integer = 'Hello'; return 123; }",
-                "ct_err:[unknown_def:type:unknown_type][stmt_var_type:x:[integer]:[text]]")
+                "ct_err:[unknown_name:unknown_type][stmt_var_type:x:[integer]:[text]]")
     }
 
     @Test fun testNamedArguments() {
@@ -287,21 +287,21 @@ class FunctionTest: BaseRellTest(false) {
         chkFn(fn, "f(123, z = true, y = 'Hello')", "text[123,Hello,true]")
         chkFn(fn, "f(123, 'Hello', z = true)", "text[123,Hello,true]")
 
-        chkFn(fn, "f(x = 123)", "ct_err:expr:call:missing_args:f:1:y,2:z")
-        chkFn(fn, "f(y = 'Hello')", "ct_err:expr:call:missing_args:f:0:x,2:z")
-        chkFn(fn, "f(z = true)", "ct_err:expr:call:missing_args:f:0:x,1:y")
-        chkFn(fn, "f(x = 123, y = 'Hello')", "ct_err:expr:call:missing_args:f:2:z")
-        chkFn(fn, "f(x = 123, z = true)", "ct_err:expr:call:missing_args:f:1:y")
+        chkFn(fn, "f(x = 123)", "ct_err:expr:call:missing_args:[f]:1:y,2:z")
+        chkFn(fn, "f(y = 'Hello')", "ct_err:expr:call:missing_args:[f]:0:x,2:z")
+        chkFn(fn, "f(z = true)", "ct_err:expr:call:missing_args:[f]:0:x,1:y")
+        chkFn(fn, "f(x = 123, y = 'Hello')", "ct_err:expr:call:missing_args:[f]:2:z")
+        chkFn(fn, "f(x = 123, z = true)", "ct_err:expr:call:missing_args:[f]:1:y")
         chkFn(fn, "f(x = 123, y = 'Hello', true)", "ct_err:expr:call:positional_after_named")
         chkFn(fn, "f(true, x = 123, y = 'Hello')",
-                "ct_err:[expr:call:missing_args:f:2:z][expr_call_argtype:f:0:x:integer:boolean][expr:call:named_arg_already_specified:f:x]")
+                "ct_err:[expr:call:missing_args:[f]:2:z][expr_call_argtype:[f]:0:x:integer:boolean][expr:call:named_arg_already_specified:[f]:x]")
 
-        chkFn(fn, "f(x = 'Bye', y = 'Hello', z = true)", "ct_err:expr_call_argtype:f:0:x:integer:text")
-        chkFn(fn, "f(x = 123, y = 456, z = true)", "ct_err:expr_call_argtype:f:1:y:text:integer")
-        chkFn(fn, "f(x = 123, y = 'Hello', z = 456)", "ct_err:expr_call_argtype:f:2:z:boolean:integer")
+        chkFn(fn, "f(x = 'Bye', y = 'Hello', z = true)", "ct_err:expr_call_argtype:[f]:0:x:integer:text")
+        chkFn(fn, "f(x = 123, y = 456, z = true)", "ct_err:expr_call_argtype:[f]:1:y:text:integer")
+        chkFn(fn, "f(x = 123, y = 'Hello', z = 456)", "ct_err:expr_call_argtype:[f]:2:z:boolean:integer")
 
         chkFn(fn, "f(x = 123, y = 'Hello', z = 456, x = 789)",
-                "ct_err:[expr_call_argtype:f:2:z:boolean:integer][expr:call:named_arg_dup:x]")
+                "ct_err:[expr_call_argtype:[f]:2:z:boolean:integer][expr:call:named_arg_dup:x]")
         chkFn(fn, "f(x = 123, y = 'Hello', z = true, x = 789)", "ct_err:expr:call:named_arg_dup:x")
     }
 
@@ -312,19 +312,19 @@ class FunctionTest: BaseRellTest(false) {
         chk("f(456,'Bye')", "text[456,Bye]")
         chk("f(456)", "text[456,Hello]")
         chk("f()", "text[123,Hello]")
-        chk("f('Bye')", "ct_err:expr_call_argtype:f:0:x:integer:text")
+        chk("f('Bye')", "ct_err:expr_call_argtype:[f]:0:x:integer:text")
         chk("f(y='Bye')", "text[123,Bye]")
 
         chk("g(456,'Bye',false)", "text[456,Bye,false]")
         chk("g(456,'Bye')", "text[456,Bye,true]")
-        chk("g(456)", "ct_err:expr:call:missing_args:g:1:y")
-        chk("g('Bye')", "ct_err:[expr:call:missing_args:g:1:y][expr_call_argtype:g:0:x:integer:text]")
+        chk("g(456)", "ct_err:expr:call:missing_args:[g]:1:y")
+        chk("g('Bye')", "ct_err:[expr:call:missing_args:[g]:1:y][expr_call_argtype:[g]:0:x:integer:text]")
         chk("g(y='Bye')", "text[123,Bye,true]")
     }
 
     @Test fun testDefaultParametersErrors() {
         chkCompile("function f(x: integer, y: integer = x){}", "ct_err:unknown_name:x")
-        chkCompile("function f(x = 123){}", "ct_err:unknown_name_type:x")
+        chkCompile("function f(x = 123){}", "ct_err:unknown_name:x")
         chkCompile("function f(x: integer = 123){}", "OK")
         chkCompile("function f(x: integer = 'Hello'){}", "ct_err:def:param:type:x:integer:text")
     }
@@ -479,12 +479,12 @@ class FunctionTest: BaseRellTest(false) {
         chkCompile("abstract function(x: integer) {}", "ct_err:[fn:abstract:non_abstract_module::function#0][fn:no_name]")
         chkCompile("override function(x: integer) {}", "ct_err:fn:no_name")
         chkCompile("@extendable function(x: integer) {}", "ct_err:fn:no_name")
-        chkCompile("@extend(f) function(x: integer) {}", "ct_err:fn:extend:not_found:f")
+        chkCompile("@extend(f) function(x: integer) {}", "ct_err:unknown_name:f")
     }
 
     @Test fun testBugOddNamedArgument() {
-        chkCompile("function foo(a: text, b: text) {} function bar() { foo(a=\"A\", x=\"X\", b=\"B\"); }",
-            "ct_err:expr:call:unknown_named_arg:foo:x")
+        chkCompile("""function foo(a: text, b: text) {} function bar() { foo(a="A", x="X", b="B"); }""",
+            "ct_err:expr:call:unknown_named_arg:[foo]:x")
     }
 
     private fun chkFn(fnCode: String, callCode: String, expected: String) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -23,7 +23,7 @@ import net.postchain.rell.runtime.*
 
 object C_Lib_Require {
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
-        val fb = C_GlobalFuncBuilder(null)
+        val fb = C_GlobalFuncBuilder()
         fb.add("require", C_SysFn_Require_Boolean)
         fb.add("require", C_SysFn_Require_Nullable)
         fb.add("requireNotEmpty", C_SysFn_Require_Collection, depError("require_not_empty"))

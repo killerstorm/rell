@@ -1137,7 +1137,7 @@ class VirtualTest: BaseGtxTest(false) {
         def("struct rec { i: integer; t: text; }")
 
         chkVirtual("gtv", "_strict_str(virtual<rec>.from_gtv_pretty(x))", argToGtv("[123,'Hello']", "[[0],[1]]"),
-                "ct_err:unknown_name:virtual<rec>.from_gtv_pretty")
+                "ct_err:unknown_name:[virtual<rec>]:from_gtv_pretty")
 
         chkFromGtv("rec", "[123,'Hello']", "[[0],[1]]", "'virtual<rec>[i=int[123],t=text[Hello]]'")
         chkFromGtv("rec", "[123,'Hello']", "[[0]]", "'virtual<rec>[i=int[123],t=null]'")

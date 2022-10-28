@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.misc
@@ -9,6 +9,7 @@ import net.postchain.rell.utils.toImmSet
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
+import kotlin.test.assertNotNull
 
 class KotlinTest {
     @Test fun testListMutability() {
@@ -208,5 +209,17 @@ class KotlinTest {
 
         // Compilation error
         //val b2 = B<Int?>(123)
+    }
+
+    @Test fun testSafeMemberAccess() {
+        class A(val f: (Int) -> Int, val l: List<Int>) { fun g(x: Int): Int = x * x }
+        fun makeA(z: Boolean): A? = if (!z) A(f = { it * it }, l = listOf(1, 2, 3)) else null
+
+        val a = makeA(false)
+        assertEquals(15129, a?.g(123))
+        assertNotNull(a?.f)
+        assertNotNull(a?.l)
+        //assertEquals(0, a?.f(123)) // Compilation error
+        //assertEquals(0, a?.l[0]) // Compilation error
     }
 }

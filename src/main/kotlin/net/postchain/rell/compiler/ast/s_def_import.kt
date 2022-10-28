@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -71,7 +71,7 @@ class S_ImportModulePath(
                 msgMgr.error(importPos, "import:no_path", "Module not specified")
                 return null
             }
-            return R_ModuleName(rPath)
+            return R_ModuleName.of(rPath)
         }
 
         if (relative.ups > currentModule.parts.size) {
@@ -83,7 +83,7 @@ class S_ImportModulePath(
 
         val base = currentModule.parts.subList(0, currentModule.parts.size - relative.ups)
         val full = base + rPath
-        return R_ModuleName(full)
+        return R_ModuleName.of(full)
     }
 }
 
@@ -92,7 +92,7 @@ sealed class S_ImportTarget {
     abstract fun addToNamespace(ctx: C_MountContext, def: C_ImportDefinition, module: C_ModuleKey)
 
     protected fun getNsBuilder(ctx: C_MountContext, alias: C_Name?): C_UserNsProtoBuilder {
-        return if (alias == null) ctx.nsBuilder else ctx.nsBuilder.addNamespace(alias, false)
+        return if (alias == null) ctx.nsBuilder else ctx.nsBuilder.addNamespace(alias, false, null)
     }
 }
 
@@ -125,7 +125,7 @@ class S_ExactImportTargetItem(
         if (wildcard) {
             val nsBuilder2 = if (aliasHand == null) nsBuilder else {
                 aliasHand.setIdeInfo(IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE))
-                nsBuilder.addNamespace(aliasHand.name, false)
+                nsBuilder.addNamespace(aliasHand.name, false, null)
             }
             nsBuilder2.addWildcardImport(module, nameHand.parts)
         } else {

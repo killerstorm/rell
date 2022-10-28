@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -620,7 +620,7 @@ class S_BinaryExpr(val head: S_Expr, val tail: List<S_BinaryExprTail>): S_Expr(h
         val queue = LinkedList(tail)
         val tree = buildTree(head, queue, 0)
         val value = tree.compile(ctx)
-        return C_VExpr(value)
+        return C_ValueExpr(value)
     }
 
     private fun buildTree(left: S_Expr, tail: Queue<S_BinaryExprTail>, level: Int): BinExprNode {

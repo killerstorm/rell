@@ -1,12 +1,15 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
 
 import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
-import net.postchain.rell.compiler.base.namespace.*
+import net.postchain.rell.compiler.base.namespace.C_NamespaceProperty
+import net.postchain.rell.compiler.base.namespace.C_NamespacePropertyContext
+import net.postchain.rell.compiler.base.namespace.C_NamespaceProperty_SysFunction
+import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_Constants
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.vexpr.V_Expr
@@ -18,16 +21,19 @@ import net.postchain.rell.utils.checkEquals
 
 object C_Lib_ChainContext {
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
-        val b = C_SysNsProtoBuilder()
+        val nsName = "chain_context"
+        val b = C_SysNsProtoBuilder(nsBuilder.basePath.subPath(nsName))
+
         b.addProperty("raw_config", makeProperty(R_GtvType, ChainCtxFns.RawConfig))
         b.addProperty("blockchain_rid", makeProperty(R_ByteArrayType, ChainCtxFns.BlockchainRid))
-        b.addProperty("args", C_NsValue_ChainContext_Args)
-        nsBuilder.addNamespace("chain_context", b.build().toNamespace())
+        b.addProperty("args", C_NsProperty_ChainContext_Args)
+
+        nsBuilder.addNamespace(nsName, b.build().toNamespace())
     }
 }
 
-private object C_NsValue_ChainContext_Args: C_NamespaceValue_VExpr(IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)) {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
+private object C_NsProperty_ChainContext_Args: C_NamespaceProperty(IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)) {
+    override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
         val struct = ctx.modCtx.getModuleArgsStruct()
         if (struct == null) {
             val nameStr = name.str()
@@ -67,7 +73,7 @@ private object ChainCtxFns {
     }
 }
 
-private fun makeProperty(type: R_Type, fn: R_SysFunction, pure: Boolean = false): C_NamespaceValue {
+private fun makeProperty(type: R_Type, fn: R_SysFunction, pure: Boolean = false): C_NamespaceProperty {
     val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
-    return C_NamespaceValue_SysFunction(ideInfo, type, fn, pure = pure)
+    return C_NamespaceProperty_SysFunction(ideInfo, type, fn, pure = pure)
 }

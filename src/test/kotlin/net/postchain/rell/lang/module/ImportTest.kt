@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.module
@@ -23,8 +23,8 @@ class ImportTest: BaseRellTest(false) {
         chkImport("import x: a.{f};", "x.f()", "int[123]")
         chkImport("import x: a.{g};", "x.g()", "int[456]")
         chkImport("import x: a.{f,g};", "x.f()+x.g()", "int[579]")
-        chkImport("import x: a.{f};", "x.g()", "ct_err:unknown_name:x.g")
-        chkImport("import x: a.{g};", "x.f()", "ct_err:unknown_name:x.f")
+        chkImport("import x: a.{f};", "x.g()", "ct_err:unknown_name:[x]:g")
+        chkImport("import x: a.{g};", "x.f()", "ct_err:unknown_name:[x]:f")
         chkImport("import x: a.{f,g};", "f()", "ct_err:unknown_name:f")
         chkImport("import x: a.{f,g};", "g()", "ct_err:unknown_name:g")
 
@@ -114,8 +114,8 @@ class ImportTest: BaseRellTest(false) {
         chkImport("import x: a.{y: ns.*};", "x.y.g()", "int[456]")
         chkImport("import x: a.{y: ns.*};", "f()", "ct_err:unknown_name:f")
         chkImport("import x: a.{y: ns.*};", "g()", "ct_err:unknown_name:g")
-        chkImport("import x: a.{y: ns.*};", "x.f()", "ct_err:unknown_name:x.f")
-        chkImport("import x: a.{y: ns.*};", "x.g()", "ct_err:unknown_name:x.g")
+        chkImport("import x: a.{y: ns.*};", "x.f()", "ct_err:unknown_name:[x]:f")
+        chkImport("import x: a.{y: ns.*};", "x.g()", "ct_err:unknown_name:[x]:g")
         chkImport("import x: a.{y: ns.*};", "y.f()", "ct_err:unknown_name:y")
         chkImport("import x: a.{y: ns.*};", "y.g()", "ct_err:unknown_name:y")
     }
@@ -172,7 +172,7 @@ class ImportTest: BaseRellTest(false) {
     @Test fun testWildcardConflict3() {
         file("a.rell", "module; function f(): integer = 123; function u(): integer = 456;")
         file("b.rell", "module; function f(): integer = 321; function v(): integer = 789;")
-        chkImport("import a.*; import b.*;", "f()", "ct_err:name:ambig:f")
+        chkImport("import a.*; import b.*;", "f()", "ct_err:name:ambig:f:[FUNCTION:a:f,FUNCTION:b:f]")
         chkImport("import a.*; import b.*;", "u()", "int[456]")
         chkImport("import a.*; import b.*;", "v()", "int[789]")
         chkImport("import a.*; import a.*;", "f()", "int[123]")
@@ -181,7 +181,7 @@ class ImportTest: BaseRellTest(false) {
 
     @Test fun testWildcardConflict4() {
         file("a.rell", "module; namespace x { function f(): integer = 123; }")
-        chkImport("namespace x { function g(): integer = 456; } import a.*;", "x.f()", "ct_err:unknown_name:x.f")
+        chkImport("namespace x { function g(): integer = 456; } import a.*;", "x.f()", "ct_err:unknown_name:[x]:f")
         chkImport("namespace x { function g(): integer = 456; } import a.*;", "x.g()", "int[456]")
     }
 
@@ -192,7 +192,7 @@ class ImportTest: BaseRellTest(false) {
         file("c/c2.rell", "function f(): integer = 789;")
         file("c/c3.rell", "import b.*;")
         file("c/c4.rell", "function g(): integer = f();")
-        chkImport("import c;", "c.f()", "ct_err:name:ambig:c.f")
+        chkImport("import c;", "c.f()", "ct_err:name:ambig:c.f:[FUNCTION:c:f,FUNCTION:a:f,FUNCTION:b:f]")
         chkImport("import c;", "c.g()", "int[789]")
     }
 
@@ -206,25 +206,25 @@ class ImportTest: BaseRellTest(false) {
 
         chkImport("import a.{ns.*, st.*};", "x(123)", "a:st.x[v=int[123]]")
         chkImport("import a.{ns.*, st.*};", "list<x.rec>()", "list<a:ns.x.rec>[]")
-        chkImport("import a.{ns.*, st.*};", "x.f()", "ct_err:name:ambig:x")
+        chkImport("import a.{ns.*, st.*};", "x.f()", "ct_err:name:ambig:x:[NAMESPACE:a:ns.x,STRUCT:a:st.x]")
 
         chkImport("import a.{ns.*, en.*};", "list<x>()", "list<a:en.x>[]")
         chkImport("import a.{ns.*, en.*};", "list<x.rec>()", "list<a:ns.x.rec>[]")
-        chkImport("import a.{ns.*, en.*};", "x.EN", "ct_err:[name:ambig:x][unknown_name:x.EN]")
-        chkImport("import a.{ns.*, en.*};", "x.f()", "ct_err:name:ambig:x")
+        chkImport("import a.{ns.*, en.*};", "x.EN", "ct_err:[name:ambig:x:[NAMESPACE:a:ns.x,ENUM:a:en.x]][unknown_name:[a:ns.x]:EN]")
+        chkImport("import a.{ns.*, en.*};", "x.f()", "ct_err:name:ambig:x:[NAMESPACE:a:ns.x,ENUM:a:en.x]")
 
         chkImport("import a.{ns.*, fn.*};", "list<x.rec>()", "list<a:ns.x.rec>[]")
         chkImport("import a.{ns.*, fn.*};", "x.f()", "int[456]")
         chkImport("import a.{ns.*, fn.*};", "x()", "int[123]")
 
-        chkImport("import a.{st.*, en.*};", "list<x>()", "ct_err:name:ambig:x")
-        chkImport("import a.{st.*, en.*};", "x.EN", "ct_err:[name:ambig:x][unknown_name:x.EN]")
-        chkImport("import a.{st.*, en.*};", "x.from_bytes(x'')", "ct_err:name:ambig:x")
-        chkImport("import a.{st.*, en.*};", "x.value(0)", "ct_err:[name:ambig:x][unknown_name:x.value]")
+        chkImport("import a.{st.*, en.*};", "list<x>()", "ct_err:name:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]")
+        chkImport("import a.{st.*, en.*};", "x.EN", "ct_err:[name:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]][unknown_name:[a:st.x]:EN]")
+        chkImport("import a.{st.*, en.*};", "x.from_bytes(x'')", "ct_err:name:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]")
+        chkImport("import a.{st.*, en.*};", "x.value(0)", "ct_err:[name:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]][unknown_name:[a:st.x]:value]")
 
         chkImport("import a.{st.*, fn.*};", "list<x>()", "list<a:st.x>[]")
         chkImport("import a.{st.*, fn.*};", "_type_of(x.from_bytes(x''))", "text[a:st.x]")
-        chkImport("import a.{st.*, fn.*};", "x(123)", "ct_err:name:ambig:x")
+        chkImport("import a.{st.*, fn.*};", "x(123)", "ct_err:name:ambig:x:[STRUCT:a:st.x,FUNCTION:a:fn.x]")
 
         chkImport("import a.{en.*, fn.*};", "list<x>()", "list<a:en.x>[]")
         chkImport("import a.{en.*, fn.*};", "x.EN", "a:en.x[EN]")
@@ -261,6 +261,20 @@ class ImportTest: BaseRellTest(false) {
     @Test fun testWildcardDuplicate() {
         file("lib.rell", "module; function f(): integer = 123;")
         chkImport("import lib.*; import lib.*;", "f()", "int[123]")
+    }
+
+    @Test fun testWildcardDuplicateIndirectFunction() {
+        file("lib.rell", "module; function f(): integer = 123;")
+        file("a.rell", "module; import lib.*;")
+        file("b.rell", "module; import lib.*;")
+        chkImport("import a.*; import b.*; import lib.*;", "f()", "int[123]")
+    }
+
+    @Test fun testWildcardDuplicateIndirectEntity() {
+        file("lib.rell", "module; entity e { x: integer = 123; }")
+        file("a.rell", "module; import lib.*;")
+        file("b.rell", "module; import lib.*;")
+        chkImport("import a.*; import b.*; import lib.*;", "struct<e>()", "struct<lib:e>[x=int[123]]")
     }
 
     @Test fun testDefKindsExact() {
@@ -345,7 +359,7 @@ class ImportTest: BaseRellTest(false) {
 
     @Test fun testRecursionExact2() {
         file("a.rell", "module; import a.{x};")
-        chkImport("import a;", "a.x", "ct_err:[main.rell:unknown_name:a.x][a.rell:import:exact:recursion:a:x]")
+        chkImport("import a;", "a.x", "ct_err:[main.rell:unknown_name:[a]:x][a.rell:import:exact:recursion:a:x]")
         chkImport("import a;", "0", "ct_err:a.rell:import:exact:recursion:a:x")
     }
 
@@ -479,7 +493,7 @@ class ImportTest: BaseRellTest(false) {
     @Test fun testRecursionMixed6() {
         file("m1.rell", "module; namespace a { import m2.{x.y.f}; namespace b { import m2.{x.*}; } }")
         file("m2.rell", "module; namespace x { import m1.{y: a.b}; }")
-        chkImport("import m1;", "m1.a.f()", "ct_err:[main.rell:unknown_name:m1.a.f][m1.rell:import:name_unknown:f]")
+        chkImport("import m1;", "m1.a.f()", "ct_err:[main.rell:unknown_name:[m1:a]:f][m1.rell:import:name_unknown:f]")
     }
 
     @Test fun testRelativePath() {
@@ -492,10 +506,10 @@ class ImportTest: BaseRellTest(false) {
 
     @Test fun testSysDefs() {
         file("a.rell", "module; function f(): integer = 123;")
-        chkImport("import a;", "_type_of(a.integer)", "ct_err:unknown_name:a.integer")
-        chkImport("import a;", "a.abs(123)", "ct_err:unknown_name:a.abs")
-        chkImport("import ns: a.*;", "_type_of(ns.integer)", "ct_err:unknown_name:ns.integer")
-        chkImport("import ns: a.*;", "ns.abs(123)", "ct_err:unknown_name:ns.abs")
+        chkImport("import a;", "_type_of(a.integer)", "ct_err:unknown_name:[a]:integer")
+        chkImport("import a;", "a.abs(123)", "ct_err:unknown_name:[a]:abs")
+        chkImport("import ns: a.*;", "_type_of(ns.integer)", "ct_err:unknown_name:[ns]:integer")
+        chkImport("import ns: a.*;", "ns.abs(123)", "ct_err:unknown_name:[ns]:abs")
     }
 
     @Test fun testAliasConflictNamespace() {
@@ -527,8 +541,8 @@ class ImportTest: BaseRellTest(false) {
         file("d.rell", "module; import a.*; import b.*; function f(): integer = 789;")
         chkImport("import c.{f};", "f()", "ct_err:[import:name_ambig:f][unknown_name:f]")
         chkImport("import d.{f};", "f()", "int[789]")
-        chkImport("import c.*;", "f()", "ct_err:name:ambig:f")
-        chkImport("import d.*;", "f()", "ct_err:name:ambig:f")
+        chkImport("import c.*;", "f()", "ct_err:name:ambig:f:[FUNCTION:a:f,FUNCTION:b:f]")
+        chkImport("import d.*;", "f()", "ct_err:name:ambig:f:[FUNCTION:d:f,FUNCTION:a:f,FUNCTION:b:f]")
     }
 
     @Test fun testAmbiguousNameImport2() {
@@ -540,8 +554,26 @@ class ImportTest: BaseRellTest(false) {
         chkImport("import d.{x.*};", "f()", "ct_err:unknown_name:f")
         chkImport("import d.{x.*};", "g()", "ct_err:unknown_name:g")
         chkImport("import d.{x.*};", "h()", "int[789]")
-        chkImport("import c.*;", "x.f()", "ct_err:name:ambig:x")
-        chkImport("import d.*;", "x.h()", "ct_err:name:ambig:x")
+        chkImport("import c.*;", "x.f()", "ct_err:name:ambig:x:[NAMESPACE:a:x,NAMESPACE:b:x]")
+        chkImport("import d.*;", "x.h()", "ct_err:name:ambig:x:[NAMESPACE:d:x,NAMESPACE:a:x,NAMESPACE:b:x]")
+    }
+
+    @Test fun testAmbiguousNameQualified() {
+        file("a.rell", "module; namespace a { import b1.*; import b2.*; }")
+        file("b1.rell", "module; namespace b { import c.*; }")
+        file("b2.rell", "module; namespace b { import c.*; }")
+        file("c.rell", "module; namespace c { entity user { name; } }")
+        chkCompile("import a.*; function f() = a.b.c.user @ {};", "ct_err:name:ambig:a.b:[NAMESPACE:b1:b,NAMESPACE:b2:b]")
+    }
+
+    @Test fun testAmbiguousNameQualified2() {
+        file("a.rell", "module; namespace a { import b1.*; import b2.*; }")
+        file("b1.rell", "module; namespace b { import c1.*; }")
+        file("b2.rell", "module; namespace b { import c2.*; }")
+        file("c1.rell", "module; namespace c { entity foo { name; } }")
+        file("c2.rell", "module; namespace c { entity bar { name; } }")
+        chkCompile("import a.*; function f() = a.b.c.foo @ {};", "ct_err:name:ambig:a.b:[NAMESPACE:b1:b,NAMESPACE:b2:b]")
+        chkCompile("import a.*; function f() = a.b.c.bar @ {};", "ct_err:[unknown_name:[c1:c]:bar][name:ambig:a.b:[NAMESPACE:b1:b,NAMESPACE:b2:b]]")
     }
 
     @Test fun testUnresolvedName() {
@@ -559,5 +591,37 @@ class ImportTest: BaseRellTest(false) {
         chkImport("import b.{y.z};", "0", "ct_err:[main.rell:import:name_unresolved:y][b.rell:import:name_unknown:y]")
     }
 
-    private fun chkImport(imp: String, code: String, exp: String) = chkFull("$imp query q() = $code;", exp)
+    @Test fun testMemberOfEnum() {
+        file("lib.rell", "module; enum color { red, green, blue }")
+        chkImport("import lib.{color.*};", "red", "ct_err:[import:not_ns:color][unknown_name:red]")
+        chkImport("import lib.{color.red};", "red", "ct_err:[import:not_ns:color][unknown_name:red]")
+    }
+
+    @Test fun testBugWildcardEntityVsModule() {
+        file("lib/collections.rell", "module; import lib.instance.*;")
+        file("lib/component_definition.rell", "module; import lib.interface.*; import lib.structure;")
+        file("lib/instance.rell", "module; import lib.collections.*; import lib.structure.*;")
+        file("lib/interface.rell", "module; import lib.component_definition.*;")
+        file("lib/structure.rell", "module; import lib.instance.*; entity structure { x: integer = 123; }")
+
+        val imports = "import lib.interface.*; import lib.structure.*; import lib.instance.*;"
+        chkImport(imports, "list<structure>()", "list<lib.structure:structure>[]")
+        chkImport(imports, "structure @? {}", "rt_err:no_sql")
+        chkImport(imports, "create structure(123)", "rt_err:no_db_update:def")
+        chkImport(imports, "structure.from_gtv(gtv.from_json('[0]'))",
+            "ct_err:name:ambig:structure:[ENTITY:lib.structure:structure,NAMESPACE:lib.component_definition:structure]")
+        chkImport(imports, "struct<structure>()", "struct<lib.structure:structure>[x=int[123]]")
+    }
+
+    @Test fun testBugWildcardFunctionVsEnum() {
+        file("lib.rell", "module; enum color { red, green, blue }")
+        chkImport("import lib.*; function color() = 123;", "color()", "int[123]")
+        chkImport("import lib.*; function color() = color.red;", "color()", "lib:color[red]")
+        chkImport("import lib.*; function color() { return color.red; }", "color()", "lib:color[red]")
+        chkImport("import lib.*; namespace ns { function color() = 123; }", "ns.color()", "int[123]")
+        chkImport("import lib.*; namespace ns { function color() = color.red; }", "ns.color()", "lib:color[red]")
+        chkImport("import lib.*; namespace ns { function color() { return color.red; } }", "ns.color()", "lib:color[red]")
+    }
+
+    private fun chkImport(imp: String, code: String, exp: String) = chkFull("$imp function __f() = $code; query q() = __f();", exp)
 }

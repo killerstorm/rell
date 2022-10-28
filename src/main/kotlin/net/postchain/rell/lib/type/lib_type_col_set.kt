@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -10,6 +10,7 @@ import net.postchain.rell.compiler.base.core.C_NamespaceContext
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.def.C_GenericType
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
@@ -23,12 +24,18 @@ import net.postchain.rell.utils.checkEquals
 
 object C_Lib_Type_Set {
     const val TYPE_NAME = "set"
+    val DEF_NAME = C_LibUtils.defName(TYPE_NAME)
 
     fun getConstructorFn(setType: R_SetType): C_GlobalFunction {
         return C_CollectionConstructorFunction(C_CollectionKindAdapter_Set, setType.elementType)
     }
 
-    fun getMemberFns(setType: R_SetType): C_MemberFuncTable {
+    fun getValueMembers(setType: R_SetType): List<C_TypeValueMember> {
+        val fns = getMemberFns(setType)
+        return C_LibUtils.makeValueMembers(setType, fns)
+    }
+
+    private fun getMemberFns(setType: R_SetType): C_MemberFuncTable {
         val listType = R_ListType(setType.elementType)
         val b = C_LibUtils.typeMemFuncBuilder(setType)
         C_Lib_Type_Collection.bindMemberFns(b, listType)
@@ -40,7 +47,7 @@ object C_Lib_Type_Set {
     }
 }
 
-private object C_GenericType_Set: C_GenericType(C_Lib_Type_Set.TYPE_NAME, 1) {
+private object C_GenericType_Set: C_GenericType(C_Lib_Type_Set.TYPE_NAME, C_Lib_Type_Set.DEF_NAME, 1) {
     override val rawConstructorFn: C_GlobalFunction = C_CollectionConstructorFunction(C_CollectionKindAdapter_Set, null)
 
     override fun compileType0(ctx: C_NamespaceContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type {
@@ -61,9 +68,10 @@ private object C_CollectionKindAdapter_Set: C_CollectionKindAdapter(C_Lib_Type_S
 }
 
 object C_Lib_Type_VirtualSet {
-    fun getMemberFns(type: R_VirtualSetType): C_MemberFuncTable {
+    fun getValueMembers(type: R_VirtualSetType): List<C_TypeValueMember> {
         val b = C_LibUtils.typeMemFuncBuilder(type)
         C_Lib_Type_VirtualCollection.bindMemberFns(b, type.innerType)
-        return b.build()
+        val fns = b.build()
+        return C_LibUtils.makeValueMembers(type, fns)
     }
 }

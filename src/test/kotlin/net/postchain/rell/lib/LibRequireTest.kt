@@ -20,7 +20,7 @@ class LibRequireTest: BaseRellTest(false) {
     }
 
     @Test fun testRequireNullable() {
-        chkEx("{ val x: integer = 123; return require(x); }", "ct_err:expr_call_argtypes:require:integer")
+        chkEx("{ val x: integer = 123; return require(x); }", "ct_err:expr_call_argtypes:[require]:integer")
         chkEx("{ val x: integer? = _nullable(123); return require(x); }", "int[123]")
         chkEx("{ val x: integer? = null; return require(x); }", "req_err:null")
     }
@@ -38,22 +38,22 @@ class LibRequireTest: BaseRellTest(false) {
         chkEx("{ return _type_of(user @? { .name == 'Bob' }); }", "text[user?]")
         chkEx("{ return _type_of(require(user @? { .name == 'Bob' })); }", "text[user]")
 
-        chkEx("{ return require(user @ { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:require:user")
-        chkEx("{ return require(user @+ { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:require:list<user>")
-        chkEx("{ return require(user @* { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:require:list<user>")
+        chkEx("{ return require(user @ { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:[require]:user")
+        chkEx("{ return require(user @+ { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:[require]:list<user>")
+        chkEx("{ return require(user @* { .name == 'Bob' }); }", "ct_err:expr_call_argtypes:[require]:list<user>")
     }
 
     @Test fun testRequireWrongArgs() {
-        chkEx("{ require(); return 0; }", "ct_err:expr_call_argtypes:require:")
-        chkEx("{ require(null); return 0; }", "ct_err:expr_call_argtypes:require:null")
-        chkEx("{ require(123); return 0; }", "ct_err:expr_call_argtypes:require:integer")
-        chkEx("{ require('Hello'); return 0; }", "ct_err:expr_call_argtypes:require:text")
-        chkEx("{ require([123]); return 0; }", "ct_err:expr_call_argtypes:require:list<integer>")
-        chkEx("{ require([123:'Hello']); return 0; }", "ct_err:expr_call_argtypes:require:map<integer,text>")
+        chkEx("{ require(); return 0; }", "ct_err:expr_call_argtypes:[require]:")
+        chkEx("{ require(null); return 0; }", "ct_err:expr_call_argtypes:[require]:null")
+        chkEx("{ require(123); return 0; }", "ct_err:expr_call_argtypes:[require]:integer")
+        chkEx("{ require('Hello'); return 0; }", "ct_err:expr_call_argtypes:[require]:text")
+        chkEx("{ require([123]); return 0; }", "ct_err:expr_call_argtypes:[require]:list<integer>")
+        chkEx("{ require([123:'Hello']); return 0; }", "ct_err:expr_call_argtypes:[require]:map<integer,text>")
     }
 
     @Test fun testRequireNotEmptyNullable() {
-        chkEx("{ val x: integer = 123; return require_not_empty(x); }", "ct_err:expr_call_argtypes:require_not_empty:integer")
+        chkEx("{ val x: integer = 123; return require_not_empty(x); }", "ct_err:expr_call_argtypes:[require_not_empty]:integer")
         chkEx("{ val x: integer? = _nullable(123); return require_not_empty(x); }", "int[123]")
         chkEx("{ val x: integer? = null; return require_not_empty(x); }", "req_err:null")
     }
@@ -82,11 +82,11 @@ class LibRequireTest: BaseRellTest(false) {
     }
 
     @Test fun testRequireNotEmptyWrongArgs() {
-        chkEx("{ require_not_empty(); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:")
-        chkEx("{ require_not_empty(null); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:null")
-        chkEx("{ require_not_empty(false); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:boolean")
-        chkEx("{ require_not_empty(true); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:boolean")
-        chkEx("{ require_not_empty(123); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:integer")
-        chkEx("{ require_not_empty('Hello'); return 0; }", "ct_err:expr_call_argtypes:require_not_empty:text")
+        chkEx("{ require_not_empty(); return 0; }", "ct_err:expr_call_argtypes:[require_not_empty]:")
+        chkEx("{ require_not_empty(null); return 0; }", "ct_err:expr_call_argtypes:[require_not_empty]:null")
+        chkEx("{ require_not_empty(false); return 0; }", "ct_err:expr_call_argtypes:[require_not_empty]:boolean")
+        chkEx("{ require_not_empty(true); return 0; }", "ct_err:expr_call_argtypes:[require_not_empty]:boolean")
+        chkEx("{ require_not_empty(123); return 0; }", "ct_err:expr_call_argtypes:[require_not_empty]:integer")
+        chkEx("{ require_not_empty('Hello'); return 0; }", "ct_err:expr_call_argtypes:[require_not_empty]:text")
     }
 }

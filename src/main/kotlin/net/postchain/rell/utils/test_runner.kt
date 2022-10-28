@@ -1,11 +1,11 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.utils
 
 import net.postchain.rell.model.R_App
-import net.postchain.rell.model.R_DefinitionNames
+import net.postchain.rell.model.R_DefinitionName
 import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.*
@@ -123,7 +123,7 @@ object TestRunner {
         return module.functions.values
             .filter { it.moduleLevelName == "test" || it.moduleLevelName.startsWith("test_") }
             .filter { it.params().isEmpty() }
-            .filter { matcher.matchFunction(it.names) }
+            .filter { matcher.matchFunction(it.defName) }
     }
 
     fun runTests(testCtx: TestRunnerContext, cases: List<TestRunnerCase>): Boolean {
@@ -179,13 +179,13 @@ private fun printException(e: Throwable) {
 }
 
 class TestMatcher private constructor(private val patterns: List<Pattern>) {
-    fun matchFunction(names: R_DefinitionNames): Boolean {
-        if (match(names.simpleName) || match(names.qualifiedName) || match(names.module)) {
+    fun matchFunction(defName: R_DefinitionName): Boolean {
+        if (match(defName.simpleName) || match(defName.qualifiedName) || match(defName.module)) {
             return true
         }
 
-        var appLevelName = names.appLevelName
-        if (names.module.isEmpty() && names.appLevelName == names.qualifiedName) {
+        var appLevelName = defName.appLevelName
+        if (defName.module.isEmpty() && defName.appLevelName == defName.qualifiedName) {
             appLevelName = ":$appLevelName"
         }
 

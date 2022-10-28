@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -35,8 +35,8 @@ class AtExprCommonDbTest: AtExprCommonBaseTest() {
         chk("$fromSingle @* { fb(true) } ( .id.s )", "[Bob, Alice]")
 
         val fromDouble = impFrom("double")
-        chk("$fromDouble @* { fi(123) } ( .id.s )", "ct_err:at_attr_type_ambig:0:integer:double.i1,double.i2")
-        chk("$fromDouble @* { ft('A') } ( .id.s )", "ct_err:at_attr_type_ambig:0:text:double.t1,double.t2")
+        chk("$fromDouble @* { fi(123) } ( .id.s )", "ct_err:at_attr_type_ambig:0:integer:[double:double.i1,double:double.i2]")
+        chk("$fromDouble @* { ft('A') } ( .id.s )", "ct_err:at_attr_type_ambig:0:text:[double:double.t1,double:double.t2]")
         chk("$fromDouble @* { fb(false) } ( .id.s )", "[]")
         chk("$fromDouble @* { fb(true) } ( .id.s )", "[Bob, Alice]")
     }
@@ -60,14 +60,32 @@ class AtExprCommonDbTest: AtExprCommonBaseTest() {
         initDataUserCompanyCity()
 
         chk("$fromUser @* {} ( _=.name, $fromCompany @ {} (.user_attr) limit 1 )",
-                "ct_err:[at:entity:outer:user][at_expr:attr:belongs_to_outer:user_attr:user]")
+            "ct_err:at_expr:attr:belongs_to_outer:user_attr:user:user")
 
         chk("(u:$fromUser) @* {} ( $fromCompany @ {} (u.name) limit 1 )", "ct_err:at:entity:outer:u")
 
         chkNestedAttributes("$fromUser @* {} ( _=.name, $fromCompany @ {} (.user_attr) limit 1 )",
-                "ct_err:[at:entity:outer:user][at_expr:attr:belongs_to_outer:user_attr:user]",
-                "ct_err:[at:entity:outer:user][at_expr:attr:belongs_to_outer:user_attr:user]",
-                "ct_err:[at:entity:outer:user][at_expr:attr:belongs_to_outer:user_attr:user]"
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user:user",
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user:user",
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user:user"
         )
+    }
+
+    @Test fun testEntityHashAttrVsFunction() {
+        tstCtx.useSql = true
+        tst.strictToString = false
+        def("entity file { name; hash: byte_array; }")
+        insert("c0.file", "name,hash", "1,'bob',E'\\\\x1234'")
+
+        chk("file @* {} (_=.name, _=.hash)", "[(bob,0x1234)]")
+        chk("file @* {} (_=.name, _=.hash())", "[(bob,0x6ccd14b5a877874ddc7ca52bd3aeded5543b73a354779224bbb86b0fd315b418)]")
+        chk("file @* {.hash == x'1234'} (.name)", "[bob]")
+
+        chk("file @* {}.name", "[bob]")
+        chk("file @* {}.hash", "[0x1234]")
+        chk("file @* {}.hash()", "ct_err:expr_call_nofn:list<byte_array>") //TODO try to support later
+
+        chkEx("{ val f = file @ {}; return f.hash; }", "0x1234")
+        chkEx("{ val f = file @ {}; return f.hash(); }", "0x6ccd14b5a877874ddc7ca52bd3aeded5543b73a354779224bbb86b0fd315b418")
     }
 }

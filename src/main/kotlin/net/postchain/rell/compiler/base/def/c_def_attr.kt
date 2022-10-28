@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -9,7 +9,6 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_LateInit
-import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.tools.api.IdeSymbolInfo
@@ -54,32 +53,28 @@ class C_AnonAttrHeaderHandle(
 
         if (typeNameHand.parts.size >= 2 || nullable) {
             isExplicitType = true
-            val type = compileType()
-            if (type == null) {
-                ctx.msgCtx.error(typeName.pos, "unknown_type:$typeName" toCodeMsg "Unknown type: '$typeName'")
-            }
-            attrType = type ?: R_CtErrorType
+            attrType = compileType() ?: R_CtErrorType
         } else if (canInferType) {
             isExplicitType = false
             attrType = null
             lastNameHand.setIdeInfo(ideInfo)
         } else {
             isExplicitType = false
-            val type = if (lastNameHand.str == "_") null else compileType()
-            if (type == null) {
+            attrType = if (lastNameHand.str == "_") {
                 lastNameHand.setIdeInfo(ideInfo)
                 C_Errors.errAttributeTypeUnknown(ctx.msgCtx, lastNameHand.name)
+                R_CtErrorType
+            } else {
+                compileType() ?: R_CtErrorType
             }
-            attrType = type ?: R_CtErrorType
         }
 
         return C_AttrHeader(typeName.pos, lastNameHand.name, attrType, isExplicitType)
     }
 
     private fun compileType(): R_Type? {
-        val typeRes = ctx.getTypeOpt(typeNameHand)
-
-        val baseType = typeRes?.getDef()?.toRType(ctx.msgCtx, typeNameHand.pos)
+        val typeDef = ctx.getType(typeNameHand)
+        val baseType = typeDef?.toRType(ctx.msgCtx, typeNameHand.pos)
 
         var type = when {
             baseType == null -> null

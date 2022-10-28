@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.utils
@@ -50,6 +50,7 @@ private class ChainIterable<T>(private val head: T, private val nextGetter: (T) 
 }
 
 fun <T> immListOf(vararg values: T): List<T> = ImmutableList.copyOf(values)
+fun <T> immListOfNotNull(value: T?): List<T> = if (value == null) immListOf() else immListOf(value)
 fun <T> immSetOf(): Set<T> = ImmutableSet.of()
 fun <T> immSetOf(vararg values: T): Set<T> = ImmutableSet.copyOf(values)
 fun <K, V> immMapOf(vararg entries: Pair<K, V>): Map<K, V> = mapOf(*entries).toImmMap()
@@ -63,6 +64,19 @@ fun <K, V> Map<K, V>.toImmMap(): Map<K, V> = ImmutableMap.copyOf(this)
 fun <K, V> immMultimapOf(): Multimap<K, V> = ImmutableMultimap.of()
 fun <K, V> mutableMultimapOf(): Multimap<K, V> = LinkedListMultimap.create()
 fun <K, V> Multimap<K, V>.toImmMultimap(): Multimap<K, V> = ImmutableMultimap.copyOf(this)
+
+fun <T, K, V> Iterable<T>.toImmMultimap(fn: (T) -> Pair<K, V>): Multimap<K, V> {
+    val m = mutableMultimapOf<K, V>()
+    for (e in this) {
+        val (key, value) = fn(e)
+        m.put(key, value)
+    }
+    return m.toImmMultimap()
+}
+
+fun <T, K> Iterable<T>.toImmMultimapKey(fn: (T) -> K): Multimap<K, T> {
+    return this.toImmMultimap { fn(it) to it }
+}
 
 fun <K, V> Iterable<Pair<K, V>>.toImmMultimap(): Multimap<K, V> {
     val m = mutableMultimapOf<K, V>()

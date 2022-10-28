@@ -1,16 +1,19 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.base.core.C_CompilerPass
+import net.postchain.rell.compiler.base.core.C_DefinitionType
 import net.postchain.rell.compiler.base.core.C_NamespaceContext
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.def.C_TypeDef_Generic
 import net.postchain.rell.compiler.base.def.C_TypeDef_Normal
 import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.namespace.C_NamespaceMemberTag
 import net.postchain.rell.compiler.base.utils.C_Error
+import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
@@ -55,37 +58,33 @@ class S_NameType(private val name: S_QualifiedName): S_Type(name.pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
         val nameHand = name.compile(ctx)
         val typeDef = ctx.getType(nameHand)
-        return typeDef.toRType(ctx.msgCtx, name.pos)
+        return typeDef?.toRType(ctx.msgCtx, name.pos) ?: R_CtErrorType
     }
 
     override fun compileMirrorStructType(ctx: C_NamespaceContext, mutable: Boolean): R_StructType? {
         val nameHand = name.compile(ctx)
-        val typeRes = ctx.getTypeOpt(nameHand)
 
-        val typeDef = typeRes?.getDef()
-        var rParamType = typeDef?.toRType(ctx.msgCtx, name.pos)
+        val nameRes = ctx.resolveName(nameHand, C_NamespaceMemberTag.MIRRORABLE)
 
-        if (rParamType == null) {
-            val objRes = ctx.getObjectOpt(nameHand)
-            if (objRes != null) {
-                val obj = objRes.getDef()
-                rParamType = obj.rEntity.type
-            }
-        }
-
-        if (rParamType != null) {
+        val obj = nameRes.getObject(error = false, unknownInfo = false)
+        if (obj != null) {
+            val rParamType = obj.rEntity.type
             return compileMirrorStructType0(ctx, rParamType, mutable)
         }
 
-        val opRes = ctx.getOperationOpt(nameHand)
-        val rOp = opRes?.getDef()
+        val rOp = nameRes.getOperation(error = false, unknownInfo = false)
         if (rOp != null) {
             val rStruct = rOp.mirrorStructs.getStruct(mutable)
             return rStruct.type
         }
 
-        ctx.getType(nameHand) // Must throw an exception, as type has been already checked.
-        return compileMirrorStructType0(ctx, R_CtErrorType, mutable)
+        val typeDef = nameRes.getType()
+        if (typeDef != null) {
+            val rParamType = typeDef.toRType(ctx.msgCtx, name.pos)
+            return compileMirrorStructType0(ctx, rParamType, mutable)
+        }
+
+        return null
     }
 }
 
@@ -97,7 +96,10 @@ class S_GenericType(private val name: S_QualifiedName, private val args: List<S_
         }
 
         val nameHand = name.compile(ctx)
-        return when (val typeDef = ctx.getType(nameHand)) {
+        val typeDef = ctx.getType(nameHand)
+
+        return when (typeDef) {
+            null -> R_CtErrorType
             is C_TypeDef_Normal -> {
                 val type = typeDef.type
                 ctx.msgCtx.error(name.pos, "type:not_generic:${type.strCode()}", "Type '${type.str()}' is not generic")

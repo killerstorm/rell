@@ -1,11 +1,12 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
 
 import net.postchain.crypto.CURVE_PARAMS
 import net.postchain.crypto.Signature
+import net.postchain.rell.compiler.base.core.C_DefinitionName
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
@@ -30,14 +31,14 @@ private val SIGNATURE_TYPE = R_TupleType.create(R_ByteArrayType, R_ByteArrayType
 object C_Lib_Crypto {
     private const val NAMESPACE_NAME = "crypto"
 
-    private val GLOBAL_FUNCTIONS = C_GlobalFuncBuilder(null)
+    private val GLOBAL_FUNCTIONS = C_GlobalFuncBuilder()
             .add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Sha256)
             .add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Keccak256)
             .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), CryptoFns.VerifySignature)
             .add("eth_ecrecover", R_ByteArrayType, listOf(R_ByteArrayType, R_ByteArrayType, R_IntegerType, R_ByteArrayType), CryptoFns.EthEcRecover)
             .build()
 
-    private val NAMESPACE_FNS = C_GlobalFuncBuilder(NAMESPACE_NAME)
+    private val NAMESPACE_FNS = C_GlobalFuncBuilder(C_DefinitionName(C_LibUtils.DEFAULT_MODULE_STR, NAMESPACE_NAME).toPath())
             .add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Sha256)
             .add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Keccak256)
             .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), CryptoFns.VerifySignature)
@@ -52,7 +53,7 @@ object C_Lib_Crypto {
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
         C_LibUtils.bindFunctions(nsBuilder, GLOBAL_FUNCTIONS)
 
-        val b = C_SysNsProtoBuilder()
+        val b = C_SysNsProtoBuilder(nsBuilder.basePath.subPath(NAMESPACE_NAME))
         C_LibUtils.bindFunctions(b, NAMESPACE_FNS)
         nsBuilder.addNamespace(NAMESPACE_NAME, b.build().toNamespace())
     }

@@ -321,7 +321,7 @@ private class RellPostchainModule(
 
         val argMap = gtvArgs.asDict().filterKeys { it != "type" }
         val actArgNames = argMap.keys
-        val expArgNames = params.map { it.name }.toSet()
+        val expArgNames = params.map { it.name.str }.toSet()
         if (actArgNames != expArgNames) {
             val exp = expArgNames.joinToString(",")
             val act = actArgNames.joinToString(",")
@@ -330,7 +330,7 @@ private class RellPostchainModule(
         }
 
         val gtvToRtCtx = GtvToRtContext.make(GTV_QUERY_PRETTY)
-        val args = params.map { argMap.getValue(it.name) }
+        val args = params.map { argMap.getValue(it.name.str) }
         val rtArgs = convertArgs(gtvToRtCtx, params, args)
         gtvToRtCtx.finish(exeCtx)
 

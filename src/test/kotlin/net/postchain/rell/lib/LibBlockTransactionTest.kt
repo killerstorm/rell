@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -93,10 +93,9 @@ class LibBlockTransactionTest: BaseRellTest() {
                 "ct_err:expr_create_cant:block")
         chkOp("create transaction(tx_rid = x'dead', tx_hash = x'beef', tx_data = x'cafe', block = block@{});",
                 "ct_err:expr_create_cant:transaction")
-        chkOp("create blocks(block_height = 123, block_rid = x'deadbeef', timestamp = 456);",
-                "ct_err:unknown_def:entity:blocks")
+        chkOp("create blocks(block_height = 123, block_rid = x'deadbeef', timestamp = 456);", "ct_err:unknown_name:blocks")
         chkOp("create transactions(tx_rid = x'dead', tx_hash = x'beef', tx_data = x'cafe', block = block@{});",
-                "ct_err:unknown_def:entity:transactions")
+            "ct_err:unknown_name:transactions")
 
         chkOp("update block@{}( block_height = 999 );", "ct_err:stmt_update_cant:block")
         chkOp("update block@{}( block_rid = x'cafe' );", "ct_err:stmt_update_cant:block")

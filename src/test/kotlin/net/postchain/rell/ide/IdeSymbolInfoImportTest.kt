@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.ide
@@ -262,7 +262,7 @@ class IdeSymbolInfoImportTest: BaseIdeSymbolInfoTest() {
         chkExpr("create lib.data('Bob')", lib, "data:DEF_ENTITY")
         chkExpr("lib.state.x", lib, "state:DEF_OBJECT", "x:MEM_ENTITY_ATTR_NORMAL")
         chkExpr("lib.rec(123)", lib, "rec:DEF_STRUCT")
-        chkExpr("lib.colors.red", lib, "colors:DEF_ENUM", "red:MEM_ENUM_ATTR")
+        chkExpr("lib.colors.red", lib, "colors:DEF_ENUM", "red:MEM_ENUM_VALUE")
         chkExpr("lib.op()", lib, "op:DEF_OPERATION")
         chkExpr("lib.q()", lib, "q:DEF_QUERY")
         chkExpr("lib.f()", lib, "f:DEF_FUNCTION_REGULAR")
@@ -281,7 +281,7 @@ class IdeSymbolInfoImportTest: BaseIdeSymbolInfoTest() {
         c("data", "data:DEF_ENTITY", "create data('Bob')", "data:DEF_ENTITY")
         c("state", "state:DEF_OBJECT", "state.x", "state:DEF_OBJECT", "x:MEM_ENTITY_ATTR_NORMAL")
         c("rec", "rec:DEF_STRUCT", "rec(123)", "rec:DEF_STRUCT")
-        c("colors", "colors:DEF_ENUM", "colors.red", "colors:DEF_ENUM", "red:MEM_ENUM_ATTR")
+        c("colors", "colors:DEF_ENUM", "colors.red", "colors:DEF_ENUM", "red:MEM_ENUM_VALUE")
         c("op", "op:DEF_OPERATION", "op()", "op:DEF_OPERATION")
         c("q", "q:DEF_QUERY", "q()", "q:DEF_QUERY")
         c("f", "f:DEF_FUNCTION_REGULAR", "f()", "f:DEF_FUNCTION_REGULAR")
@@ -296,7 +296,7 @@ class IdeSymbolInfoImportTest: BaseIdeSymbolInfoTest() {
         chkExpr("create data('Bob')", "data:DEF_ENTITY")
         chkExpr("state.x", "state:DEF_OBJECT", "x:MEM_ENTITY_ATTR_NORMAL")
         chkExpr("rec(123)", "rec:DEF_STRUCT")
-        chkExpr("colors.red", "colors:DEF_ENUM", "red:MEM_ENUM_ATTR")
+        chkExpr("colors.red", "colors:DEF_ENUM", "red:MEM_ENUM_VALUE")
         chkExpr("op()", "op:DEF_OPERATION")
         chkExpr("q()", "q:DEF_QUERY")
         chkExpr("f()", "f:DEF_FUNCTION_REGULAR")

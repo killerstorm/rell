@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -14,7 +14,7 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array('')", "byte_array[]")
         chk("byte_array('0')", "rt_err:fn:byte_array.from_hex")
         chk("byte_array('0g')", "rt_err:fn:byte_array.from_hex")
-        chk("byte_array(123)", "ct_err:expr_call_argtypes:byte_array:integer")
+        chk("byte_array(123)", "ct_err:expr_call_argtypes:[byte_array]:integer")
     }
 
     @Test fun testSha256() {
@@ -29,10 +29,10 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array.from_list([18, 52, 171, 205])", "byte_array[1234abcd]")
         chk("byte_array.from_list([0, 255])", "byte_array[00ff]")
 
-        chk("byte_array.from_list()", "ct_err:expr_call_argtypes:from_list:")
-        chk("byte_array.from_list(list<text>())", "ct_err:expr_call_argtypes:from_list:list<text>")
-        chk("byte_array.from_list(['Hello'])", "ct_err:expr_call_argtypes:from_list:list<text>")
-        chk("byte_array.from_list(set<integer>())", "ct_err:expr_call_argtypes:from_list:set<integer>")
+        chk("byte_array.from_list()", "ct_err:expr_call_argtypes:[byte_array.from_list]:")
+        chk("byte_array.from_list(list<text>())", "ct_err:expr_call_argtypes:[byte_array.from_list]:list<text>")
+        chk("byte_array.from_list(['Hello'])", "ct_err:expr_call_argtypes:[byte_array.from_list]:list<text>")
+        chk("byte_array.from_list(set<integer>())", "ct_err:expr_call_argtypes:[byte_array.from_list]:set<integer>")
         chk("byte_array.from_list([-1])", "rt_err:fn:byte_array.from_list:-1")
         chk("byte_array.from_list([256])", "rt_err:fn:byte_array.from_list:256")
     }
@@ -102,9 +102,9 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array.from_hex('DEADBEEF')", "byte_array[deadbeef]")
         chk("byte_array.from_hex('123456')", "byte_array[123456]")
 
-        chk("byte_array.from_hex()", "ct_err:expr_call_argtypes:from_hex:")
-        chk("byte_array.from_hex(1234)", "ct_err:expr_call_argtypes:from_hex:integer")
-        chk("byte_array.from_hex(true)", "ct_err:expr_call_argtypes:from_hex:boolean")
+        chk("byte_array.from_hex()", "ct_err:expr_call_argtypes:[byte_array.from_hex]:")
+        chk("byte_array.from_hex(1234)", "ct_err:expr_call_argtypes:[byte_array.from_hex]:integer")
+        chk("byte_array.from_hex(true)", "ct_err:expr_call_argtypes:[byte_array.from_hex]:boolean")
 
         chk("byte_array.from_hex('0')", "rt_err:fn:byte_array.from_hex")
         chk("byte_array.from_hex('0g')", "rt_err:fn:byte_array.from_hex")
@@ -139,9 +139,9 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array.from_base64('yv66vt6tvu8=')", "byte_array[cafebabedeadbeef]")
         chk("byte_array.from_base64('!@#%^')", "rt_err:fn:byte_array.from_base64")
 
-        chk("byte_array.from_base64()", "ct_err:expr_call_argtypes:from_base64:")
-        chk("byte_array.from_base64(1234)", "ct_err:expr_call_argtypes:from_base64:integer")
-        chk("byte_array.from_base64(true)", "ct_err:expr_call_argtypes:from_base64:boolean")
+        chk("byte_array.from_base64()", "ct_err:expr_call_argtypes:[byte_array.from_base64]:")
+        chk("byte_array.from_base64(1234)", "ct_err:expr_call_argtypes:[byte_array.from_base64]:integer")
+        chk("byte_array.from_base64(true)", "ct_err:expr_call_argtypes:[byte_array.from_base64]:boolean")
     }
 
     @Test fun testIterable() {

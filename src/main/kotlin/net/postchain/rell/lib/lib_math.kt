@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -26,7 +26,7 @@ object C_Lib_Math {
     val Max_Decimal = MathFns.Max_Decimal
 
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
-        val fb = C_GlobalFuncBuilder(null)
+        val fb = C_GlobalFuncBuilder()
 
         fb.add("abs", R_IntegerType, listOf(R_IntegerType), MathFns.Abs_Integer)
         fb.add("abs", R_DecimalType, listOf(R_DecimalType), MathFns.Abs_Decimal)

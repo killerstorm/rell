@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.fn
@@ -27,7 +27,7 @@ class C_FormalParameter(
     fun toCallParameter() = C_FunctionCallParameter(name.rName, type, index, defaultValue)
 
     fun createVarParam(ptr: R_VarPtr): R_VarParam {
-        return R_VarParam(name.str, type, ptr)
+        return R_VarParam(name.rName, type, ptr)
     }
 
     fun createMirrorAttr(mutable: Boolean): R_Attribute {

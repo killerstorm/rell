@@ -1,30 +1,26 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.expr
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_BlockContext
 import net.postchain.rell.compiler.base.core.C_LoopUid
 import net.postchain.rell.compiler.base.core.C_OwnerBlockContext
-import net.postchain.rell.compiler.base.namespace.C_NamespaceValueContext
+import net.postchain.rell.compiler.base.namespace.C_NamespacePropertyContext
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
-import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.R_AtExprId
 import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.R_DbAtEntity
-import net.postchain.rell.tools.api.IdeSymbolInfo
 
 class C_ExprContext private constructor(
         val blkCtx: C_BlockContext,
         val factsCtx: C_VarFactsContext,
         val atCtx: C_AtContext?,
-        val insideGuardBlock: Boolean
+        val insideGuardBlock: Boolean,
 ) {
     val defCtx = blkCtx.defCtx
     val modCtx = defCtx.modCtx
@@ -34,7 +30,7 @@ class C_ExprContext private constructor(
     val appCtx = defCtx.appCtx
     val msgCtx = nsCtx.msgCtx
     val executor = defCtx.executor
-    val nsValueCtx = C_NamespaceValueContext(this)
+    val propCtx = C_NamespacePropertyContext(this)
 
     fun makeAtEntity(rEntity: R_EntityDefinition, atExprId: R_AtExprId) = R_DbAtEntity(rEntity, appCtx.nextAtEntityId(atExprId))
 
@@ -79,31 +75,8 @@ class C_ExprContext private constructor(
         }
     }
 
-    fun findWhereAttributesByName(name: R_Name) = blkCtx.lookupAtAttributesByName(name, false)
-    fun findWhereAttributesByType(type: R_Type) = blkCtx.lookupAtAttributesByType(type)
-
-    fun resolveAttr(name: S_Name): V_Expr {
-        val nameHand = name.compile(this)
-        val cName = nameHand.name
-
-        val attrs = blkCtx.lookupAtAttributesByName(cName.rName, true)
-
-        if (attrs.isEmpty()) {
-            nameHand.setIdeInfo(IdeSymbolInfo.UNKNOWN)
-            throw C_Errors.errUnknownAttr(cName)
-        } else if (attrs.size > 1) {
-            nameHand.setIdeInfo(attrs.first().ideSymbolInfo())
-            throw C_Errors.errMultipleAttrs(name.pos, attrs, "at_attr_name_ambig:$cName",
-                    "Multiple attributes with name '$cName'")
-        }
-
-        val attr = attrs[0]
-
-        val ideInfo = attr.ideSymbolInfo()
-        nameHand.setIdeInfo(ideInfo)
-
-        return attr.compile(this, name.pos)
-    }
+    fun findWhereAttributesByName(name: R_Name) = blkCtx.lookupAtImplicitAttributesByName(name)
+    fun findWhereAttributesByType(type: R_Type) = blkCtx.lookupAtImplicitAttributesByType(type)
 
     companion object {
         fun createRoot(blkCtx: C_BlockContext) = C_ExprContext(

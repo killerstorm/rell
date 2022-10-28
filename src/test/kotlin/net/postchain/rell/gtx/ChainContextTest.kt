@@ -71,8 +71,8 @@ class ChainContextTest : BaseGtxTest() {
         chk("a.f()", "{'x':'Hello'}")
         chk("b.f()", "{'y':123}")
         chk("c.f()", "{'z':'456.789'}")
-        chk("a.chain_context", "ct_err:unknown_name:a.chain_context")
-        chk("a.chain_context.args", "ct_err:unknown_name:a.chain_context")
+        chk("a.chain_context", "ct_err:unknown_name:[a]:chain_context")
+        chk("a.chain_context.args", "ct_err:unknown_name:[a]:chain_context")
 
         tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.c" to "{'q':456.789}")
         chkUserMistake("", "Module initialization failed: Key missing in Gtv dictionary")

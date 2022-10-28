@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.expr
@@ -8,6 +8,7 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_AppContext
 import net.postchain.rell.compiler.base.core.C_BlockEntry_AtEntity
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
@@ -85,32 +86,32 @@ class C_AtFrom_Entities(
         return V_DbAtWhat(fields)
     }
 
-    override fun findAttributesByName(name: R_Name): List<C_AtFromContextAttr> {
+    override fun findMembers(name: R_Name): List<C_AtFromMember> {
+        return entities.flatMap { atEntity ->
+            val base = C_AtFromBase_Entity(atEntity)
+            atEntity.rEntity.type.getValueMembers(name).map { C_AtFromMember(base, it) }
+        }.toImmList()
+    }
+
+    override fun findImplicitAttributesByName(name: R_Name): List<C_AtFromImplicitAttr> {
         return findContextAttrs { rEntity ->
-            val attrRef = C_EntityAttrRef.resolveByName(rEntity, name)
-            if (attrRef == null) listOf() else listOf(attrRef)
+            rEntity.type.getAtImplicitAttrs(name)
         }
     }
 
-    override fun findAttributesByType(type: R_Type): List<C_AtFromContextAttr> {
+    override fun findImplicitAttributesByType(type: R_Type): List<C_AtFromImplicitAttr> {
         return findContextAttrs { rEntity ->
-            C_EntityAttrRef.resolveByType(rEntity, type)
+            rEntity.type.getAtImplicitAttrs(type)
         }
     }
 
-    private fun findContextAttrs(resolver: (R_EntityDefinition) -> List<C_EntityAttrRef>): List<C_AtFromContextAttr> {
-        val attrs = mutableListOf<C_AtFromContextAttr>()
-
-        //TODO take other kinds of fields into account
-        //TODO fail when there is more than one match
-        //TODO use a table lookup
-        for (entity in entities) {
-            val entityAttrs = resolver(entity.rEntity)
-            val ctxAttrs = entityAttrs.map { C_AtFromContextAttr_DbAtEntity(entity, it) }
-            attrs.addAll(ctxAttrs)
-        }
-
-        return attrs.toImmList()
+    private fun findContextAttrs(getter: (R_EntityDefinition) -> List<C_AtTypeImplicitAttr>): List<C_AtFromImplicitAttr> {
+        return entities
+            .flatMap { entity ->
+                val base = C_AtFromBase_Entity(entity)
+                val members = getter(entity.rEntity)
+                members.map { C_AtFromImplicitAttr(base, it) }
+            }.toImmList()
     }
 
     override fun compile(details: C_AtDetails): V_Expr {
@@ -183,22 +184,16 @@ class C_AtFrom_Entities(
         val cBlock = innerBlkCtx.buildBlock()
         return cBlock.rBlock
     }
-}
 
-private class C_AtFromContextAttr_DbAtEntity(
-        private val atEntity: C_AtEntity,
-        private val attrRef: C_EntityAttrRef
-): C_AtFromContextAttr(attrRef.type()) {
-    override fun attrNameMsg(qualified: Boolean): C_CodeMsg {
-        var name = attrRef.attrName.str
-        if (qualified) name = "${atEntity.alias}.$name"
-        return C_CodeMsg(name, name)
+    private inner class C_AtFromBase_Entity(private val atEntity: C_AtEntity): C_AtFromBase() {
+        override fun nameMsg(): C_CodeMsg {
+            return "${atEntity.alias}:${atEntity.rEntity.type.name}" toCodeMsg atEntity.alias.str
+        }
+
+        override fun compile(pos: S_Pos): V_Expr {
+            return V_AtEntityExpr(innerExprCtx, pos, atEntity, false)
+        }
     }
-
-    override fun ownerTypeName() = atEntity.rEntity.type.name
-    override fun ideSymbolInfo() = attrRef.ideSymbolInfo()
-
-    override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr = V_AtAttrExpr(ctx, pos, atEntity, false, attrRef)
 }
 
 sealed class C_DbAtWhatValue {

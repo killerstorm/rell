@@ -4,8 +4,7 @@
 
 package net.postchain.rell.misc
 
-import net.postchain.rell.model.R_DefinitionId
-import net.postchain.rell.model.R_DefinitionNames
+import net.postchain.rell.model.R_DefinitionName
 import net.postchain.rell.utils.TestMatcher
 import net.postchain.rell.utils.checkEquals
 import org.junit.Test
@@ -88,15 +87,14 @@ class TestMatcherTest {
         assertEquals(exp, m.matchFunction(rDefNames))
     }
 
-    private fun parseFunctionName(name: String): R_DefinitionNames {
+    private fun parseFunctionName(name: String): R_DefinitionName {
         val parts = name.split(":")
         checkEquals(parts.size, 2)
         val module = parts[0]
         val qName = parts[1]
         val nameParts = qName.split(".")
         val simpleName = nameParts.last()
-        val defId = R_DefinitionId(module, qName)
-        return R_DefinitionNames(module = module, qualifiedName = qName, simpleName = simpleName, defId = defId)
+        return R_DefinitionName(module = module, qualifiedName = qName, simpleName = simpleName)
     }
 
     @Test fun testGlob() {

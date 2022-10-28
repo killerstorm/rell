@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.type
@@ -81,7 +81,7 @@ class MirrorStructOperationTest: BaseRellTest(false) {
         chk("""$type.from_gtv(gtv.from_json('["Bob",123]'))""", "$type[name=text[Bob],rating=int[123]]")
         chk("""$type.from_gtv_pretty(gtv.from_json('{"name":"Bob","rating":123}'))""", "$type[name=text[Bob],rating=int[123]]")
         chk("$type.from_bytes(x'a50e300ca2050c03426f62a30302017b')", "$type[name=text[Bob],rating=int[123]]")
-        chk("$type.bad_name()", "ct_err:unknown_name:$type.bad_name")
+        chk("$type.bad_name()", "ct_err:unknown_name:[$type]:bad_name")
     }
 
     @Test fun testCycle() {

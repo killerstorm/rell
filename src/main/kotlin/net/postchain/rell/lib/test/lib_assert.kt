@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.test
@@ -28,7 +28,7 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.immListOf
 
 object C_Lib_Test_Assert {
-    private val FUNCTIONS = C_GlobalFuncBuilder("rell.test")
+    private val FUNCTIONS = C_GlobalFuncBuilder(C_Lib_Test.NAMESPACE_DEF_PATH)
             .add("assert_equals", C_FuncCase_AssertEquals(true))
             .add("assert_not_equals", C_FuncCase_AssertEquals(false))
             .add("assert_true", R_UnitType, listOf(R_BooleanType), R_Fns.AssertBoolean(true))

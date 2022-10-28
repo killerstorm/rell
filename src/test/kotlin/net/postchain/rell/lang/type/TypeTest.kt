@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.type
@@ -41,9 +41,9 @@ class TypeTest: BaseRellTest() {
                 """json[{"a":5,"b":[1,2,3],"c":{"x":10,"y":20}}]""")
 
         // Bad argument
-        chkEx("= json();", "ct_err:expr_call_argtypes:json:")
-        chkEx("= json(1234);", "ct_err:expr_call_argtypes:json:integer")
-        chkEx("= json(json('{}'));", "ct_err:expr_call_argtypes:json:json")
+        chkEx("= json();", "ct_err:expr_call_argtypes:[json]:")
+        chkEx("= json(1234);", "ct_err:expr_call_argtypes:[json]:integer")
+        chkEx("= json(json('{}'));", "ct_err:expr_call_argtypes:[json]:json")
         chkEx("= json('');", "rt_err:fn_json_badstr")
         chkEx("= json('{]');", "rt_err:fn_json_badstr")
     }
@@ -278,9 +278,9 @@ class TypeTest: BaseRellTest() {
         chkEx("{ val list = 123; return list<integer>(); }", "list<integer>[]")
         chkEx("{ val set = 123; return set<integer>(); }", "set<integer>[]")
         chkEx("{ val map = 123; return map<integer,text>(); }", "map<integer,text>[]")
-        chkEx("{ val list = 123; return list([true]); }", "ct_err:expr_call_nofn:integer") //TODO make it work
-        chkEx("{ val set = 123; return set([true]); }", "ct_err:expr_call_nofn:integer") //TODO make it work
-        chkEx("{ val map = 123; return map([true:'ABC']); }", "ct_err:expr_call_nofn:integer") //TODO make it work
+        chkEx("{ val list = 123; return list([true]); }", "list<boolean>[boolean[true]]")
+        chkEx("{ val set = 123; return set([true]); }", "set<boolean>[boolean[true]]")
+        chkEx("{ val map = 123; return map([true:'ABC']); }", "map<boolean,text>[boolean[true]=text[ABC]]")
         chkEx("{ val list = f(*); return list([true]); }", "int[123]")
         chkEx("{ val set = f(*); return set([true]); }", "int[123]")
         chkEx("{ val map = g(*); return map([true:'ABC']); }", "int[123]")
@@ -306,9 +306,9 @@ class TypeTest: BaseRellTest() {
         chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return f(a < b, c > d); }", "int[123]")
 
         chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return f(a < b, c > ()); }",
-            "ct_err:[expr:call:missing_args:f:1:y][unknown_def:type:a][unknown_def:type:b][unknown_def:type:c]")
+            "ct_err:[expr:call:missing_args:[f]:1:y][unknown_name:a][unknown_name:b][unknown_name:c]")
         chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return f(a < b, c > . d()); }",
-            "ct_err:[expr:call:missing_args:f:1:y][unknown_def:type:a][unknown_def:type:b][unknown_def:type:c]")
+            "ct_err:[expr:call:missing_args:[f]:1:y][unknown_name:a][unknown_name:b][unknown_name:c]")
 
         chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return g(list<integer>()); }", "int[123]")
         chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return g(list<integer>.from_gtv(gtv.from_json('[]'))); }", "int[123]")
@@ -325,6 +325,12 @@ class TypeTest: BaseRellTest() {
         chkCompile("function f(x: rec<integer>) {}", "ct_err:type:not_generic:rec")
         chkCompile("function f(x: user<integer>) {}", "ct_err:type:not_generic:user")
         chkCompile("function f(x: color<integer>) {}", "ct_err:type:not_generic:color")
-        chkCompile("function f(x: g<integer>) {}", "ct_err:unknown_def:type:g")
+        chkCompile("function f(x: g<integer>) {}", "ct_err:wrong_name:type:function:g")
+    }
+
+    @Test fun testRawGenericType() {
+        chk("list.from_gtv('')", "ct_err:unknown_name:[list]:from_gtv")
+        chk("set.from_gtv('')", "ct_err:unknown_name:[set]:from_gtv")
+        chk("map.from_gtv('')", "ct_err:unknown_name:[map]:from_gtv")
     }
 }

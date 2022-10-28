@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.expr
@@ -13,6 +13,7 @@ import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.modifier.C_AtSummarizationKind
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_ColAtFrom
 import net.postchain.rell.compiler.vexpr.V_DbAtWhat
 import net.postchain.rell.compiler.vexpr.V_Expr
@@ -20,7 +21,6 @@ import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_ForIterator
 import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.toImmList
 
 class C_AtContext(
@@ -30,6 +30,24 @@ class C_AtContext(
 )
 
 class C_AtFromContext(val pos: S_Pos, val atExprId: R_AtExprId, val parentAtCtx: C_AtContext?)
+
+abstract class C_AtFromBase {
+    abstract fun nameMsg(): C_CodeMsg
+    abstract fun compile(pos: S_Pos): V_Expr
+}
+
+class C_AtFromMember(private val base: C_AtFromBase, private val member: C_TypeValueMember) {
+    fun nameMsg(): String = member.name.str
+    fun ownerMsg(): C_CodeMsg = base.nameMsg()
+    fun isCallable() = member.isCallable()
+    fun valueType() = member.valueType
+
+    fun compile(ctx: C_ExprContext, pos: S_Pos): C_ExprMember {
+        val baseExpr = base.compile(pos)
+        val link = C_MemberLink(baseExpr, false, pos)
+        return member.compile(ctx, link)
+    }
+}
 
 abstract class C_AtFrom(
         protected val outerExprCtx: C_ExprContext,
@@ -44,8 +62,9 @@ abstract class C_AtFrom(
 
     abstract fun innerExprCtx(): C_ExprContext
     abstract fun makeDefaultWhat(): V_DbAtWhat
-    abstract fun findAttributesByName(name: R_Name): List<C_AtFromContextAttr>
-    abstract fun findAttributesByType(type: R_Type): List<C_AtFromContextAttr>
+    abstract fun findMembers(name: R_Name): List<C_AtFromMember>
+    abstract fun findImplicitAttributesByName(name: R_Name): List<C_AtFromImplicitAttr>
+    abstract fun findImplicitAttributesByType(type: R_Type): List<C_AtFromImplicitAttr>
 
     abstract fun compile(details: C_AtDetails): V_Expr
 }
@@ -189,30 +208,62 @@ class C_AtSummarization_Aggregate_MinMax(
     }
 }
 
-class C_ExprContextAttr(private val fromAttr: C_AtFromContextAttr, private val outerAtExpr: Boolean) {
-    val type = fromAttr.type
+class C_AtContextMember(private val member: C_AtFromMember, private val outerAtExpr: Boolean) {
+    val callable = member.isCallable()
+    val valueType = member.valueType()
 
-    fun ideSymbolInfo() = fromAttr.ideSymbolInfo()
-
-    fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
-        if (outerAtExpr) {
-            val attrName = attrNameMsg(false)
-            val ownerTypeName = fromAttr.ownerTypeName()
-            ctx.msgCtx.error(pos, "at_expr:attr:belongs_to_outer:${attrName.code}:$ownerTypeName",
-                    "Attribute '${attrName.msg}' belongs to an outer at-expression, fully qualified name is required")
-        }
-        return fromAttr.compile(ctx, pos)
+    fun fullNameMsg(): C_CodeMsg {
+        val name = member.nameMsg()
+        val owner = member.ownerMsg()
+        return "${owner.code}:$name" toCodeMsg "${owner.msg}.$name"
     }
 
-    fun attrNameMsg(qualified: Boolean): C_CodeMsg = fromAttr.attrNameMsg(qualified)
-    override fun toString() = attrNameMsg(true).code
+    fun compile(ctx: C_ExprContext, pos: S_Pos): C_ExprMember {
+        if (outerAtExpr) {
+            val name = member.nameMsg()
+            val owner = member.ownerMsg()
+            ctx.msgCtx.error(pos, "at_expr:attr:belongs_to_outer:$name:${owner.code}",
+                "Name '$name' belongs to an outer at-expression, fully qualified name is required")
+        }
+        return member.compile(ctx, pos)
+    }
 }
 
-abstract class C_AtFromContextAttr(val type: R_Type) {
-    abstract fun attrNameMsg(qualified: Boolean): C_CodeMsg
-    abstract fun ownerTypeName(): String
-    abstract fun ideSymbolInfo(): IdeSymbolInfo
-    abstract fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr
+class C_AtFromImplicitAttr(
+    private val base: C_AtFromBase,
+    private val member: C_AtTypeImplicitAttr,
+) {
+    val type = member.type
 
-    final override fun toString() = attrNameMsg(true).code
+    override fun toString() = attrNameMsg().code
+
+    fun attrNameMsg(): C_CodeMsg {
+        val baseMsg = base.nameMsg()
+        val name = member.nameMsg()
+        val code = "${baseMsg.code}.${name.code}"
+        return C_CodeMsg(code, name.msg)
+    }
+
+    fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
+        val vBase = base.compile(pos)
+        val memLink = C_MemberLink(vBase, false, pos)
+        return member.compile(ctx, memLink)
+    }
+}
+
+abstract class C_AtTypeImplicitAttr(val name: R_Name?, val type: R_Type) {
+    abstract fun nameMsg(): C_CodeMsg
+    abstract fun compile(ctx: C_ExprContext, link: C_MemberLink): V_Expr
+}
+
+class C_AtTypeImplicitAttr_TypeMember(
+    name: R_Name,
+    type: R_Type,
+    private val typeMember: C_TypeValueMember,
+): C_AtTypeImplicitAttr(name, type) {
+    override fun nameMsg() = typeMember.nameMsg()
+
+    override fun compile(ctx: C_ExprContext, link: C_MemberLink): V_Expr {
+        return typeMember.compile(ctx, link).expr.value()
+    }
 }

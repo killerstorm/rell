@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -345,8 +345,7 @@ class FunctionExtendTest: BaseRellTest(false) {
 
         chkCompile("@extendable @extend(lib.f) function g() {}", "ct_err:modifier:bad_combination:ann:extendable,ann:extend")
 
-        chkCompile("@extendable override function g() {}",
-                "ct_err:[modifier:bad_combination:ann:extendable,kw:override][fn:override:not_found:g]")
+        chkCompile("@extendable override function g() {}", "ct_err:[modifier:bad_combination:ann:extendable,kw:override][unknown_name:g]")
         chkCompile("@extendable abstract function g() {}",
                 "ct_err:[modifier:bad_combination:ann:extendable,kw:abstract][fn:abstract:non_abstract_module::g]")
 
@@ -354,8 +353,7 @@ class FunctionExtendTest: BaseRellTest(false) {
 
         chkCompile("@extend(lib.f) abstract function g() {}",
                 "ct_err:[modifier:bad_combination:ann:extend,kw:abstract][fn:abstract:non_abstract_module::g]")
-        chkCompile("@extend(lib.f) override function g() {}",
-                "ct_err:[modifier:bad_combination:ann:extend,kw:override][fn:override:not_found:g]")
+        chkCompile("@extend(lib.f) override function g() {}", "ct_err:[modifier:bad_combination:ann:extend,kw:override][unknown_name:g]")
 
         chkCompile("@extend(lib.f) @extendable abstract override function g() {}",
                 "ct_err:[modifier:bad_combination:ann:extend,ann:extendable,kw:abstract,kw:override][fn:abstract:non_abstract_module::g]")
@@ -535,9 +533,9 @@ class FunctionExtendTest: BaseRellTest(false) {
         def("struct rec { x: integer; }")
         def("function g() {}")
 
-        chkCompile("@extend(q) function f() = true;", "ct_err:fn:extend:not_extendable:q")
-        chkCompile("@extend(op) function f() {}", "ct_err:fn:extend:not_extendable:op")
-        chkCompile("@extend(rec) function f(x: integer) {}", "ct_err:fn:extend:not_extendable:rec")
+        chkCompile("@extend(q) function f() = true;", "ct_err:wrong_name:function:query:q")
+        chkCompile("@extend(op) function f() {}", "ct_err:wrong_name:function:operation:op")
+        chkCompile("@extend(rec) function f(x: integer) {}", "ct_err:wrong_name:function:struct:rec")
         chkCompile("@extend(g) function f(x: integer) {}", "ct_err:fn:extend:not_extendable:g")
 
         chkCompile("@extend(abs) function f(x: integer) = x;", "ct_err:fn:extend:not_extendable:abs")
@@ -707,30 +705,30 @@ class FunctionExtendTest: BaseRellTest(false) {
         def("import lib;")
 
         chk("lib.f()", "list<integer>[int[123]]")
-        chk("lib.f(123)", "ct_err:expr:call:too_many_args:f:0:1")
-        chk("lib.f(true)", "ct_err:expr:call:too_many_args:f:0:1")
-        chk("lib.f('A', false)", "ct_err:expr:call:too_many_args:f:0:2")
+        chk("lib.f(123)", "ct_err:expr:call:too_many_args:[lib:f]:0:1")
+        chk("lib.f(true)", "ct_err:expr:call:too_many_args:[lib:f]:0:1")
+        chk("lib.f('A', false)", "ct_err:expr:call:too_many_args:[lib:f]:0:2")
 
         chk("lib.g(1)", "list<integer>[int[123]]")
         chk("lib.g(x = 1)", "list<integer>[int[123]]")
-        chk("lib.g()", "ct_err:expr:call:missing_args:g:0:x")
-        chk("lib.g('A')", "ct_err:expr_call_argtype:g:0:x:integer:text")
-        chk("lib.g(x = 'A')", "ct_err:expr_call_argtype:g:0:x:integer:text")
-        chk("lib.g(true)", "ct_err:expr_call_argtype:g:0:x:integer:boolean")
-        chk("lib.g(1, 'A')", "ct_err:expr:call:too_many_args:g:1:2")
+        chk("lib.g()", "ct_err:expr:call:missing_args:[lib:g]:0:x")
+        chk("lib.g('A')", "ct_err:expr_call_argtype:[lib:g]:0:x:integer:text")
+        chk("lib.g(x = 'A')", "ct_err:expr_call_argtype:[lib:g]:0:x:integer:text")
+        chk("lib.g(true)", "ct_err:expr_call_argtype:[lib:g]:0:x:integer:boolean")
+        chk("lib.g(1, 'A')", "ct_err:expr:call:too_many_args:[lib:g]:1:2")
 
         chk("lib.h('A', true)", "list<integer>[int[123]]")
         chk("lib.h(x = 'A', y = true)", "list<integer>[int[123]]")
         chk("lib.h(y = true, x = 'A')", "list<integer>[int[123]]")
-        chk("lib.h()", "ct_err:expr:call:missing_args:h:0:x,1:y")
-        chk("lib.h('A')", "ct_err:expr:call:missing_args:h:1:y")
-        chk("lib.h(x = 'A')", "ct_err:expr:call:missing_args:h:1:y")
-        chk("lib.h(true)", "ct_err:[expr:call:missing_args:h:1:y][expr_call_argtype:h:0:x:text:boolean]")
-        chk("lib.h(x = true)", "ct_err:[expr:call:missing_args:h:1:y][expr_call_argtype:h:0:x:text:boolean]")
-        chk("lib.h(y = true)", "ct_err:expr:call:missing_args:h:0:x")
-        chk("lib.h('A', 1)", "ct_err:expr_call_argtype:h:1:y:boolean:integer")
-        chk("lib.h(true, 'A')", "ct_err:[expr_call_argtype:h:0:x:text:boolean][expr_call_argtype:h:1:y:boolean:text]")
-        chk("lib.h('A', true, 1)", "ct_err:expr:call:too_many_args:h:2:3")
+        chk("lib.h()", "ct_err:expr:call:missing_args:[lib:h]:0:x,1:y")
+        chk("lib.h('A')", "ct_err:expr:call:missing_args:[lib:h]:1:y")
+        chk("lib.h(x = 'A')", "ct_err:expr:call:missing_args:[lib:h]:1:y")
+        chk("lib.h(true)", "ct_err:[expr:call:missing_args:[lib:h]:1:y][expr_call_argtype:[lib:h]:0:x:text:boolean]")
+        chk("lib.h(x = true)", "ct_err:[expr:call:missing_args:[lib:h]:1:y][expr_call_argtype:[lib:h]:0:x:text:boolean]")
+        chk("lib.h(y = true)", "ct_err:expr:call:missing_args:[lib:h]:0:x")
+        chk("lib.h('A', 1)", "ct_err:expr_call_argtype:[lib:h]:1:y:boolean:integer")
+        chk("lib.h(true, 'A')", "ct_err:[expr_call_argtype:[lib:h]:0:x:text:boolean][expr_call_argtype:[lib:h]:1:y:boolean:text]")
+        chk("lib.h('A', true, 1)", "ct_err:expr:call:too_many_args:[lib:h]:2:3")
     }
 
     @Test fun testInvocationOrder() {
@@ -891,8 +889,7 @@ class FunctionExtendTest: BaseRellTest(false) {
         chkFull("@extend(lib.f) function h() = [123]; query q() = lib.f();", "ct_err:fn:extend:param_cnt:h:1:0")
 
         chkFull("@extend(lib.g) function h(x: integer = 456) = [x + 1]; query q() = lib.g(123);", "[124, 123]")
-        chkFull("@extend(lib.g) function h(x: integer = 456) = [x + 1]; query q() = lib.g();",
-                "ct_err:expr:call:missing_args:g:0:x")
+        chkFull("@extend(lib.g) function h(x: integer = 456) = [x + 1]; query q() = lib.g();", "ct_err:expr:call:missing_args:[lib:g]:0:x")
         chkFull("@extend(lib.g) function h(x: integer = 456) = [x + 1]; query q() = h();", "[457]")
     }
 
@@ -907,8 +904,8 @@ class FunctionExtendTest: BaseRellTest(false) {
     }
 
     @Test fun testUnknownFunction() {
-        chkFull("@extend(foo) function g() {}", "ct_err:fn:extend:not_found:foo")
-        chkFull("@extend(foo.bar) function g() {}", "ct_err:fn:extend:not_found:foo.bar")
+        chkFull("@extend(foo) function g() {}", "ct_err:unknown_name:foo")
+        chkFull("@extend(foo.bar) function g() {}", "ct_err:unknown_name:foo")
     }
 
     private fun chkFullOut(code: String, expectedRes: String, vararg expectedOut: String) {

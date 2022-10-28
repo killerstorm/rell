@@ -130,7 +130,7 @@ private fun runApp(
 
 private fun runSingleModuleTests(args: RellCliArgsEx, app: R_App, module: R_Module, entryRoutine: R_QualifiedName?) {
     val fns = TestRunner.getTestFunctions(module, TestMatcher.ANY)
-            .filter { entryRoutine == null || it.names.qualifiedName == entryRoutine.str() }
+            .filter { entryRoutine == null || it.defName.qualifiedName == entryRoutine.str() }
     runTests(args, app, fns)
 }
 

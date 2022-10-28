@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.expr
@@ -26,7 +26,7 @@ class R_MemberExpr(val base: R_Expr, val safe: Boolean, val calculator: R_Member
     }
 }
 
-sealed class R_MemberCalculator(val type: R_Type) {
+abstract class R_MemberCalculator(val type: R_Type) {
     abstract fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value
 }
 
@@ -42,13 +42,6 @@ class R_MemberCalculator_VirtualTupleAttr(type: R_Type, val fieldIndex: Int): R_
         val tuple = baseValue.asVirtualTuple()
         val res = tuple.get(fieldIndex)
         return res
-    }
-}
-
-class R_MemberCalculator_StructAttr(val attr: R_Attribute): R_MemberCalculator(attr.type) {
-    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
-        val structValue = baseValue.asStruct()
-        return structValue.get(attr.index)
     }
 }
 

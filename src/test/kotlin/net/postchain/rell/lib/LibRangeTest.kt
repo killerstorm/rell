@@ -24,8 +24,8 @@ class LibRangeTest: BaseRellTest(false) {
         chk("range(1,0,-1)", "range[1,0,-1]")
         chk("range(10,0,-1)", "range[10,0,-1]")
 
-        chk("range()", "ct_err:expr_call_argtypes:range:")
-        chk("range(1,2,3,4)", "ct_err:expr_call_argtypes:range:integer,integer,integer,integer")
+        chk("range()", "ct_err:expr_call_argtypes:[range]:")
+        chk("range(1,2,3,4)", "ct_err:expr_call_argtypes:[range]:integer,integer,integer,integer")
     }
 
     @Test fun testIn() {

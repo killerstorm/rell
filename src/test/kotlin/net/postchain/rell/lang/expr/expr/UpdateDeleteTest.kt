@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.expr
@@ -129,7 +129,7 @@ class UpdateDeleteTest: BaseRellTest() {
         chkOp("update (p: person) @ { p.name == 'Mike' } ( score = 999 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
 
-        chkOp("update (p: person) @ { person.name == 'Mike' } ( score = 777 );", "ct_err:unknown_name:person.name")
+        chkOp("update (p: person) @ { person.name == 'Mike' } ( score = 777 );", "ct_err:unknown_name:[person]:name")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
 
         chkOp("update person @ { person.name == 'Mike' } ( score = 777 );")
@@ -142,7 +142,7 @@ class UpdateDeleteTest: BaseRellTest() {
         chkOp("delete (p: person) @ { p.name == 'Mike' };")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)")
 
-        chkOp("delete (p: person) @ { person.name == 'James' };", "ct_err:unknown_name:person.name")
+        chkOp("delete (p: person) @ { person.name == 'James' };", "ct_err:unknown_name:[person]:name")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)")
 
         chkOp("delete person @ { person.name == 'James' };")
@@ -164,8 +164,8 @@ class UpdateDeleteTest: BaseRellTest() {
     }
 
     @Test fun testErr() {
-        chkOp("update foo @ {} ( x = 0 );", "ct_err:unknown_def:entity:foo")
-        chkOp("delete foo @ {};", "ct_err:unknown_def:entity:foo")
+        chkOp("update foo @ {} ( x = 0 );", "ct_err:unknown_name:foo")
+        chkOp("delete foo @ {};", "ct_err:unknown_name:foo")
 
         chkOp("update person @ {} ( foo = 123 );", "ct_err:attr_unknown_name:foo")
 

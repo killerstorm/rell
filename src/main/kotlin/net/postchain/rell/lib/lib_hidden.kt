@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -25,7 +25,7 @@ import net.postchain.rell.utils.checkEquals
 
 object C_Lib_Hidden {
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
-        val fb = C_GlobalFuncBuilder(null)
+        val fb = C_GlobalFuncBuilder()
 
         fb.add("_crash", R_UnitType, listOf(R_TextType), HiddenFns.Crash)
         fb.add("_type_of", C_SysFn_TypeOf)

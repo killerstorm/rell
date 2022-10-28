@@ -1,25 +1,27 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.core
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
-import net.postchain.rell.compiler.base.def.*
+import net.postchain.rell.compiler.base.def.C_AbstractFunctionDescriptor
+import net.postchain.rell.compiler.base.def.C_MountTablesBuilder
+import net.postchain.rell.compiler.base.def.C_OverrideFunctionDescriptor
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.fn.C_FormalParameters
 import net.postchain.rell.compiler.base.modifier.C_ModifierValue
 import net.postchain.rell.compiler.base.modifier.C_MountAnnotationValue
 import net.postchain.rell.compiler.base.modifier.C_RawMountAnnotationValue
 import net.postchain.rell.compiler.base.module.*
-import net.postchain.rell.compiler.base.namespace.*
+import net.postchain.rell.compiler.base.namespace.C_DeclarationType
+import net.postchain.rell.compiler.base.namespace.C_Namespace
+import net.postchain.rell.compiler.base.namespace.C_NsAsm_ComponentAssembler
+import net.postchain.rell.compiler.base.namespace.C_UserNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.*
-import net.postchain.rell.utils.Getter
-import net.postchain.rell.utils.TypedKeyMap
-import net.postchain.rell.utils.immListOf
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.*
 import org.apache.commons.lang3.mutable.MutableLong
 
 data class C_VarUid(val id: Long, val name: String, val fn: R_FnUid)
@@ -107,12 +109,12 @@ sealed class C_ModuleContext(
     private val constFnUid = nextFnUid("<const>")
     private val constUidGen = C_UidGen { id, name -> C_VarUid(id, name, constFnUid) }
 
-    private val namelessFunctionIds = mutableMapOf<R_QualifiedName, MutableLong>()
+    private val namelessFunctionIds = mutableMapOf<C_RNamePath, MutableLong>()
 
     fun nextFnUid(name: String) = fnUidGen.next(name)
     fun nextConstVarUid(name: String) = constUidGen.next(name)
 
-    fun nextNamelessFunctionId(namespace: R_QualifiedName): Long {
+    fun nextNamelessFunctionId(namespace: C_RNamePath): Long {
         val idCtr = namelessFunctionIds.computeIfAbsent(namespace) { MutableLong(0) }
         val res = idCtr.toLong()
         idCtr.increment()
@@ -158,7 +160,7 @@ class C_RegularModuleContext(
 
     override val scopeBuilder: C_ScopeBuilder = let {
         val sysNs = if (isTestLib()) sysDefs.testNs else sysDefs.appNs
-        val rootScopeBuilder = C_ScopeBuilder(msgCtx)
+        val rootScopeBuilder = C_ScopeBuilder()
         val sysScopeBuilder = rootScopeBuilder.nested { sysNs }
         val nsGetter = nsAssembler.futureNs()
         sysScopeBuilder.nested(nsGetter)
@@ -192,7 +194,7 @@ class C_ReplModuleContext(
     override val repl = true
 
     override val scopeBuilder: C_ScopeBuilder = let {
-        var builder = C_ScopeBuilder(msgCtx)
+        var builder = C_ScopeBuilder()
         builder = builder.nested { sysDefs.testNs }
         builder = builder.nested(replNsGetter)
         builder.nested(componentNsGetter)
@@ -244,82 +246,6 @@ class C_FileContext(val modCtx: C_ModuleContext, val symCtx: C_SymbolContext) {
     }
 }
 
-class C_NamespaceContext(
-        val modCtx: C_ModuleContext,
-        val symCtx: C_SymbolContext,
-        val namespaceName: C_RQualifiedName?,
-        val scopeBuilder: C_ScopeBuilder
-) {
-    val globalCtx = modCtx.globalCtx
-    val appCtx = modCtx.appCtx
-    val msgCtx = modCtx.msgCtx
-    val executor = modCtx.executor
-
-    val rNamespaceName = namespaceName?.toRName() ?: R_QualifiedName.EMPTY
-    private val rawNamespaceName = namespaceName?.toCRawName()
-
-    private val scope = scopeBuilder.scope()
-
-    fun defNames(qualifiedName: C_StringQualifiedName, extChain: C_ExternalChain? = null): R_DefinitionNames {
-        val moduleKey = modCtx.rModuleKey.copy(externalChain = extChain?.name)
-        val fullName = rawNamespaceName?.add(qualifiedName) ?: qualifiedName
-        return C_Utils.createDefNames(moduleKey, fullName)
-    }
-
-    fun defNames(qualifiedName: C_QualifiedName, extChain: C_ExternalChain? = null): R_DefinitionNames {
-        val cQualifiedName = C_StringQualifiedName.of(qualifiedName)
-        return defNames(cQualifiedName, extChain)
-    }
-
-    fun defNames(simpleName: C_Name, extChain: C_ExternalChain? = null): R_DefinitionNames {
-        return defNames(C_QualifiedName(simpleName), extChain)
-    }
-
-    fun <T> getDefOpt(
-            name: C_QualifiedNameHandle,
-            selector: C_ScopeDefSelector<T>,
-            setUnknownInfo: Boolean = false
-    ): C_DefResolution<T>? {
-        return scope.getDefOpt(name, selector, setUnknownInfo)
-    }
-
-    private fun <T> getDef(name: C_QualifiedNameHandle, selector: C_ScopeDefSelector<T>): T {
-        return scope.getDef(name, selector)
-    }
-
-    fun getType(name: C_QualifiedNameHandle): C_TypeDef {
-        return getDef(name, C_ScopeDefSelector.TYPE)
-    }
-
-    fun getTypeOpt(name: C_QualifiedNameHandle): C_DefResolution<C_TypeDef>? {
-        return getDefOpt(name, C_ScopeDefSelector.TYPE)
-    }
-
-    fun getEntity(name: C_QualifiedNameHandle): R_EntityDefinition {
-        return getDef(name, C_ScopeDefSelector.ENTITY)
-    }
-
-    fun getEntityOpt(name: C_QualifiedNameHandle): C_DefResolution<R_EntityDefinition>? {
-        return getDefOpt(name, C_ScopeDefSelector.ENTITY)
-    }
-
-    fun getObjectOpt(name: C_QualifiedNameHandle): C_DefResolution<R_ObjectDefinition>? {
-        return getDefOpt(name, C_ScopeDefSelector.OBJECT)
-    }
-
-    fun getValueOpt(name: C_QualifiedNameHandle): C_DefResolution<C_NamespaceValue>? {
-        return getDefOpt(name, C_ScopeDefSelector.VALUE)
-    }
-
-    fun getFunctionOpt(name: C_QualifiedNameHandle): C_DefResolution<C_GlobalFunction>? {
-        return getDefOpt(name, C_ScopeDefSelector.FUNCTION)
-    }
-
-    fun getOperationOpt(name: C_QualifiedNameHandle): C_DefResolution<R_OperationDefinition>? {
-        return getDefOpt(name, C_ScopeDefSelector.OPERATION)
-    }
-}
-
 class C_ExternalChain(
         val name: String,
         val ref: R_ExternalChainRef,
@@ -329,7 +255,7 @@ class C_ExternalChain(
 class C_MountContext(
         val fileCtx: C_FileContext,
         val nsCtx: C_NamespaceContext,
-        val extChain: C_ExternalChain?,
+        private val extChain: C_ExternalChain?,
         val nsBuilder: C_UserNsProtoBuilder,
         val mountName: R_MountName
 ) {
@@ -340,6 +266,8 @@ class C_MountContext(
     val symCtx = fileCtx.symCtx
     val executor = nsCtx.executor
     val mntBuilder = fileCtx.mntBuilder
+
+    private val stringNamespacePath = nsCtx.namespacePath.parts.map { it.str }.toImmList()
 
     fun checkNotExternal(pos: S_Pos, decType: C_DeclarationType) {
         if (extChain != null) {
@@ -358,21 +286,21 @@ class C_MountContext(
         checkNotReplOrTest(pos) { decType.name toCodeMsg decType.msg }
     }
 
-    fun checkNotReplOrTest(pos: S_Pos, declSupplier: C_CodeMsgSupplier): Boolean {
+    private fun checkNotReplOrTest(pos: S_Pos, declSupplier: C_CodeMsgSupplier): Boolean {
         return checkNotTest(pos, declSupplier) && checkNotRepl(pos, declSupplier)
+    }
+
+    private fun checkNotRepl(pos: S_Pos, declSupplier: C_CodeMsgSupplier): Boolean {
+        return C_Errors.check(modCtx.msgCtx, !modCtx.repl, pos) {
+            val codeMsg = declSupplier()
+            "def_repl:${codeMsg.code}" toCodeMsg "Cannot declare ${codeMsg.msg} in REPL"
+        }
     }
 
     fun checkNotTest(pos: S_Pos, declSupplier: C_CodeMsgSupplier): Boolean {
         return C_Errors.check(modCtx.msgCtx, !modCtx.test, pos) {
             val codeMsg = declSupplier()
             "def_test:${codeMsg.code}" toCodeMsg "Cannot declare ${codeMsg.msg} in a test module"
-        }
-    }
-
-    fun checkNotRepl(pos: S_Pos, declSupplier: C_CodeMsgSupplier): Boolean {
-        return C_Errors.check(modCtx.msgCtx, !modCtx.repl, pos) {
-            val codeMsg = declSupplier()
-            "def_repl:${codeMsg.code}" toCodeMsg "Cannot declare ${codeMsg.msg} in REPL"
         }
     }
 
@@ -396,6 +324,17 @@ class C_MountContext(
         val ann = modExternal.value()
         return if (ann == null) extChain else appCtx.addExternalChain(ann.name)
     }
+
+    fun defBase(simpleName: C_Name, extChain: C_ExternalChain? = null): C_DefinitionBase {
+        val cQualifiedName = C_StringQualifiedName.of(simpleName.str)
+        return defBase(cQualifiedName, extChain)
+    }
+
+    fun defBase(qualifiedName: C_StringQualifiedName, extChain: C_ExternalChain? = null): C_DefinitionBase {
+        val moduleKey = modCtx.rModuleKey.copy(externalChain = extChain?.name)
+        val fullName = C_StringQualifiedName.of(stringNamespacePath + qualifiedName.parts)
+        return C_Utils.createDefBase(moduleKey, fullName)
+    }
 }
 
 enum class C_DefinitionType {
@@ -410,6 +349,15 @@ enum class C_DefinitionType {
     ;
 
     fun isEntityLike() = this == ENTITY || this == OBJECT
+
+    companion object {
+        val NAMESPACE_MSG = "namespace" toCodeMsg "namespace"
+        val TYPE_MSG = "type" toCodeMsg "type"
+        val ENTITY_MSG = "entity" toCodeMsg "entity"
+        val FUNCTION_MSG = "function" toCodeMsg "function"
+        val OPERATION_MSG = "operation" toCodeMsg "operation"
+        val OBJECT_MSG = "object" toCodeMsg "object"
+    }
 }
 
 class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_DefinitionType, val defId: R_DefinitionId) {
@@ -549,11 +497,11 @@ class C_FunctionContext(
 }
 
 class C_FunctionBodyContext(
-        val defCtx: C_DefinitionContext,
-        val namePos: S_Pos,
-        val defNames: R_DefinitionNames,
-        val explicitRetType: R_Type?,
-        val forParams: C_FormalParameters
+    val defCtx: C_DefinitionContext,
+    val namePos: S_Pos,
+    val defName: R_DefinitionName,
+    val explicitRetType: R_Type?,
+    val forParams: C_FormalParameters
 ) {
     val appCtx = defCtx.appCtx
     val executor = defCtx.executor

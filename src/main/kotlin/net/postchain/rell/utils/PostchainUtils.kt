@@ -55,7 +55,7 @@ object PostchainUtils {
     fun gtvToXml(v: Gtv): String = GtvMLEncoder.encodeXMLGtv(v)
 
     fun gtvToJson(v: Gtv): String = GSON.toJson(v, Gtv::class.java)
-    fun jsonToGtv(s: String): Gtv = GSON.fromJson<Gtv>(s, Gtv::class.java) ?: GtvNull
+    fun jsonToGtv(s: String): Gtv = GSON.fromJson(s, Gtv::class.java) ?: GtvNull
     fun gtvToJsonPretty(v: Gtv): String = PRETTY_GSON.toJson(v, Gtv::class.java)
 
     fun merkleHash(v: Gtv): ByteArray = v.merkleHash(merkleCalculator)

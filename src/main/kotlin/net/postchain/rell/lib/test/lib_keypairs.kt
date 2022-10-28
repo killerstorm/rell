@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.test
 
-import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
+import net.postchain.crypto.secp256k1_derivePubKey
+import net.postchain.rell.compiler.base.core.C_DefinitionPath
 import net.postchain.rell.compiler.base.def.C_SysAttribute
-import net.postchain.rell.compiler.base.namespace.C_Namespace
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_Utils
@@ -52,7 +52,10 @@ object C_Lib_Test_KeyPairs {
 
     private val PREDEFINED_KEYPAIRS = createPredefinedKeyPairs()
 
+    private val DEF_PATH = C_DefinitionPath(C_Lib_Test.MODULE, C_Lib_Test.MODULE_NAME.parts.map { it.str })
+
     private val KEYPAIRS_NAMESPACE = C_LibUtils.makeNsValues(
+            DEF_PATH,
             PREDEFINED_KEYPAIRS.mapValues {
                 val attrs = listOf(it.value.pub, it.value.priv)
                         .map { Rt_ByteArrayValue(it.toByteArray()) as Rt_Value }
@@ -62,10 +65,12 @@ object C_Lib_Test_KeyPairs {
     )
 
     private val PUBKEYS_NAMESPACE = C_LibUtils.makeNsValues(
+            DEF_PATH,
             PREDEFINED_KEYPAIRS.mapValues { Rt_ByteArrayValue(it.value.pub.toByteArray()) }
     )
 
     private val PRIVKEYS_NAMESPACE = C_LibUtils.makeNsValues(
+            DEF_PATH,
             PREDEFINED_KEYPAIRS.mapValues { Rt_ByteArrayValue(it.value.priv.toByteArray()) }
     )
 

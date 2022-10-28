@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -13,12 +13,12 @@ class EnumTest: BaseRellTest() {
         chk("foo.A", "foo[A]")
         chk("foo.B", "foo[B]")
         chk("foo.C", "foo[C]")
-        chk("foo.X", "ct_err:unknown_name:foo.X")
+        chk("foo.X", "ct_err:unknown_name:[foo]:X")
 
-        chk("foo", "ct_err:expr_novalue:enum")
-        chk("'' + foo", "ct_err:expr_novalue:enum")
+        chk("foo", "ct_err:expr_novalue:enum:[foo]")
+        chk("'' + foo", "ct_err:expr_novalue:enum:[foo]")
         chk("_type_of(foo.A)", "text[foo]")
-        chk("_type_of(foo)", "ct_err:expr_novalue:enum")
+        chk("_type_of(foo)", "ct_err:expr_novalue:enum:[foo]")
     }
 
     @Test fun testOperators() {
@@ -147,9 +147,9 @@ class EnumTest: BaseRellTest() {
         chk("foo.value('C')", "foo[C]")
         chk("foo.value('D')", "rt_err:enum_badname:foo:D")
 
-        chk("foo.value(true)", "ct_err:expr_call_argtypes:value:boolean")
-        chk("foo.value(null)", "ct_err:expr_call_argtypes:value:null")
-        chk("foo.value(foo.A)", "ct_err:expr_call_argtypes:value:foo")
+        chk("foo.value(true)", "ct_err:expr_call_argtypes:[foo.value]:boolean")
+        chk("foo.value(null)", "ct_err:expr_call_argtypes:[foo.value]:null")
+        chk("foo.value(foo.A)", "ct_err:expr_call_argtypes:[foo.value]:foo")
     }
 
     @Test fun testMemberFunctions() {
@@ -203,5 +203,14 @@ class EnumTest: BaseRellTest() {
 
         chkEx("{ val f: foo? = nop(foo.A); return _type_of(f?.name); }", "text[text?]")
         chkEx("{ val f: foo? = nop(foo.A); return _type_of(f?.value); }", "text[integer?]")
+    }
+
+    @Test fun testValueFunctionConflict() {
+        def("enum foo { a, value }")
+        def("enum bar { b, values }")
+        chk("foo.value", "foo[value]")
+        chk("foo.value(0)", "foo[a]")
+        chk("bar.values", "bar[values]")
+        chk("bar.values()", "list<bar>[bar[b],bar[values]]")
     }
 }

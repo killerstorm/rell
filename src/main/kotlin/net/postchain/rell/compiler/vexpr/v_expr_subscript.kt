@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
@@ -7,8 +7,8 @@ package net.postchain.rell.compiler.vexpr
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_VirtualType
 import net.postchain.rell.compiler.base.expr.C_Destination
+import net.postchain.rell.compiler.base.expr.C_Destination_Simple
 import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.expr.C_SimpleDestination
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.lib.type.C_Lib_Type_ByteArray
@@ -116,7 +116,7 @@ class V_CommonSubscriptExpr(
             val type = baseType.strCode()
             throw C_Error.stop(pos, "expr_immutable:$type", "Value of type '$type' cannot be modified")
         }
-        return C_SimpleDestination(dstExpr)
+        return C_Destination_Simple(dstExpr)
     }
 }
 

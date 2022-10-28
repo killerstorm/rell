@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -31,7 +31,7 @@ class LibOpContextTest: BaseRellTest(false) {
         chkFull("function f(): timestamp = op_context.last_block_time; query q() = f();", listOf(),
                 "rt_err:fn:op_context.last_block_time:noop")
 
-        chk("op_context", "ct_err:expr_novalue:namespace")
+        chk("op_context", "ct_err:expr_novalue:namespace:[op_context]")
     }
 
     @Test fun testLastBlockTimeAsDefaultValue() {
@@ -118,10 +118,10 @@ class LibOpContextTest: BaseRellTest(false) {
         chkFn("= op_context.is_signer(x'1234abcd');", "boolean[false]")
         chkFn("= op_context.is_signer(x'');", "boolean[false]")
 
-        chkFn("= op_context.is_signer();", "ct_err:expr_call_argtypes:is_signer:")
-        chkFn("= op_context.is_signer(123);", "ct_err:expr_call_argtypes:is_signer:integer")
-        chkFn("= op_context.is_signer('1234');", "ct_err:expr_call_argtypes:is_signer:text")
-        chkFn("= op_context.is_signer(x'12', x'34');", "ct_err:expr_call_argtypes:is_signer:byte_array,byte_array")
+        chkFn("= op_context.is_signer();", "ct_err:expr_call_argtypes:[op_context.is_signer]:")
+        chkFn("= op_context.is_signer(123);", "ct_err:expr_call_argtypes:[op_context.is_signer]:integer")
+        chkFn("= op_context.is_signer('1234');", "ct_err:expr_call_argtypes:[op_context.is_signer]:text")
+        chkFn("= op_context.is_signer(x'12', x'34');", "ct_err:expr_call_argtypes:[op_context.is_signer]:byte_array,byte_array")
     }
 
     @Test fun testIsSignerGlobalScope() {
@@ -155,11 +155,11 @@ class LibOpContextTest: BaseRellTest(false) {
     @Test fun testEmitEvent() {
         tst.opContext = opContext()
         chkOp("op_context.emit_event('bob', gtv.from_json('{}'));", "rt_err:not_supported")
-        chkOp("op_context.emit_event();", "ct_err:expr_call_argtypes:emit_event:")
-        chkOp("op_context.emit_event('bob');", "ct_err:expr_call_argtypes:emit_event:text")
-        chkOp("op_context.emit_event('bob', 'alice');", "ct_err:expr_call_argtypes:emit_event:text,text")
-        chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 123);", "ct_err:expr_call_argtypes:emit_event:text,gtv,integer")
-        chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 'alice');", "ct_err:expr_call_argtypes:emit_event:text,gtv,text")
+        chkOp("op_context.emit_event();", "ct_err:expr_call_argtypes:[op_context.emit_event]:")
+        chkOp("op_context.emit_event('bob');", "ct_err:expr_call_argtypes:[op_context.emit_event]:text")
+        chkOp("op_context.emit_event('bob', 'alice');", "ct_err:expr_call_argtypes:[op_context.emit_event]:text,text")
+        chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 123);", "ct_err:expr_call_argtypes:[op_context.emit_event]:text,gtv,integer")
+        chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 'alice');", "ct_err:expr_call_argtypes:[op_context.emit_event]:text,gtv,text")
     }
 
     @Test fun testCallFucntionsFromQuery() {

@@ -1,18 +1,19 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
 
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_DefinitionPath
 import net.postchain.rell.compiler.base.core.C_DefinitionType
 import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.def.C_SysAttribute
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.namespace.C_Deprecated
-import net.postchain.rell.compiler.base.namespace.C_NamespaceValueContext
-import net.postchain.rell.compiler.base.namespace.C_NamespaceValue_VExpr
+import net.postchain.rell.compiler.base.namespace.C_NamespaceProperty
+import net.postchain.rell.compiler.base.namespace.C_NamespacePropertyContext
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
@@ -53,11 +54,13 @@ private val GET_ALL_OPERATIONS_RETURN_TYPE: R_Type = R_ListType(GTX_OPERATION_ST
 object C_Lib_OpContext {
     const val NAMESPACE_NAME = "op_context"
 
-    val NAMESPACE_QNAME = R_QualifiedName.of(NAMESPACE_NAME)
+    private val NAMESPACE_QNAME = R_QualifiedName.of(NAMESPACE_NAME)
 
     val GLOBAL_STRUCTS = immListOf(GTX_OPERATION_STRUCT, GTX_TRANSACTION_BODY_STRUCT, GTX_TRANSACTION_STRUCT)
 
-    private val NAMESPACE_FNS = C_GlobalFuncBuilder(NAMESPACE_NAME)
+    private val DEF_PATH = C_DefinitionPath.ROOT.subPath(NAMESPACE_NAME)
+
+    private val NAMESPACE_FNS = C_GlobalFuncBuilder(DEF_PATH)
             .add("get_signers", GET_SIGNERS_RETURN_TYPE, listOf(), wrapFn(OpCtxFns.GetSigners))
             .add("is_signer", R_BooleanType, listOf(R_ByteArrayType), wrapFn(OpCtxFns.IsSigner))
             .add("get_all_operations", GET_ALL_OPERATIONS_RETURN_TYPE, listOf(), wrapFn(OpCtxFns.GetAllOperations))
@@ -65,11 +68,12 @@ object C_Lib_OpContext {
             .build()
 
     val NAMESPACE = C_LibUtils.makeNs(
+            DEF_PATH,
             NAMESPACE_FNS,
-            "last_block_time" to BaseNsValue(R_IntegerType, OpCtxFns.LastBlockTime),
-            "block_height" to BaseNsValue(R_IntegerType, OpCtxFns.BlockHeight),
-            "transaction" to Value_Transaction,
-            "op_index" to BaseNsValue(R_IntegerType, OpCtxFns.OpIndex)
+            "last_block_time" to BaseNsProperty(R_IntegerType, OpCtxFns.LastBlockTime),
+            "block_height" to BaseNsProperty(R_IntegerType, OpCtxFns.BlockHeight),
+            "transaction" to Property_Transaction,
+            "op_index" to BaseNsProperty(R_IntegerType, OpCtxFns.OpIndex)
     )
 
     val FN_IS_SIGNER: C_SysFunction = wrapFn(OpCtxFns.IsSigner)
@@ -79,7 +83,7 @@ object C_Lib_OpContext {
     private val TRANSACTION_FN_LAZY = LazyString.of(TRANSACTION_FN)
 
     fun bind(nsBuilder: C_SysNsProtoBuilder, testLib: Boolean) {
-        val fb = C_GlobalFuncBuilder(null)
+        val fb = C_GlobalFuncBuilder()
         // When turning deprecated warning into error, keep backwards-compatibility (the function is used in existing code).
         fb.add("is_signer", R_BooleanType, listOf(R_ByteArrayType), C_Lib_OpContext.FN_IS_SIGNER, depWarn("op_context.is_signer"))
         C_LibUtils.bindFunctions(nsBuilder, fb.build())
@@ -93,17 +97,17 @@ object C_Lib_OpContext {
         }
     }
 
-    fun transactionRExpr(ctx: C_NamespaceValueContext, pos: S_Pos): R_Expr {
+    fun transactionRExpr(ctx: C_NamespacePropertyContext, pos: S_Pos): R_Expr {
         val type = ctx.modCtx.sysDefs.transactionEntity.type
         return C_ExprUtils.createSysCallRExpr(type, OpCtxFns.Transaction(type), listOf(), pos, TRANSACTION_FN_LAZY)
     }
 
-    private fun transactionExpr(ctx: C_NamespaceValueContext, pos: S_Pos): V_Expr {
+    private fun transactionExpr(ctx: C_NamespacePropertyContext, pos: S_Pos): V_Expr {
         val type = ctx.modCtx.sysDefs.transactionEntity.type
         return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, type, OpCtxFns.Transaction(type), pos, TRANSACTION_FN, pure = false)
     }
 
-    private fun checkCtx(ctx: C_NamespaceValueContext, name: C_QualifiedName) {
+    private fun checkCtx(ctx: C_NamespacePropertyContext, name: C_QualifiedName) {
         checkCtx(ctx.exprCtx, name.pos)
     }
 
@@ -120,17 +124,17 @@ object C_Lib_OpContext {
         }
     }
 
-    private class BaseNsValue(val resType: R_Type, val rFn: R_SysFunction)
-        : C_NamespaceValue_VExpr(IdeSymbolInfo(IdeSymbolKind.MEM_SYS_PROPERTY))
+    private class BaseNsProperty(val resType: R_Type, val rFn: R_SysFunction)
+        : C_NamespaceProperty(IdeSymbolInfo(IdeSymbolKind.MEM_SYS_PROPERTY))
     {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
+        override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
             checkCtx(ctx, name)
             return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, resType, rFn, name, pure = false)
         }
     }
 
-    private object Value_Transaction: C_NamespaceValue_VExpr(IdeSymbolInfo(IdeSymbolKind.MEM_SYS_PROPERTY)) {
-        override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
+    private object Property_Transaction: C_NamespaceProperty(IdeSymbolInfo(IdeSymbolKind.MEM_SYS_PROPERTY)) {
+        override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
             checkCtx(ctx, name)
             return transactionExpr(ctx, name.pos)
         }

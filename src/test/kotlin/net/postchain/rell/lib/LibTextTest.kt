@@ -41,7 +41,7 @@ class LibTextTest: BaseRellTest(false) {
         chk("'ABCDE'.compare_to('ABCDE')", "int[0]")
         chk("'ABCDE'.compare_to('ABCDF')", "int[-1]")
         chk("'ABCDE'.compare_to('ABCDD')", "int[1]")
-        chk("'ABCDE'.compare_to(123)", "ct_err:expr_call_argtypes:text.compare_to:integer")
+        chk("'ABCDE'.compare_to(123)", "ct_err:expr_call_argtypes:[text.compare_to]:integer")
     }
 
     @Test fun testStartsWith() {
@@ -51,7 +51,7 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'.starts_with('')", "boolean[true]")
         chk("'Hello'.starts_with('hello')", "boolean[false]")
         chk("'Hello'.starts_with('Hellou')", "boolean[false]")
-        chk("'Hello'.starts_with(123)", "ct_err:expr_call_argtypes:text.starts_with:integer")
+        chk("'Hello'.starts_with(123)", "ct_err:expr_call_argtypes:[text.starts_with]:integer")
     }
 
     @Test fun testEndsWith() {
@@ -61,7 +61,7 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'.ends_with('')", "boolean[true]")
         chk("'Hello'.ends_with('hello')", "boolean[false]")
         chk("'Hello'.ends_with('XHello')", "boolean[false]")
-        chk("'Hello'.ends_with(123)", "ct_err:expr_call_argtypes:text.ends_with:integer")
+        chk("'Hello'.ends_with(123)", "ct_err:expr_call_argtypes:[text.ends_with]:integer")
     }
 
     @Test fun testContains() {
@@ -72,7 +72,7 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'.contains('hello')", "boolean[false]")
         chk("'Hello'.contains('L')", "boolean[false]")
         chk("'Hello'.contains('Hello1')", "boolean[false]")
-        chk("'Hello'.contains(123)", "ct_err:expr_call_argtypes:text.contains:integer")
+        chk("'Hello'.contains(123)", "ct_err:expr_call_argtypes:[text.contains]:integer")
     }
 
     @Test fun testIndexOf() {
@@ -83,7 +83,7 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'.index_of('lo')", "int[3]")
         chk("'Hello'.index_of('hello')", "int[-1]")
         chk("'Hello'.index_of('L')", "int[-1]")
-        chk("'Hello'.index_of(123)", "ct_err:expr_call_argtypes:text.index_of:integer")
+        chk("'Hello'.index_of(123)", "ct_err:expr_call_argtypes:[text.index_of]:integer")
 
         chk("'Hello World'.index_of('o', 0)", "int[4]")
         chk("'Hello World'.index_of('o', 4)", "int[4]")
@@ -104,7 +104,7 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello'.last_index_of('lo')", "int[3]")
         chk("'Hello'.last_index_of('hello')", "int[-1]")
         chk("'Hello'.last_index_of('L')", "int[-1]")
-        chk("'Hello'.last_index_of(123)", "ct_err:expr_call_argtypes:text.last_index_of:integer")
+        chk("'Hello'.last_index_of(123)", "ct_err:expr_call_argtypes:[text.last_index_of]:integer")
         chk("'Hello Hello'.last_index_of('Hello')", "int[6]")
 
         chk("'Hello World'.last_index_of('o')", "int[7]")

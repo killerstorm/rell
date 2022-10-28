@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.core
@@ -17,10 +17,7 @@ import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
-import net.postchain.rell.utils.immMapOf
-import net.postchain.rell.utils.mutableMultimapOf
-import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.*
 
 class C_LocalVarRef(val target: C_LocalVar, val ptr: R_VarPtr) {
     fun toRExpr(): R_DestinationExpr = R_VarExpr(target.type, ptr, target.metaName)
@@ -123,8 +120,14 @@ class C_BlockEntry_Var(
     override fun ideSymbolInfo() = ideInfo
 
     override fun compile(ctx: C_ExprContext, pos: S_Pos, ambiguous: Boolean): V_Expr {
-        val varRef = localVar.toRef(ctx.blkCtx.blockUid)
-        return varRef.compile(ctx, pos)
+        return compile0(ctx, pos, localVar)
+    }
+
+    companion object {
+        fun compile0(ctx: C_ExprContext, pos: S_Pos, localVar: C_LocalVar): V_Expr {
+            val varRef = localVar.toRef(ctx.blkCtx.blockUid)
+            return varRef.compile(ctx, pos)
+        }
     }
 }
 
@@ -228,8 +231,9 @@ sealed class C_BlockContext(val frameCtx: C_FrameContext, val blockUid: R_FrameB
     abstract fun lookupEntry(name: R_Name): C_BlockEntryResolution?
     abstract fun lookupLocalVar(name: R_Name): C_LocalVarRef?
     abstract fun lookupAtPlaceholder(): C_BlockEntryResolution?
-    abstract fun lookupAtAttributesByName(name: R_Name, outer: Boolean): List<C_ExprContextAttr>
-    abstract fun lookupAtAttributesByType(type: R_Type): List<C_ExprContextAttr>
+    abstract fun lookupAtMembers(name: R_Name): List<C_AtContextMember>
+    abstract fun lookupAtImplicitAttributesByName(name: R_Name): List<C_AtFromImplicitAttr>
+    abstract fun lookupAtImplicitAttributesByType(type: R_Type): List<C_AtFromImplicitAttr>
 
     abstract fun addEntry(pos: S_Pos, name: R_Name, explicit: Boolean, entry: C_BlockEntry)
     abstract fun addAtPlaceholder(entry: C_BlockEntry)
@@ -350,31 +354,33 @@ class C_OwnerBlockContext(
         }
     }
 
-    override fun lookupAtAttributesByName(name: R_Name, outer: Boolean): List<C_ExprContextAttr> {
+    override fun lookupAtMembers(name: R_Name): List<C_AtContextMember> {
         var block = atFromBlock
 
-        val attrs = mutableListOf<C_ExprContextAttr>()
+        val mems = mutableListOf<C_AtContextMember>()
 
         while (block != null) {
-            val fromAttrs = block.from.findAttributesByName(name)
-            attrs.addAll(fromAttrs.map { C_ExprContextAttr(it, block !== atFromBlock) })
+            val blockMems = block.from.findMembers(name)
+            mems.addAll(blockMems.map { C_AtContextMember(it, block !== atFromBlock) })
 
-            block = if (!outer) {
-                null
-            } else when (appCtx.globalCtx.compilerOptions.atAttrShadowing) {
+            block = when (appCtx.globalCtx.compilerOptions.atAttrShadowing) {
                 C_AtAttrShadowing.NONE -> block.parent
-                C_AtAttrShadowing.FULL -> if (attrs.isNotEmpty()) null else block.parent
-                C_AtAttrShadowing.PARTIAL -> if (block.from.innerAtCtx.parent == null && attrs.isNotEmpty()) null else block.parent
+                C_AtAttrShadowing.FULL -> if (mems.isNotEmpty()) null else block.parent
+                C_AtAttrShadowing.PARTIAL -> if (mems.isNotEmpty() && block.from.innerAtCtx.parent == null) null else block.parent
             }
         }
 
-        return attrs.toImmList()
+        return mems.toImmList()
     }
 
-    override fun lookupAtAttributesByType(type: R_Type): List<C_ExprContextAttr> {
-        // Not looking in outer contexts, because matching by type is used in where-part, only direct at-expr is considered.
-        val fromAttrs = atFromBlock?.from?.findAttributesByType(type) ?: listOf()
-        return fromAttrs.map { C_ExprContextAttr(it, false) }
+    override fun lookupAtImplicitAttributesByName(name: R_Name): List<C_AtFromImplicitAttr> {
+        // Not looking in outer contexts, because for implicit matching only the direct at-expr is considered.
+        return atFromBlock?.from?.findImplicitAttributesByName(name) ?: immListOf()
+    }
+
+    override fun lookupAtImplicitAttributesByType(type: R_Type): List<C_AtFromImplicitAttr> {
+        // Not looking in outer contexts, because for implicit matching only the direct at-expr is considered.
+        return atFromBlock?.from?.findImplicitAttributesByType(type) ?: immListOf()
     }
 
     override fun addEntry(pos: S_Pos, name: R_Name, explicit: Boolean, entry: C_BlockEntry) {

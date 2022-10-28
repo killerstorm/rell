@@ -1,27 +1,26 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.expr
 
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.base.core.C_BlockEntry
 import net.postchain.rell.compiler.base.core.C_BlockEntry_Var
 import net.postchain.rell.compiler.base.core.C_LocalVar
 import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Constants
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_Type
-import net.postchain.rell.model.R_VarParam
 import net.postchain.rell.model.R_VarPtr
 import net.postchain.rell.model.expr.R_ColAtFieldSummarization_None
+import net.postchain.rell.model.expr.R_ColAtParam
 import net.postchain.rell.model.expr.R_ColAtWhatExtras
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
-import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
 
@@ -62,24 +61,33 @@ class C_AtFrom_Iterable(
         return V_DbAtWhat(listOf(field))
     }
 
-    override fun findAttributesByName(name: R_Name): List<C_AtFromContextAttr> {
-        val memValue = C_MemberResolver.findMemberValueForTypeByName(item.elemType, name)
-        memValue ?: return immListOf()
-        return immListOf(C_AtFromContextAttr_ColAtMember(placeholderVar, memValue))
+    override fun findMembers(name: R_Name): List<C_AtFromMember> {
+        val base = C_AtFromBase_Iterable()
+        val members = item.elemType.getValueMembers(name)
+        return members.map { C_AtFromMember(base, it) }.toImmList()
     }
 
-    override fun findAttributesByType(type: R_Type): List<C_AtFromContextAttr> {
-        val memValues = C_MemberResolver.findMemberValuesForTypeByType(item.elemType, type)
-        return memValues.map { C_AtFromContextAttr_ColAtMember(placeholderVar, it) }
+    override fun findImplicitAttributesByName(name: R_Name): List<C_AtFromImplicitAttr> {
+        val base = C_AtFromBase_Iterable()
+        val members = item.elemType.getAtImplicitAttrs(name)
+        return members
+            .map { C_AtFromImplicitAttr(base, it) }
+            .toImmList()
+    }
+
+    override fun findImplicitAttributesByType(type: R_Type): List<C_AtFromImplicitAttr> {
+        val base = C_AtFromBase_Iterable()
+        return item.elemType.getAtImplicitAttrs(type)
+            .map { C_AtFromImplicitAttr(base, it) }
+            .toImmList()
     }
 
     private fun compilePlaceholderRef(pos: S_Pos): V_Expr {
-        val entry: C_BlockEntry = C_BlockEntry_Var(placeholderVar, placeholderIdeInfo)
-        return entry.compile(innerExprCtx, pos, false)
+        return C_BlockEntry_Var.compile0(innerExprCtx, pos, placeholderVar)
     }
 
     override fun compile(details: C_AtDetails): V_Expr {
-        val rParam = R_VarParam(C_Constants.AT_PLACEHOLDER, item.elemType, varPtr)
+        val rParam = R_ColAtParam(item.elemType, varPtr)
         val rFrom = item.compile()
         val what = compileWhat(details)
         val extras = V_AtExprExtras(details.limit, details.offset)
@@ -146,32 +154,14 @@ class C_AtFrom_Iterable(
         val rFlags = cField.flags.compile()
         return V_ColAtWhatField(cField.expr, rFlags, summarization)
     }
-}
 
-private class C_AtFromContextAttr_ColAtMember(
-        private val itemVar: C_LocalVar,
-        private val memberValue: C_MemberValue
-): C_AtFromContextAttr(memberValue.type()) {
-    override fun attrNameMsg(qualified: Boolean): C_CodeMsg {
-        val memberName = memberValue.memberName()
-        val base = if (itemVar.rName != null) itemVar.rName.str else itemVar.type.name
-        val code = memberName(memberName, base, qualified)
-        val msg = memberName(memberName, base, qualified)
-        return C_CodeMsg(code, msg)
-    }
+    private inner class C_AtFromBase_Iterable: C_AtFromBase() {
+        override fun nameMsg(): C_CodeMsg {
+            return "${placeholderVar.metaName}:${item.elemType.name}" toCodeMsg placeholderVar.metaName
+        }
 
-    private fun memberName(memberName: C_MemberName, base: String, qualified: Boolean): String {
-        return if (qualified) memberName.qualifiedName(base) else memberName.simpleName()
-    }
-
-    override fun ownerTypeName() = itemVar.type.name
-    override fun ideSymbolInfo() = memberValue.ideSymbolInfo()
-
-    override fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
-        val ideInfo = ideSymbolInfo()
-        val blockEntry: C_BlockEntry = C_BlockEntry_Var(itemVar, ideInfo)
-        val base = blockEntry.compile(ctx, pos, false)
-        val memLink = C_MemberLink(base, false, pos)
-        return memberValue.compile(ctx, memLink)
+        override fun compile(pos: S_Pos): V_Expr {
+            return compilePlaceholderRef(pos)
+        }
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -10,6 +10,7 @@ import net.postchain.rell.compiler.base.core.C_NamespaceContext
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.def.C_GenericType
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_CollectionSub
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_Simple
@@ -30,12 +31,18 @@ private fun matcherColSub(elementType: R_Type): C_ArgTypeMatcher = C_ArgTypeMatc
 
 object C_Lib_Type_List {
     const val TYPE_NAME = "list"
+    val DEF_NAME = C_LibUtils.defName(TYPE_NAME)
 
     fun getConstructorFn(listType: R_ListType): C_GlobalFunction {
         return C_CollectionConstructorFunction(C_CollectionKindAdapter_List, listType.elementType)
     }
 
-    fun getMemberFns(listType: R_ListType): C_MemberFuncTable {
+    fun getValueMembers(listType: R_ListType): List<C_TypeValueMember> {
+        val fns = getMemberFns(listType)
+        return C_LibUtils.makeValueMembers(listType, fns)
+    }
+
+    private fun getMemberFns(listType: R_ListType): C_MemberFuncTable {
         val elemType = listType.elementType
 
         val b = C_LibUtils.typeMemFuncBuilder(listType)
@@ -74,7 +81,7 @@ object C_Lib_Type_List {
     }
 }
 
-private object C_GenericType_List: C_GenericType(C_Lib_Type_List.TYPE_NAME, 1) {
+private object C_GenericType_List: C_GenericType(C_Lib_Type_List.TYPE_NAME, C_Lib_Type_List.DEF_NAME, 1) {
     override val rawConstructorFn: C_GlobalFunction = C_CollectionConstructorFunction(C_CollectionKindAdapter_List, null)
 
     override fun compileType0(ctx: C_NamespaceContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type {
@@ -187,12 +194,13 @@ private object ListFns {
 }
 
 object C_Lib_Type_VirtualList {
-    fun getMemberFns(type: R_VirtualListType): C_MemberFuncTable {
+    fun getValueMembers(type: R_VirtualListType): List<C_TypeValueMember> {
         val elemType = type.innerType.elementType
         val b = C_LibUtils.typeMemFuncBuilder(type)
         C_Lib_Type_VirtualCollection.bindMemberFns(b, type.innerType)
         b.add("get", elemType, listOf(R_IntegerType), VirListFns.Get)
-        return b.build()
+        val fns = b.build()
+        return C_LibUtils.makeValueMembers(type, fns)
     }
 }
 

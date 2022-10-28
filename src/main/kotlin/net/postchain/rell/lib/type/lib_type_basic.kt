@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
 
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
-import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
 import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_UnitValue
@@ -59,9 +59,9 @@ object C_Lib_Type_Unit: C_Lib_Type("unit", R_UnitType, defaultMemberFns = false)
 }
 
 object C_Lib_Type_Null {
-    val memberFns: C_MemberFuncTable = let {
+    val valueMembers: List<C_TypeValueMember> = let {
         val b = C_LibUtils.typeMemFuncBuilder(R_NullType, default = false)
         b.add("to_gtv", R_GtvType, listOf(), C_Lib_Type_Any.ToGtv(R_NullType, false, "to_gtv"))
-        b.build()
+        C_LibUtils.makeValueMembers(R_NullType, b.build())
     }
 }

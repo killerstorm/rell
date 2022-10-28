@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.utils
@@ -12,10 +12,9 @@ import net.postchain.rell.utils.toImmList
 
 abstract class C_GenericQualifiedName<NameT, FullNameT: C_GenericQualifiedName<NameT, FullNameT>>
 protected constructor(parts: List<NameT>) {
-    val parts = parts.toImmList()
-
-    init {
-        check(this.parts.isNotEmpty())
+    val parts = parts.let {
+        check(it.isNotEmpty())
+        it.toImmList()
     }
 
     val last = parts.last()
@@ -77,14 +76,14 @@ class C_StringQualifiedName private constructor(parts: List<String>): C_GenericQ
         fun of(parts: List<String>): C_StringQualifiedName = ofNames0(parts) { C_StringQualifiedName(it) }
         fun of(name: String): C_StringQualifiedName = ofName0(name) { C_StringQualifiedName(it) }
         fun of(cName: C_QualifiedName): C_StringQualifiedName = of(cName.parts.map { it.str })
-        fun of(parent: R_QualifiedName, name: R_Name): C_StringQualifiedName = of(parent.parts.map { it.str } + listOf(name.str))
+        fun of(parent: List<R_Name>, name: String): C_StringQualifiedName = of(parent.map { it.str } + listOf(name))
+        fun of(parent: R_QualifiedName, name: R_Name): C_StringQualifiedName = of(parent.parts, name.str)
+
+        fun ofRNames(parts: List<R_Name>): C_StringQualifiedName = of(parts.map { it.str })
     }
 }
 
 class C_RQualifiedName private constructor(parts: List<R_Name>): C_GenericQualifiedName<R_Name, C_RQualifiedName>(parts) {
-    fun toRName() = R_QualifiedName(parts)
-    fun toCRawName() = C_StringQualifiedName.of(parts.map { it.str })
-
     override fun create(names: List<R_Name>) = C_RQualifiedName(names)
 
     override fun checkName(name: R_Name) {
@@ -94,5 +93,21 @@ class C_RQualifiedName private constructor(parts: List<R_Name>): C_GenericQualif
     companion object {
         fun of(parts: List<R_Name>): C_RQualifiedName = ofNames0(parts) { C_RQualifiedName(it) }
         fun of(name: R_Name): C_RQualifiedName = ofName0(name) { C_RQualifiedName(it) }
+    }
+}
+
+class C_RNamePath private constructor(parts: List<R_Name>) {
+    val parts = parts.toImmList()
+
+    fun child(name: R_Name) = C_RNamePath(parts + name)
+    fun child(names: List<R_Name>) = of(parts + names)
+
+    override fun equals(other: Any?) = other is C_RNamePath && parts == other.parts
+    override fun hashCode() = parts.hashCode()
+    override fun toString() = parts.joinToString(".")
+
+    companion object {
+        val EMPTY = C_RNamePath(immListOf())
+        fun of(parts: List<R_Name>): C_RNamePath = if (parts.isEmpty()) EMPTY else C_RNamePath(parts)
     }
 }

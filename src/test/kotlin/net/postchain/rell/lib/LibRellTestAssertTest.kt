@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -86,11 +86,11 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     private fun chkAssertEqualsBadArgs(fn: String) {
-        chkAssert("$fn()", "ct_err:expr_call_argtypes:$fn:")
-        chkAssert("$fn(0)", "ct_err:expr_call_argtypes:$fn:integer")
-        chkAssert("$fn(0, 1, 'Hello')", "ct_err:expr_call_argtypes:$fn:integer,integer,text")
-        chkAssert("$fn(0, 1, 2)", "ct_err:expr_call_argtypes:$fn:integer,integer,integer")
-        chkAssert("$fn(123, 'Hello')", "ct_err:expr_call_argtypes:$fn:integer,text")
+        chkAssert("$fn()", "ct_err:expr_call_argtypes:[FN]:")
+        chkAssert("$fn(0)", "ct_err:expr_call_argtypes:[FN]:integer")
+        chkAssert("$fn(0, 1, 'Hello')", "ct_err:expr_call_argtypes:[FN]:integer,integer,text")
+        chkAssert("$fn(0, 1, 2)", "ct_err:expr_call_argtypes:[FN]:integer,integer,integer")
+        chkAssert("$fn(123, 'Hello')", "ct_err:expr_call_argtypes:[FN]:integer,text")
     }
 
     private fun chkAssertEquals(e1: String, e2: String, v1: String, v2: String) {
@@ -104,8 +104,8 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     private fun chkAssertEqualsBad(e1: String, e2: String, t1: String, t2: String) {
-        chkAssert("assert_equals($e1, $e2)", "ct_err:expr_call_argtypes:assert_equals:$t1,$t2")
-        chkAssert("assert_not_equals($e1, $e2)", "ct_err:expr_call_argtypes:assert_not_equals:$t1,$t2")
+        chkAssert("assert_equals($e1, $e2)", "ct_err:expr_call_argtypes:[FN]:$t1,$t2")
+        chkAssert("assert_not_equals($e1, $e2)", "ct_err:expr_call_argtypes:[FN]:$t1,$t2")
     }
 
     @Test fun testAssertTrueFalse() {
@@ -114,22 +114,22 @@ class LibRellTestAssertTest: BaseRellTest(false) {
         chkAssert("assert_false(true)", "rt_err:assert_boolean:false")
         chkAssert("assert_false(false)", "int[0]")
 
-        chkAssert("assert_true(123)", "ct_err:expr_call_argtypes:assert_true:integer")
-        chkAssert("assert_false(123)", "ct_err:expr_call_argtypes:assert_false:integer")
-        chkAssert("assert_true(_nullable(true))", "ct_err:expr_call_argtypes:assert_true:boolean?")
-        chkAssert("assert_false(_nullable(true))", "ct_err:expr_call_argtypes:assert_false:boolean?")
+        chkAssert("assert_true(123)", "ct_err:expr_call_argtypes:[FN]:integer")
+        chkAssert("assert_false(123)", "ct_err:expr_call_argtypes:[FN]:integer")
+        chkAssert("assert_true(_nullable(true))", "ct_err:expr_call_argtypes:[FN]:boolean?")
+        chkAssert("assert_false(_nullable(true))", "ct_err:expr_call_argtypes:[FN]:boolean?")
     }
 
     @Test fun testAssertNull() {
         chkAssert("assert_null(_nullable_int(123))", "rt_err:assert_null:int[123]")
         chkAssert("assert_null(_nullable_int(null))", "int[0]")
-        chkAssert("assert_null(123)", "ct_err:expr_call_argtypes:assert_null:integer")
+        chkAssert("assert_null(123)", "ct_err:expr_call_argtypes:[FN]:integer")
         chkAssert("assert_null(null)", "int[0]")
 
         chkAssert("assert_not_null(_nullable_int(123))", "int[0]")
         chkAssert("assert_not_null(_nullable_int(null))", "rt_err:assert_not_null")
-        chkAssert("assert_not_null(123)", "ct_err:expr_call_argtypes:assert_not_null:integer")
-        chkAssert("assert_not_null(null)", "ct_err:expr_call_argtypes:assert_not_null:null")
+        chkAssert("assert_not_null(123)", "ct_err:expr_call_argtypes:[FN]:integer")
+        chkAssert("assert_not_null(null)", "ct_err:expr_call_argtypes:[FN]:null")
     }
 
     @Test fun testAssertNullNullabilityAnalysis() {
@@ -277,8 +277,9 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     private fun chkAssert(expr: String, expected: String) {
-        chkEx("{ $expr; return 0; }", expected)
-        chkEx("{ rell.test.$expr; return 0; }", expected)
+        val fn = expr.substringBefore('(')
+        chkEx("{ $expr; return 0; }", expected.replace("FN", fn))
+        chkEx("{ rell.test.$expr; return 0; }", expected.replace("FN", "rell.test.$fn"))
     }
 
     private enum class CmpOp(val op: String, val fn: (Int) -> Boolean) {

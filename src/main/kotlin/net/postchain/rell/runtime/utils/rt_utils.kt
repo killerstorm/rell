@@ -179,12 +179,17 @@ object Rt_Utils {
     }
 
     fun <T> wrapErr(errCode: String, code: () -> T): T {
+        return wrapErr({ errCode }, code)
+    }
+
+    fun <T> wrapErr(errCodeFn: () -> String, code: () -> T): T {
         try {
             val res = code()
             return res
         } catch (e: Rt_BaseError) {
             throw e
         } catch (e: Throwable) {
+            val errCode = errCodeFn()
             throw Rt_Error(errCode, e.message ?: "")
         }
     }

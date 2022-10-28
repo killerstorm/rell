@@ -20,7 +20,7 @@ class FunctionTypeComplexWhatTest: BaseRellTest(false) {
         chkEx("{ val p = f(*); return data @* {} ( p(77, 'Z') ); }", "list<text>[text[f:77,Z],text[f:77,Z]]")
 
         chkEx("{ val p = f(t = *, i = *); return data @* {} ( p(.i, .t) ); }",
-                "ct_err:[expr_call_argtype:?:0:text:integer][expr_call_argtype:?:1:integer:text]")
+                "ct_err:[expr_call_argtype:[?]:0:text:integer][expr_call_argtype:[?]:1:integer:text]")
         chkEx("{ val p = f(t = *, i = *); return data @* {} ( p(.t, .i) ); }", "list<text>[text[f:11,A],text[f:22,B]]")
         chkEx("{ val p = f(t = *, i = *); return data @* {} ( p(.t, 77) ); }", "list<text>[text[f:77,A],text[f:77,B]]")
         chkEx("{ val p = f(t = *, i = *); return data @* {} ( p('Z', .i) ); }", "list<text>[text[f:11,Z],text[f:22,Z]]")

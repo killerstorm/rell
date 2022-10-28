@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -55,7 +55,7 @@ class AtExprInTest: BaseRellTest() {
     @Test fun testAttributeResolution() {
         initData()
         chk("(u:user) @* { u.job in ((w:work)@*{}(.job)) } (.name)", "[Bob, Alice, Trudy, John]")
-        chk("(u:user) @* { u.job in ((w:work)@*{}(.name)) } (.name)", "ct_err:at_expr:attr:belongs_to_outer:name:user")
+        chk("(u:user) @* { u.job in ((w:work)@*{}(.name)) } (.name)", "ct_err:at_expr:attr:belongs_to_outer:name:u:user")
         chk("(u:user) @* { u.job in ((w:work)@*{}(w.job)) } (.name)", "[Bob, Alice, Trudy, John]")
         chk("(u:user) @* { u.job in ((w:work)@*{}(u.name)) } (.name)", "[]")
     }
@@ -63,10 +63,10 @@ class AtExprInTest: BaseRellTest() {
     @Test fun testEntityResolution() {
         initData()
         chk("user @* { .job in (work@*{}(work.job)) } (.name)", "[Bob, Alice, Trudy, John]")
-        chk("user @* { .job in ((w:work)@*{}(work.job)) } (.name)", "ct_err:unknown_name:work.job")
+        chk("user @* { .job in ((w:work)@*{}(work.job)) } (.name)", "ct_err:unknown_name:[work]:job")
         chk("user @* { .job in ((w:work)@*{}(w.job)) } (.name)", "[Bob, Alice, Trudy, John]")
         chk("user @* { .job in (work@*{}($.job)) } (.name)", "[Bob, Alice, Trudy, John]")
-        chk("user @* { .job in ((w:work)@*{}(work.job)) } (.name)", "ct_err:unknown_name:work.job")
+        chk("user @* { .job in ((w:work)@*{}(work.job)) } (.name)", "ct_err:unknown_name:[work]:job")
         chk("(u:user) @* { .job in (work@*{}($.job)) } (.name)", "[Bob, Alice, Trudy, John]")
         chk("(u:user) @* { .job in ((w:work)@*{}($.job)) } (.name)", "ct_err:expr:placeholder:none")
         chk("(u:user) @* { .job in ((w:work)@*{}(u.job)) } (.name)", "[Bob, Alice, Trudy, John]")

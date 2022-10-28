@@ -20,7 +20,7 @@ Cardinality
 
 Specifies whether the expression must return one or many objects:
 
--  ``T @? {}`` - returns ``T``, zero or one, fails if more than one found.
+-  ``T @? {}`` - returns ``T?``, zero or one, fails if more than one found.
 -  ``T @ {}`` - returns ``T``, exactly one, fails if zero or more than one found.
 -  ``T @* {}`` - returns ``list<T>``, zero or more.
 -  ``T @+ {}`` - returns ``list<T>``, one or more, fails if none found.
@@ -124,7 +124,7 @@ to include that expression into the result tuple:
 
 ::
 
-    val sorted_users = user @* { _ = .first_name, _ = .last_name, @omit @sort .date_of_birth }
+    val sorted_users = user @* {} ( _ = .first_name, _ = .last_name, @omit @sort .date_of_birth )
     // Returns list<(text,text)>.
 
 Tail part

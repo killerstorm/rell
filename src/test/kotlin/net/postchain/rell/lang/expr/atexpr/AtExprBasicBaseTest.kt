@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -59,8 +59,8 @@ abstract class AtExprBasicBaseTest: AtExprBaseTest() {
         chkEx("{ val firstName = 'Bill'; return $fromUser @ { firstName }; }", "user[40]")
         chkEx("{ val lastName = 'Gates'; return $fromUser @ { lastName }; }", "user[40]")
         chkEx("{ val name = 'Microsoft'; return $fromCompany @ { name }; }", "company[400]")
-        chkEx("{ val name = 'Bill'; return $fromUser @ { name }; }",
-                "ct_err:at_where:var_manyattrs_type:0:name:text:user.firstName,user.lastName")
+        chkEx("{ val name = 'Bill'; return (u:$fromUser) @ { name }; }",
+                "ct_err:at_where:var_manyattrs_type:0:name:text:[u:user.firstName,u:user.lastName]")
         chkEx("{ val name = 12345; return $fromCompany @ { name }; }", "ct_err:at_where:var_noattrs:0:name:integer")
         chkEx("{ val company = $fromCompany @ { .name == 'Facebook' }; return $fromUser @ { company }; }", "user[10]")
     }
@@ -85,7 +85,7 @@ abstract class AtExprBasicBaseTest: AtExprBaseTest() {
     @Test fun testSingleEntityAlias() {
         initDataUserCompany()
         chk("(u: $fromUser) @ { u.firstName == 'Bill' }", "user[40]")
-        chk("(u: $fromUser) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:user.firstName")
+        chk("(u: $fromUser) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:[user]:firstName")
     }
 
     @Test fun testNameResolutionLocalVsAttr() {

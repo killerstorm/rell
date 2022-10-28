@@ -47,8 +47,7 @@ object C_Lib_Type_Any {
         pure = type.completeFlags().pure
     ) { ctx, a ->
         val gtv = a.asGtv()
-        //TODO FIXME construct error code only on error
-        Rt_Utils.wrapErr("fn:[$name]:from_gtv:$pretty") {
+        Rt_Utils.wrapErr({ "fn:[$name]:from_gtv:$pretty" }) {
             val convCtx = GtvToRtContext.make(pretty)
             val res = type.gtvToRt(convCtx, gtv)
             convCtx.finish(ctx.exeCtx)

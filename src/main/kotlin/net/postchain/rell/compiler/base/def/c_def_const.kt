@@ -146,7 +146,7 @@ class C_GlobalConstantFunctionBody(
         val actualType = vExpr.type
 
         return if (bodyCtx.explicitRetType == null) {
-            C_Types.checkNotUnit(bodyCtx.defCtx.msgCtx, sExpr.startPos, actualType, bodyCtx.defNames.simpleName) {
+            C_Types.checkNotUnit(bodyCtx.defCtx.msgCtx, sExpr.startPos, actualType, bodyCtx.defName.simpleName) {
                 "def:const" toCodeMsg "global constant"
             }
             vExpr

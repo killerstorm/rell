@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -15,9 +15,9 @@ import kotlin.test.assertEquals
 class EntityTest: BaseRellTest(false) {
     @Test fun testAttrNoType() {
         chkCompile("entity foo { name; }", "OK")
-        chkCompile("entity foo { name123; }", "ct_err:unknown_name_type:name123")
-        chkCompile("entity foo { index name123; }", "ct_err:unknown_name_type:name123")
-        chkCompile("entity foo { key name123; }", "ct_err:unknown_name_type:name123")
+        chkCompile("entity foo { name123; }", "ct_err:unknown_name:name123")
+        chkCompile("entity foo { index name123; }", "ct_err:unknown_name:name123")
+        chkCompile("entity foo { key name123; }", "ct_err:unknown_name:name123")
         chkCompile("entity foo { range; }", "ct_err:entity_attr_type:range:range")
         chkCompile("entity foo { range: integer; }", "OK")
     }
@@ -391,15 +391,15 @@ class EntityTest: BaseRellTest(false) {
         chkKeyIndex("entity data { name; KW name: integer; }", "ct_err:entity:attr:type_diff:[text]:[integer]")
         chkKeyIndex("entity data { KW name: integer; name; }", "ct_err:entity:attr:type_diff:[text]:[integer]")
 
-        chkKeyIndex("entity data { value; KW value; }", "ct_err:unknown_name_type:value")
-        chkKeyIndex("entity data { KW value; value; }", "ct_err:unknown_name_type:value")
+        chkKeyIndex("entity data { value; KW value; }", "ct_err:unknown_name:value")
+        chkKeyIndex("entity data { KW value; value; }", "ct_err:unknown_name:value")
         chkKeyIndex("entity data { value: text; KW value; }", "value:text; KW value")
         chkKeyIndex("entity data { KW value; value: text; }", "value:text; KW value")
         chkKeyIndex("entity data { value: text; KW value: text; }", "value:text; KW value")
         chkKeyIndex("entity data { KW value: text; value: text; }", "value:text; KW value")
 
-        chkKeyIndex("entity data { value; KW value: text; }", "ct_err:unknown_name_type:value")
-        chkKeyIndex("entity data { KW value: text; value; }", "ct_err:unknown_name_type:value")
+        chkKeyIndex("entity data { value; KW value: text; }", "ct_err:unknown_name:value")
+        chkKeyIndex("entity data { KW value: text; value; }", "ct_err:unknown_name:value")
     }
 
     @Test fun testEntityDetailsKeyIndexSeparateMutable() {

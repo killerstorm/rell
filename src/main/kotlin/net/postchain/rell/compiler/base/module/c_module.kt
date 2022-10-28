@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.module
@@ -77,11 +77,8 @@ class C_FileImportsDescriptor(
 }
 
 class C_ModuleKey(val name: R_ModuleName, val extChain: C_ExternalChain?) {
-    fun keyStr(): String {
-        val nameStr = name.str()
-        return if (extChain == null) nameStr else "$nameStr[${extChain.name}]"
-    }
-
+    fun keyStr() = R_ModuleKey.str(name, extChain?.name)
+    fun toRKey() = R_ModuleKey(name, extChain?.name)
     override fun equals(other: Any?) = other is C_ModuleKey && name == other.name && extChain == other.extChain
     override fun hashCode() = Objects.hash(name, extChain)
     override fun toString() = "[${keyStr()}]"

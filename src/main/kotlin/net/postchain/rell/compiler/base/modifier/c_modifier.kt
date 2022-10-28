@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.modifier
@@ -120,9 +120,13 @@ private class C_ModifierEvaluator_Const<T: Any> private constructor(private val 
     }
 }
 
-class C_Modifier<T: Any>(val key: C_ModifierKey, val evaluator: C_ModifierEvaluator<T>)
+class C_Modifier<T: Any>(val key: C_ModifierKey, val hidden: Boolean, val evaluator: C_ModifierEvaluator<T>)
 
 private class C_ModifierValueEntry<T: Any>(private val mod: C_Modifier<T>, private val value: C_ModifierValue_Impl<T>) {
+    fun isVisible(ctx: C_ModifierContext): Boolean {
+        return !mod.hidden || ctx.msgCtx.globalCtx.compilerOptions.hiddenLib
+    }
+
     fun compile(ctx: C_ModifierContext, modLink: C_ModifierLink, args: List<C_AnnotationArg>) {
         value.compile(ctx, modLink, mod, args)
     }
@@ -187,7 +191,7 @@ private class C_FixedModifierValues_Impl(
 
     private fun compile0(ctx: C_ModifierContext, link: C_ModifierLink, args: List<C_AnnotationArg>): Boolean {
         val entry = mods[link.key]
-        if (entry != null) {
+        if (entry != null && entry.isVisible(ctx)) {
             entry.compile(ctx, link, args)
             return true
         }
@@ -212,21 +216,21 @@ class C_ModifierField<T: Any>(mods: List<C_Modifier<T>>) {
         private val VOID_EVALUATOR = C_ModifierEvaluator_Const.of(Unit)
 
         fun flagKeyword(kind: S_KeywordModifierKind): C_ModifierField<Unit> {
-            return flag(C_ModifierKey_Keyword.of(kind))
+            return flag(C_ModifierKey_Keyword.of(kind), hidden = false)
         }
 
-        fun flagAnnotation(name: String): C_ModifierField<Unit> {
-            return flag(C_ModifierKey_Annotation.of(name))
+        fun flagAnnotation(name: String, hidden: Boolean = false): C_ModifierField<Unit> {
+            return flag(C_ModifierKey_Annotation.of(name), hidden)
         }
 
-        private fun flag(modKey: C_ModifierKey): C_ModifierField<Unit> {
-            val mod = C_Modifier(modKey, VOID_EVALUATOR)
+        private fun flag(modKey: C_ModifierKey, hidden: Boolean): C_ModifierField<Unit> {
+            val mod = C_Modifier(modKey, hidden, VOID_EVALUATOR)
             return C_ModifierField(immListOf(mod))
         }
 
-        fun <T: Any> valueAnnotation(name: String, evaluator: C_ModifierEvaluator<T>): C_ModifierField<T> {
+        fun <T: Any> valueAnnotation(name: String, evaluator: C_ModifierEvaluator<T>, hidden: Boolean = false): C_ModifierField<T> {
             val modKey = C_ModifierKey_Annotation.of(name)
-            val mod = C_Modifier(modKey, evaluator)
+            val mod = C_Modifier(modKey, hidden, evaluator)
             return C_ModifierField(immListOf(mod))
         }
 
@@ -234,7 +238,7 @@ class C_ModifierField<T: Any>(mods: List<C_Modifier<T>>) {
             val mods = anns.map {
                 val modKey = C_ModifierKey_Annotation.of(it.key)
                 val evaluator = C_ModifierEvaluator_Const.of(it.value)
-                C_Modifier(modKey, evaluator)
+                C_Modifier(modKey, hidden = false, evaluator)
             }
             return C_ModifierField(mods)
         }

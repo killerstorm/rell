@@ -1,10 +1,12 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.expr
 
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_FrameBlock
+import net.postchain.rell.model.R_Type
+import net.postchain.rell.model.R_VarPtr
 import net.postchain.rell.model.stmt.R_ForIterator
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_Error
@@ -13,6 +15,8 @@ import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import kotlin.math.min
+
+class R_ColAtParam(val type: R_Type, val ptr: R_VarPtr)
 
 sealed class R_ColAtFieldSummarization {
     abstract fun newSummarizer(): R_ColAtValueSummarizer
@@ -272,7 +276,7 @@ class R_ColAtFrom(private val iterator: R_ForIterator, private val expr: R_Expr)
 class R_ColAtExpr(
         type: R_Type,
         val block: R_FrameBlock,
-        val param: R_VarParam,
+        val param: R_ColAtParam,
         val from: R_ColAtFrom,
         val what: R_ColAtWhat,
         val where: R_Expr,

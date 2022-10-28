@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.module
@@ -8,14 +8,14 @@ import net.postchain.rell.compiler.ast.S_BasicDefinition
 import net.postchain.rell.compiler.ast.S_ImportTarget
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.modifier.C_MountAnnotationValue
+import net.postchain.rell.compiler.base.namespace.C_Deprecated
+import net.postchain.rell.compiler.base.namespace.C_NamespaceMemberBase
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_LateInit
-import net.postchain.rell.compiler.base.utils.C_RQualifiedName
 import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_EnumDefinition
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
@@ -81,10 +81,10 @@ class C_ExtModuleMember_Basic(private val def: S_BasicDefinition): C_ExtModuleMe
 class C_ExtModuleMember_Enum(
     private val cName: C_Name,
     private val rEnum: R_EnumDefinition,
-    private val ideInfo: IdeSymbolInfo,
+    private val memBase: C_NamespaceMemberBase,
 ): C_ExtModuleMember() {
     override fun compile0(mntCtx: C_MountContext) {
-        mntCtx.nsBuilder.addEnum(cName, rEnum, ideInfo)
+        mntCtx.nsBuilder.addEnum(memBase, cName, rEnum)
     }
 }
 
@@ -123,7 +123,8 @@ class C_ExtModuleMember_Namespace(
         private val qualifiedName: C_QualifiedName?,
         members: List<C_ExtModuleMember>,
         private val mount: C_MountAnnotationValue?,
-        private val extChainName: C_ExtChainName?
+        private val extChainName: C_ExtChainName?,
+        private val deprecated: C_Deprecated?,
 ): C_ExtModuleMember() {
     private val members = members.toImmList()
 
@@ -146,10 +147,10 @@ class C_ExtModuleMember_Namespace(
         var nsCtx = mntCtx.nsCtx
 
         for (name in qualifiedName.parts) {
-            nsBuilder = nsBuilder.addNamespace(name, true)
-            val nsQualifiedName = nsCtx.namespaceName?.add(name.rName) ?: C_RQualifiedName.of(name.rName)
+            nsBuilder = nsBuilder.addNamespace(name, true, deprecated)
+            val nsPath = nsCtx.namespacePath.child(name.rName)
             val subScopeBuilder = nsCtx.scopeBuilder.nested(nsBuilder.futureNs())
-            nsCtx = C_NamespaceContext(mntCtx.modCtx, mntCtx.symCtx, nsQualifiedName, subScopeBuilder)
+            nsCtx = C_NamespaceContext(mntCtx.modCtx, mntCtx.symCtx, nsPath, subScopeBuilder)
         }
 
         return C_MountContext(mntCtx.fileCtx, nsCtx, extChain, nsBuilder, subMountName)

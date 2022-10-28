@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.utils
@@ -8,9 +8,8 @@ import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_MessageContext
 import net.postchain.rell.compiler.base.core.C_Name
-import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.def.C_MntEntry
-import net.postchain.rell.compiler.base.expr.C_ExprContextAttr
+import net.postchain.rell.compiler.base.expr.C_AtFromImplicitAttr
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.model.R_Definition
 import net.postchain.rell.model.R_ModuleName
@@ -36,39 +35,30 @@ object C_Errors {
         }
     }
 
-    fun errMultipleAttrs(pos: S_Pos, attrs: List<C_ExprContextAttr>, errCode: String, errMsg: String): C_Error {
-        val attrNames = attrs.map { it.attrNameMsg(true) }
+    fun errMultipleAttrs(pos: S_Pos, attrs: List<C_AtFromImplicitAttr>, errCode: String, errMsg: String): C_Error {
+        val attrNames = attrs.map { it.attrNameMsg() }
         val attrsCode = attrNames.joinToString(",") { it.code }
         val attrsText = attrNames.joinToString(", ") { it.msg }
-        return C_Error.stop(pos, "$errCode:$attrsCode", "$errMsg: $attrsText")
+        return C_Error.stop(pos, "$errCode:[$attrsCode]", "$errMsg: $attrsText")
     }
 
-    fun errUnknownName(name: C_Name): C_Error {
-        return errUnknownName(name.pos, name.str)
-    }
-
-    fun errUnknownName(pos: S_Pos, str: String): C_Error {
-        return C_Error.stop(pos, "unknown_name:$str", "Unknown name: '$str'")
+    fun errUnknownName(name: C_Name): C_PosCodeMsg {
+        val nameStr = name.str
+        return C_PosCodeMsg(name.pos, "unknown_name:$nameStr", "Unknown name: '$nameStr'")
     }
 
     fun errUnknownAttr(name: C_Name): C_Error {
         return C_Error.stop(name.pos, "expr_attr_unknown:$name", "Unknown attribute: '$name'")
     }
 
-    fun errUnknownName(msgCtx: C_MessageContext, baseName: C_QualifiedName, name: C_Name) {
-        val nameStr = baseName.add(name).str()
-        errUnknownName(msgCtx, name.pos, nameStr)
-    }
-
     fun errUnknownName(msgCtx: C_MessageContext, baseType: R_Type, name: C_Name) {
         if (baseType.isNotError()) {
-            val baseName = baseType.name
-            msgCtx.error(name.pos, "unknown_name:$baseName.$name", "Unknown name: '$baseName.$name'")
+            errUnknownName(msgCtx, name.pos, "[${baseType.defName.appLevelName}]:$name", "${baseType.name}.$name")
         }
     }
 
-    fun errUnknownName(msgCtx: C_MessageContext, pos: S_Pos, str: String) {
-        msgCtx.error(pos, "unknown_name:$str", "Unknown name: '$str'")
+    fun errUnknownName(msgCtx: C_MessageContext, pos: S_Pos, nameCode: String, nameMsg: String) {
+        msgCtx.error(pos, "unknown_name:$nameCode", "Unknown name: '$nameMsg'")
     }
 
     fun errUnknownMember(msgCtx: C_MessageContext, type: R_Type, name: C_Name) {
@@ -94,7 +84,7 @@ object C_Errors {
     fun errNamedArgsNotSupported(msgCtx: C_MessageContext, fn: LazyString?, arg: C_Name) {
         val fnCode = fn?.value ?: ""
         val fnMsg = if (fn == null) "this function" else "function '$fn'"
-        msgCtx.error(arg.pos, "expr:call:named_args_not_allowed:$fnCode:$arg", "Named arguments not supported for $fnMsg")
+        msgCtx.error(arg.pos, "expr:call:named_args_not_allowed:[$fnCode]:$arg", "Named arguments not supported for $fnMsg")
     }
 
     fun errBadDestination(pos: S_Pos): C_Error {

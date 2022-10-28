@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.core
@@ -128,7 +128,7 @@ class C_SystemDefs private constructor(
         ): C_SysNsProto {
             val libNs = C_SystemLibraryProvider.getNsProto(test, globalCtx.compilerOptions.hiddenLib)
 
-            val nsBuilder = C_SysNsProtoBuilder()
+            val nsBuilder = C_SysNsProtoBuilder(libNs.basePath)
             nsBuilder.addAll(libNs)
 
             for (entity in sysEntities) {

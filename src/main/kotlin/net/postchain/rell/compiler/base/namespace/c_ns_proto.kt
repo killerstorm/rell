@@ -1,25 +1,28 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.namespace
 
-import net.postchain.rell.compiler.base.core.C_Entity
-import net.postchain.rell.compiler.base.core.C_Name
-import net.postchain.rell.compiler.base.core.C_NameHandle
-import net.postchain.rell.compiler.base.core.C_QualifiedNameHandle
+import net.postchain.rell.compiler.ast.S_CallArgument
+import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.def.*
+import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.module.C_ModuleDefsBuilder
 import net.postchain.rell.compiler.base.module.C_ModuleKey
+import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_ObjectExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.tools.api.IdeSymbolKind
+import net.postchain.rell.utils.LazyPosString
+import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
-class C_NsEntry(val name: R_Name, val def: C_NsDef) {
+class C_NsEntry(val name: R_Name, val def: C_NamespaceMember) {
     fun addToNamespace(nsBuilder: C_NamespaceBuilder) {
-        val elem = def.toNamespaceElement()
-        nsBuilder.add(name, elem)
+        nsBuilder.add(name, def)
     }
 
     companion object {
@@ -33,147 +36,285 @@ class C_NsEntry(val name: R_Name, val def: C_NsDef) {
     }
 }
 
-sealed class C_NsDef(val ideInfo: IdeSymbolInfo) {
-    abstract fun type(): C_DeclarationType
-    abstract fun toNamespaceElement(): C_NamespaceElement
+class C_NamespaceMemberBase(
+    val defName: C_DefinitionName,
+    val ideInfo: IdeSymbolInfo,
+    val deprecated: C_Deprecated?,
+)
+
+enum class C_NamespaceMemberTag {
+    NAMESPACE,
+    TYPE,
+    VALUE,
+    CALLABLE,
+    OBJECT,
+    ;
+
+    val list = immListOf(this)
+    val notList: List<C_NamespaceMemberTag> by lazy { values().filter { it != this }.toImmList() }
+
+    companion object {
+        val MIRRORABLE = immListOf(TYPE, CALLABLE, OBJECT)
+    }
+}
+
+sealed class C_NamespaceMember(base: C_NamespaceMemberBase) {
+    val defName = base.defName
+    val ideInfo = base.ideInfo
+    val deprecation = if (base.deprecated == null) null else C_DefDeprecation(defName, base.deprecated)
+
+    abstract fun declarationType(): C_DeclarationType
+
+    protected abstract fun hasTag(tag: C_NamespaceMemberTag): Boolean
+
+    fun isCallable() = hasTag(C_NamespaceMemberTag.CALLABLE)
+
+    open fun getNamespaceOpt(): C_Namespace? = null
+    open fun getTypeOpt(): C_TypeDef? = null
+    open fun getEntityOpt(): R_EntityDefinition? = null
+    open fun getFunctionOpt(): C_GlobalFunction? = null // getFunctionOpt() is not always non-null when matching CALLBLE
+    open fun getObjectOpt(): R_ObjectDefinition? = null
+    open fun getOperationOpt(): R_OperationDefinition? = null
 
     open fun addToDefs(b: C_ModuleDefsBuilder) {
     }
 
-    companion object {
-        fun toNamespaceElement(struct: R_Struct, ideInfo: IdeSymbolInfo) = C_NamespaceElement.create(
-                type = C_DefProxy.create(struct.type, ideInfo),
-                value = C_NamespaceValue_Struct(ideInfo, struct),
-                function = C_StructGlobalFunction(struct, ideInfo)
-        )
+    fun hasTag(tags: List<C_NamespaceMemberTag>): Boolean {
+        return when {
+            tags.isEmpty() -> true
+            else -> tags.any { hasTag(it) }
+        }
+    }
+
+    abstract fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr
+}
+
+private class C_NamespaceMember_Property(base: C_NamespaceMemberBase, private val prop: C_NamespaceProperty): C_NamespaceMember(base) {
+    override fun declarationType() = C_DeclarationType.PROPERTY
+    override fun hasTag(tag: C_NamespaceMemberTag) = tag == C_NamespaceMemberTag.VALUE
+
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+        val propCtx = C_NamespacePropertyContext(ctx)
+        val vExpr = prop.toExpr(propCtx, qName)
+        return C_ValueExpr(vExpr, implicitAttrMatchName = implicitAttrMatchName)
     }
 }
 
-sealed class C_NsDef_Namespace(private val ns: C_DefProxy<C_Namespace>): C_NsDef(ns.ideInfo) {
-    final override fun type() = C_DeclarationType.NAMESPACE
+sealed class C_NamespaceMember_Namespace(
+    base: C_NamespaceMemberBase,
+    private val ns: C_Namespace,
+): C_NamespaceMember(base) {
+    final override fun declarationType() = C_DeclarationType.NAMESPACE
 
-    final override fun toNamespaceElement() = C_NamespaceElement.create(
-            namespace = ns,
-            value = C_NamespaceValue_Namespace(ns)
-    )
-}
+    final override fun hasTag(tag: C_NamespaceMemberTag): Boolean {
+        return tag == C_NamespaceMemberTag.NAMESPACE || tag == C_NamespaceMemberTag.VALUE
+    }
 
-private class C_NsDef_SysNamespace(ns: C_DefProxy<C_Namespace>): C_NsDef_Namespace(ns)
+    final override fun getNamespaceOpt() = ns
 
-class C_NsDef_UserNamespace(ns: C_DefProxy<C_Namespace>): C_NsDef_Namespace(ns)
+    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+        return C_NamespaceExpr(qName, ns, defName)
+    }
 
-private class C_NsDef_Type(private val type: C_DefProxy<C_TypeDef>): C_NsDef(type.ideInfo) {
-    override fun type() = C_DeclarationType.TYPE
-    override fun toNamespaceElement() = C_NamespaceElement.create(
-        type = type,
-        value = C_NamespaceValue_Type(type),
-    )
-}
+    private class C_NamespaceExpr(
+        private val qName: C_QualifiedName,
+        private val ns: C_Namespace,
+        private val defName: C_DefinitionName,
+    ): C_NoValueExpr() {
+        override fun startPos() = qName.pos
 
-private sealed class C_NsDef_Entity(
-        ideInfo: IdeSymbolInfo,
-        private val entity: R_EntityDefinition,
-): C_NsDef(ideInfo) {
-    final override fun type() = C_DeclarationType.ENTITY
+        override fun member(ctx: C_ExprContext, memberName: C_Name, exprHint: C_ExprHint): C_ExprMember {
+            val entry = ns.getEntry(memberName.rName)
 
-    final override fun toNamespaceElement(): C_NamespaceElement {
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_ENTITY)
-        val type = entity.type
-        val typeProxy = C_DefProxy.create(type, ideInfo)
-        return C_NamespaceElement.create(type = typeProxy, value = C_NamespaceValue_Entity(ideInfo, type))
+            if (entry == null) {
+                C_Errors.errUnknownName(ctx.msgCtx, qName.pos, "[${defName.appLevelName}]:$memberName", qName.add(memberName).str())
+                return C_ExprUtils.errorMember(ctx, memberName.pos)
+            }
+
+            val tags = exprHint.memberTags()
+            val elem = entry.element(tags)
+
+            val qFullName = qName.add(memberName)
+            return elem.toExprMember(ctx, qFullName, implicitAttrMatchName = null)
+        }
+
+        override fun errKindName() = "namespace" to defName.appLevelName
     }
 }
 
-private class C_NsDef_SysEntity(
-        ideInfo: IdeSymbolInfo,
-        entity: R_EntityDefinition
-): C_NsDef_Entity(ideInfo, entity)
+private class C_NamespaceMember_SysNamespace(base: C_NamespaceMemberBase, ns: C_Namespace): C_NamespaceMember_Namespace(base, ns)
+class C_NamespaceMember_UserNamespace(base: C_NamespaceMemberBase, ns: C_Namespace): C_NamespaceMember_Namespace(base, ns)
 
-private class C_NsDef_UserEntity(
-        ideInfo: IdeSymbolInfo,
-        private val entity: C_Entity,
-        private val addToModule: Boolean
-): C_NsDef_Entity(ideInfo, entity.entity) {
+private class C_NamespaceMember_Type(base: C_NamespaceMemberBase, private val type: C_TypeDef): C_NamespaceMember(base) {
+    init {
+        check(!type.isEntity()) { type }
+    }
+
+    override fun declarationType() = C_DeclarationType.TYPE
+
+    override fun hasTag(tag: C_NamespaceMemberTag): Boolean {
+        return tag == C_NamespaceMemberTag.TYPE
+                || tag == C_NamespaceMemberTag.VALUE
+                || tag == C_NamespaceMemberTag.CALLABLE && type.hasConstructor()
+    }
+
+    override fun getTypeOpt() = type
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?) = type.toExpr(qName.pos)
+}
+
+private sealed class C_NamespaceMember_Entity(
+    base: C_NamespaceMemberBase,
+    protected val entity: R_EntityDefinition,
+): C_NamespaceMember(base) {
+    private val typeDef: C_TypeDef = C_TypeDef_Normal(entity.type)
+
+    final override fun declarationType() = C_DeclarationType.ENTITY
+
+    final override fun hasTag(tag: C_NamespaceMemberTag): Boolean {
+        return tag == C_NamespaceMemberTag.TYPE || tag == C_NamespaceMemberTag.VALUE
+    }
+
+    final override fun getTypeOpt() = typeDef
+    final override fun getEntityOpt() = entity
+    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?) = typeDef.toExpr(qName.pos)
+}
+
+private class C_NamespaceMember_SysEntity(base: C_NamespaceMemberBase, entity: R_EntityDefinition): C_NamespaceMember_Entity(base, entity)
+
+private class C_NamespaceMember_UserEntity(
+    base: C_NamespaceMemberBase,
+    entity: R_EntityDefinition,
+    private val addToModule: Boolean,
+): C_NamespaceMember_Entity(base, entity) {
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         if (addToModule) {
-            b.entities.add(entity.entity.moduleLevelName, entity.entity)
+            b.entities.add(entity.moduleLevelName, entity)
         }
     }
 }
 
-private class C_NsDef_Object(
-        ideInfo: IdeSymbolInfo,
-        private val obj: R_ObjectDefinition
-): C_NsDef(ideInfo) {
-    override fun type() = C_DeclarationType.OBJECT
-    override fun toNamespaceElement() = C_NamespaceElement.create(value = C_NamespaceValue_Object(ideInfo, obj))
+private class C_NamespaceMember_Object(
+    base: C_NamespaceMemberBase,
+    private val obj: R_ObjectDefinition,
+): C_NamespaceMember(base) {
+    override fun declarationType() = C_DeclarationType.OBJECT
+
+    override fun hasTag(tag: C_NamespaceMemberTag): Boolean {
+        return tag == C_NamespaceMemberTag.VALUE || tag == C_NamespaceMemberTag.OBJECT
+    }
+
+    override fun getObjectOpt() = obj
+
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+        val vExpr: V_Expr = V_ObjectExpr(ctx, qName, obj)
+        return C_ValueExpr(vExpr)
+    }
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         b.objects.add(obj.moduleLevelName, obj)
     }
 }
 
-private sealed class C_NsDef_Struct(
-        ideInfo: IdeSymbolInfo,
-        private val rStruct: R_Struct
-): C_NsDef(ideInfo) {
-    final override fun type() = C_DeclarationType.STRUCT
-    final override fun toNamespaceElement() = toNamespaceElement(rStruct, ideInfo)
+private sealed class C_NamespaceMember_Struct(
+    base: C_NamespaceMemberBase,
+    rStruct: R_Struct,
+): C_NamespaceMember(base) {
+    private val typeDef: C_TypeDef = C_TypeDef_Normal(rStruct.type)
+    final override fun declarationType() = C_DeclarationType.STRUCT
+
+    final override fun hasTag(tag: C_NamespaceMemberTag): Boolean {
+        return tag == C_NamespaceMemberTag.TYPE || tag == C_NamespaceMemberTag.VALUE || tag == C_NamespaceMemberTag.CALLABLE
+    }
+
+    final override fun getTypeOpt() = typeDef
+    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?) = typeDef.toExpr(qName.pos)
 }
 
-private class C_NsDef_SysStruct(
-        ideInfo: IdeSymbolInfo,
-        struct: R_Struct
-): C_NsDef_Struct(ideInfo, struct)
+private class C_NamespaceMember_SysStruct(
+    base: C_NamespaceMemberBase,
+    struct: R_Struct,
+): C_NamespaceMember_Struct(base, struct)
 
-private class C_NsDef_UserStruct(
-        ideInfo: IdeSymbolInfo,
-        private val struct: C_Struct
-): C_NsDef_Struct(ideInfo, struct.structDef.struct) {
+private class C_NamespaceMember_UserStruct(
+    base: C_NamespaceMemberBase,
+    private val struct: C_Struct,
+): C_NamespaceMember_Struct(base, struct.structDef.struct) {
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         b.structs.add(struct.structDef.moduleLevelName, struct)
     }
 }
 
-private class C_NsDef_Enum(
-        ideInfo: IdeSymbolInfo,
-        private val e: R_EnumDefinition
-): C_NsDef(ideInfo) {
-    override fun type() = C_DeclarationType.ENUM
+private class C_NamespaceMember_Enum(
+    base: C_NamespaceMemberBase,
+    private val e: R_EnumDefinition,
+): C_NamespaceMember(base) {
+    private val typeDef: C_TypeDef = C_TypeDef_Normal(e.type)
 
-    override fun toNamespaceElement(): C_NamespaceElement {
-        val typeProxy = C_DefProxy.create(e.type, ideInfo)
-        return C_NamespaceElement.create(
-            type = typeProxy,
-            value = C_NamespaceValue_Type(typeProxy)
-        )
+    override fun declarationType() = C_DeclarationType.ENUM
+
+    override fun hasTag(tag: C_NamespaceMemberTag): Boolean {
+        return tag == C_NamespaceMemberTag.TYPE || tag == C_NamespaceMemberTag.VALUE
     }
+
+    override fun getTypeOpt() = typeDef
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?) = typeDef.toExpr(qName.pos)
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         b.enums.add(e.moduleLevelName, e)
     }
 }
 
-private sealed class C_NsDef_Function(private val fn: C_GlobalFunction): C_NsDef(fn.ideInfo) {
-    final override fun type() = C_DeclarationType.FUNCTION
-    final override fun toNamespaceElement() = C_NamespaceElement.create(function = fn)
+private class C_FunctionExpr(private val name: LazyPosString, private val fn: C_GlobalFunction): C_NoValueExpr() {
+    override fun startPos() = name.pos
+    override fun isCallable() = true
+
+    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
+        val vExpr = fn.compileCall(ctx, name, args, resTypeHint)
+        return C_ValueExpr(vExpr)
+    }
+
+    override fun errKindName() = "function" to name.str
 }
 
-private class C_NsDef_SysFunction(fn: C_GlobalFunction): C_NsDef_Function(fn)
+private sealed class C_NamespaceMember_Function(
+    base: C_NamespaceMemberBase,
+    private val fn: C_GlobalFunction,
+): C_NamespaceMember(base) {
+    final override fun declarationType() = C_DeclarationType.FUNCTION
+    final override fun hasTag(tag: C_NamespaceMemberTag) = tag == C_NamespaceMemberTag.CALLABLE
+    final override fun getFunctionOpt() = fn
 
-private class C_NsDef_UserFunction(private val userFn: C_UserGlobalFunction): C_NsDef_Function(userFn) {
+    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+        val lazyName = LazyPosString.of(qName.last.pos) { defName.appLevelName }
+        return C_FunctionExpr(lazyName, fn)
+    }
+}
+
+private class C_NamespaceMember_SysFunction(base: C_NamespaceMemberBase, fn: C_GlobalFunction): C_NamespaceMember_Function(base, fn)
+
+private class C_NamespaceMember_UserFunction(
+    base: C_NamespaceMemberBase,
+    private val userFn: C_UserGlobalFunction,
+) : C_NamespaceMember_Function(base, userFn) {
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         val rFn = userFn.rFunction
         b.functions.add(rFn.moduleLevelName, rFn)
     }
 }
 
-private class C_NsDef_Operation(
-        ideInfo: IdeSymbolInfo,
-        private val cOp: C_OperationGlobalFunction
-): C_NsDef(ideInfo) {
-    override fun type() = C_DeclarationType.OPERATION
-    override fun toNamespaceElement() = C_NamespaceElement.create(function = cOp)
+private class C_NamespaceMember_Operation(
+    base: C_NamespaceMemberBase,
+    private val cOp: C_OperationGlobalFunction,
+): C_NamespaceMember(base) {
+    override fun declarationType() = C_DeclarationType.OPERATION
+    override fun hasTag(tag: C_NamespaceMemberTag) = tag == C_NamespaceMemberTag.CALLABLE
+
+    override fun getOperationOpt() = cOp.rOp
+
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+        val lazyName = LazyPosString.of(qName.last.pos) { defName.appLevelName }
+        return C_FunctionExpr(lazyName, cOp)
+    }
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         val op = cOp.rOp
@@ -181,12 +322,17 @@ private class C_NsDef_Operation(
     }
 }
 
-private class C_NsDef_Query(
-        ideInfo: IdeSymbolInfo,
-        private val cQuery: C_QueryGlobalFunction
-): C_NsDef(ideInfo) {
-    override fun type() = C_DeclarationType.QUERY
-    override fun toNamespaceElement() = C_NamespaceElement.create(function = cQuery)
+private class C_NamespaceMember_Query(
+    base: C_NamespaceMemberBase,
+    private val cQuery: C_QueryGlobalFunction,
+): C_NamespaceMember(base) {
+    override fun declarationType() = C_DeclarationType.QUERY
+    override fun hasTag(tag: C_NamespaceMemberTag) = tag == C_NamespaceMemberTag.CALLABLE
+
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+        val lazyName = LazyPosString.of(qName.last.pos) { defName.appLevelName }
+        return C_FunctionExpr(lazyName, cQuery)
+    }
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         val q = cQuery.rQuery
@@ -194,12 +340,17 @@ private class C_NsDef_Query(
     }
 }
 
-private class C_NsDef_GlobalConstant(
-        ideInfo: IdeSymbolInfo,
-        private val cDef: C_GlobalConstantDefinition
-): C_NsDef(ideInfo) {
-    override fun type() = C_DeclarationType.CONSTANT
-    override fun toNamespaceElement() = C_NamespaceElement.create(value = C_NamespaceValue_GlobalConstant(ideInfo, cDef))
+private class C_NamespaceMember_GlobalConstant(
+    base: C_NamespaceMemberBase,
+    private val cDef: C_GlobalConstantDefinition,
+): C_NamespaceMember(base) {
+    override fun declarationType() = C_DeclarationType.CONSTANT
+    override fun hasTag(tag: C_NamespaceMemberTag) = tag == C_NamespaceMemberTag.VALUE
+
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+        val vExpr = cDef.compileRead(ctx, qName.last)
+        return C_ValueExpr(vExpr, implicitAttrMatchName = implicitAttrMatchName)
+    }
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         val rDef = cDef.rDef
@@ -207,12 +358,7 @@ private class C_NsDef_GlobalConstant(
     }
 }
 
-private class C_NsDef_Property(private val value: C_NamespaceValue): C_NsDef(value.ideInfo) {
-    override fun type() = C_DeclarationType.PROPERTY
-    override fun toNamespaceElement() = C_NamespaceElement.create(value = value)
-}
-
-class C_SysNsProto(entries: List<C_NsEntry>, entities: List<C_NsEntry>) {
+class C_SysNsProto(val basePath: C_DefinitionPath, entries: List<C_NsEntry>, entities: List<C_NsEntry>) {
     val entries = entries.toImmList()
     val entities = entities.toImmList()
 
@@ -221,7 +367,7 @@ class C_SysNsProto(entries: List<C_NsEntry>, entities: List<C_NsEntry>) {
     }
 }
 
-class C_SysNsProtoBuilder {
+class C_SysNsProtoBuilder(val basePath: C_DefinitionPath) {
     private val entries = mutableListOf<C_NsEntry>()
     private val entities = mutableListOf<C_NsEntry>()
 
@@ -238,73 +384,74 @@ class C_SysNsProtoBuilder {
         entities.addAll(nsProto.entities)
     }
 
-    private fun addDef(name: R_Name, def: C_NsDef): C_NsEntry {
+    private fun addDef(name: R_Name, def: C_NamespaceMember): C_NsEntry {
         check(!completed)
         val entry = C_NsEntry(name, def)
         entries.add(entry)
         return entry
     }
 
-    fun addNamespace(name: R_Name, ns: C_DefProxy<C_Namespace>) {
-        addDef(name, C_NsDef_SysNamespace(ns))
-    }
-
     fun addNamespace(name: String, ns: C_Namespace) {
         val rName = R_Name.of(name)
-        addNamespace(rName, C_DefProxy.create(ns))
-    }
-
-    fun addType(name: String, type: R_Type) {
-        val rName = R_Name.of(name)
-        val proxy = C_DefProxy.create(type, IdeSymbolInfo.DEF_TYPE)
-        addType(rName, proxy)
+        val base = makeBase(rName, IdeSymbolInfo.DEF_NAMESPACE)
+        addDef(rName, C_NamespaceMember_SysNamespace(base, ns))
     }
 
     fun addType(name: String, type: C_GenericType) {
         val rName = R_Name.of(name)
-        val proxy = C_DefProxy.create(type, IdeSymbolInfo.DEF_TYPE)
-        addType(rName, proxy)
+        val typeDef = C_TypeDef_Generic(type)
+        addType(rName, typeDef, IdeSymbolInfo.DEF_TYPE)
     }
 
-    fun addType(name: R_Name, type: C_DefProxy<C_TypeDef>) {
-        addDef(name, C_NsDef_Type(type))
+    fun addType(name: R_Name, type: C_TypeDef, ideInfo: IdeSymbolInfo, deprecated: C_Deprecated? = null) {
+        val base = makeBase(name, ideInfo, deprecated)
+        addDef(name, C_NamespaceMember_Type(base, type))
     }
 
     fun addEntity(name: R_Name, entity: R_EntityDefinition, ideInfo: IdeSymbolInfo) {
-        val entry = addDef(name, C_NsDef_SysEntity(ideInfo, entity))
+        val base = makeBase(name, ideInfo)
+        val entry = addDef(name, C_NamespaceMember_SysEntity(base, entity))
         entities.add(entry)
     }
 
     fun addStruct(name: String, struct: R_Struct, ideInfo: IdeSymbolInfo) {
         val rName = R_Name.of(name)
-        addDef(rName, C_NsDef_SysStruct(ideInfo, struct))
+        val base = makeBase(rName, ideInfo)
+        addDef(rName, C_NamespaceMember_SysStruct(base, struct))
     }
 
     fun addFunction(name: R_Name, fn: C_GlobalFunction) {
-        addDef(name, C_NsDef_SysFunction(fn))
+        val base = makeBase(name, fn.ideInfo)
+        addDef(name, C_NamespaceMember_SysFunction(base, fn))
     }
 
-    fun addProperty(name: String, value: C_NamespaceValue) {
+    fun addProperty(name: String, prop: C_NamespaceProperty) {
         val rName = R_Name.of(name)
-        addDef(rName, C_NsDef_Property(value))
+        val base = makeBase(rName, prop.ideInfo)
+        addDef(rName, C_NamespaceMember_Property(base, prop))
     }
 
     fun build(): C_SysNsProto {
         check(!completed)
         completed = true
-        return C_SysNsProto(entries, entities)
+        return C_SysNsProto(basePath, entries, entities)
+    }
+
+    private fun makeBase(name: R_Name, ideInfo: IdeSymbolInfo, deprecated: C_Deprecated? = null): C_NamespaceMemberBase {
+        val defName = basePath.subName(name)
+        return C_NamespaceMemberBase(defName, ideInfo, deprecated)
     }
 }
 
 class C_UserNsProtoBuilder(private val assembler: C_NsAsm_ComponentAssembler) {
     fun futureNs() = assembler.futureNs()
 
-    private fun addDef(name: C_Name, def: C_NsDef) {
+    private fun addDef(name: C_Name, def: C_NamespaceMember) {
         assembler.addDef(name, def)
     }
 
-    fun addNamespace(name: C_Name, expandable: Boolean): C_UserNsProtoBuilder {
-        val subAssembler = assembler.addNamespace(name, expandable)
+    fun addNamespace(name: C_Name, expandable: Boolean, deprecated: C_Deprecated?): C_UserNsProtoBuilder {
+        val subAssembler = assembler.addNamespace(name, expandable, deprecated)
         return C_UserNsProtoBuilder(subAssembler)
     }
 
@@ -320,36 +467,35 @@ class C_UserNsProtoBuilder(private val assembler: C_NsAsm_ComponentAssembler) {
         assembler.addWildcardImport(module, path)
     }
 
-    fun addEntity(name: C_Name, entity: R_EntityDefinition, ideInfo: IdeSymbolInfo, addToModule: Boolean = true) {
-        val cEntity = C_Entity(name.pos, entity)
-        addDef(name, C_NsDef_UserEntity(ideInfo, cEntity, addToModule))
+    fun addEntity(base: C_NamespaceMemberBase, name: C_Name, entity: R_EntityDefinition, addToModule: Boolean = true) {
+        addDef(name, C_NamespaceMember_UserEntity(base, entity, addToModule))
     }
 
-    fun addObject(name: C_Name, obj: R_ObjectDefinition, ideInfo: IdeSymbolInfo) {
-        addDef(name, C_NsDef_Object(ideInfo, obj))
+    fun addObject(base: C_NamespaceMemberBase, name: C_Name, obj: R_ObjectDefinition) {
+        addDef(name, C_NamespaceMember_Object(base, obj))
     }
 
-    fun addStruct(cStruct: C_Struct, ideInfo: IdeSymbolInfo) {
-        addDef(cStruct.name, C_NsDef_UserStruct(ideInfo, cStruct))
+    fun addStruct(base: C_NamespaceMemberBase, cStruct: C_Struct) {
+        addDef(cStruct.name, C_NamespaceMember_UserStruct(base, cStruct))
     }
 
-    fun addEnum(name: C_Name, e: R_EnumDefinition, ideInfo: IdeSymbolInfo) {
-        addDef(name, C_NsDef_Enum(ideInfo, e))
+    fun addEnum(base: C_NamespaceMemberBase, name: C_Name, e: R_EnumDefinition) {
+        addDef(name, C_NamespaceMember_Enum(base, e))
     }
 
-    fun addFunction(name: C_Name, fn: C_UserGlobalFunction) {
-        addDef(name, C_NsDef_UserFunction(fn))
+    fun addFunction(base: C_NamespaceMemberBase, name: C_Name, fn: C_UserGlobalFunction) {
+        addDef(name, C_NamespaceMember_UserFunction(base, fn))
     }
 
-    fun addOperation(name: C_Name, operation: C_OperationGlobalFunction, ideInfo: IdeSymbolInfo) {
-        addDef(name, C_NsDef_Operation(ideInfo, operation))
+    fun addOperation(base: C_NamespaceMemberBase, name: C_Name, operation: C_OperationGlobalFunction) {
+        addDef(name, C_NamespaceMember_Operation(base, operation))
     }
 
-    fun addQuery(name: C_Name, query: C_QueryGlobalFunction, ideInfo: IdeSymbolInfo) {
-        addDef(name, C_NsDef_Query(ideInfo, query))
+    fun addQuery(base: C_NamespaceMemberBase, name: C_Name, query: C_QueryGlobalFunction) {
+        addDef(name, C_NamespaceMember_Query(base, query))
     }
 
-    fun addConstant(name: C_Name, c: C_GlobalConstantDefinition, ideInfo: IdeSymbolInfo) {
-        addDef(name, C_NsDef_GlobalConstant(ideInfo, c))
+    fun addConstant(base: C_NamespaceMemberBase, name: C_Name, c: C_GlobalConstantDefinition) {
+        addDef(name, C_NamespaceMember_GlobalConstant(base, c))
     }
 }

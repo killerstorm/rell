@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.repl
@@ -65,7 +65,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
         repl.chk("lib.f(456)", "RES:int[207936]")
         repl.chk("lib.rec()", "RES:lib:rec[p=text[Hello],q=int[123]]")
 
-        repl.chk("struct dat { r: rec; }", "CTE:<console>:unknown_def:type:rec")
+        repl.chk("struct dat { r: rec; }", "CTE:<console>:unknown_name:rec")
         repl.chk("struct dat { r: lib.rec; }")
         repl.chk("dat(lib.rec('Bye',456))", "RES:dat[r=lib:rec[p=text[Bye],q=int[456]]]")
     }
@@ -88,7 +88,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
         repl.chk("f()", "RES:int[123]")
         repl.chk("g()", "RES:int[456]")
         repl.chk("import other.*;")
-        repl.chk("f()", "CTE:<console>:name:ambig:f")
+        repl.chk("f()", "CTE:<console>:name:ambig:f:[FUNCTION:lib:f,FUNCTION:other:f]")
         repl.chk("g()", "RES:int[456]")
     }
 

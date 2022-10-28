@@ -971,7 +971,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkDecimalConstructor("1.0", "dec[1]")
         chkDecimalConstructor("1.00000", "dec[1]")
 
-        chkExpr("decimal(false)", "ct_err:expr_call_argtypes:decimal:boolean")
+        chkExpr("decimal(false)", "ct_err:expr_call_argtypes:[decimal]:boolean")
         chkDecimalConstructor("", errRt("decimal:invalid:"))
         chkDecimalConstructor("Hello", errRt("decimal:invalid:Hello"))
         chkDecimalConstructor("0x1234", errRt("decimal:invalid:0x1234"))

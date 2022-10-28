@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.core
@@ -71,8 +71,8 @@ class C_ExtReplCommand(
 
     private fun createReplContext(mntCtx: C_MountContext, codeState: ReplCodeState): C_ReplCommandContext {
         val stmtVars = discoverStatementVars()
-        val defId = R_DefinitionId("", "<REPL>")
-        val defCtx = C_DefinitionContext(mntCtx, C_DefinitionType.REPL, defId)
+        val cDefBase = mntCtx.defBase(C_StringQualifiedName.of("<REPL>"))
+        val defCtx = C_DefinitionContext(mntCtx, C_DefinitionType.REPL, cDefBase.defId)
         val fnCtx = C_FunctionContext(defCtx, "<REPL>", null, stmtVars)
         val frameCtx = C_FrameContext.create(fnCtx, codeState.cState.frameProto)
         return C_ReplCommandContext(frameCtx, codeState)

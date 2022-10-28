@@ -1,20 +1,20 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
 
-import net.postchain.rell.compiler.ast.*
+import net.postchain.rell.compiler.ast.S_CallArgument
+import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_PosValue
+import net.postchain.rell.compiler.ast.S_VirtualType
 import net.postchain.rell.compiler.base.core.C_ForIterator
 import net.postchain.rell.compiler.base.core.C_NamespaceContext
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.def.C_GenericType
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.compiler.base.expr.C_CallTypeHints
-import net.postchain.rell.compiler.base.expr.C_CallTypeHints_None
-import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.fn.*
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.*
@@ -36,12 +36,18 @@ private fun matcherMapSub(keyType: R_Type, valueType: R_Type): C_ArgTypeMatcher 
 
 object C_Lib_Type_Map {
     const val TYPE_NAME = "map"
+    val DEF_NAME = C_LibUtils.defName(TYPE_NAME)
 
     fun getConstructorFn(mapType: R_MapType): C_GlobalFunction {
         return C_MapConstructorFunction(mapType.keyValueTypes)
     }
 
-    fun getMemberFns(mapType: R_MapType): C_MemberFuncTable {
+    fun getValueMembers(mapType: R_MapType): List<C_TypeValueMember> {
+        val fns = getMemberFns(mapType)
+        return C_LibUtils.makeValueMembers(mapType, fns)
+    }
+
+    private fun getMemberFns(mapType: R_MapType): C_MemberFuncTable {
         val keyType = mapType.keyType
         val valueType = mapType.valueType
         val keySetType = R_SetType(keyType)
@@ -69,7 +75,7 @@ object C_Lib_Type_Map {
     }
 }
 
-private object C_GenericType_Map: C_GenericType(C_Lib_Type_Map.TYPE_NAME, 2) {
+private object C_GenericType_Map: C_GenericType(C_Lib_Type_Map.TYPE_NAME, C_Lib_Type_Map.DEF_NAME, 2) {
     override val rawConstructorFn: C_GlobalFunction = C_MapConstructorFunction(null)
 
     override fun compileType0(ctx: C_NamespaceContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type {
@@ -217,13 +223,13 @@ private class C_MapConstructorFunction(
 }
 
 object C_Lib_Type_VirtualMap {
-    fun getMemberFns(type: R_VirtualMapType): C_MemberFuncTable {
+    fun getValueMembers(type: R_VirtualMapType): List<C_TypeValueMember> {
         val mapType = type.innerType
         val keyType = mapType.keyType
         val valueType = mapType.valueType
         val keySetType = R_SetType(keyType)
         val valueListType = R_ListType(S_VirtualType.virtualMemberType(valueType))
-        return C_LibUtils.typeMemFuncBuilder(type)
+        val fns = C_LibUtils.typeMemFuncBuilder(type)
             .add("str", R_TextType, listOf(), AnyFns.ToText_NoDb)
             .add("to_text", R_TextType, listOf(), AnyFns.ToText_NoDb)
             .add("empty", R_BooleanType, listOf(), MapFns.Empty)
@@ -234,6 +240,7 @@ object C_Lib_Type_VirtualMap {
             .add("values", valueListType, listOf(), MapFns.Values(valueListType))
             .add("to_full", mapType, listOf(), C_Lib_Type_Virtual.ToFull)
             .build()
+        return C_LibUtils.makeValueMembers(type, fns)
     }
 }
 

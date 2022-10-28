@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -29,7 +29,7 @@ import net.postchain.rell.utils.checkEquals
 
 object C_Lib_Exists {
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
-        val fb = C_GlobalFuncBuilder(null)
+        val fb = C_GlobalFuncBuilder()
         fb.add("exists", C_SysFn_Exists(false))
         fb.add("empty", C_SysFn_Exists(true))
         C_LibUtils.bindFunctions(nsBuilder, fb.build())

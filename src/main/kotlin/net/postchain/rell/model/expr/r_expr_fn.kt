@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.expr
@@ -28,7 +28,7 @@ object R_SysFunctionUtils {
         return res
     }
 
-    fun callAndCatch(fn: R_SysFunction, name: LazyString, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
+    private fun callAndCatch(fn: R_SysFunction, name: LazyString, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
         val res = try {
             call0(fn, frame, values)
         } catch (e: Rt_StackTraceError) {

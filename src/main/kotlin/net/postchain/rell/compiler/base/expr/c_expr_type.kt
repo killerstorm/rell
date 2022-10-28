@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.compiler.base.expr
 
 import net.postchain.rell.compiler.ast.S_CallArgument
@@ -6,52 +10,26 @@ import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.def.C_GenericType
-import net.postchain.rell.compiler.base.namespace.C_NamespaceValueContext
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.model.R_EnumType
+import net.postchain.rell.model.R_StructType
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.utils.LazyPosString
-import net.postchain.rell.utils.immListOf
 
-class C_SpecificTypeExpr(private val pos: S_Pos, private val type: R_Type): C_Expr() {
-    override fun kind() = when (type) {
-        is R_EnumType -> C_ExprKind.ENUM
-        else -> C_ExprKind.TYPE
-    }
-
+class C_SpecificTypeExpr(private val pos: S_Pos, private val type: R_Type): C_NoValueExpr() {
     override fun startPos() = pos
 
-    override fun member0(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
-        val valueMember = memberValue(ctx, memberName)
-        val fnMember = memberFunction(memberName)
+    override fun member(ctx: C_ExprContext, memberName: C_Name, exprHint: C_ExprHint): C_ExprMember {
+        val tags = exprHint.memberTags()
+        val memberElem = type.getStaticNamespace().getElement(memberName.rName, tags)
 
-        val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
-
-        if (res == null) {
+        if (memberElem == null) {
             C_Errors.errUnknownName(ctx.msgCtx, type, memberName)
             return C_ExprUtils.errorMember(ctx, memberName.pos)
         }
 
-        return res
-    }
-
-    private fun memberValue(ctx: C_ExprContext, memberName: C_Name): C_ExprMember? {
-        val value = type.getStaticValues()[memberName.rName]
-        value ?: return null
-
-        val memCtx = C_NamespaceValueContext(ctx)
-        val qName = C_QualifiedName(immListOf(memberName))
-        val cExpr = value.toExpr(memCtx, qName, null)
-        return C_ExprMember(cExpr, value.ideInfo)
-    }
-
-    private fun memberFunction(memberName: C_Name): C_ExprMember? {
-        val fn = type.getStaticFunctions().get(memberName.rName)
-        fn ?: return null
-
-        val lazyMemberName = LazyPosString.of(memberName)
-        val fnExpr = C_FunctionExpr(lazyMemberName, fn)
-        return C_ExprMember(fnExpr, fn.ideInfo)
+        val qName = C_QualifiedName(memberName)
+        return memberElem.toExprMember(ctx, qName, implicitAttrMatchName = null)
     }
 
     override fun isCallable(): Boolean {
@@ -70,16 +48,27 @@ class C_SpecificTypeExpr(private val pos: S_Pos, private val type: R_Type): C_Ex
 
         val lazyName = LazyPosString.of(this.pos) { type.name }
         val vExpr = fn.compileCall(ctx, lazyName, args, resTypeHint)
-        return C_VExpr(vExpr)
+        return C_ValueExpr(vExpr)
+    }
+
+    override fun errKindName(): Pair<String, String> {
+        val kind = when (type) {
+            is R_EnumType -> "enum"
+            is R_StructType -> "struct"
+            else -> "type"
+        }
+        return kind to type.defName.appLevelName
     }
 }
 
-class C_RawGenericTypeExpr(private val pos: S_Pos, private val type: C_GenericType): C_Expr() {
-    override fun kind() = C_ExprKind.TYPE
+class C_RawGenericTypeExpr(private val pos: S_Pos, private val type: C_GenericType): C_NoValueExpr() {
     override fun startPos() = pos
 
-    override fun member0(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
-        TODO()
+    override fun member(ctx: C_ExprContext, memberName: C_Name, exprHint: C_ExprHint): C_ExprMember {
+        val nameCode = "[${type.defName.appLevelName}]:$memberName"
+        val nameMsg = "${type.name}.$memberName"
+        C_Errors.errUnknownName(ctx.msgCtx, pos, nameCode, nameMsg)
+        return C_ExprUtils.errorMember(ctx, memberName.pos)
     }
 
     override fun isCallable(): Boolean {
@@ -93,6 +82,8 @@ class C_RawGenericTypeExpr(private val pos: S_Pos, private val type: C_GenericTy
 
         val lazyName = LazyPosString.of(this.pos) { type.name }
         val vExpr = fn.compileCall(ctx, lazyName, args, resTypeHint)
-        return C_VExpr(vExpr)
+        return C_ValueExpr(vExpr)
     }
+
+    override fun errKindName() = "type" to type.defName.appLevelName
 }

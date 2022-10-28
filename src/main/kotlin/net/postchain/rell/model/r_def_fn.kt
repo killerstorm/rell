@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model
@@ -16,14 +16,14 @@ import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
-class R_Param(val name: String, val type: R_Type) {
+class R_Param(val name: R_Name, val type: R_Type) {
     fun toMetaGtv(): Gtv = mapOf(
-            "name" to name.toGtv(),
+            "name" to name.str.toGtv(),
             "type" to type.toMetaGtv()
     ).toGtv()
 }
 
-class R_VarParam(val name: String, val type: R_Type, val ptr: R_VarPtr) {
+class R_VarParam(val name: R_Name, val type: R_Type, val ptr: R_VarPtr) {
     fun toParam() = R_Param(name, type)
 }
 

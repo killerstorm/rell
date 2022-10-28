@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.module
@@ -41,7 +41,7 @@ class ModuleDirTest: BaseRellTest(false) {
     @Test fun testSyntaxError() {
         file("a/foo/code.rell", "syntax error;")
         chkCompile("import a.foo;", "ct_err:a/foo/code.rell:syntax")
-        chkCompile("import a.foo; query q() = foo.f();", "ct_err:[main.rell:unknown_name:foo.f][a/foo/code.rell:syntax]")
+        chkCompile("import a.foo; query q() = foo.f();", "ct_err:[main.rell:unknown_name:[foo]:f][a/foo/code.rell:syntax]")
     }
 
     @Test fun testNoRellFiles() {
@@ -77,7 +77,7 @@ class ModuleDirTest: BaseRellTest(false) {
         chkImp("import a;", "a.f1()", "int[123]")
         chkImp("import a;", "a.f2()", "int[456]")
         chkImp("import a;", "a.f3()", "int[789]")
-        chkImp("import a;", "a.f4()", "ct_err:unknown_name:a.f4")
+        chkImp("import a;", "a.f4()", "ct_err:unknown_name:[a]:f4")
         chkImp("import a.a4;", "a4.f4()", "int[987]")
     }
 

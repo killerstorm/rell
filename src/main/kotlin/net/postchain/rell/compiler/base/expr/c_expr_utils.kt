@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.expr
@@ -36,7 +36,7 @@ object C_ExprUtils {
         return Db_InterpretedExpr(rExpr)
     }
 
-    fun makeDbBinaryExpr(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, left: Db_Expr, right: Db_Expr): Db_Expr {
+    private fun makeDbBinaryExpr(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, left: Db_Expr, right: Db_Expr): Db_Expr {
         return if (left is Db_InterpretedExpr && right is Db_InterpretedExpr) {
             val rExpr = R_BinaryExpr(type, rOp, left.expr, right.expr)
             Db_InterpretedExpr(rExpr)
@@ -113,7 +113,7 @@ object C_ExprUtils {
 
     fun errorExpr(ctx: C_ExprContext, pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): C_Expr {
         val value = errorVExpr(ctx, pos, type, msg)
-        return C_VExpr(value)
+        return C_ValueExpr(value)
     }
 
     fun errorMember(ctx: C_ExprContext, pos: S_Pos): C_ExprMember {
@@ -128,26 +128,6 @@ object C_ExprUtils {
             throw C_Error.stop(pos, "eval_fail:${e.code}", e.message ?: "Evaluation failed")
         } catch (e: Throwable) {
             throw C_Error.stop(pos, "eval_fail:${e.javaClass.canonicalName}", "Evaluation failed")
-        }
-    }
-
-    fun valueFunctionExpr(valueExpr: C_Expr?, fnExpr: C_Expr?, hint: C_ExprHint): C_Expr? {
-        val valueCallable = valueExpr?.isCallable() ?: false
-        return valueFunctionExpr0(valueExpr, fnExpr, valueCallable, hint)
-    }
-
-    fun valueFunctionExprMember(valueMember: C_ExprMember?, fnMember: C_ExprMember?, hint: C_ExprHint): C_ExprMember? {
-        val valueCallable = valueMember?.expr?.isCallable() ?: false
-        return valueFunctionExpr0(valueMember, fnMember, valueCallable, hint)
-    }
-
-    fun <T> valueFunctionExpr0(value: T?, fn: T?, valueCallable: Boolean, hint: C_ExprHint): T? {
-        return if (value != null && (valueCallable || fn == null)) {
-            value
-        } else if (value != null && fn != null) {
-            if (hint.callable) fn else value
-        } else {
-            fn
         }
     }
 }

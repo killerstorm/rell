@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -327,10 +327,10 @@ class GlobalConstantTest: BaseRellTest(false) {
         def("entity user { name; }")
 
         chkConstErr("user @ {}", "ct_err:[def:const:bad_type:not_pure:0::X:user][def:const:bad_expr:0::X:at_expr]")
-        chkConstErr("user @ {} (.name)", "ct_err:def:const:bad_expr:0::X:at_expr")
+        chkConstErr("user @ {} (.name)", "ct_err:[def:const:bad_expr:0::X:at_expr][def:const:bad_expr:0::X:entity_attr]")
 
         chkConstErr("user @ { exists ( (u2:user) @* {} ) } ( .name )",
-                "ct_err:[def:const:bad_expr:0::X:at_expr][def:const:bad_expr:0::X:at_expr]")
+                "ct_err:[def:const:bad_expr:0::X:at_expr][def:const:bad_expr:0::X:at_expr][def:const:bad_expr:0::X:entity_attr]")
 
         chkConst("[1,2,3,4,5] @ {} ( @sum $ )", "int[15]")
     }

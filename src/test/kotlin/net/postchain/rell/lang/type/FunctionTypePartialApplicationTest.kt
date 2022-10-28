@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.type
@@ -30,17 +30,17 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
 
         chk("f0(*)", "fn[f0()]")
         chk("f0(*)()", "text[f0]")
-        chk("f0(x = *)", "ct_err:expr:call:unknown_named_arg:f0:x")
+        chk("f0(x = *)", "ct_err:expr:call:unknown_named_arg:[f0]:x")
 
         chk("f1(*)", "fn[f1(*)]")
         chk("f1(*)(123)", "text[f1:123]")
         chk("f1(123)", "text[f1:123]")
         chk("f1(123, *)", "fn[f1(int[123])]")
-        chk("f1(*, 123)", "ct_err:expr:call:too_many_args:f1:1:2")
+        chk("f1(*, 123)", "ct_err:expr:call:too_many_args:[f1]:1:2")
         chk("f1(x = 123)", "text[f1:123]")
         chk("f1(x = 123, *)", "fn[f1(int[123])]")
         chk("f1(x = 123, *)()", "text[f1:123]")
-        chk("f1(*, x = 123)", "ct_err:expr:call:named_arg_already_specified:f1:x")
+        chk("f1(*, x = 123)", "ct_err:expr:call:named_arg_already_specified:[f1]:x")
 
         chk("f2(*)", "fn[f2(*,*)]")
         chk("f2(*)(123, 456)", "text[f2:123,456]")
@@ -57,7 +57,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("f2(y = 456, *)", "fn[f2(*,int[456])]")
         chk("f2(y = 456, *)(123)", "text[f2:123,456]")
 
-        chk("f2(*, x = 123)", "ct_err:expr:call:named_arg_already_specified:f2:x")
+        chk("f2(*, x = 123)", "ct_err:expr:call:named_arg_already_specified:[f2]:x")
         chk("f2(*, y = 456)", "fn[f2(*,int[456])]")
         chk("f2(*, y = 456)(123)", "text[f2:123,456]")
 
@@ -74,8 +74,8 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("f1(*)", "fn[f1(*)]")
         chk("f1(*, *)", "ct_err:expr:call:last_wildcard_not_alone")
         chk("f1(x = *, *)", "ct_err:expr:call:last_wildcard_not_alone")
-        chk("f1(*, x = *)", "ct_err:expr:call:named_arg_already_specified:f1:x")
-        chk("f1(*, x = 123)", "ct_err:expr:call:named_arg_already_specified:f1:x")
+        chk("f1(*, x = *)", "ct_err:expr:call:named_arg_already_specified:[f1]:x")
+        chk("f1(*, x = 123)", "ct_err:expr:call:named_arg_already_specified:[f1]:x")
         chk("f1(123, *)", "fn[f1(int[123])]")
         chk("f1(123, *)()", "text[f1:123]")
 
@@ -86,7 +86,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("f2(123, *, *)", "ct_err:expr:call:last_wildcard_not_alone")
         chk("f2(123, 456, *)", "fn[f2(int[123],int[456])]")
         chk("f2(123, 456, *)()", "text[f2:123,456]")
-        chk("f2(123, 456, *, *)", "ct_err:[expr:call:too_many_args:f2:2:3][expr:call:last_wildcard_not_alone]")
+        chk("f2(123, 456, *, *)", "ct_err:[expr:call:too_many_args:[f2]:2:3][expr:call:last_wildcard_not_alone]")
         chk("f2(*, 456)", "fn[f2(*,int[456])]")
         chk("f2(*, 456)(123)", "text[f2:123,456]")
         chk("f2(*, 456, *)", "ct_err:expr:call:last_wildcard_not_alone")
@@ -147,7 +147,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("f2(*, y = *)", "fn[f2(*,*)]")
         chk("f2(*, y = *)(777, 888)", "text[f2:777,888]")
         chk("f2(*, y = *, *)", "ct_err:expr:call:last_wildcard_not_alone")
-        chk("f2(*, x = *)", "ct_err:expr:call:named_arg_already_specified:f2:x")
+        chk("f2(*, x = *)", "ct_err:expr:call:named_arg_already_specified:[f2]:x")
 
         chk("f2(777, *)", "fn[f2(int[777],int[456])]")
         chk("f2(777, *)()", "text[f2:777,456]")
@@ -202,8 +202,8 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
 
     @Test fun testSysGlobalFunction() {
         chk("integer.from_hex(*)", "fn[integer.from_hex(*)]")
-        chk("integer.from_hex(s = *)", "ct_err:expr:call:unknown_named_arg:integer.from_hex:s")
-        chk("integer.from_hex(s = 'beef', *)", "ct_err:expr:call:unknown_named_arg:integer.from_hex:s")
+        chk("integer.from_hex(s = *)", "ct_err:expr:call:unknown_named_arg:[integer.from_hex]:s")
+        chk("integer.from_hex(s = 'beef', *)", "ct_err:expr:call:unknown_named_arg:[integer.from_hex]:s")
 
         chkSysGlobalFn("integer.from_hex(*)", "'beef'", "(text)->integer", "fn[integer.from_hex(*)]", "int[48879]")
         chkSysGlobalFn("integer.from_hex('beef', *)", "", "()->integer", "fn[integer.from_hex(text[beef])]", "int[48879]")

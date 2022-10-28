@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.api
@@ -29,7 +29,7 @@ enum class IdeSymbolKind {
     MEM_ENTITY_ATTR_NORMAL,
     MEM_ENTITY_ATTR_NORMAL_VAR,
     MEM_ENTITY_ATTR_ROWID,
-    MEM_ENUM_ATTR,
+    MEM_ENUM_VALUE,
     MEM_STRUCT_ATTR,
     MEM_STRUCT_ATTR_VAR,
     MEM_SYS_PROPERTY,
@@ -54,6 +54,7 @@ class IdeSymbolInfo(
         val DEF_FUNCTION_SYSTEM = IdeSymbolInfo(IdeSymbolKind.DEF_FUNCTION_SYSTEM)
         val DEF_NAMESPACE = IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE)
         val DEF_TYPE = IdeSymbolInfo(IdeSymbolKind.DEF_TYPE)
+        val DEF_STRUCT = IdeSymbolInfo(IdeSymbolKind.DEF_STRUCT)
         val MEM_TUPLE_FIELD = IdeSymbolInfo(IdeSymbolKind.MEM_TUPLE_ATTR)
         val EXPR_CALL_ARG = IdeSymbolInfo(IdeSymbolKind.EXPR_CALL_ARG)
     }

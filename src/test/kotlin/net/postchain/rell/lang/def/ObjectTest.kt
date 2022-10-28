@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -30,7 +30,7 @@ class ObjectTest: BaseRellTest() {
     @Test fun testAttributes() {
         chkCompile("object foo { x: integer; }", "ct_err:object_attr_novalue:foo:x")
         chkCompile("object foo { x: integer = 123; s: text; }", "ct_err:object_attr_novalue:foo:s")
-        chkCompile("object foo { n = 123; }", "ct_err:unknown_name_type:n")
+        chkCompile("object foo { n = 123; }", "ct_err:unknown_name:n")
 
         def("object foo{}")
         chk("'' + foo", "text[foo]")
@@ -51,21 +51,21 @@ class ObjectTest: BaseRellTest() {
 
     @Test fun testUseAsType() {
         def("object foo { x: integer = 123; }")
-        chkCompile("function g(f: foo){}", "ct_err:unknown_def:type:foo")
-        chkCompile("function g(): foo {}", "ct_err:[fun_noreturn:g][unknown_def:type:foo]")
-        chkCompile("function g() { var f: foo; }", "ct_err:unknown_def:type:foo")
-        chkCompile("entity bar { f: foo; }", "ct_err:unknown_def:type:foo")
-        chkCompile("function g() { var l: list<foo>; }", "ct_err:unknown_def:type:foo")
-        chkCompile("function g() { var l: set<foo>; }", "ct_err:unknown_def:type:foo")
-        chkCompile("function g() { var l: map<integer, foo>; }", "ct_err:unknown_def:type:foo")
-        chkCompile("function g() { var l: map<foo, integer>; }", "ct_err:unknown_def:type:foo")
-        chkCompile("struct bar { foo; }", "ct_err:unknown_name_type:foo")
+        chkCompile("function g(f: foo){}", "ct_err:wrong_name:type:object:foo")
+        chkCompile("function g(): foo {}", "ct_err:[fun_noreturn:g][wrong_name:type:object:foo]")
+        chkCompile("function g() { var f: foo; }", "ct_err:wrong_name:type:object:foo")
+        chkCompile("entity bar { f: foo; }", "ct_err:wrong_name:type:object:foo")
+        chkCompile("function g() { var l: list<foo>; }", "ct_err:wrong_name:type:object:foo")
+        chkCompile("function g() { var l: set<foo>; }", "ct_err:wrong_name:type:object:foo")
+        chkCompile("function g() { var l: map<integer, foo>; }", "ct_err:wrong_name:type:object:foo")
+        chkCompile("function g() { var l: map<foo, integer>; }", "ct_err:wrong_name:type:object:foo")
+        chkCompile("struct bar { foo; }", "ct_err:wrong_name:type:object:foo")
     }
 
     @Test fun testCreateDelete() {
         def("object foo { x: integer = 123; }")
-        chkOp("create foo(x=123);", "ct_err:unknown_def:entity:foo")
-        chkOp("delete foo @* {};", "ct_err:unknown_def:entity:foo")
+        chkOp("create foo(x=123);", "ct_err:wrong_name:entity:object:foo")
+        chkOp("delete foo @* {};", "ct_err:wrong_name:entity:object:foo")
         chkOp("delete foo;", "ct_err:stmt_delete_obj:foo")
     }
 
@@ -82,7 +82,7 @@ class ObjectTest: BaseRellTest() {
 
         chk("'' + foo", "text[foo]")
         chk("_type_of(foo)", "text[foo]")
-        chk("abs(foo)", "ct_err:expr_call_argtypes:abs:foo")
+        chk("abs(foo)", "ct_err:expr_call_argtypes:[abs]:foo")
         chk("foo", "foo")
 
         chk("foo == foo", "ct_err:binop_operand_type:==:[foo]:[foo]")

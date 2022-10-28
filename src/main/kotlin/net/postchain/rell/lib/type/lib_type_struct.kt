@@ -4,28 +4,34 @@
 
 package net.postchain.rell.lib.type
 
+import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_VirtualType
+import net.postchain.rell.compiler.base.expr.C_MemberAttr_StructAttr
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember_BasicAttr
 import net.postchain.rell.compiler.base.namespace.C_Namespace
-import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
-import net.postchain.rell.compiler.base.utils.C_LibUtils
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.base.utils.C_LibUtils.depError
-import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
-import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.lib.test.R_TestOpType
 import net.postchain.rell.lib.test.Rt_TestOpValue
-import net.postchain.rell.model.R_ByteArrayType
-import net.postchain.rell.model.R_GtvType
-import net.postchain.rell.model.R_Struct
-import net.postchain.rell.model.R_VirtualStructType
+import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.*
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.runtime.Rt_ByteArrayValue
-import net.postchain.rell.runtime.Rt_GtvValue
-import net.postchain.rell.runtime.Rt_StructValue
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.utils.PostchainUtils
 
 object C_Lib_Type_Struct {
-    fun getMemberFns(struct: R_Struct): C_MemberFuncTable {
+    fun getValueMembers(struct: R_Struct): List<C_TypeValueMember> {
+        val fns = getMemberFns(struct)
+        val attrMembers = struct.attributesList.map {
+            val mem = C_MemberAttr_RegularStructAttr(it)
+            C_TypeValueMember_BasicAttr(it.rName, mem, it.ideInfo)
+        }
+        return C_LibUtils.makeValueMembers(struct.type, fns, attrMembers)
+    }
+
+    private fun getMemberFns(struct: R_Struct): C_MemberFuncTable {
         val type = struct.type
 
         val b = C_LibUtils.typeMemFuncBuilder(type)
@@ -66,7 +72,7 @@ object C_Lib_Type_Struct {
         val mFromGtv = StructFns.FromGtv(struct, false)
         val mFromGtvPretty = StructFns.FromGtv(struct, true)
 
-        val fb = C_GlobalFuncBuilder(struct.type.name)
+        val fb = C_GlobalFuncBuilder(struct.type.defName.toPath())
         C_LibUtils.addGlobalFnFromGtv(fb, "fromBytes", type, R_ByteArrayType, mFromBytes, depError("from_bytes"))
         C_LibUtils.addGlobalFnFromGtv(fb, "from_bytes", type, R_ByteArrayType, mFromBytes)
         C_LibUtils.addGlobalFnFromGtv(fb, "fromGTXValue", type, R_GtvType, mFromGtv, depError("from_gtv"))
@@ -75,17 +81,48 @@ object C_Lib_Type_Struct {
         C_LibUtils.addGlobalFnFromGtv(fb, "from_gtv_pretty", type, R_GtvType, mFromGtvPretty)
 
         val fns = fb.build()
-        return C_LibUtils.makeNs(fns)
+        return C_LibUtils.makeNs(type.defName.toPath(), fns)
     }
 
     fun toTestOp(arg: Rt_Value): Rt_TestOpValue = StructFns.toTestOp(arg)
+
+    private class C_MemberAttr_RegularStructAttr(attr: R_Attribute): C_MemberAttr_StructAttr(attr.type, attr) {
+        override fun calculator() = R_MemberCalculator_StructAttr(attr)
+
+        override fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr {
+            if (!attr.mutable) {
+                throw C_Errors.errAttrNotMutable(pos, attr.name)
+            }
+            return R_StructMemberExpr(base, attr)
+        }
+    }
+
+    private class R_MemberCalculator_StructAttr(val attr: R_Attribute): R_MemberCalculator(attr.type) {
+        override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
+            val structValue = baseValue.asStruct()
+            return structValue.get(attr.index)
+        }
+    }
 }
 
 object C_Lib_Type_VirtualStruct {
-    fun getMemberFns(type: R_VirtualStructType): C_MemberFuncTable {
-        return C_LibUtils.typeMemFuncBuilder(type)
+    fun getValueMembers(type: R_VirtualStructType): List<C_TypeValueMember> {
+        val fns = C_LibUtils.typeMemFuncBuilder(type)
             .add("to_full", type.innerType, listOf(), C_Lib_Type_Virtual.ToFull)
             .build()
+
+        val attrMembers = type.innerType.struct.attributesList.map { attr ->
+            val virtualType = S_VirtualType.virtualMemberType(attr.type)
+            val mem = C_MemberAttr_VirtualStructAttr(virtualType, attr)
+            C_TypeValueMember_BasicAttr(attr.rName, mem, attr.ideInfo)
+        }
+
+        return C_LibUtils.makeValueMembers(type, fns, attrMembers)
+    }
+
+    private class C_MemberAttr_VirtualStructAttr(type: R_Type, attr: R_Attribute): C_MemberAttr_StructAttr(type, attr) {
+        override fun calculator() = R_MemberCalculator_VirtualStructAttr(type, attr)
+        override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errAttrNotMutable(pos, attr.name)
     }
 }
 
@@ -120,7 +157,7 @@ private object StructFns {
         pure = struct.type.completeFlags().pure
     ) { ctx, a ->
         val gtv = a.asGtv()
-        Rt_Utils.wrapErr("fn:struct:from_gtv:$pretty") {
+        Rt_Utils.wrapErr({ "fn:struct:from_gtv:$pretty" }) {
             val convCtx = GtvToRtContext.make(pretty)
             val res = struct.type.gtvToRt(convCtx, gtv)
             convCtx.finish(ctx.exeCtx)

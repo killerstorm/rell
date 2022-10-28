@@ -1,31 +1,27 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.compiler.base.core.C_TypeAdapter
-import net.postchain.rell.compiler.base.core.C_TypeAdapter_Direct
-import net.postchain.rell.compiler.base.core.C_TypeAdapter_IntegerToDecimal
-import net.postchain.rell.compiler.base.core.C_TypeAdapter_Nullable
+import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
+import net.postchain.rell.compiler.base.def.C_StructGlobalFunction
+import net.postchain.rell.compiler.base.expr.C_AtTypeImplicitAttr
+import net.postchain.rell.compiler.base.expr.C_AtTypeImplicitAttr_TypeMember
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember
 import net.postchain.rell.compiler.base.fn.C_FunctionCallParameter
 import net.postchain.rell.compiler.base.fn.C_FunctionCallParameters
-import net.postchain.rell.compiler.base.namespace.C_NamespaceValue
-import net.postchain.rell.compiler.base.utils.C_GlobalFuncTable
+import net.postchain.rell.compiler.base.namespace.C_Namespace
 import net.postchain.rell.compiler.base.utils.C_LibUtils
-import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
 import net.postchain.rell.lib.type.*
 import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.LazyString
-import net.postchain.rell.utils.immMapOf
-import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.*
 import org.jooq.DataType
 import org.jooq.SQLDialect
 import org.jooq.impl.DefaultDataType
@@ -135,12 +131,46 @@ private abstract class R_TypeSqlAdapter_Primitive(
     private val name: String,
     sqlType: DataType<*>
 ): R_TypeSqlAdapter_Some(sqlType) {
-    override final fun metaName(sqlCtx: Rt_SqlContext): String = "sys:$name"
+    final override fun metaName(sqlCtx: Rt_SqlContext): String = "sys:$name"
 }
 
-abstract class R_Type(val name: String) {
-    val toTextFunction = "$name.to_text"
-    val toTextFunctionLazy = LazyString.of(toTextFunction)
+private class R_TypeAtImplicitAttrs(private val calculator: () -> List<C_AtTypeImplicitAttr>) {
+    private val byNameLazy: Map<R_Name, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.name } }
+    private val byTypeLazy: Map<R_Type, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.type } }
+    private val attrsLazy: List<C_AtTypeImplicitAttr> by lazy { calculator().toImmList() }
+
+    fun get(name: R_Name): List<C_AtTypeImplicitAttr> = byNameLazy[name] ?: immListOf()
+    fun get(type: R_Type): List<C_AtTypeImplicitAttr> = byTypeLazy[type] ?: immListOf()
+
+    private fun <K> getAtImplicitAttrs(keyGetter: (C_AtTypeImplicitAttr) -> K?): Map<K, List<C_AtTypeImplicitAttr>> {
+        return attrsLazy
+            .mapNotNull { keyGetter(it)?.let { key -> Pair<K, C_AtTypeImplicitAttr>(key, it) } }
+            .groupBy({it.first}, {it.second})
+            .mapValues { it.value.toImmList() }
+            .toImmMap()
+    }
+}
+
+private class R_TypeValueMembers(private val calculator: () -> List<C_TypeValueMember>) {
+    private val byNameLazy: Map<R_Name, List<C_TypeValueMember>> by lazy {
+        allLazy
+            .map { it.name to it }
+            .groupBy({it.first}, {it.second})
+            .mapValues { it.value.toImmList() }
+            .toImmMap()
+    }
+
+    private val allLazy: List<C_TypeValueMember> by lazy { calculator().toImmList() }
+
+    fun getAll() = allLazy
+    fun get(name: R_Name): List<C_TypeValueMember> = byNameLazy[name] ?: immListOf()
+}
+
+abstract class R_Type(
+    val name: String,
+    val defName: C_DefinitionName = C_DefinitionName(C_LibUtils.DEFAULT_MODULE_STR, name),
+) {
+    val toTextFunctionLazy = LazyString.of { "$name.to_text" }
 
     private val gtvConversion by lazy { createGtvConversion() }
     val sqlAdapter = createSqlAdapter()
@@ -202,39 +232,26 @@ abstract class R_Type(val name: String) {
 
     abstract fun toMetaGtv(): Gtv
 
-    private val constructorFunctionLazy: C_GlobalFunction? by lazy {
-        getConstructorFunction0()
-    }
-
     fun getConstructorFunction(): C_GlobalFunction? = constructorFunctionLazy
-
+    private val constructorFunctionLazy: C_GlobalFunction? by lazy { getConstructorFunction0() }
     protected open fun getConstructorFunction0(): C_GlobalFunction? = null
 
-    private val staticValuesLazy: Map<R_Name, C_NamespaceValue> by lazy {
-        getStaticValues0()
+    fun getStaticNamespace(): C_Namespace = staticNamespaceLazy
+    private val staticNamespaceLazy: C_Namespace by lazy { getStaticNamespace0() }
+    protected open fun getStaticNamespace0(): C_Namespace {
+        val fns = C_LibUtils.typeGlobalFuncBuilder(this).build()
+        return C_LibUtils.makeNs(defName.toPath(), fns)
     }
 
-    fun getStaticValues(): Map<R_Name, C_NamespaceValue> = staticValuesLazy
+    private val valueMembers = R_TypeValueMembers { getValueMembers0() }
+    fun getValueMembers(name: R_Name) = valueMembers.get(name)
+    protected open fun getValueMembers0(): List<C_TypeValueMember> = immListOf()
 
-    protected open fun getStaticValues0(): Map<R_Name, C_NamespaceValue> = immMapOf()
-
-    private val staticFunctionsLazy: C_GlobalFuncTable by lazy {
-        getStaticFunctions0()
-    }
-
-    fun getStaticFunctions(): C_GlobalFuncTable = staticFunctionsLazy
-
-    protected open fun getStaticFunctions0(): C_GlobalFuncTable {
-        return C_LibUtils.typeGlobalFuncBuilder(this).build()
-    }
-
-    private val memberFunctionsLazy: C_MemberFuncTable by lazy {
-        getMemberFunctions0()
-    }
-
-    fun getMemberFunctions(): C_MemberFuncTable = memberFunctionsLazy
-
-    protected open fun getMemberFunctions0(): C_MemberFuncTable = C_MemberFuncTable.EMPTY
+    private val atImplicitAttrs = R_TypeAtImplicitAttrs { getAtImplicitAttrs0() }
+    fun getAtImplicitAttrs(name: R_Name) = atImplicitAttrs.get(name)
+    fun getAtImplicitAttrs(type: R_Type) = atImplicitAttrs.get(type)
+    protected open fun getAtImplicitAttrs0(): List<C_AtTypeImplicitAttr> = valueMembers.getAll()
+        .mapNotNull { if (it.valueType == null) null else C_AtTypeImplicitAttr_TypeMember(it.name, it.valueType, it) }
 
     companion object {
         fun commonTypeOpt(a: R_Type, b: R_Type): R_Type? {
@@ -277,16 +294,17 @@ object R_CtErrorType: R_Type("<error>") {
     }
 }
 
-sealed class R_PrimitiveType(name: String): R_Type(name) {
+abstract class R_BasicType(name: String, defName: C_DefinitionName): R_Type(name, defName) {
     protected abstract fun getLibType(): C_Lib_Type
 
     final override fun strCode(): String = name
     final override fun toMetaGtv() = name.toGtv()
     final override fun getConstructorFunction0() = getLibType().constructorFn
-    final override fun getMemberFunctions0() = getLibType().memberFns
-    final override fun getStaticValues0() = getLibType().staticValues
-    final override fun getStaticFunctions0() = getLibType().staticFns
+    final override fun getStaticNamespace0() = getLibType().staticNs
+    final override fun getValueMembers0() = getLibType().valueMembers
 }
+
+sealed class R_PrimitiveType(name: String): R_BasicType(name, C_LibUtils.defName(name))
 
 object R_UnitType: R_PrimitiveType("unit") {
     override fun createGtvConversion() = GtvRtConversion_None
@@ -503,10 +521,10 @@ object R_NullType: R_Type("null") {
     override fun createGtvConversion() = GtvRtConversion_Null
     override fun strCode() = "null"
     override fun toMetaGtv() = "null".toGtv()
-    override fun getMemberFunctions0() = C_Lib_Type_Null.memberFns
+    override fun getValueMembers0() = C_Lib_Type_Null.valueMembers
 }
 
-class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName) {
+class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName, rEntity.cDefName) {
     override fun comparator() = Rt_Comparator.create { it.asObjectId() }
     override fun fromCli(s: String): Rt_Value = Rt_EntityValue(this, s.toLong())
     override fun strCode(): String = name
@@ -520,7 +538,7 @@ class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName
 
     override fun toMetaGtv() = rEntity.appLevelName.toGtv()
 
-    override fun getMemberFunctions0() = C_Lib_Type_Entity.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_Entity.getValueMembers(this)
 
     private class R_TypeSqlAdapter_Entity(private val type: R_EntityType): R_TypeSqlAdapter_Some(SQLDataType.BIGINT) {
         override fun toSqlValue(value: Rt_Value) = value.asObjectId()
@@ -540,7 +558,7 @@ class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName
     }
 }
 
-class R_ObjectType(val rObject: R_ObjectDefinition): R_Type(rObject.appLevelName) {
+class R_ObjectType(val rObject: R_ObjectDefinition): R_Type(rObject.appLevelName, rObject.cDefName) {
     override fun isDirectVirtualable() = false
     override fun isDirectPure() = false
     override fun equals(other: Any?): Boolean = other === this || (other is R_ObjectType && other.rObject == rObject)
@@ -548,7 +566,7 @@ class R_ObjectType(val rObject: R_ObjectDefinition): R_Type(rObject.appLevelName
     override fun createGtvConversion() = GtvRtConversion_None
     override fun strCode(): String = name
     override fun toMetaGtv() = rObject.appLevelName.toGtv()
-    override fun getMemberFunctions0() = C_Lib_Type_Object.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_Object.getMemberValues(this)
 }
 
 class R_StructType(val struct: R_Struct): R_Type(struct.name) {
@@ -563,10 +581,12 @@ class R_StructType(val struct: R_Struct): R_Type(struct.name) {
     override fun strCode(): String = name
     override fun toMetaGtv() = struct.typeMetaGtv
 
-    override fun getMemberFunctions0() = C_Lib_Type_Struct.getMemberFns(struct)
+    override fun getConstructorFunction0(): C_GlobalFunction = C_StructGlobalFunction(struct)
+    override fun getStaticNamespace0() = C_Lib_Type_Struct.getNamespace(struct)
+    override fun getValueMembers0() = C_Lib_Type_Struct.getValueMembers(struct)
 }
 
-class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName) {
+class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName, enum.cDefName) {
     override fun comparator() = Rt_Comparator.create { it.asEnum().value }
 
     override fun fromCli(s: String): Rt_Value {
@@ -583,9 +603,8 @@ class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName) {
     override fun strCode() = name
     override fun toMetaGtv() = enum.appLevelName.toGtv()
 
-    override fun getStaticValues0() = C_Lib_Type_Enum.getStaticValues(this)
-    override fun getStaticFunctions0() = C_Lib_Type_Enum.getStaticFns(this)
-    override fun getMemberFunctions0() = C_Lib_Type_Enum.getMemberFns(this)
+    override fun getStaticNamespace0() = C_Lib_Type_Enum.getStaticNs(this)
+    override fun getValueMembers0() = C_Lib_Type_Enum.getValueMembers(this)
 
     private class R_TypeSqlAdapter_Enum(private val type: R_EnumType): R_TypeSqlAdapter_Some(SQLDataType.INTEGER) {
         override fun toSqlValue(value: Rt_Value) = value.asEnum().value
@@ -705,7 +724,7 @@ class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
     override fun createGtvConversion() = GtvRtConversion_List(this)
 
     override fun getConstructorFunction0() = C_Lib_Type_List.getConstructorFn(this)
-    override fun getMemberFunctions0() = C_Lib_Type_List.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_List.getValueMembers(this)
 
     override fun comparator(): Comparator<Rt_Value>? {
         val elemComparator = elementType.comparator()
@@ -722,7 +741,7 @@ class R_SetType(elementType: R_Type): R_CollectionType(elementType, "set") {
     override fun createGtvConversion() = GtvRtConversion_Set(this)
 
     override fun getConstructorFunction0() = C_Lib_Type_Set.getConstructorFn(this)
-    override fun getMemberFunctions0() = C_Lib_Type_Set.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_Set.getValueMembers(this)
 }
 
 class R_MapKeyValueTypes(val key: R_Type, val value: R_Type)
@@ -760,7 +779,7 @@ class R_MapType(
     override fun createGtvConversion() = GtvRtConversion_Map(this)
 
     override fun getConstructorFunction0() = C_Lib_Type_Map.getConstructorFn(this)
-    override fun getMemberFunctions0() = C_Lib_Type_Map.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_Map.getValueMembers(this)
 
     override fun toMetaGtv() = mapOf(
             "type" to "map".toGtv(),
@@ -863,7 +882,8 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
             "fields" to fields.map { it.toMetaGtv() }.toGtv()
     ).toGtv()
 
-    override fun getMemberFunctions0() = C_Lib_Type_Tuple.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_Tuple.getValueMembers(this)
+    override fun getAtImplicitAttrs0() = C_Lib_Type_Tuple.getAtImplicitAttrs(this)
 
     companion object {
         private fun calcName(fields: List<R_TupleField>): String {
@@ -924,7 +944,7 @@ sealed class R_VirtualCollectionType(innerType: R_Type): R_VirtualType(innerType
 class R_VirtualListType(val innerType: R_ListType): R_VirtualCollectionType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualList(this)
     override fun elementType() = innerType.elementType
-    override fun getMemberFunctions0() = C_Lib_Type_VirtualList.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_VirtualList.getValueMembers(this)
     override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualListType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
 }
@@ -932,30 +952,30 @@ class R_VirtualListType(val innerType: R_ListType): R_VirtualCollectionType(inne
 class R_VirtualSetType(val innerType: R_SetType): R_VirtualCollectionType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualSet(this)
     override fun elementType() = innerType.elementType
-    override fun getMemberFunctions0() = C_Lib_Type_VirtualSet.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_VirtualSet.getValueMembers(this)
     override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualSetType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
 }
 
 class R_VirtualMapType(val innerType: R_MapType): R_VirtualType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualMap(this)
-    override fun getMemberFunctions0() = C_Lib_Type_VirtualMap.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_VirtualMap.getValueMembers(this)
     override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualMapType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
 }
 
 class R_VirtualTupleType(val innerType: R_TupleType): R_VirtualType(innerType) {
-    override fun createGtvConversion() = GtvRtConversion_VirtualTuple(this)
-    override fun getMemberFunctions0() = C_Lib_Type_VirtualTuple.getMemberFns(this)
     override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualTupleType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
+    override fun createGtvConversion() = GtvRtConversion_VirtualTuple(this)
+    override fun getValueMembers0() = C_Lib_Type_VirtualTuple.getValueMembers(this)
 }
 
 class R_VirtualStructType(val innerType: R_StructType): R_VirtualType(innerType) {
-    override fun createGtvConversion() = GtvRtConversion_VirtualStruct(this)
-    override fun getMemberFunctions0() = C_Lib_Type_VirtualStruct.getMemberFns(this)
     override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualStructType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
+    override fun createGtvConversion() = GtvRtConversion_VirtualStruct(this)
+    override fun getValueMembers0() = C_Lib_Type_VirtualStruct.getValueMembers(this)
 }
 
 class R_FunctionType(params: List<R_Type>, val result: R_Type): R_Type(calcName(params, result)) {
