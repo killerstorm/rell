@@ -122,8 +122,8 @@ class AtExprInTest: BaseRellTest() {
         chk("nums @* { .n in data @*{} ( .v ) } (.n)", "[3, 5, 7, 11, 17]")
         chk("nums @* { .n in data @*{} ( @group .v ) } (.n)", "[3, 5, 7, 11, 17]")
 
-        chk("nums @* { .n in data @*{} ( @min .v ) } (.n)", "ct_err:binop_operand_type:in:[integer]:[list<integer?>]")
-        chk("nums @* { .n in data @*{} ( @max .v ) } (.n)", "ct_err:binop_operand_type:in:[integer]:[list<integer?>]")
+        chk("nums @* { .n in data @*{} ( @min .v ) } (.n)", "ct_err:expr_nosql:integer?")
+        chk("nums @* { .n in data @*{} ( @max .v ) } (.n)", "ct_err:expr_nosql:integer?")
         chk("nums @* { .n in data @*{} ( @sum .v ) } (.n)", "[56]")
         chk("nums @* { .n in data @*{} ( @sum 1 ) } (.n)", "[6]")
 

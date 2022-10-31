@@ -283,6 +283,44 @@ class ExpressionTest: BaseRellTest(false) {
         chk("123 not in map<integer,text>()", "boolean[true]")
     }
 
+    @Test fun testInNullable() {
+        chk("5 in list<integer?>([5, null])", "boolean[true]")
+        chk("6 in list<integer?>([5, null])", "boolean[false]")
+        chk("null in list<integer?>([5, null])", "boolean[true]")
+        chk("null in list<integer?>([5, 6])", "boolean[false]")
+
+        chk("5 in set<integer?>([5, null])", "boolean[true]")
+        chk("6 in set<integer?>([5, null])", "boolean[false]")
+        chk("null in set<integer?>([5, null])", "boolean[true]")
+        chk("null in set<integer?>([5, 6])", "boolean[false]")
+
+        chk("5 in map<integer?,text>([5:'a', null:'b'])", "boolean[true]")
+        chk("6 in map<integer?,text>([5:'a', null:'b'])", "boolean[false]")
+        chk("null in map<integer?,text>([5:'a', null:'b'])", "boolean[true]")
+        chk("null in map<integer?,text>([5:'a', 6:'b'])", "boolean[false]")
+    }
+
+    @Test fun testInPromotion() {
+        chk("5 in list<decimal>([5.0, 7.0])", "boolean[true]")
+        chk("6 in list<decimal>([5.0, 7.0])", "boolean[false]")
+        chk("7 in list<decimal>([5.0, 7.0])", "boolean[true]")
+
+        chk("5 in set<decimal>([5.0, 7.0])", "boolean[true]")
+        chk("6 in set<decimal>([5.0, 7.0])", "boolean[false]")
+        chk("7 in set<decimal>([5.0, 7.0])", "boolean[true]")
+
+        chk("5 in map<decimal,text>([5.0:'a', 7.0:'b'])", "boolean[true]")
+        chk("6 in map<decimal,text>([5.0:'a', 7.0:'b'])", "boolean[false]")
+        chk("7 in map<decimal,text>([5.0:'a', 7.0:'b'])", "boolean[true]")
+
+        chk("5 in list<decimal?>([5.0, null])", "boolean[true]")
+        chk("7 in list<decimal?>([5.0, null])", "boolean[false]")
+        chk("5 in set<decimal?>([5.0, null])", "boolean[true]")
+        chk("7 in set<decimal?>([5.0, null])", "boolean[false]")
+        chk("5 in map<decimal?,text>([5.0:'a', null:'b'])", "boolean[true]")
+        chk("7 in map<decimal?,text>([5.0:'a', null:'b'])", "boolean[false]")
+    }
+
     @Test fun testNamespace() {
         chk("integer", "ct_err:expr_novalue:type:[integer]")
         chk("integer('123')", "int[123]")

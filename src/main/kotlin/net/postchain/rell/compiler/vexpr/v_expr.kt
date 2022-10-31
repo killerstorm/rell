@@ -128,7 +128,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
             return toDbExpr0()
         }
         val rExpr = toRExpr()
-        return C_ExprUtils.toDbExpr(pos, rExpr)
+        return C_ExprUtils.toDbExpr(exprCtx.msgCtx, pos, rExpr)
     }
 
     fun toDbExprWhat(): C_DbAtWhatValue {

@@ -196,6 +196,13 @@ sealed class C_BinOp {
                         "Wrong operand types for '$op': ${leftType.str()}, ${rightType.str()}")
             }
         }
+
+        fun errTypeMismatchDb(msgCtx: C_MessageContext, pos: S_Pos, op: String, leftType: R_Type, rightType: R_Type) {
+            if (leftType.isNotError() && rightType.isNotError()) {
+                msgCtx.error(pos, "binop_nosql:$op:[${leftType.strCode()}]:[${rightType.strCode()}]",
+                    "Operator '$op' cannot be converted to SQL with operands: ${leftType.str()}, ${rightType.str()}")
+            }
+        }
     }
 }
 
@@ -535,11 +542,13 @@ class C_BinOp_In(private val not: Boolean): C_BinOp() {
         val rightType = right.type
 
         val op = matchOp(rightType)
-        if (op == null || leftType != op.elemType) {
-            return null
-        }
+        op ?: return null
 
-        return op.compile(ctx, left, right)
+        val adapter = op.elemType.getTypeAdapter(leftType)
+        adapter ?: return null
+
+        val left2 = adapter.adaptExpr(ctx, left)
+        return op.compile(ctx, left2, right)
     }
 
     override fun compileRight(ctx: C_ExprContext, sExpr: S_Expr): V_Expr {

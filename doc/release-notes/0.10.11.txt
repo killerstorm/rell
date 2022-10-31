@@ -48,3 +48,8 @@ byte_array.reversed(): byte_array
     Returns a reversed copy of the byte array.
 
 * For repeat(n), the argument must be non-negative and less than 2^31, and the size of the resulting value must be less than 2^31.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Bug fixes
+
+- False "Wrong operand types..." compilation error on expression: T in list<T?>.

@@ -6,6 +6,7 @@ package net.postchain.rell.compiler.base.expr
 
 import net.postchain.rell.compiler.ast.C_BinOp_EqNe
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_MessageContext
 import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.fn.C_FuncCaseCtx
 import net.postchain.rell.compiler.base.utils.C_Error
@@ -28,12 +29,14 @@ object C_ExprUtils {
     val ERROR_DB_EXPR = errorDbExpr()
     val ERROR_STATEMENT = R_ExprStatement(ERROR_R_EXPR)
 
-    fun toDbExpr(errPos: S_Pos, rExpr: R_Expr): Db_Expr {
+    fun toDbExpr(msgCtx: C_MessageContext, errPos: S_Pos, rExpr: R_Expr): Db_Expr {
         val type = rExpr.type
-        if (!type.sqlAdapter.isSqlCompatible()) {
-            throw C_Errors.errExprNoDb(errPos, type)
+        return if (!type.sqlAdapter.isSqlCompatible()) {
+            C_Errors.errExprNoDb(msgCtx, errPos, type)
+            errorDbExpr()
+        } else {
+            Db_InterpretedExpr(rExpr)
         }
-        return Db_InterpretedExpr(rExpr)
     }
 
     private fun makeDbBinaryExpr(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, left: Db_Expr, right: Db_Expr): Db_Expr {

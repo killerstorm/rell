@@ -162,7 +162,7 @@ class V_ObjectAttrExpr(
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("object_attr", null)
 
     override fun toRExpr0() = createAccessExpr()
-    override fun toDbExpr0() = C_ExprUtils.toDbExpr(pos, toRExpr())
+    override fun toDbExpr0() = C_ExprUtils.toDbExpr(exprCtx.msgCtx, pos, toRExpr())
 
     override fun destination(): C_Destination {
         if (!attr.mutable) {

@@ -159,7 +159,7 @@ class V_MemberAttrExpr(
 
     override fun toDbExpr0(): Db_Expr {
         val rExpr = toRExpr()
-        return C_ExprUtils.toDbExpr(memberLink.linkPos, rExpr)
+        return C_ExprUtils.toDbExpr(exprCtx.msgCtx, memberLink.linkPos, rExpr)
     }
 
     override fun destination(): C_Destination {

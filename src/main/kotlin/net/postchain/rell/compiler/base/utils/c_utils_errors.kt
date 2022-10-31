@@ -99,14 +99,11 @@ object C_Errors {
         return C_CodeMsg("update_attr_not_mutable:$name", "Attribute '$name' is not mutable")
     }
 
-    fun errExprNoDb(pos: S_Pos, type: R_Type): C_Error {
-        val typeStr = type.strCode()
-        return C_Error.stop(pos, "expr_nosql:$typeStr", "Value of type $typeStr cannot be converted to SQL")
-    }
-
     fun errExprNoDb(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type) {
-        val typeStr = type.strCode()
-        msgCtx.error(pos, "expr_nosql:$typeStr", "Value of type $typeStr cannot be converted to SQL")
+        if (type.isNotError()) {
+            val typeStr = type.strCode()
+            msgCtx.error(pos, "expr_nosql:$typeStr", "Value of type $typeStr cannot be converted to SQL")
+        }
     }
 
     fun errExprDbNotAllowed(pos: S_Pos): C_Error {
