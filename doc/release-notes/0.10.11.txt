@@ -15,3 +15,36 @@ Method ._set() of type list<T> was deprecated (with warning) and a new method .s
 
 As keyword "sort" was removed in 0.10.10 (and word "sort" became a regular name), a new method .sort() was added to
 replace the old method ._sort() of list<T>. The old method was deprecated (with warning).
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+3. Library: new methods: "repeat", "reverse", "reversed".
+
+list<T>.repeat(n: integer): list<T>
+
+    Returns a new list, which is the old list repeated "n" times. Always creates a new list (even if n = 1).
+
+list<T>.reverse()
+
+    Reverses the list in place, returns nothing.
+
+list<T>.reversed(): list<T>
+
+    Returns a reversed copy of the list. Always creates a new list (even if the old list is empty or has one element).
+
+text.repeat(n: integer): text
+
+    Returns the text repeated "n" times. SQL-compatible.
+
+text.reversed(): text
+
+    Returns a reversed copy of the text. SQL-compatible.
+
+byte_array.repeat(n: integer): byte_array
+
+    Returns the byte array repeated "n" times.
+
+byte_array.reversed(): byte_array
+
+    Returns a reversed copy of the byte array.
+
+* For repeat(n), the argument must be non-negative and less than 2^31, and the size of the resulting value must be less than 2^31.

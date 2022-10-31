@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -40,6 +40,8 @@ object C_Lib_Type_ByteArray: C_Lib_Type("byte_array", R_ByteArrayType) {
         b.add("decode", R_TextType, listOf(), BytesFns.Decode, depError("text.from_bytes"))
         b.add("toList", R_ListType(R_IntegerType), listOf(), BytesFns.ToList, depError("to_list"))
         b.add("to_list", R_ListType(R_IntegerType), listOf(), BytesFns.ToList)
+        b.add("repeat", R_ByteArrayType, listOf(R_IntegerType), BytesFns.Repeat)
+        b.add("reversed", R_ByteArrayType, listOf(), BytesFns.Reversed)
         b.add("sub", R_ByteArrayType, listOf(R_IntegerType), BytesFns.Sub_2)
         b.add("sub", R_ByteArrayType, listOf(R_IntegerType, R_IntegerType), BytesFns.Sub_3)
         b.add("to_hex", R_TextType, listOf(), BytesFns.ToHex)
@@ -145,6 +147,26 @@ private object BytesFns {
             r[i] = b.toByte()
         }
         Rt_ByteArrayValue(r)
+    }
+
+    val Repeat = C_SysFunction.simple2(pure = true) { a, b ->
+        val bs = a.asByteArray()
+        val n = b.asInteger()
+        val s = bs.size
+        val total = C_Lib_Type_List.rtCheckRepeatArgs(s, n, "byte_array")
+        if (bs.isEmpty() || n == 1L) a else {
+            val res = ByteArray(total) { bs[it % s] }
+            Rt_ByteArrayValue(res)
+        }
+    }
+
+    val Reversed = C_SysFunction.simple1(pure = true) { a ->
+        val bs = a.asByteArray()
+        if (bs.size <= 1) a else {
+            val n = bs.size
+            val res = ByteArray(n) { bs[n - 1 - it] }
+            Rt_ByteArrayValue(res)
+        }
     }
 
     val Subscript_Db = Db_SysFunction.template("byte_array.[]", 2, "GET_BYTE(#0, (#1)::INT)")

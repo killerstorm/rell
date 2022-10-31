@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -65,6 +65,8 @@ object C_Lib_Type_Text: C_Lib_Type("text", R_TextType) {
         b.add("last_index_of", R_IntegerType, listOf(R_TextType), TextFns.LastIndexOf_2)
         b.add("lastIndexOf", R_IntegerType, listOf(R_TextType, R_IntegerType), TextFns.LastIndexOf_3, depError("last_index_of"))
         b.add("last_index_of", R_IntegerType, listOf(R_TextType, R_IntegerType), TextFns.LastIndexOf_3)
+        b.add("repeat", R_TextType, listOf(R_IntegerType), TextFns.Repeat)
+        b.add("reversed", R_TextType, listOf(), TextFns.Reversed)
         b.add("sub", R_TextType, listOf(R_IntegerType), TextFns.Sub_2)
         b.add("sub", R_TextType, listOf(R_IntegerType, R_IntegerType), TextFns.Sub_3)
         b.add("to_bytes", R_ByteArrayType, listOf(), TextFns.ToBytes)
@@ -180,6 +182,19 @@ private object TextFns {
         Rt_IntValue(s1.lastIndexOf(s2, start.toInt()).toLong())
     }
 
+    val Repeat = C_SysFunction.simple2(
+        Db_SysFunction.template("text.repeat", 2, "${SqlConstants.FN_TEXT_REPEAT}(#0, (#1)::INT)"),
+        pure = true
+    ) { a, b ->
+        val s = a.asString()
+        val n = b.asInteger()
+        C_Lib_Type_List.rtCheckRepeatArgs(s.length, n, "text")
+        if (s.isEmpty() || n == 1L) a else {
+            val res = s.repeat(n.toInt())
+            Rt_TextValue(res)
+        }
+    }
+
     val Replace = C_SysFunction.simple3(
         Db_SysFunction.template("text.replace", 3, "REPLACE(#0, #1, #2)"),
         pure = true
@@ -188,6 +203,17 @@ private object TextFns {
         val s2 = b.asString()
         val s3 = c.asString()
         Rt_TextValue(s1.replace(s2, s3))
+    }
+
+    val Reversed = C_SysFunction.simple1(
+        Db_SysFunction.template("text.reversed", 1, "REVERSE(#0)"),
+        pure = true
+    ) { a ->
+        val s = a.asString()
+        if (s.length <= 1) a else {
+            val res = s.reversed()
+            Rt_TextValue(res)
+        }
     }
 
     private val SPLIT_TYPE = R_ListType(R_TextType)

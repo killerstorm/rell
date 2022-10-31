@@ -152,4 +152,34 @@ class LibByteArrayTest: BaseRellTest(false) {
         chkEx("{ val l = list<integer>(); for (x in x'05000F80') l.add(x); return l; }",
                 "list<integer>[int[5],int[0],int[15],int[128]]")
     }
+
+    @Test fun testRepeat() {
+        chk("_type_of(x'123456'.repeat(3))", "text[byte_array]")
+
+        chk("x'123456'.repeat(0)", "byte_array[]")
+        chk("x'123456'.repeat(1)", "byte_array[123456]")
+        chk("x'123456'.repeat(2)", "byte_array[123456123456]")
+        chk("x'123456'.repeat(3)", "byte_array[123456123456123456]")
+        chk("x'123456'.repeat(4)", "byte_array[123456123456123456123456]")
+        chk("x'123456'.repeat(5)", "byte_array[123456123456123456123456123456]")
+
+        chk("x''.repeat(3)", "byte_array[]")
+        chk("x'12'.repeat(3)", "byte_array[121212]")
+        chk("x'1234'.repeat(3)", "byte_array[123412341234]")
+
+        chk("x'123456'.repeat(-1)", "rt_err:fn:byte_array.repeat:n_negative:-1")
+        chk("x'123456'.repeat(-1234567890123456)", "rt_err:fn:byte_array.repeat:n_negative:-1234567890123456")
+        chk("x'123456'.repeat(0x80000000)", "rt_err:fn:byte_array.repeat:n_out_of_range:2147483648")
+        chk("x'123456'.repeat(0x7FFFFFFF)", "rt_err:fn:byte_array.repeat:too_big:6442450941")
+    }
+
+    @Test fun testReversed() {
+        chk("_type_of(x'123456'.reversed())", "text[byte_array]")
+        chk("x''.reversed()", "byte_array[]")
+        chk("x'12'.reversed()", "byte_array[12]")
+        chk("x'1234'.reversed()", "byte_array[3412]")
+        chk("x'123456'.reversed()", "byte_array[563412]")
+        chk("x'12345678'.reversed()", "byte_array[78563412]")
+        chk("x'123456789a'.reversed()", "byte_array[9a78563412]")
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -284,5 +284,59 @@ class LibListTest: BaseRellTest(false) {
         chkWarn()
         chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l._sort(); return l; }", "[1, 2, 3, 4, 5]")
         chkWarn("deprecated:FUNCTION:list<integer>._sort:sort")
+    }
+
+    @Test fun testRepeat() {
+        tst.strictToString = false
+
+        chk("_type_of([1,2,3].repeat(3))", "list<integer>")
+        chk("[1,2,3].repeat(0)", "[]")
+        chk("[1,2,3].repeat(1)", "[1, 2, 3]")
+        chk("[1,2,3].repeat(2)", "[1, 2, 3, 1, 2, 3]")
+        chk("[1,2,3].repeat(3)", "[1, 2, 3, 1, 2, 3, 1, 2, 3]")
+        chk("[1,2,3].repeat(4)", "[1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]")
+        chk("[1,2,3].repeat(5)", "[1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]")
+
+        chk("list<integer>().repeat(3)", "[]")
+        chk("[1].repeat(3)", "[1, 1, 1]")
+        chk("[1, 2].repeat(3)", "[1, 2, 1, 2, 1, 2]")
+
+        chk("[1, 2, 3].repeat(-1)", "rt_err:fn:list.repeat:n_negative:-1")
+        chk("[1, 2, 3].repeat(-1234567890123456)", "rt_err:fn:list.repeat:n_negative:-1234567890123456")
+        chk("[1, 2, 3].repeat(0x80000000)", "rt_err:fn:list.repeat:n_out_of_range:2147483648")
+        chk("[1, 2, 3].repeat(0x7FFFFFFF)", "rt_err:fn:list.repeat:too_big:6442450941")
+
+        chkEx("{ val l = list<integer>(); val r = l.repeat(5); r.add(7); return (l, r); }", "([],[7])")
+        chkEx("{ val l = [1, 2, 3]; val r = l.repeat(1); r.add(7); return (l, r); }", "([1, 2, 3],[1, 2, 3, 7])")
+        chkEx("{ val l = [1, 2, 3]; val r1 = l.repeat(0); val r2 = l.repeat(0); r2.add(7); return (l, r1, r2); }", "([1, 2, 3],[],[7])")
+    }
+
+    @Test fun testReverse() {
+        tst.strictToString = false
+        chk("_type_of([1,2,3].reverse())", "unit")
+        chk("[1, 2, 3].reverse()", "ct_err:query_exprtype_unit")
+
+        chkEx("{ val l = list<integer>(); l.reverse(); return l; }", "[]")
+        chkEx("{ val l = [1]; l.reverse(); return l; }", "[1]")
+        chkEx("{ val l = [1, 2]; l.reverse(); return l; }", "[2, 1]")
+        chkEx("{ val l = [1, 2, 3]; l.reverse(); return l; }", "[3, 2, 1]")
+        chkEx("{ val l = [1, 2, 3, 4]; l.reverse(); return l; }", "[4, 3, 2, 1]")
+        chkEx("{ val l = [1, 2, 3, 4, 5]; l.reverse(); return l; }", "[5, 4, 3, 2, 1]")
+    }
+
+    @Test fun testReversed() {
+        tst.strictToString = false
+        chk("_type_of([1,2,3].reversed())", "list<integer>")
+
+        chk("list<integer>().reversed()", "[]")
+        chk("[1].reversed()", "[1]")
+        chk("[1, 2].reversed()", "[2, 1]")
+        chk("[1, 2, 3].reversed()", "[3, 2, 1]")
+        chk("[1, 2, 3, 4].reversed()", "[4, 3, 2, 1]")
+        chk("[1, 2, 3, 4, 5].reversed()", "[5, 4, 3, 2, 1]")
+
+        chkEx("{ val l = list<integer>(); val r = l.reversed(); r.add(7); return (l, r); }", "([],[7])")
+        chkEx("{ val l = [1]; val r = l.reversed(); r.add(7); return (l, r); }", "([1],[1, 7])")
+        chkEx("{ val l = [1, 2, 3]; val r = l.reversed(); r.add(7); return (l, r); }", "([1, 2, 3],[3, 2, 1, 7])")
     }
 }

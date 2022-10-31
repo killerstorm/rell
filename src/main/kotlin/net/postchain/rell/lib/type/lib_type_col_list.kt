@@ -4,6 +4,7 @@
 
 package net.postchain.rell.lib.type
 
+import com.google.common.math.LongMath
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
 import net.postchain.rell.compiler.base.core.C_NamespaceContext
@@ -73,11 +74,29 @@ object C_Lib_Type_List {
             b.add("_sort", R_UnitType, listOf(), fn, depWarn("sort"))
         }
 
+        b.add("repeat", listType, listOf(R_IntegerType), ListFns.Repeat)
+        b.add("reverse", R_UnitType, listOf(), ListFns.Reverse)
+        b.add("reversed", listType, listOf(), ListFns.Reversed)
+
         return b.build()
     }
 
     fun bind(b: C_SysNsProtoBuilder) {
         b.addType(TYPE_NAME, C_GenericType_List)
+    }
+
+    fun rtCheckRepeatArgs(s: Int, n: Long, type: String): Int {
+        return if (n < 0) {
+            throw Rt_Error("fn:$type.repeat:n_negative:$n", "Negative count: $n")
+        } else if (n > Integer.MAX_VALUE) {
+            throw Rt_Error("fn:$type.repeat:n_out_of_range:$n", "Count out of range: $n")
+        } else {
+            val total = LongMath.checkedMultiply(s.toLong(), n) // Must never fail, but using checkedMultiply() for extra safety
+            if (total > Integer.MAX_VALUE) {
+                throw Rt_Error("fn:$type.repeat:too_big:$total", "Resulting size is too large: $s * $n = $total")
+            }
+            total.toInt()
+        }
     }
 }
 
@@ -184,6 +203,36 @@ private object ListFns {
 
         val r = list.set(i.toInt(), c)
         r
+    }
+
+    val Repeat = C_SysFunction.simple2 { a, b ->
+        val list = a.asList()
+        val listType = a.type()
+        val n = b.asInteger()
+
+        val total = C_Lib_Type_List.rtCheckRepeatArgs(list.size, n, "list")
+
+        val resList: MutableList<Rt_Value> = ArrayList(total)
+        if (n > 0 && list.isNotEmpty()) {
+            for (i in 0 until n) {
+                resList.addAll(list)
+            }
+        }
+
+        Rt_ListValue(listType, resList)
+    }
+
+    val Reverse = C_SysFunction.simple1 { a ->
+        val list = a.asList()
+        list.reverse()
+        Rt_UnitValue
+    }
+
+    val Reversed = C_SysFunction.simple1 { a ->
+        val list = a.asList()
+        val resList = list.toMutableList()
+        resList.reverse()
+        Rt_ListValue(a.type(), resList)
     }
 
     fun Sort(comparator: Comparator<Rt_Value>) = C_SysFunction.simple1 { a ->

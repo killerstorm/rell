@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -135,10 +135,40 @@ class LibTextTest: BaseRellTest(false) {
         chk("'Hello World'.sub(0, 11)", "text[Hello World]")
     }
 
+    @Test fun testRepeat() {
+        chk("_type_of('abc'.repeat(3))", "text[text]")
+
+        chk("'abc'.repeat(0)", "text[]")
+        chk("'abc'.repeat(1)", "text[abc]")
+        chk("'abc'.repeat(2)", "text[abcabc]")
+        chk("'abc'.repeat(3)", "text[abcabcabc]")
+        chk("'abc'.repeat(4)", "text[abcabcabcabc]")
+        chk("'abc'.repeat(5)", "text[abcabcabcabcabc]")
+
+        chk("''.repeat(3)", "text[]")
+        chk("'a'.repeat(3)", "text[aaa]")
+        chk("'ab'.repeat(3)", "text[ababab]")
+
+        chk("'abc'.repeat(-1)", "rt_err:fn:text.repeat:n_negative:-1")
+        chk("'abc'.repeat(-1234567890123456)", "rt_err:fn:text.repeat:n_negative:-1234567890123456")
+        chk("'abc'.repeat(0x80000000)", "rt_err:fn:text.repeat:n_out_of_range:2147483648")
+        chk("'abc'.repeat(0x7FFFFFFF)", "rt_err:fn:text.repeat:too_big:6442450941")
+    }
+
     @Test fun testReplace() {
         chk("'Hello World'.replace('Hello', 'Bye')", "text[Bye World]")
         chk("'Hello World'.replace('o', '0')", "text[Hell0 W0rld]")
         chk("'Hello World'.replace('Bye', 'Tschus')", "text[Hello World]")
+    }
+
+    @Test fun testReversed() {
+        chk("_type_of('abc'.reversed())", "text[text]")
+        chk("''.reversed()", "text[]")
+        chk("'a'.reversed()", "text[a]")
+        chk("'ab'.reversed()", "text[ba]")
+        chk("'abc'.reversed()", "text[cba]")
+        chk("'abcd'.reversed()", "text[dcba]")
+        chk("'abcde'.reversed()", "text[edcba]")
     }
 
     @Test fun testUpperCase() {
