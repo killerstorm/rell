@@ -100,7 +100,7 @@ class LibMapTest: BaseRellTest(false) {
         chk("['Bob':123,'Alice':456].get('Trudy')", "rt_err:fn:map.get:novalue:text[Trudy]")
     }
 
-    @Test fun testSubscriptGet() {
+    @Test fun testGetSubscript() {
         chk("['Bob':123]['Bob']", "int[123]")
         chk("['Bob':123][123]", "ct_err:expr_subscript_keytype:[text]:[integer]")
         chk("['Bob':123]['Alice']", "rt_err:fn_map_get_novalue:text[Alice]")
@@ -117,6 +117,37 @@ class LibMapTest: BaseRellTest(false) {
 
         chkEx("{ val m: map<text,integer>? = if (1>0) ['Bob':123] else null; return m['Bob']; }", "ct_err:expr_subscript_null")
         chkEx("{ val m: map<text,integer>? = if (1>0) ['Bob':123] else null; return m!!['Bob']; }", "int[123]")
+    }
+
+    @Test fun testGetOrNull() {
+        chk("_type_of(map<text,integer>().get_or_null('a'))", "text[integer?]")
+        chk("_type_of(map<text,integer?>().get_or_null('a'))", "text[integer?]")
+        chk("map<text,integer>().get_or_null('Bob')", "null")
+        chk("map<text,integer>().get_or_null(123)", "ct_err:expr_call_argtypes:[map<text,integer>.get_or_null]:integer")
+        chk("['Bob':123].get_or_null('Bob')", "int[123]")
+        chk("['Bob':123].get_or_null('Alice')", "null")
+        chk("['Bob':123,'Alice':456].get_or_null('Bob')", "int[123]")
+        chk("['Bob':123,'Alice':456].get_or_null('Alice')", "int[456]")
+        chk("['Bob':123,'Alice':456].get_or_null('Trudy')", "null")
+        chk("['Bob':null].get_or_null('Bob')", "null")
+        chk("['Bob':null].get_or_null('Alice')", "null")
+    }
+
+    @Test fun testGetOrDefault() {
+        chk("_type_of(map<text,integer>().get_or_default('a',123))", "text[integer]")
+        chk("_type_of(map<text,integer>().get_or_default('a',_nullable(123)))", "text[integer?]")
+        chk("_type_of(map<text,integer>().get_or_default('a',null))", "text[integer?]")
+
+        chk("['a':123].get_or_default('a',456)", "int[123]")
+        chk("['a':123].get_or_default('b',456)", "int[456]")
+        chk("['a':123].get_or_default('a',null)", "int[123]")
+        chk("['a':123].get_or_default('b',null)", "null")
+
+        chk("['a':123].get_or_default('a',45.67)", "ct_err:expr_call_argtypes:[map<text,integer>.get_or_default]:text,decimal")
+        chk("['a':12.34].get_or_default('a',567)", "ct_err:expr_call_argtypes:[map<text,decimal>.get_or_default]:text,integer")
+
+        chk("[123:'a'].get_or_default(45.67,'b')", "ct_err:expr_call_argtypes:[map<integer,text>.get_or_default]:decimal,text")
+        chk("[12.34:'a'].get_or_default(567,'b')", "text[b]")
     }
 
     @Test fun testEquals() {
@@ -202,6 +233,20 @@ class LibMapTest: BaseRellTest(false) {
                 "rt_err:fn:map.remove:novalue:text[Trudy]")
         chkEx("{ val x = ['Bob':123,'Alice':456]; val r = x.remove(123); return 0; }",
                 "ct_err:expr_call_argtypes:[map<text,integer>.remove]:integer")
+    }
+
+    @Test fun testRemoveOrNull() {
+        tst.strictToString = false
+        chk("_type_of(['Bob':123].remove_or_null('Bob'))", "integer?")
+        chkEx("{ val x = ['Bob':123,'Alice':456]; val r = x.remove_or_null('Bob'); return ''+r+ ' ' + x; }", "123 {Alice=456}")
+        chkEx("{ val x = ['Bob':123,'Alice':456]; val r = x.remove_or_null('Alice'); return ''+r+ ' ' + x; }", "456 {Bob=123}")
+        chkEx("{ val x = ['Bob':123,'Alice':456]; val r = x.remove_or_null('Trudy'); return ''+r+ ' ' + x; }", "null {Bob=123, Alice=456}")
+        chkEx("{ val x = ['Bob':123,'Alice':456]; val r = x.remove_or_null(123); return 0; }",
+            "ct_err:expr_call_argtypes:[map<text,integer>.remove_or_null]:integer")
+
+        chk("_type_of(['Bob':123,'Alice':null].remove_or_null('Bob'))", "integer?")
+        chkEx("{ val x = ['Bob':123,'Alice':null]; val r = x.remove_or_null('Bob'); return ''+r+ ' ' + x; }", "123 {Alice=null}")
+        chkEx("{ val x = ['Bob':123,'Alice':null]; val r = x.remove_or_null('Alice'); return ''+r+ ' ' + x; }", "null {Bob=123}")
     }
 
     @Test fun testKeys() {

@@ -24,6 +24,7 @@ import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_IteratorCopyMapConstructorExpr
 import net.postchain.rell.compiler.vexpr.V_MapCopyMapConstructorExpr
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.R_TypeAdapter
 import net.postchain.rell.runtime.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
@@ -52,26 +53,67 @@ object C_Lib_Type_Map {
         val valueType = mapType.valueType
         val keySetType = R_SetType(keyType)
         val valueListType = R_ListType(valueType)
-        return C_LibUtils.typeMemFuncBuilder(mapType)
-            .add("str", R_TextType, listOf(), AnyFns.ToText_NoDb)
-            .add("to_text", R_TextType, listOf(), AnyFns.ToText_NoDb)
-            .add("empty", R_BooleanType, listOf(), MapFns.Empty)
-            .add("size", R_IntegerType, listOf(), MapFns.Size)
-            .add("len", R_IntegerType, listOf(), MapFns.Size, depError("size"))
-            .add("get", valueType, listOf(keyType), MapFns.Get)
-            .add("contains", R_BooleanType, listOf(keyType), MapFns.Contains)
-            .add("clear", R_UnitType, listOf(), MapFns.Clear)
-            .add("put", R_UnitType, listOf(keyType, valueType), MapFns.Put)
-            .addEx("putAll", R_UnitType, listOf(matcherMapSub(keyType, valueType)), MapFns.PutAll, depError("put_all"))
-            .addEx("put_all", R_UnitType, listOf(matcherMapSub(keyType, valueType)), MapFns.PutAll)
-            .add("remove", valueType, listOf(keyType), MapFns.Remove)
-            .add("keys", keySetType, listOf(), MapFns.Keys(keySetType))
-            .add("values", valueListType, listOf(), MapFns.Values(valueListType))
-            .build()
+
+        val b = C_LibUtils.typeMemFuncBuilder(mapType)
+        getCommonMemberFns(b, mapType, keySetType, valueListType)
+
+        b.add("clear", R_UnitType, listOf(), MapFns.Clear)
+        b.add("put", R_UnitType, listOf(keyType, valueType), MapFns.Put)
+        b.addEx("putAll", R_UnitType, listOf(matcherMapSub(keyType, valueType)), MapFns.PutAll, depError("put_all"))
+        b.addEx("put_all", R_UnitType, listOf(matcherMapSub(keyType, valueType)), MapFns.PutAll)
+        b.add("remove", valueType, listOf(keyType), MapFns.Remove)
+        b.add("remove_or_null", C_Types.toNullable(valueType), listOf(keyType), MapFns.RemoveOrNull)
+
+        return b.build()
+    }
+
+    fun getCommonMemberFns(b: C_MemberFuncBuilder, mapType: R_MapType, keySetType: R_Type, valueListType: R_Type) {
+        val keyType = mapType.keyType
+        val valueType = mapType.valueType
+        b.add("str", R_TextType, listOf(), AnyFns.ToText_NoDb)
+        b.add("to_text", R_TextType, listOf(), AnyFns.ToText_NoDb)
+        b.add("empty", R_BooleanType, listOf(), MapFns.Empty)
+        b.add("size", R_IntegerType, listOf(), MapFns.Size)
+        b.add("len", R_IntegerType, listOf(), MapFns.Size, depError("size"))
+        b.add("get", valueType, listOf(keyType), MapFns.Get)
+        b.add("get_or_null", C_Types.toNullable(valueType), listOf(keyType), MapFns.GetOrNull)
+        b.add("get_or_default", C_SysFn_Map_GetOrDefault(mapType))
+        b.add("contains", R_BooleanType, listOf(keyType), MapFns.Contains)
+        b.add("keys", keySetType, listOf(), MapFns.Keys(keySetType))
+        b.add("values", valueListType, listOf(), MapFns.Values(valueListType))
     }
 
     fun bind(b: C_SysNsProtoBuilder) {
         b.addType(TYPE_NAME, C_GenericType_Map)
+    }
+
+    private class C_SysFn_Map_GetOrDefault(private val mapType: R_MapType): C_MemberSpecialFuncCase() {
+        override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_MemberFuncCaseMatch? {
+            if (args.size != 2) {
+                return null
+            }
+
+            val keyAdapter = mapType.keyType.getTypeAdapter(args[0].type)
+            keyAdapter ?: return null
+
+            val defType = args[1].type
+            val resType = C_Types.commonTypeOpt(defType, mapType.valueType)
+            resType ?: return null
+
+            val rKeyAdapter = keyAdapter.toRAdapter()
+
+            val body = C_SysMemberFormalParamsFuncBody(resType, makeFn(rKeyAdapter))
+            return C_FormalParamsFuncCaseMatch(body, args)
+        }
+
+        private fun makeFn(rKeyAdapter: R_TypeAdapter) = C_SysFunction.simple { args ->
+            checkEquals(args.size, 3)
+            val m = args[0].asMap()
+            val k = rKeyAdapter.adaptValue(args[1])
+            val v = args[2]
+            val res = m[k] ?: v
+            res
+        }
     }
 }
 
@@ -229,17 +271,13 @@ object C_Lib_Type_VirtualMap {
         val valueType = mapType.valueType
         val keySetType = R_SetType(keyType)
         val valueListType = R_ListType(S_VirtualType.virtualMemberType(valueType))
-        val fns = C_LibUtils.typeMemFuncBuilder(type)
-            .add("str", R_TextType, listOf(), AnyFns.ToText_NoDb)
-            .add("to_text", R_TextType, listOf(), AnyFns.ToText_NoDb)
-            .add("empty", R_BooleanType, listOf(), MapFns.Empty)
-            .add("size", R_IntegerType, listOf(), MapFns.Size)
-            .add("get", valueType, listOf(keyType), MapFns.Get)
-            .add("contains", R_BooleanType, listOf(keyType), MapFns.Contains)
-            .add("keys", keySetType, listOf(), MapFns.Keys(keySetType))
-            .add("values", valueListType, listOf(), MapFns.Values(valueListType))
-            .add("to_full", mapType, listOf(), C_Lib_Type_Virtual.ToFull)
-            .build()
+
+        val b = C_LibUtils.typeMemFuncBuilder(type)
+        C_Lib_Type_Map.getCommonMemberFns(b, mapType, keySetType, valueListType)
+        b.add("to_full", mapType, listOf(), C_Lib_Type_Virtual.ToFull)
+
+        val fns = b.build()
+
         return C_LibUtils.makeValueMembers(type, fns)
     }
 }
@@ -257,11 +295,14 @@ private object MapFns {
 
     val Get = C_SysFunction.simple2(pure = true) { a, b ->
         val map = a.asMap()
+        val v = map[b]
+        v ?: throw Rt_Error("fn:map.get:novalue:${b.strCode()}", "Key not in map: ${b.str()}")
+    }
+
+    val GetOrNull = C_SysFunction.simple2(pure = true) { a, b ->
+        val map = a.asMap()
         val r = map[b]
-        if (r == null) {
-            throw Rt_Error("fn:map.get:novalue:${b.strCode()}", "Key not in map: ${b.str()}")
-        }
-        r
+        r ?: Rt_NullValue
     }
 
     val Contains = C_SysFunction.simple2(pure = true) { a, b ->
@@ -291,10 +332,13 @@ private object MapFns {
     val Remove = C_SysFunction.simple2 { a, b ->
         val map = a.asMutableMap()
         val v = map.remove(b)
-        if (v == null) {
-            throw Rt_Error("fn:map.remove:novalue:${b.strCode()}", "Key not in map: ${b.str()}")
-        }
-        v
+        v ?: throw Rt_Error("fn:map.remove:novalue:${b.strCode()}", "Key not in map: ${b.str()}")
+    }
+
+    val RemoveOrNull = C_SysFunction.simple2 { a, b ->
+        val map = a.asMutableMap()
+        val v = map.remove(b)
+        v ?: Rt_NullValue
     }
 
     fun Keys(type: R_Type) = C_SysFunction.simple1(pure = true) { a ->

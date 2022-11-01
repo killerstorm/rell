@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.core
@@ -202,7 +202,7 @@ object C_Types {
     }
 
     fun toNullable(type: R_Type): R_Type {
-        return if (type is R_NullableType || type.isError()) type else R_NullableType(type)
+        return if (type is R_NullableType || type == R_NullType || type.isError()) type else R_NullableType(type)
     }
 
     fun removeNullable(type: R_Type): R_Type {

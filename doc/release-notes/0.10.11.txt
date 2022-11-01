@@ -17,7 +17,7 @@ As keyword "sort" was removed in 0.10.10 (and word "sort" became a regular name)
 replace the old method ._sort() of list<T>. The old method was deprecated (with warning).
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-3. Library: new methods: "repeat", "reverse", "reversed".
+3. Library: new functions: "repeat", "reverse", "reversed".
 
 list<T>.repeat(n: integer): list<T>
 
@@ -47,9 +47,28 @@ byte_array.reversed(): byte_array
 
     Returns a reversed copy of the byte array.
 
-* For repeat(n), the argument must be non-negative and less than 2^31, and the size of the resulting value must be less than 2^31.
+* For repeat(n), the argument must be non-negative and less than 2^31, and the size of the resulting value must be less
+  than 2^31.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-4. Bug fixes
+4. Library: new functions of type "map": get_or_null(), get_or_default(), remove_or_null()
+
+map<K, V>.get_or_null(key: K): V?
+
+    Returns null if the key is not in the map, otherwise returns the associated value. Unlike .get(K), which throws an
+    exception in such case.
+
+map<K, V>.get_or_default(key: K, default_value: V2): V2
+
+    Returns a default value if the key is not in the map, otherwise returns the associated value.
+    The type of the default value can be a supertype of "V". For instance, the default value can be "V?" or "null",
+    even if "V" is not nullable.
+
+map<K, V>.remove_or_null(key: K): V?
+
+    Removes the specified key from the map. Returns null if the key is not in the map.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+5. Bug fixes
 
 - False "Wrong operand types..." compilation error on expression: T in list<T?>.
