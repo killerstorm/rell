@@ -432,13 +432,13 @@ class AtExprComplexWhatTest: BaseRellTest() {
         initData()
         def("struct s { name; }")
         def("function f(c: city) = s(c.name);")
-        chk("city @* {} ( f($).name )", "ct_err:expr_sqlnotallowed") //TODO support
+        chk("city @* {} ( f($).name )", "list<text>[text[Berlin],text[Paris],text[Madrid]]")
     }
 
     @Test fun testMemberValueTupleAttr() {
         initData()
         def("function f(c: city) = (name = c.name);")
-        chk("city @* {} ( f($).name )", "ct_err:expr_sqlnotallowed") //TODO support
+        chk("city @* {} ( f($).name )", "list<text>[text[Berlin],text[Paris],text[Madrid]]")
     }
 
     private fun chkSel(what: String, type: String, vararg values: String) {

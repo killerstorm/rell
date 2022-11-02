@@ -325,10 +325,10 @@ class ObjectTest: BaseRellTest() {
         chkOp("foo.x *= 55;")
         chkData("foo(0,4565,250)")
 
-        chkOp("foo.y = 10;", "ct_err:update_attr_not_mutable:y")
+        chkOp("foo.y = 10;", "ct_err:attr_not_mutable:y")
         chkData("foo(0,4565,250)")
 
-        chkOp("foo.y += 10;", "ct_err:update_attr_not_mutable:y")
+        chkOp("foo.y += 10;", "ct_err:attr_not_mutable:y")
         chkData("foo(0,4565,250)")
 
         chkEx("{ foo.x = 50; return 0; }", "ct_err:no_db_update:query")

@@ -20,6 +20,7 @@ import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.immSetOf
+import net.postchain.rell.utils.toImmList
 
 abstract class C_Lib_Type(
     nameStr: String,
@@ -49,9 +50,13 @@ abstract class C_Lib_Type(
     }
 
     val valueMembers: List<C_TypeValueMember> by lazy {
-        val b = C_LibUtils.typeMemFuncBuilder(type, default = defaultMemberFns)
-        bindMemberFunctions(b)
-        C_LibUtils.makeValueMembers(type, b.build())
+        val vb = mutableListOf<C_TypeValueMember>()
+        bindMemberValues(vb)
+
+        val fb = C_LibUtils.typeMemFuncBuilder(type, default = defaultMemberFns)
+        bindMemberFunctions(fb)
+
+        C_LibUtils.makeValueMembers(type, fb.build(), vb.toImmList())
     }
 
     protected open fun bindConstructors(b: C_GlobalFuncBuilder) {
@@ -62,6 +67,9 @@ abstract class C_Lib_Type(
     }
 
     protected open fun bindStaticFunctions(b: C_GlobalFuncBuilder) {
+    }
+
+    protected open fun bindMemberValues(b: MutableList<C_TypeValueMember>) {
     }
 
     protected open fun bindMemberFunctions(b: C_MemberFuncBuilder) {

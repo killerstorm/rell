@@ -152,7 +152,7 @@ class EnumTest: BaseRellTest() {
         chk("foo.value(foo.A)", "ct_err:expr_call_argtypes:[foo.value]:foo")
     }
 
-    @Test fun testMemberFunctions() {
+    @Test fun testMemberProperties() {
         def("enum foo { A, B, C }")
 
         chk("foo.A.name", "text[A]")
@@ -162,9 +162,14 @@ class EnumTest: BaseRellTest() {
         chk("foo.A.value", "int[0]")
         chk("foo.B.value", "int[1]")
         chk("foo.C.value", "int[2]")
+
+        chkEx("{ foo.A.name = 'X'; return 0; }", "ct_err:attr_not_mutable:name")
+        chkEx("{ foo.A.value = 123; return 0; }", "ct_err:attr_not_mutable:value")
+        chkEx("{ val v = foo.A; v.name = 'X'; return 0; }", "ct_err:attr_not_mutable:name")
+        chkEx("{ val v = foo.A; v.value = 123; return 0; }", "ct_err:attr_not_mutable:value")
     }
 
-    @Test fun testMemberFunctionsAt() {
+    @Test fun testMemberPropertiesAt() {
         def("enum foo { A, B, C }")
         def("entity user { name; foo; }")
         insert("c0.user", "name,foo", "1,'Bob',0")

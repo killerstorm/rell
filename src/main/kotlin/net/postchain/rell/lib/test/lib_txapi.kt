@@ -12,10 +12,7 @@ import net.postchain.rell.compiler.base.core.C_DefinitionName
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_List
 import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_MirrorStructOperation
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
-import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
-import net.postchain.rell.compiler.base.utils.C_LibUtils
-import net.postchain.rell.compiler.base.utils.C_MemberFuncBuilder
-import net.postchain.rell.compiler.base.utils.C_StringQualifiedName
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.lib.type.C_Lib_Type
 import net.postchain.rell.lib.type.C_Lib_Type_Struct
 import net.postchain.rell.model.*
@@ -201,13 +198,13 @@ private class TxCommonFunctions(private val txGetter: (ctx: Rt_CallContext, self
 
     private fun privKeyToKeyPair(priv: ByteArray): BytesKeyPair {
         val privSize = 32
-        Rt_Utils.check(priv.size == privSize) { "tx.sign:priv_key_size:$privSize:${priv.size}" to
+        Rt_Utils.check(priv.size == privSize) { "tx.sign:priv_key_size:$privSize:${priv.size}" toCodeMsg
                 "Wrong size of private key: ${priv.size} instead of $privSize"
         }
 
         val pub = secp256k1_derivePubKey(priv)
         val pubSize = 33
-        Rt_Utils.check(pub.size == pubSize) { "tx.sign:pub_key_size:$pubSize:${pub.size}" to
+        Rt_Utils.check(pub.size == pubSize) { "tx.sign:pub_key_size:$pubSize:${pub.size}" toCodeMsg
                 "Wrong size of calculated public key: ${pub.size} instead of $pubSize"
         }
 
@@ -482,7 +479,7 @@ private object C_Lib_Type_Op: C_Lib_Type(C_Lib_Test.OP_SNAME, R_TestOpType, defa
 
         val name = R_MountName.ofOpt(nameStr)
         Rt_Utils.check(name != null && !name.isEmpty()) {
-            "${C_Lib_Test.OP_TYPE_QNAME_STR}:bad_name:$nameStr" to "Bad operation name: '$nameStr'"
+            "${C_Lib_Test.OP_TYPE_QNAME_STR}:bad_name:$nameStr" toCodeMsg "Bad operation name: '$nameStr'"
         }
         name!!
 

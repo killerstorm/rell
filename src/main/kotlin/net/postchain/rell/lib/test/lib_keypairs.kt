@@ -11,6 +11,7 @@ import net.postchain.rell.compiler.base.def.C_SysAttribute
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_ByteArrayType
 import net.postchain.rell.runtime.Rt_ByteArrayValue
 import net.postchain.rell.runtime.Rt_Error
@@ -45,7 +46,7 @@ object C_Lib_Test_KeyPairs {
 
     private fun toByteArray(v: Rt_Value, n: Int): ByteArray {
         val bs = v.asByteArray()
-        Rt_Utils.check(bs.size == n) { "keypair:wrong_byte_array_size:$n:${bs.size}" to
+        Rt_Utils.check(bs.size == n) { "keypair:wrong_byte_array_size:$n:${bs.size}" toCodeMsg
                 "Wrong byte array size: ${bs.size} instead of $n" }
         return bs
     }

@@ -42,8 +42,6 @@ object C_Lib_Types {
 
 object C_Lib_Type_Boolean: C_Lib_Type("boolean", R_BooleanType)
 
-object C_Lib_Type_Rowid: C_Lib_Type("rowid", R_RowidType)
-
 object C_Lib_Type_Signer: C_Lib_Type("signer", R_SignerType, defaultMemberFns = false)
 
 object C_Lib_Type_Guid: C_Lib_Type("guid", R_GUIDType, defaultMemberFns = false)

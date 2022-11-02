@@ -435,10 +435,10 @@ class UpdateDeleteTest: BaseRellTest() {
                 "ct_err:binop_operand_type:+=:[integer]:[integer?]")
         chkDataCommon(james(100), mike(250))
 
-        resetChkOp("val p = ${person("Mike")}; p.name = 'Bond';", "ct_err:update_attr_not_mutable:name")
+        resetChkOp("val p = ${person("Mike")}; p.name = 'Bond';", "ct_err:attr_not_mutable:name")
         chkDataCommon(james(100), mike(250))
 
-        resetChkOp("val p = ${person("Mike")}; p.name += 'Bond';", "ct_err:update_attr_not_mutable:name")
+        resetChkOp("val p = ${person("Mike")}; p.name += 'Bond';", "ct_err:attr_not_mutable:name")
         chkDataCommon(james(100), mike(250))
 
         resetData()

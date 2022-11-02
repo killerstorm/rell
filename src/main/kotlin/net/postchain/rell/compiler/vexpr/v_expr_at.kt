@@ -65,9 +65,15 @@ class V_DbAtWhatField(
 ) {
     fun isIgnored() = flags.omit && flags.sort == null && summarization == null
 
-    fun toDbField(): Db_AtWhatField {
+    fun toDbField(nested: Boolean): Db_AtWhatField {
         val cWhatValue = if (expr.info.dependsOnDbAtEntity || V_AtUtils.hasWhatModifiers(flags)) {
-            expr.toDbExprWhat()
+            if (nested) {
+                // Nested "at" doesn't support complex what (e. g. exists, in - complex what doesn't make sense).
+                val dbExpr = expr.toDbExpr()
+                C_DbAtWhatValue_Simple(dbExpr)
+            } else {
+                expr.toDbExprWhat()
+            }
         } else {
             val rExpr = expr.toRExpr()
             val dbWhatValue = Db_AtWhatValue_RExpr(rExpr)
@@ -99,8 +105,8 @@ class V_AtExprBase(
     fun innerExprs(): List<V_Expr> = innerExprs
     fun referencedAtExprIds(): Set<R_AtExprId> = refAtExprIds
 
-    fun toDbBase(): Db_AtExprBase {
-        val dbWhat = what.map { it.toDbField() }
+    fun toDbBase(nested: Boolean): Db_AtExprBase {
+        val dbWhat = what.map { it.toDbField(nested) }
         val dbWhere = where?.toDbExpr()
         return Db_AtExprBase(from, dbWhat, dbWhere)
     }
@@ -122,7 +128,7 @@ class V_TopDbAtExpr(
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("at_expr", null)
 
     override fun toRExpr0(): R_Expr {
-        val dbBase = base.toDbBase()
+        val dbBase = base.toDbBase(false)
         val rExtras = extras.toRExtras()
         return R_DbAtExpr(resultType, dbBase, cardinality, rExtras, internals)
     }
@@ -150,7 +156,7 @@ class V_NestedDbAtExpr(
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
 
     override fun toDbExpr0(): Db_Expr {
-        val dbBase = base.toDbBase()
+        val dbBase = base.toDbBase(true)
         val rExtras = extras.toRExtras()
         return Db_NestedAtExpr(resultType, dbBase, rExtras, rBlock)
     }

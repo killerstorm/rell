@@ -11,6 +11,7 @@ import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_SysFunction
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_BooleanType
 import net.postchain.rell.model.R_ByteArrayType
 import net.postchain.rell.model.R_IntegerType
@@ -153,7 +154,7 @@ private object CryptoFns {
     private fun checkPrivKeySize(privKey: ByteArray, fn: String) {
         val expPrivKeySize = 32
         Rt_Utils.check(privKey.size == expPrivKeySize) {
-            "fn:$fn:privkey_size:${privKey.size}" to "Wrong size of private key: ${privKey.size} instead of $expPrivKeySize"
+            "fn:$fn:privkey_size:${privKey.size}" toCodeMsg "Wrong size of private key: ${privKey.size} instead of $expPrivKeySize"
         }
     }
 }

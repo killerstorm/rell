@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime
@@ -12,6 +12,7 @@ import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtx.data.OpData
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel
@@ -384,7 +385,7 @@ private class Rt_GlobalConstants(private val appCtx: Rt_AppContext, oldStates: L
             }
 
             Rt_Utils.check(!initing) {
-                "const:recursion:${constId.strCode()}" to "Constant has recursive expression: ${constId.appLevelName}"
+                "const:recursion:${constId.strCode()}" toCodeMsg "Constant has recursive expression: ${constId.appLevelName}"
             }
             initing = true
 

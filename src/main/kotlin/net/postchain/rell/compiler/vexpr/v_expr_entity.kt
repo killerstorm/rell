@@ -19,7 +19,17 @@ class V_EntityAttrExpr(
         private val attrRef: C_EntityAttrRef,
         private val resultType: R_Type
 ): V_Expr(exprCtx, memberLink.base.pos) {
-    private val path = toPath()
+    private val path: List<V_EntityAttrExpr> = let {
+        val path = mutableListOf<V_EntityAttrExpr>()
+        var expr: V_Expr = this
+        while (expr is V_EntityAttrExpr) {
+            path.add(expr)
+            expr = expr.memberLink.base
+        }
+        path.reverse()
+        path.toImmList()
+    }
+
     private val cLambda = createLambda(exprCtx, path.first().attrRef.rEntity)
 
     override fun exprInfo0() = V_ExprInfo.simple(resultType, memberLink.base)
@@ -43,17 +53,6 @@ class V_EntityAttrExpr(
         val whatField = Db_AtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
 
         return createRExpr(first.memberLink.base, atEntity, whatField, first.memberLink.safe, resultType, cLambda)
-    }
-
-    private fun toPath(): List<V_EntityAttrExpr> {
-        val path = mutableListOf<V_EntityAttrExpr>()
-        var expr: V_Expr = this
-        while (expr is V_EntityAttrExpr) {
-            path.add(expr)
-            expr = expr.memberLink.base
-        }
-        path.reverse()
-        return path.toImmList()
     }
 
     private fun toDbExprPath(atEntity: R_DbAtEntity, path: List<V_EntityAttrExpr>): Db_Expr {

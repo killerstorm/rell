@@ -17,9 +17,12 @@ import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_ExprInfo
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
+import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.LazyString
+import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
@@ -108,6 +111,8 @@ abstract class C_MemberAttr(val type: R_Type) {
     abstract fun nameMsg(): C_CodeMsg
     abstract fun calculator(): R_MemberCalculator
     abstract fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr
+    open fun hasDbExpr(): Boolean = false
+    open fun dbExpr(base: Db_Expr): Db_Expr? = null
 }
 
 abstract class C_MemberAttr_TupleAttr(
@@ -133,13 +138,44 @@ abstract class C_MemberAttr_StructAttr(type: R_Type, protected val attr: R_Attri
     final override fun nameMsg() = attr.rName.str toCodeMsg attr.rName.str
 }
 
+class C_MemberAttr_SysProperty(
+    private val name: R_Name,
+    private val prop: C_SysMemberProperty,
+): C_MemberAttr(prop.type) {
+    override fun attrName() = name
+    override fun nameMsg() = name.str toCodeMsg name.str
+
+    override fun calculator(): R_MemberCalculator {
+        return R_MemberCalculator_SysProperty(prop)
+    }
+
+    override fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr {
+        throw C_Errors.errAttrNotMutable(pos, name.str)
+    }
+
+    override fun hasDbExpr() = prop.fn.dbFn != null
+
+    override fun dbExpr(base: Db_Expr): Db_Expr? {
+        val dbFn = prop.fn.dbFn
+        dbFn ?: return null
+        return Db_CallExpr(prop.type, dbFn, immListOf(base))
+    }
+
+    private class R_MemberCalculator_SysProperty(private val prop: C_SysMemberProperty): R_MemberCalculator(prop.type) {
+        override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
+            val args = immListOf(baseValue)
+            return prop.fn.rFn.call(frame.defCtx.callCtx, args)
+        }
+    }
+}
+
 class V_MemberAttrExpr(
         exprCtx: C_ExprContext,
         private val memberLink: C_MemberLink,
         private val memberAttr: C_MemberAttr,
         private val resType: R_Type
 ): V_Expr(exprCtx, memberLink.base.pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(resType, memberLink.base)
+    override fun exprInfo0() = V_ExprInfo.simple(resType, memberLink.base, canBeDbExpr = memberAttr.hasDbExpr())
 
     override fun implicitAtWhereAttrName(): R_Name? {
         val isAt = memberLink.base.isAtExprItem()
@@ -158,8 +194,24 @@ class V_MemberAttrExpr(
     }
 
     override fun toDbExpr0(): Db_Expr {
-        val rExpr = toRExpr()
-        return C_ExprUtils.toDbExpr(exprCtx.msgCtx, memberLink.linkPos, rExpr)
+        val dbBase = memberLink.base.toDbExpr()
+        val dbExpr = memberAttr.dbExpr(dbBase)
+        return if (dbExpr != null) dbExpr else {
+            val rExpr = toRExpr()
+            C_ExprUtils.toDbExpr(exprCtx.msgCtx, memberLink.linkPos, rExpr)
+        }
+    }
+
+    override fun toDbExprWhat0(): C_DbAtWhatValue {
+        val calculator = memberAttr.calculator()
+        val evaluator = object: Db_ComplexAtWhatEvaluator() {
+            override fun evaluate(frame: Rt_CallFrame, values: List<Rt_AtWhatItem>): Rt_Value {
+                checkEquals(values.size, 1)
+                val baseValue = values[0].value()
+                return calculator.calculate(frame, baseValue)
+            }
+        }
+        return C_DbAtWhatValue_Complex(immListOf(memberLink.base), evaluator)
     }
 
     override fun destination(): C_Destination {

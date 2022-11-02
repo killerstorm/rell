@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
@@ -57,21 +57,6 @@ class V_SysSpecialGlobalCaseCallExpr(
     override fun globalConstantRestriction() = match.globalConstantRestriction(caseCtx)
 
     override fun toRExpr0() = match.compileCallR(exprCtx, caseCtx)
-}
-
-// Just a wrapper which adds implicit at-expr what attribute name.
-class V_SysMemberPropertyExpr(
-        exprCtx: C_ExprContext,
-        private val expr: V_Expr,
-        private val propName: R_Name
-): V_Expr(exprCtx, expr.pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(expr.type, expr)
-
-    override fun toRExpr0() = expr.toRExpr()
-    override fun toDbExpr0() = expr.toDbExpr()
-    override fun toDbExprWhat0() = expr.toDbExprWhat()
-
-    override fun implicitAtWhatAttrName() = propName // That's the only purpose of this class.
 }
 
 class V_FunctionCallArgs(

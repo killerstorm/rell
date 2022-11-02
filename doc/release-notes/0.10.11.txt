@@ -69,6 +69,17 @@ map<K, V>.remove_or_null(key: K): V?
     Removes the specified key from the map. Returns null if the key is not in the map.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-5. Bug fixes
+5. Library: conversion between "rowid" and "integer"
+
+rowid(integer): rowid
+
+    Converts an integer to rowid. The value must be non-negative.
+
+rowid.to_integer(): integer
+
+    Returns the integer value of the rowid.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+6. Bug fixes
 
 - False "Wrong operand types..." compilation error on expression: T in list<T?>.

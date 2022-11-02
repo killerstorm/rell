@@ -14,6 +14,7 @@ import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils.depError
 import net.postchain.rell.compiler.base.utils.C_MemberFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_SysFunction
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.Db_SysFunction
@@ -328,7 +329,7 @@ private object TextFns {
     }
 
     val Format = C_SysFunction.simple(pure = true) { args ->
-        Rt_Utils.check(args.isNotEmpty()) { "fn:text.format:no_args" to "No arguments" }
+        Rt_Utils.check(args.isNotEmpty()) { "fn:text.format:no_args" toCodeMsg "No arguments" }
         val s = args[0].asString()
         val anys = args.drop(1).map { it.asFormatArg() }.toTypedArray()
         val r = try {

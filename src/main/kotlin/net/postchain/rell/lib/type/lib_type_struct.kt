@@ -179,7 +179,7 @@ private object StructFns {
         val structType = v.type()
         val mirrorStructs = Rt_Utils.checkNotNull(structType.struct.mirrorStructs) {
             // Must not happen, checking for extra safety.
-            "$name:bad_type:${v.type()}" to "Wrong struct type: ${v.type()}"
+            "$name:bad_type:${v.type()}" toCodeMsg "Wrong struct type: ${v.type()}"
         }
 
         val resultType = mirrorStructs.getStruct(returnMutable).type
@@ -201,7 +201,7 @@ private object StructFns {
         val structType = v.type()
         val op = Rt_Utils.checkNotNull(structType.struct.mirrorStructs?.operation) {
             // Must not happen, checking for extra safety.
-            "to_test_op:bad_type:${v.type()}" to "Wrong struct type: ${v.type()}"
+            "to_test_op:bad_type:${v.type()}" toCodeMsg "Wrong struct type: ${v.type()}"
         }
 
         val rtArgs = structType.struct.attributesList.map { v.get(it.index) }

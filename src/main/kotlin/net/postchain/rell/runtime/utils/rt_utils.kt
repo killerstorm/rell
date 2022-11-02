@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime.utils
@@ -8,7 +8,9 @@ import mu.KLogger
 import net.postchain.common.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
+import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_CallFrame
 import net.postchain.rell.model.R_FilePos
 import net.postchain.rell.model.R_FunctionBase
@@ -198,17 +200,17 @@ object Rt_Utils {
         return if (stack.isEmpty()) msg else (msg + "\n" + stack.joinToString("\n") { "\tat $it" })
     }
 
-    fun check(b: Boolean, msgProvider: () -> Pair<String, String>) {
+    fun check(b: Boolean, msgProvider: () -> C_CodeMsg) {
         if (!b) {
-            val (code, msg) = msgProvider()
-            throw Rt_Error(code, msg)
+            val codeMsg = msgProvider()
+            throw Rt_Error(codeMsg.code, codeMsg.msg)
         }
     }
 
-    fun <T> checkNotNull(value: T?, msgProvider: () -> Pair<String, String>): T {
+    fun <T> checkNotNull(value: T?, msgProvider: () -> C_CodeMsg): T {
         if (value == null) {
-            val (code, msg) = msgProvider()
-            throw Rt_Error(code, msg)
+            val codeMsg = msgProvider()
+            throw Rt_Error(codeMsg.code, codeMsg.msg)
         }
         return value
     }
@@ -217,7 +219,7 @@ object Rt_Utils {
         check(expected == actual) {
             val code = "check_equals:$expected:$actual"
             val msg = "expected <$expected> actual <$actual>"
-            code to msg
+            code toCodeMsg msg
         }
     }
 

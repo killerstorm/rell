@@ -229,9 +229,12 @@ class AtExprExistsTest: BaseRellTest() {
                 "[user[100], user[101]]")
     }
 
-    @Test fun testWhatPartInNestedExprToStruct() {
+    @Test fun testWhatPartInNestedExprComplex() {
         initDataUserCompany()
-        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ( c.to_struct() ) ) }", "[user[100], user[101]]")
+        def("function f(c: company) = c.name.upper_case();")
+        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ( c.to_struct() ) ) }", "ct_err:expr_sqlnotallowed")
+        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ( c.to_struct().name ) ) }", "ct_err:expr_sqlnotallowed")
+        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ( f(c) ) ) }", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testRtExprWithinNestedAt() {

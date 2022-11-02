@@ -335,8 +335,8 @@ class VirtualTest: BaseGtxTest(false) {
     @Test fun testStructAttrMutable() {
         def("struct rec { mutable i: integer; mutable t: text; }")
         var args = argToGtv("[123,'Hello']", "[[0],[1]]")
-        chkVirtualEx("virtual<rec>", "{ x.i = 456; return 0; }", args, "ct_err:update_attr_not_mutable:i")
-        chkVirtualEx("virtual<rec>", "{ x.t = 'Bye'; return 0; }", args, "ct_err:update_attr_not_mutable:t")
+        chkVirtualEx("virtual<rec>", "{ x.i = 456; return 0; }", args, "ct_err:attr_not_mutable:i")
+        chkVirtualEx("virtual<rec>", "{ x.t = 'Bye'; return 0; }", args, "ct_err:attr_not_mutable:t")
 
         chkVirtualEx("virtual<rec>", " = x.foo;", args, "ct_err:unknown_member:[virtual<rec>]:foo")
         chkVirtualEx("virtual<rec>", " = x.foo();", args, "ct_err:unknown_member:[virtual<rec>]:foo")

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -71,8 +71,8 @@ class StructTest: BaseRellTest(false) {
         def("struct foo { mutable a: integer; b: integer; }")
         chkEx("{ val r = foo(a = 123, b = 456); return r; }", "foo[a=int[123],b=int[456]]")
         chkEx("{ val r = foo(a = 123, b = 456); r.a = 789; return r; }", "foo[a=int[789],b=int[456]]")
-        chkEx("{ val r = foo(a = 123, b = 456); r.b = 789; return r; }", "ct_err:update_attr_not_mutable:b")
-        chkEx("{ val r = foo(a = 123, b = 456); r.b += 789; return r; }", "ct_err:update_attr_not_mutable:b")
+        chkEx("{ val r = foo(a = 123, b = 456); r.b = 789; return r; }", "ct_err:attr_not_mutable:b")
+        chkEx("{ val r = foo(a = 123, b = 456); r.b += 789; return r; }", "ct_err:attr_not_mutable:b")
     }
 
     @Test fun testAttributeTypeNullable() {

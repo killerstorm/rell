@@ -162,10 +162,14 @@ class AtExprInTest: BaseRellTest() {
         chk("(u:user) @* {} ( .job in (w:work)@*{w.city == u.city}(w.job) )", "[false, true, false, true]")
     }
 
-    @Test fun testToStruct() {
+    @Test fun testComplexWhat() {
         initData()
+        def("function f(w: work) = w.job.upper_case();")
+        def("function g(w: work) = w.job.size();")
         chk("user @* { .job in work @*{}( work.to_struct() ) }", "ct_err:binop_operand_type:in:[text]:[list<struct<work>>]")
         chk("user @* { .job in work @*{}( work.to_struct().job ) }", "ct_err:expr_sqlnotallowed")
+        chk("user @* { .job in work @*{}( f(work) ) }", "ct_err:expr_sqlnotallowed")
+        chk("user @* { .job in work @*{}( g(work) ) }", "ct_err:binop_operand_type:in:[text]:[list<integer>]")
     }
 
     @Test fun testMixedCollectionAndDbAt() {

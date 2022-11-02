@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.fn
@@ -14,18 +14,15 @@ import net.postchain.rell.compiler.base.expr.C_CallTypeHints
 import net.postchain.rell.compiler.base.expr.C_CallTypeHints_None
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
-import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.utils.C_SysFunction
-import net.postchain.rell.compiler.base.utils.C_SysFunctionCtx
-import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.vexpr.*
-import net.postchain.rell.model.R_BooleanType
-import net.postchain.rell.model.R_FunctionType
-import net.postchain.rell.model.R_Name
-import net.postchain.rell.model.R_Type
+import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.Db_SysFunction
+import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.LazyString
+import net.postchain.rell.utils.checkEquals
 
 abstract class C_FormalParamsFuncBody<CtxT: C_FuncCaseCtx>(val resType: R_Type) {
     abstract fun effectiveResType(caseCtx: CtxT, type: R_Type): R_Type
@@ -303,7 +300,18 @@ abstract class C_SpecialSysMemberFunction: C_SysMemberFunction() {
 }
 
 class C_SysMemberProperty(
-        val type: R_Type,
-        val fn: C_SysFunction,
-        val pure: Boolean
-)
+    val type: R_Type,
+    val pure: Boolean,
+    val fn: C_SysFunctionBody,
+) {
+    companion object {
+        fun simple(type: R_Type, dbFn: Db_SysFunction? = null, pure: Boolean = false, rCode: (Rt_Value) -> Rt_Value): C_SysMemberProperty {
+            val rFn = R_SysFunction { ctx, args ->
+                checkEquals(args.size, 1)
+                rCode(args[0])
+            }
+            val fn = C_SysFunctionBody(rFn, dbFn)
+            return C_SysMemberProperty(type, pure, fn)
+        }
+    }
+}

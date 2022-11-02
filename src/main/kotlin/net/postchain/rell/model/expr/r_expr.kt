@@ -1,10 +1,11 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.expr
 
 import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.lib.type.C_Lib_Type_Decimal
 import net.postchain.rell.model.*
 import net.postchain.rell.model.stmt.R_ForIterator
@@ -214,7 +215,7 @@ class R_IteratorCopyMapConstructorExpr(
             val k = tuple.get(0)
             val v = tuple.get(1)
             val v0 = map.put(k, v)
-            Rt_Utils.check(v0 == null) { "map:new:iterator:dupkey:${k.strCode()}" to "Duplicate key: ${k.str()}" }
+            Rt_Utils.check(v0 == null) { "map:new:iterator:dupkey:${k.strCode()}" toCodeMsg "Duplicate key: ${k.str()}" }
         }
         return Rt_MapValue(type, map)
     }

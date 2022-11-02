@@ -96,7 +96,7 @@ object C_Errors {
     }
 
     fun msgAttrNotMutable(name: String): C_CodeMsg {
-        return C_CodeMsg("update_attr_not_mutable:$name", "Attribute '$name' is not mutable")
+        return C_CodeMsg("attr_not_mutable:$name", "Attribute '$name' is not mutable")
     }
 
     fun errExprNoDb(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type) {
