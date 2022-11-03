@@ -16,6 +16,7 @@ import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
+import java.math.BigDecimal
 
 const val GTV_QUERY_PRETTY = true
 const val GTV_OPERATION_PRETTY = false
@@ -125,12 +126,20 @@ object GtvRtConversion_Decimal: GtvRtConversion() {
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvFactory.gtv(Lib_DecimalMath.toString(rt.asDecimal()))
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        return if (gtv.type == GtvType.INTEGER) {
-            val v = GtvRtUtils.gtvToInteger(ctx, gtv, R_DecimalType)
-            Rt_DecimalValue.of(v)
-        } else {
-            val s = GtvRtUtils.gtvToString(ctx, gtv, R_DecimalType)
-            Rt_DecimalValue.of(s)
+        return when (gtv.type) {
+            GtvType.INTEGER -> {
+                val v = GtvRtUtils.gtvToInteger(ctx, gtv, R_DecimalType)
+                Rt_DecimalValue.of(v)
+            }
+            GtvType.BIGINTEGER -> {
+                val v = gtv.asBigInteger()
+                val bd = BigDecimal(v)
+                Rt_DecimalValue.of(bd)
+            }
+            else -> {
+                val s = GtvRtUtils.gtvToString(ctx, gtv, R_DecimalType)
+                Rt_DecimalValue.of(s)
+            }
         }
     }
 }
@@ -642,6 +651,14 @@ class GtvRtConversion_VirtualTuple(val type: R_VirtualTupleType): GtvRtConversio
 
 object GtvRtUtils {
     fun gtvToInteger(ctx: GtvToRtContext, gtv: Gtv, rellType: R_Type): Long {
+        if (gtv.type == GtvType.BIGINTEGER) {
+            val v = gtv.asBigInteger()
+            try {
+                return v.longValueExact()
+            } catch (e: ArithmeticException) {
+                throw errGtvType(ctx, rellType, "out_of_range:$v", "value out of range: $v")
+            }
+        }
         try {
             return gtv.asInteger()
         } catch (e: UserMistake) {

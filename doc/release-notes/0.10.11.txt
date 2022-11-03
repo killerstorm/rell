@@ -83,3 +83,4 @@ rowid.to_integer(): integer
 6. Bug fixes
 
 - False "Wrong operand types..." compilation error on expression: T in list<T?>.
+- Conversion from gtv big integer value to decimal.

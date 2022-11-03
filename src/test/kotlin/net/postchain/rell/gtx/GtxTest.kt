@@ -4,9 +4,12 @@
 
 package net.postchain.rell.gtx
 
+import net.postchain.gtv.GtvBigInteger
+import net.postchain.rell.lang.type.DecimalTest
 import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.test.BaseGtxTest
 import org.junit.Test
+import java.math.BigInteger
 
 class GtxTest : BaseGtxTest() {
     @Test fun testObject() {
@@ -118,5 +121,28 @@ class GtxTest : BaseGtxTest() {
         chkCallOperation("otext", listOf("123"), "gtv_err:type:[text]:STRING:INTEGER:x")
         chkCallOperation("otext", listOf("[]"), "gtv_err:type:[text]:STRING:ARRAY:x")
         chkCallOperation("otext", listOf("{}"), "gtv_err:type:[text]:STRING:DICT:x")
+    }
+
+    @Test fun testBigInteger() {
+        tst.wrapRtErrors = false
+        def("query qint(x: integer) = x;")
+        def("query qdec(x: decimal) = x;")
+
+        val two63 = "9223372036854775808"
+        val ten25 = "10000000000000000000000000"
+
+        chkCallQuery("qint", mapOf("x" to GtvBigInteger(123)), "123")
+        chkCallQuery("qint", mapOf("x" to GtvBigInteger(Long.MAX_VALUE)), "9223372036854775807")
+        chkCallQuery("qint", mapOf("x" to GtvBigInteger(BigInteger(two63))), "gtv_err:type:[integer]:out_of_range:$two63:x")
+        chkCallQuery("qint", mapOf("x" to GtvBigInteger(BigInteger(ten25))), "gtv_err:type:[integer]:out_of_range:$ten25:x")
+
+        chkCallQuery("qdec", mapOf("x" to GtvBigInteger(123)), "'123'")
+        chkCallQuery("qdec", mapOf("x" to GtvBigInteger(Long.MAX_VALUE)), "'9223372036854775807'")
+        chkCallQuery("qdec", mapOf("x" to GtvBigInteger(BigInteger(two63))), "'$two63'")
+        chkCallQuery("qdec", mapOf("x" to GtvBigInteger(BigInteger(ten25))), "'$ten25'")
+
+        val decMax = DecimalTest.LIMIT.subtract(BigInteger.ONE)
+        chkCallQuery("qdec", mapOf("x" to GtvBigInteger(decMax)), "'$decMax'")
+        chkCallQuery("qdec", mapOf("x" to GtvBigInteger(DecimalTest.LIMIT)), "rt_err:decimal:overflow")
     }
 }

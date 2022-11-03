@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -19,4 +19,5 @@ abstract class BaseGtxTest(useSql: Boolean = true): BaseTesterTest(useSql) {
             tst.chkCallOperation(name, args, expected)
 
     fun chkCallQuery(name: String, args: String, expected: String) = tst.chkCallQuery(name, args, expected)
+    fun chkCallQuery(name: String, args: Map<String, Gtv>, expected: String) = tst.chkCallQuery(name, args, expected)
 }

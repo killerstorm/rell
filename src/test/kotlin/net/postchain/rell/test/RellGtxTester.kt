@@ -86,6 +86,11 @@ class RellGtxTester(
         return callQuery0(moduleCode, name, args)
     }
 
+    fun chkCallQuery(name: String, args: Map<String, Gtv>, expected: String) {
+        val actual = callQuery(name, args)
+        assertEquals(expected, actual)
+    }
+
     fun chkCallQuery(name: String, args: String, expected: String) {
         val gtvArgs = strToArgs(args)
         val actual = callQuery(name, gtvArgs)
