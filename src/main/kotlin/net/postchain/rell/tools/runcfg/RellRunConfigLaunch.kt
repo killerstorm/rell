@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
@@ -24,6 +24,7 @@ import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_RegularSqlContext
 import net.postchain.rell.runtime.Rt_StaticBlockRunnerStrategy
@@ -51,7 +52,7 @@ private fun main0(args: RellRunConfigLaunchCliArgs) {
     val runConfigFile = RellCliUtils.checkFile(args.runConfigFile)
     val sourceDir = RellCliUtils.checkDir(args.sourceDir ?: ".").absoluteFile
     val sourceVer = RellCliUtils.checkVersion(args.sourceVersion)
-    val commonArgs = CommonArgs(runConfigFile, sourceDir, sourceVer)
+    val commonArgs = CommonArgs(runConfigFile, sourceDir, sourceVer, args.sqlLog)
 
     if (args.test) {
         val filter = args.testFilter
@@ -59,7 +60,10 @@ private fun main0(args: RellRunConfigLaunchCliArgs) {
         val matcher = TestMatcher.make(filter ?: "*")
         runTests(commonArgs, matcher, targetChains)
     } else {
-        runApp(commonArgs)
+        val env = RellPostchainModuleEnvironment(sqlLog = args.sqlLog)
+        RellPostchainModuleEnvironment.set(env) {
+            runApp(commonArgs)
+        }
     }
 }
 
@@ -166,13 +170,13 @@ private fun runTests(args: CommonArgs, matcher: TestMatcher, targetChains: Colle
     val testRes = TestRunnerResults()
 
     StorageBuilder.buildStorage(nodeAppConf).use { storage ->
-        val sqlMgr = PostchainStorageSqlManager(storage, false)
+        val sqlMgr = PostchainStorageSqlManager(storage, args.sqlLog)
 
         for (tChain in tChains) {
             val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(tChain.rApp, Rt_ChainSqlMapping(tChain.chain.iid))
             val blockRunnerStrategy = Rt_StaticBlockRunnerStrategy(tChain.gtvConfig, keyPair)
 
-            val globalCtx = RellCliUtils.createGlobalContext(true, compilerOptions, true)
+            val globalCtx = RellCliUtils.createGlobalContext(compilerOptions, typeCheck = true, runXmlTest = true, sqlLog = args.sqlLog)
 
             val chainRid = BlockchainRid(tChain.chain.brid.toByteArray())
             val chainCtx = PostchainUtils.createChainContext(tChain.gtvConfig, tChain.rApp, chainRid)
@@ -211,15 +215,16 @@ private fun getNodeConfig(rellAppConf: RellPostAppCliConfig, rellAppNode: RellPo
 }
 
 private class CommonArgs(
-    val runConfigFile: File,
-    val sourceDir: File,
-    val sourceVer: R_LangVersion
+        val runConfigFile: File,
+        val sourceDir: File,
+        val sourceVer: R_LangVersion,
+        val sqlLog: Boolean,
 )
 
 @CommandLine.Command(name = "RellRunConfigLaunch", description = ["Launch a run.xml config"])
-private class RellRunConfigLaunchCliArgs : RellRunConfigCliArgs() {
+private class RellRunConfigLaunchCliArgs: RellRunConfigCliArgs() {
     @CommandLine.Option(names = ["--test"], description = ["Run unit tests"])
-    var test: Boolean = false
+    var test = false
 
     @CommandLine.Option(
         names = ["--test-filter"],
@@ -232,6 +237,9 @@ private class RellRunConfigLaunchCliArgs : RellRunConfigCliArgs() {
         description = ["Execute tests only for specified chains (comma-separated list of chain names)"]
     )
     var testChain: String? = null
+
+    @CommandLine.Option(names = ["--sqllog"], description = ["Enable SQL logging"])
+    var sqlLog = false
 
     fun getTargetChains(): Set<String>? {
         val s = testChain

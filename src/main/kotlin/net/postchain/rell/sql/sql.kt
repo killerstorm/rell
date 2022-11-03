@@ -4,6 +4,7 @@
 
 package net.postchain.rell.sql
 
+import mu.KLogging
 import net.postchain.base.withReadConnection
 import net.postchain.base.withWriteConnection
 import net.postchain.core.Storage
@@ -68,10 +69,10 @@ class SqlConnectionLogger(private val logging: Boolean) {
     private val conId = idCounter.getAndIncrement()
 
     fun log(s: String) {
-        if (logging) println("[$conId] $s")
+        if (logging) logger.info("[{}] {}", conId, s)
     }
 
-    companion object {
+    companion object: KLogging() {
         private val idCounter = AtomicLong()
     }
 }

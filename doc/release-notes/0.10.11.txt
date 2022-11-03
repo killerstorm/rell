@@ -80,7 +80,14 @@ rowid.to_integer(): integer
     Returns the integer value of the rowid.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-6. Bug fixes
+6. Tools: multirun.sh --sqllog
+
+New argument of multirun.sh:
+
+    --sqllog     Enable SQL logging
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+7. Bug fixes
 
 - False "Wrong operand types..." compilation error on expression: T in list<T?>.
 - Conversion from gtv big integer value to decimal.

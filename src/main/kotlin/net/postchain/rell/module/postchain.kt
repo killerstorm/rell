@@ -348,7 +348,8 @@ class RellPostchainModuleEnvironment(
         val wrapRtErrors: Boolean = true,
         val forceTypeCheck: Boolean = false,
         val dbInitLogLevel: Int = DEFAULT_DB_INIT_LOG_LEVEL,
-        val hiddenLib: Boolean = false
+        val hiddenLib: Boolean = false,
+        val sqlLog: Boolean = false,
 ) {
     companion object {
         val DEFAULT = RellPostchainModuleEnvironment()
@@ -366,7 +367,7 @@ class RellPostchainModuleEnvironment(
 }
 
 class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): GTXModuleFactory {
-    val env = env ?: RellPostchainModuleEnvironment.get()
+    private val env = env ?: RellPostchainModuleEnvironment.get()
 
     override fun makeModule(config: Gtv, blockchainRID: BlockchainRid): GTXModule {
         val gtxNode = config.asDict().getValue("gtx").asDict()
@@ -392,15 +393,14 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
             val modLogPrinter = getModulePrinter(env.logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
             val modOutPrinter = getModulePrinter(env.outPrinter, combinedPrinter, copyOutput)
 
-            val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
             val typeCheck = env.forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
             val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: env.dbInitLogLevel
 
             val moduleConfig = RellModuleConfig(
-                    sqlLogging = sqlLogging,
+                    sqlLogging = env.sqlLog,
                     typeCheck = typeCheck,
                     dbInitLogLevel = dbInitLogLevel,
-                    compilerOptions = compilerOptions
+                    compilerOptions = compilerOptions,
             )
 
             RellPostchainModule(
