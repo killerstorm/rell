@@ -56,6 +56,7 @@ class IdeSymbolInfo(
         val DEF_TYPE = IdeSymbolInfo(IdeSymbolKind.DEF_TYPE)
         val DEF_STRUCT = IdeSymbolInfo(IdeSymbolKind.DEF_STRUCT)
         val MEM_STRUCT_ATTR = IdeSymbolInfo(IdeSymbolKind.MEM_STRUCT_ATTR)
+        val MEM_SYS_PROPERTY = IdeSymbolInfo(IdeSymbolKind.MEM_SYS_PROPERTY)
         val MEM_TUPLE_FIELD = IdeSymbolInfo(IdeSymbolKind.MEM_TUPLE_ATTR)
         val EXPR_CALL_ARG = IdeSymbolInfo(IdeSymbolKind.EXPR_CALL_ARG)
     }

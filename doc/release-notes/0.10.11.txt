@@ -80,14 +80,22 @@ rowid.to_integer(): integer
     Returns the integer value of the rowid.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-6. Tools: multirun.sh --sqllog
+6. Library: op_context.exists.
+
+op_context.exists: boolean
+
+    New property, which is "true" if the code is called from an operation (directly or indirectly). Unlike other
+    properties of "op_context", this property is always available, but returns "false" if there is no operation.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+7. Tools: multirun.sh --sqllog
 
 New argument of multirun.sh:
 
     --sqllog     Enable SQL logging
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-7. Bug fixes
+8. Bug fixes
 
 - False "Wrong operand types..." compilation error on expression: T in list<T?>.
 - Conversion from gtv big integer value to decimal.

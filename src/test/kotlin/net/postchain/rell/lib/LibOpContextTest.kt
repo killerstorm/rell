@@ -170,6 +170,23 @@ class LibOpContextTest: BaseRellTest(false) {
         chk("is_signer(x'1234')", "ct_err:op_ctx_noop")
     }
 
+    @Test fun testExists() {
+        tst.opContext = opContext(lastBlockTime = 12345)
+        chkOp("print(op_context.exists);")
+        chkOut("true")
+
+        chk("op_context.exists", "boolean[true]")
+        chk("op_context.last_block_time", "ct_err:op_ctx_noop")
+        chkFn("= op_context.exists;", "boolean[true]")
+        chkFn("= op_context.last_block_time;", "int[12345]")
+
+        tst.opContext = null
+        chk("op_context.exists", "boolean[false]")
+        chk("op_context.last_block_time", "ct_err:op_ctx_noop")
+        chkFn("= op_context.exists;", "boolean[false]")
+        chkFn("= op_context.last_block_time;", "rt_err:fn:op_context.last_block_time:noop")
+    }
+
     companion object {
         private fun opContext(
                 lastBlockTime: Long = -1,
