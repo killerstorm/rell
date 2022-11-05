@@ -74,13 +74,13 @@ class ChainContextTest : BaseGtxTest() {
         chk("a.chain_context", "ct_err:unknown_name:[a]:chain_context")
         chk("a.chain_context.args", "ct_err:unknown_name:[a]:chain_context")
 
-        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.c" to "{'q':456.789}")
+        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.c" to "{'q':'456.789'}")
         chkUserMistake("", "Module initialization failed: Key missing in Gtv dictionary")
 
         tst.moduleArgs()
         chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration for module 'lib.a'")
 
-        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.d" to "{'z':456.789}")
+        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.d" to "{'z':'456.789'}")
         chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration for module 'lib.c'")
     }
 
