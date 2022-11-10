@@ -72,6 +72,7 @@
         <dependency>
             <groupId>net.postchain</groupId>
             <artifactId>postchain-devtools</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
