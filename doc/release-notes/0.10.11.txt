@@ -88,7 +88,7 @@ op_context.exists: boolean
     properties of "op_context", this property is always available, but returns "false" if there is no operation.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-7. Library: function "assert_fails" for unit tests
+7. Library: function assert_fails() for unit tests
 
 assert_fails(f: () -> unit): rell.test.failure
 assert_fails(expected: text, f: () -> unit): rell.test.failure
@@ -122,14 +122,26 @@ Use the returned value if non-exact error message matching is needed:
     assert_true(f.message.starts_with("x is negative: "));
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-8. Tools: multirun.sh --sqllog
+8. Library: function .run_must_fail() with error message check
+
+The function run_must_fail() in types rell.test.block, rell.test.tx and rell.test.op changed to return a failure object
+and check error message:
+
+run_must_fail(): rell.test.failure
+run_must_fail(expected: text): rell.test.failure
+
+    Return type of the old function run_must_fail() changed from "unit" to "rell.test.failure".
+    When "expected" is specified, the call fails if the actual error message differs from the expected one.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+9. Tools: multirun.sh --sqllog
 
 New argument of multirun.sh:
 
     --sqllog     Enable SQL logging
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-9. Bug fixes
+10. Bug fixes
 
 - False "Wrong operand types..." compilation error on expression: T in list<T?>.
 - Conversion from gtv big integer value to decimal.

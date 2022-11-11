@@ -107,40 +107,70 @@ private class BlockCommonFunctions(
         private val typeQName: String,
         private val blockGetter: (ctx: Rt_CallContext, self: Rt_Value) -> Rt_TestBlockValue
 ) {
+    private val runSimpleName = "run"
+    private val runMustFailSimpleName = "run_must_fail"
+
+    private val runFullName = "$typeQName.$runSimpleName"
+    private val runMustFailFullName = "$typeQName.$runMustFailSimpleName"
+
     fun bind(b: C_MemberFuncBuilder) {
-        val run = "run"
-        val runFail = "run_must_fail"
-        b.add(run, R_UnitType, listOf(), Run(true, run))
-        b.add(runFail, R_UnitType, listOf(), Run(false, runFail))
+        val failType = C_Lib_Test_Assert.FAILURE_TYPE
+        b.add(runSimpleName, R_UnitType, listOf(), Run())
+        b.add(runMustFailSimpleName, failType, listOf(), RunMustFail0())
+        b.add(runMustFailSimpleName, failType, listOf(R_TextType), RunMustFail1())
     }
 
-    private inner class Run(val positive: Boolean, val name: String): R_SysFunctionEx_1() {
-        private val fnName = "$typeQName.$name"
+    private fun getRunBlock(ctx: Rt_CallContext, arg: Rt_Value, fnName: String): Rt_TestBlockValue {
+        val block = blockGetter(ctx, arg)
+        if (!ctx.appCtx.repl && !ctx.appCtx.test) {
+            throw Rt_Exception.common("fn:$fnName:no_repl_test", "Block can be executed only in REPL or test")
+        }
+        return block
+    }
 
-        override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
-            val block = blockGetter(ctx, arg)
-
-            if (!ctx.appCtx.repl && !ctx.appCtx.test) {
-                throw Rt_Exception.common("fn:$fnName:no_repl_test", "Block can be executed only in REPL or test")
-            }
-
-            try {
-                try {
-                    UnitTestBlockRunner.runBlock(ctx, block)
-                } catch (e: Rt_Exception) {
-                    throw e
-                } catch (e: Throwable) {
-                    throw Rt_Exception.common("fn:$fnName:fail:${e.javaClass.canonicalName}", "Block execution failed: $e")
+    private fun runMustFail(ctx: Rt_CallContext, block: Rt_TestBlockValue, expected: String?): Rt_Value {
+        try {
+            UnitTestBlockRunner.runBlock(ctx, block)
+        } catch (e: Throwable) {
+            val actual = e.message ?: ""
+            if (expected != null) {
+                if (actual != expected) {
+                    val code = "$runMustFailSimpleName:mismatch:[$expected]:[$actual]"
+                    val msg = "wrong error: expected <$expected> but was <$actual>"
+                    throw Rt_AssertError.exception(code, msg)
                 }
+            }
+            return C_Lib_Test_Assert.failureValue(actual)
+        }
+        throw Rt_Exception.common("fn:$runMustFailFullName:nofail", "Transaction did not fail")
+    }
+
+    private inner class Run: R_SysFunctionEx_1() {
+        override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+            val block = getRunBlock(ctx, arg, runFullName)
+            try {
+                UnitTestBlockRunner.runBlock(ctx, block)
+            } catch (e: Rt_Exception) {
+                throw e
             } catch (e: Throwable) {
-                if (positive) throw e else return Rt_UnitValue
+                throw Rt_Exception.common("fn:$runFullName:fail:${e.javaClass.canonicalName}", "Block execution failed: $e")
             }
-
-            if (!positive) {
-                throw Rt_Exception.common("fn:$fnName:nofail", "Transaction did not fail")
-            }
-
             return Rt_UnitValue
+        }
+    }
+
+    private inner class RunMustFail0: R_SysFunctionEx_1() {
+        override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+            val block = getRunBlock(ctx, arg, runMustFailFullName)
+            return runMustFail(ctx, block, null)
+        }
+    }
+
+    private inner class RunMustFail1: R_SysFunctionEx_2() {
+        override fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
+            val block = getRunBlock(ctx, arg1, runMustFailFullName)
+            val expected = arg2.asString()
+            return runMustFail(ctx, block, expected)
         }
     }
 }

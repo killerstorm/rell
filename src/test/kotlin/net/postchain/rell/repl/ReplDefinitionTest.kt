@@ -264,7 +264,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
     }
 
     @Test fun testRuntimeError() {
-        repl.chk("function f(): integer = 123; print(123 / (1 - 1));", "RTE:expr:/:div0:123")
+        repl.chk("function f(): integer = 123; print(123 / (1 - 1));", "rt_err:expr:/:div0:123")
         repl.chk("f()", "CTE:<console>:unknown_name:f")
         repl.chk("function f(): integer = 456;")
         repl.chk("f()", "RES:int[456]")
@@ -302,7 +302,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
             function f(): module_args = chain_context.args;
         """)
         repl.chk("import lib;")
-        repl.chk("lib.f()", "RTE:chain_context.args:no_module_args:lib")
+        repl.chk("lib.f()", "rt_err:chain_context.args:no_module_args:lib")
     }
 
     @Test fun testModuleArgsLinked() {
@@ -312,7 +312,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
         """)
         tst.replModule = "lib"
         repl.chk("123", "RES:int[123]")
-        repl.chk("f()", "RTE:chain_context.args:no_module_args:lib")
+        repl.chk("f()", "rt_err:chain_context.args:no_module_args:lib")
     }
 
     @Test fun testImportConstants() {

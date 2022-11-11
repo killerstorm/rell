@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.repl
@@ -39,7 +39,7 @@ class ReplExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testRuntimeError() {
-        repl.chk("123 / 0", "RTE:expr:/:div0:123")
+        repl.chk("123 / 0", "rt_err:expr:/:div0:123")
     }
 
     @Test fun testPrint() {

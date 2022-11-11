@@ -27,6 +27,8 @@ private const val FAILURE_SNAME = "failure"
 private val FAILURE_QNAME = C_Lib_Test.NAMESPACE_NAME.add(FAILURE_SNAME)
 
 object C_Lib_Test_Assert {
+    val FAILURE_TYPE: R_Type = R_TestFailureType
+
     private val FUNCTIONS = C_GlobalFuncBuilder(C_Lib_Test.NAMESPACE_DEF_PATH)
             .add("assert_equals", C_FuncCase_AssertEquals(true))
             .add("assert_not_equals", C_FuncCase_AssertEquals(false))
@@ -34,8 +36,8 @@ object C_Lib_Test_Assert {
             .add("assert_false", R_UnitType, listOf(R_BooleanType), R_Fns.AssertBoolean(false))
             .addEx("assert_null", R_UnitType, listOf(C_ArgTypeMatcher_Nullable), R_Fns.AssertNull)
             .add("assert_not_null", C_FuncCase_AssertNotNull)
-            .add("assert_fails", R_FailureType, listOf(R_FunctionType(listOf(), R_UnitType)), R_Fns.AssertFails1)
-            .add("assert_fails", R_FailureType, listOf(R_TextType, R_FunctionType(listOf(), R_UnitType)), R_Fns.AssertFails2)
+            .add("assert_fails", R_TestFailureType, listOf(R_FunctionType(listOf(), R_UnitType)), R_Fns.AssertFails1)
+            .add("assert_fails", R_TestFailureType, listOf(R_TextType, R_FunctionType(listOf(), R_UnitType)), R_Fns.AssertFails2)
 
             .add("assert_lt", C_FuncCase_AssertCompare(C_BinOp_Lt))
             .add("assert_gt", C_FuncCase_AssertCompare(C_BinOp_Gt))
@@ -51,6 +53,8 @@ object C_Lib_Test_Assert {
         C_Lib_Type_Failure.bind(b)
         C_LibUtils.bindFunctions(b, FUNCTIONS)
     }
+
+    fun failureValue(message: String): Rt_Value = Rt_TestFailureValue(message)
 }
 
 private object R_Fns {
@@ -118,7 +122,7 @@ private object R_Fns {
                 throw Rt_AssertError.exception(code, msg)
             }
 
-            return Rt_FailureValue(message)
+            return Rt_TestFailureValue(message)
         }
     }
 }
@@ -330,7 +334,7 @@ private class R_AssertRangeExpr(
     }
 }
 
-private class Rt_AssertError(val code: String, val msg: String): Rt_Error() {
+class Rt_AssertError private constructor(val code: String, val msg: String): Rt_Error() {
     override fun code() = "asrt_err:$code"
     override fun message() = msg
 
@@ -339,14 +343,14 @@ private class Rt_AssertError(val code: String, val msg: String): Rt_Error() {
     }
 }
 
-private object R_FailureType: R_BasicType(FAILURE_QNAME.str(), C_Lib_Test.typeDefName(FAILURE_QNAME)) {
+private object R_TestFailureType: R_BasicType(FAILURE_QNAME.str(), C_Lib_Test.typeDefName(FAILURE_QNAME)) {
     override fun isReference() = true
     override fun isDirectPure() = false
     override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_None
     override fun getLibType(): C_Lib_Type = C_Lib_Type_Failure
 }
 
-private object C_Lib_Type_Failure: C_Lib_Type(FAILURE_SNAME, R_FailureType, defaultMemberFns = false) {
+private object C_Lib_Type_Failure: C_Lib_Type(FAILURE_SNAME, R_TestFailureType, defaultMemberFns = false) {
     val VALUE_TYPE = Rt_LibValueType.of("TEST_FAILURE")
 
     override fun bindMemberValues(b: MutableList<C_TypeValueMember>) {
@@ -356,16 +360,16 @@ private object C_Lib_Type_Failure: C_Lib_Type(FAILURE_SNAME, R_FailureType, defa
     }
 
     private val PropMessage = C_SysMemberProperty.simple(R_TextType, pure = true) { a ->
-        val v = a as Rt_FailureValue
+        val v = a as Rt_TestFailureValue
         v.messageValue
     }
 }
 
-private class Rt_FailureValue(val message: String): Rt_Value() {
+private class Rt_TestFailureValue(val message: String): Rt_Value() {
     val messageValue = Rt_TextValue(message)
 
     override val valueType = C_Lib_Type_Failure.VALUE_TYPE
-    override fun type(): R_Type = R_FailureType
+    override fun type(): R_Type = R_TestFailureType
     override fun str() = message
-    override fun strCode(showTupleFieldNames: Boolean) = "${R_FailureType.name}[$message]"
+    override fun strCode(showTupleFieldNames: Boolean) = "${R_TestFailureType.name}[$message]"
 }

@@ -12,7 +12,10 @@ import net.postchain.rell.repl.ReplInterpreter
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.repl.ReplValueFormat
 import net.postchain.rell.repl.ReplValueFormatter
-import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.Rt_Exception
+import net.postchain.rell.runtime.Rt_GlobalContext
+import net.postchain.rell.runtime.Rt_Printer
+import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.SqlManager
 import java.util.*
 import kotlin.test.assertEquals
@@ -74,14 +77,8 @@ class RellReplTester(
         }
 
         override fun printRuntimeError(e: Rt_Exception) {
-            val err = e.err
-            val s = when (err) {
-                is Rt_CommonError -> err.code
-                is Rt_GtvError -> "gtv:${err.code}"
-                is Rt_RequireError -> "req:${err.userMsg}"
-                else -> throw RuntimeException("Unexpected exception: ${err.javaClass.simpleName}", e)
-            }
-            output.add("RTE:$s")
+            val code = e.err.code()
+            output.add(code)
         }
 
         override fun printPlatformRuntimeError(e: Throwable) {

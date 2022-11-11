@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.repl
@@ -89,7 +89,7 @@ class ReplSqlTest: BaseRellTest(true) {
         file("u1.rell", "module; entity user { key name; }")
         file("u2.rell", "module; entity user { name; }")
         repl.chk("\\db-auto", "CMD:db-auto:true")
-        repl.chk("import u1;", "RTE:dbinit:index_diff:user:code:key:name")
+        repl.chk("import u1;", "rt_err:dbinit:index_diff:user:code:key:name")
         repl.chk("import u2;")
         repl.chk("u2.user @* {} (.name)", "RES:list<text>[text[Bob],text[Alice]]")
     }
@@ -97,7 +97,7 @@ class ReplSqlTest: BaseRellTest(true) {
     @Test fun testDbUpdate() {
         file("u.rell", "module; entity user { name; }")
         repl.chk("import u;")
-        repl.chk("u.user @* {}", "RTE:sqlerr:0")
+        repl.chk("u.user @* {}", "rt_err:sqlerr:0")
         repl.chk("\\db-update")
         repl.chk("u.user @* {}", "RES:list<u:user>[]")
     }
@@ -111,7 +111,7 @@ class ReplSqlTest: BaseRellTest(true) {
         repl.chk("c.company @* {}", "RES:list<c:company>[]")
 
         repl.chk("import u;")
-        repl.chk("u.user @* {}", "RTE:sqlerr:0")
+        repl.chk("u.user @* {}", "rt_err:sqlerr:0")
         repl.chk("c.company @* {}", "RES:list<c:company>[]")
         repl.chk("\\db-update")
         repl.chk("u.user @* {}", "RES:list<u:user>[]")
@@ -124,7 +124,7 @@ class ReplSqlTest: BaseRellTest(true) {
         file("d.rell", "module; entity data { value: integer; }")
 
         repl.chk("import c;")
-        repl.chk("c.company @* {}", "RTE:sqlerr:0")
+        repl.chk("c.company @* {}", "rt_err:sqlerr:0")
         repl.chk("\\db-auto", "CMD:db-auto:true")
         repl.chk("c.company @* {}", "RES:list<c:company>[]")
 
@@ -133,7 +133,7 @@ class ReplSqlTest: BaseRellTest(true) {
 
         repl.chk("\\db-auto", "CMD:db-auto:false")
         repl.chk("import d;")
-        repl.chk("d.data @* {}", "RTE:sqlerr:0")
+        repl.chk("d.data @* {}", "rt_err:sqlerr:0")
         repl.chk("\\db-update")
         repl.chk("d.data @* {}", "RES:list<d:data>[]")
     }
