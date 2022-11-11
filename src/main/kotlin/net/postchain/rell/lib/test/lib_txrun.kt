@@ -35,7 +35,7 @@ import net.postchain.rell.utils.*
 import java.sql.Connection
 
 object UnitTestBlockRunner {
-    private val TEST_KEY_PAIR: BytesKeyPair by lazy {
+    private val TEST_KEYPAIR: BytesKeyPair = let {
         val privKey = "42".repeat(32).hexStringToByteArray()
         val pubKey = secp256k1_derivePubKey(privKey)
         BytesKeyPair(privKey, pubKey)
@@ -148,7 +148,7 @@ object UnitTestBlockRunner {
     }
 
     fun getTestKeyPair(): BytesKeyPair {
-        return TEST_KEY_PAIR
+        return TEST_KEYPAIR
     }
 }
 

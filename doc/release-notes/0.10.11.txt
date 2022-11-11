@@ -134,14 +134,29 @@ run_must_fail(expected: text): rell.test.failure
     When "expected" is specified, the call fails if the actual error message differs from the expected one.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-9. Tools: multirun.sh --sqllog
+9. Library: constant rell.test.BLOCKCHAIN_SIGNER_KEYPAIR
+
+The keypair used to sign blockchain blocks in unit tests:
+
+val BLOCKCHAIN_SIGNER_KEYPAIR: rell.test.keypair = rell.test.keypair(
+    priv = x'4242424242424242424242424242424242424242424242424242424242424242',
+    pub = x'0324653eac434488002cc06bbfb7f10fe18991e35f9fe4302dbea6d2353dc0ab1c'
+);
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+10. Tools: multirun.sh --sqllog
 
 New argument of multirun.sh:
 
     --sqllog     Enable SQL logging
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-10. Bug fixes
+11. Tools: singletest.sh removed
+
+Old utility used to run XML Postchain tests, obsolete now.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+12. Bug fixes
 
 - False "Wrong operand types..." compilation error on expression: T in list<T?>.
 - Conversion from gtv big integer value to decimal.

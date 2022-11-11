@@ -71,4 +71,12 @@ class LibRellTestOtherTest: BaseRellTest(false) {
         chk("rell.test.assert_equals(0,0)", "ct_err:unknown_name:[rell]:test")
         chk("assert_equals(0,0)", "ct_err:unknown_name:assert_equals")
     }
+
+    @Test fun testBlockchainSignerKeypair() {
+        chk("_type_of(rell.test.BLOCKCHAIN_SIGNER_KEYPAIR)", "text[rell.test.keypair]")
+        chk("rell.test.BLOCKCHAIN_SIGNER_KEYPAIR.priv", "byte_array[4242424242424242424242424242424242424242424242424242424242424242]")
+        chk("rell.test.BLOCKCHAIN_SIGNER_KEYPAIR.pub", "byte_array[0324653eac434488002cc06bbfb7f10fe18991e35f9fe4302dbea6d2353dc0ab1c]")
+        chk("crypto.privkey_to_pubkey(rell.test.BLOCKCHAIN_SIGNER_KEYPAIR.priv, true)",
+            "byte_array[0324653eac434488002cc06bbfb7f10fe18991e35f9fe4302dbea6d2353dc0ab1c]")
+    }
 }

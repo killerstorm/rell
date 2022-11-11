@@ -56,8 +56,7 @@ object C_LibUtils {
     }
 
     fun makeNsValues(basePath: C_DefinitionPath, constants: Map<String, Rt_Value>): C_Namespace {
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
-        val pairs = constants.mapValues { C_NamespaceProperty_RtValue(ideInfo, it.value) }.toList().toTypedArray()
+        val pairs = constants.mapValues { C_NamespaceProperty_RtValue(IdeSymbolInfo.DEF_CONSTANT, it.value) }.toList().toTypedArray()
         return makeNs(basePath, C_GlobalFuncTable.EMPTY, *pairs)
     }
 
@@ -131,7 +130,7 @@ object C_LibUtils {
     fun constValue(name: String, value: Long) = constValue(name, Rt_IntValue(value))
     fun constValue(name: String, value: BigDecimal) = constValue(name, Rt_DecimalValue.of(value))
 
-    fun constValue(name: String, value: Rt_Value): Pair<String, C_NamespaceProperty> {
+    private fun constValue(name: String, value: Rt_Value): Pair<String, C_NamespaceProperty> {
         val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
         return Pair(name, C_NamespaceProperty_RtValue(ideInfo, value))
     }

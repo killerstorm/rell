@@ -382,6 +382,22 @@ class LibGtvTest: BaseRellTest(false) {
         chk("integer.from_gtv(null.to_gtv())", "gtv_err:type:[integer]:INTEGER:NULL")
     }
 
+    @Test fun testJsonNumberTruncation() {
+        chkFromGtv("9223372036854775807", "integer.from_gtv(g)", "int[9223372036854775807]")
+        chkFromGtv("9223372036854775808", "integer.from_gtv(g)", "rt_err:fn:gtv.from_json(text)")
+        chkFromGtv("-9223372036854775808", "integer.from_gtv(g)", "int[-9223372036854775808]")
+        chkFromGtv("-9223372036854775809", "integer.from_gtv(g)", "rt_err:fn:gtv.from_json(text)")
+        chkFromGtv("123.456", "integer.from_gtv(g)", "rt_err:fn:gtv.from_json(text)")
+        chkFromGtv("123.0", "integer.from_gtv(g)", "int[123]")
+        chkFromGtv("123.0000000001", "integer.from_gtv(g)", "rt_err:fn:gtv.from_json(text)")
+
+        chkFromGtv("9223372036854775807", "decimal.from_gtv(g)", "dec[9223372036854775807]")
+        chkFromGtv("-9223372036854775808", "decimal.from_gtv(g)", "dec[-9223372036854775808]")
+        chkFromGtv("9223372036854775808", "decimal.from_gtv(g)", "rt_err:fn:gtv.from_json(text)") // Probably should work
+        chkFromGtv("-9223372036854775809", "decimal.from_gtv(g)", "rt_err:fn:gtv.from_json(text)") // Probably should work
+        chkFromGtv("123.456", "decimal.from_gtv(g)", "rt_err:fn:gtv.from_json(text)")
+    }
+
     private fun chkFromGtv(gtv: String, expr: String, expected: String) = chkFromGtv(tst, gtv, expr, expected)
 
     companion object {

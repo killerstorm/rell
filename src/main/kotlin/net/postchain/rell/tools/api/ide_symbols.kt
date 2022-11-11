@@ -51,6 +51,7 @@ class IdeSymbolInfo(
 
     companion object {
         val UNKNOWN = IdeSymbolInfo(IdeSymbolKind.UNKNOWN)
+        val DEF_CONSTANT = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
         val DEF_FUNCTION_SYSTEM = IdeSymbolInfo(IdeSymbolKind.DEF_FUNCTION_SYSTEM)
         val DEF_NAMESPACE = IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE)
         val DEF_TYPE = IdeSymbolInfo(IdeSymbolKind.DEF_TYPE)
