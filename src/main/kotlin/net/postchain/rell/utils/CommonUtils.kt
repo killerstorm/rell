@@ -4,8 +4,8 @@
 
 package net.postchain.rell.utils
 
+import jakarta.xml.bind.DatatypeConverter
 import java.io.File
-import javax.xml.bind.DatatypeConverter
 
 object CommonUtils {
     val IS_UNIT_TEST: Boolean = Thread.currentThread().stackTrace.any { it.className.startsWith("org.junit.runners.") }
