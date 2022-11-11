@@ -8,10 +8,7 @@ import net.postchain.rell.model.R_FrameBlock
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.R_VarPtr
 import net.postchain.rell.model.stmt.R_ForIterator
-import net.postchain.rell.runtime.Rt_CallFrame
-import net.postchain.rell.runtime.Rt_Error
-import net.postchain.rell.runtime.Rt_NullValue
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import kotlin.math.min
@@ -23,7 +20,7 @@ sealed class R_ColAtFieldSummarization {
 }
 
 object R_ColAtFieldSummarization_None: R_ColAtFieldSummarization() {
-    override fun newSummarizer() = throw Rt_Error("at_summarization_none", "Aggregation failed")
+    override fun newSummarizer() = throw Rt_Exception.common("at_summarization_none", "Aggregation failed")
 }
 
 class R_ColAtFieldSummarization_Group: R_ColAtFieldSummarization() {

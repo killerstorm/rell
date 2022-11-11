@@ -18,7 +18,8 @@ import net.postchain.rell.model.R_SysFunction
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_ExprStatement
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_CommonError
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.LazyPosString
@@ -127,8 +128,12 @@ object C_ExprUtils {
         try {
             val v = code()
             return v
-        } catch (e: Rt_Error) {
-            throw C_Error.stop(pos, "eval_fail:${e.code}", e.message ?: "Evaluation failed")
+        } catch (e: Rt_Exception) {
+            val msg = e.fullMessage()
+            when (e.err) {
+                is Rt_CommonError -> throw C_Error.stop(pos, "eval_fail:${e.err.code}", msg)
+                else -> throw C_Error.stop(pos, "eval_fail:${e.err.javaClass.simpleName}", msg)
+            }
         } catch (e: Throwable) {
             throw C_Error.stop(pos, "eval_fail:${e.javaClass.canonicalName}", "Evaluation failed")
         }

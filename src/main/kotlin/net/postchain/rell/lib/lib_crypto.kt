@@ -80,7 +80,7 @@ private object CryptoFns {
             val signature = Signature(b.asByteArray(), c.asByteArray())
             PostchainUtils.cryptoSystem.verifyDigest(digest, signature)
         } catch (e: Exception) {
-            throw Rt_Error("verify_signature", e.message ?: "")
+            throw Rt_Exception.common("verify_signature", e.message ?: "Signature verification crashed")
         }
         Rt_BooleanValue(res)
     }

@@ -68,7 +68,7 @@ private object ChainCtxFns {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
             val res = ctx.chainCtx.moduleArgs[moduleName]
-            return res ?: throw Rt_Error("chain_context.args:no_module_args:$moduleName", "No module args for module '$moduleName'")
+            return res ?: throw Rt_Exception.common("chain_context.args:no_module_args:$moduleName", "No module args for module '$moduleName'")
         }
     }
 }

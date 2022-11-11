@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -23,7 +23,8 @@ import net.postchain.rell.model.R_CtErrorType
 import net.postchain.rell.model.R_GlobalConstantDefinition
 import net.postchain.rell.model.R_GlobalConstantId
 import net.postchain.rell.model.R_Type
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_CommonError
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.One
@@ -181,8 +182,10 @@ class C_GlobalConstantFunctionBody(
         val vExpr = compile()
         return try {
             vExpr.constantValue(ctx)
-        } catch (e: Rt_Error) {
-            bodyCtx.appCtx.msgCtx.error(vExpr.pos, e.code, e.msg)
+        } catch (e: Rt_Exception) {
+            when (e.err) {
+                is Rt_CommonError -> bodyCtx.appCtx.msgCtx.error(vExpr.pos, e.err.code, e.fullMessage())
+            }
             null
         } catch (e: Throwable) {
             // ignore

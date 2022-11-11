@@ -8,7 +8,7 @@ import mu.KLogging
 import net.postchain.base.withReadConnection
 import net.postchain.base.withWriteConnection
 import net.postchain.core.Storage
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immSetOf
 import net.postchain.rell.utils.toImmSet
@@ -156,7 +156,7 @@ object NoConnSqlExecutor: SqlExecutor() {
     override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) = throw err()
     override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) = throw err()
 
-    private fun err() = Rt_Error("no_sql", "No database connection")
+    private fun err() = Rt_Exception.common("no_sql", "No database connection")
 }
 
 class ConnectionSqlManager(private val con: Connection, logging: Boolean): SqlManager() {

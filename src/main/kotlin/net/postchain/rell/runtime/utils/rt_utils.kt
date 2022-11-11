@@ -132,14 +132,14 @@ class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Bo
                 System.err.println("SQL: " + sql)
                 e.printStackTrace()
             }
-            throw Rt_Error("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")
+            throw Rt_Exception.common("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")
         }
     }
 }
 
 class Rt_Messages(private val logger: KLogger) {
     private val warningCodes = mutableListOf<String>()
-    private val errors = mutableListOf<Rt_Error>()
+    private val errors = mutableListOf<Rt_CommonError>()
 
     fun warning(code: String, msg: String) {
         warningCodes.add(code)
@@ -147,7 +147,7 @@ class Rt_Messages(private val logger: KLogger) {
     }
 
     fun error(code: String, msg: String) {
-        errors.add(Rt_Error(code, msg))
+        errors.add(Rt_CommonError(code, msg))
     }
 
     fun errorIfNotEmpty(list: Collection<String>, code: String, msg: String) {
@@ -164,20 +164,20 @@ class Rt_Messages(private val logger: KLogger) {
         }
 
         if (errors.size == 1) {
-            throw errors[0]
+            throw Rt_Exception(errors[0])
         }
 
-        val code = errors.map { it.code }.joinToString(",")
-        val msg = errors.mapNotNull { it.message }.joinToString("\n")
-        throw Rt_Error(code, msg)
+        val code = errors.joinToString(",") { it.code }
+        val msg = errors.joinToString("\n") { it.message() }
+        throw Rt_Exception.common(code, msg)
     }
 
     fun warningCodes() = warningCodes.toList()
 }
 
 object Rt_Utils {
-    fun errNotSupported(msg: String): Rt_Error {
-        return Rt_Error("not_supported", msg)
+    fun errNotSupported(msg: String): Rt_Exception {
+        return Rt_Exception.common("not_supported", msg)
     }
 
     fun <T> wrapErr(errCode: String, code: () -> T): T {
@@ -188,11 +188,11 @@ object Rt_Utils {
         try {
             val res = code()
             return res
-        } catch (e: Rt_BaseError) {
+        } catch (e: Rt_Exception) {
             throw e
         } catch (e: Throwable) {
             val errCode = errCodeFn()
-            throw Rt_Error(errCode, e.message ?: "")
+            throw Rt_Exception.common(errCode, e.message ?: "error")
         }
     }
 
@@ -203,14 +203,14 @@ object Rt_Utils {
     fun check(b: Boolean, msgProvider: () -> C_CodeMsg) {
         if (!b) {
             val codeMsg = msgProvider()
-            throw Rt_Error(codeMsg.code, codeMsg.msg)
+            throw Rt_Exception.common(codeMsg.code, codeMsg.msg)
         }
     }
 
     fun <T> checkNotNull(value: T?, msgProvider: () -> C_CodeMsg): T {
         if (value == null) {
             val codeMsg = msgProvider()
-            throw Rt_Error(codeMsg.code, codeMsg.msg)
+            throw Rt_Exception.common(codeMsg.code, codeMsg.msg)
         }
         return value
     }
@@ -230,9 +230,10 @@ object Rt_Utils {
             filePos: R_FilePos?,
             rFrameGetter: C_LateGetter<R_CallFrame>
     ): Rt_Value {
-        val caller = if (filePos == null || frame == null) null else R_FunctionBase.createFrameCaller(frame, filePos)
+        val stack = if (filePos == null || frame == null) null else frame.subStack(filePos)
         val rSubFrame = rFrameGetter.get()
-        val subFrame = R_FunctionBase.createCallFrame(defCtx, caller, rSubFrame)
+        val callCtx = Rt_CallContext(defCtx, stack, frame?.dbUpdateAllowed() ?: true)
+        val subFrame = R_FunctionBase.createCallFrame(callCtx, rSubFrame)
         return expr.evaluate(subFrame)
     }
 }

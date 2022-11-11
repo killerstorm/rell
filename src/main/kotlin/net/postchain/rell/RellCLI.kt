@@ -451,8 +451,8 @@ private class RellAppLauncher(
     private fun callEntryPoint(exeCtx: Rt_ExecutionContext, rtArgs: List<Rt_Value>): Rt_Value? {
         val res = try {
             entryPoint.call(exeCtx, rtArgs)
-        } catch (e: Rt_StackTraceError) {
-            val msg = Rt_Utils.appendStackTrace("ERROR ${e.message}", e.stack)
+        } catch (e: Rt_Exception) {
+            val msg = Rt_Utils.appendStackTrace("ERROR ${e.message}", e.info.stack)
             System.err.println(msg)
             exitProcess(1)
         }

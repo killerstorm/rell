@@ -1,10 +1,9 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.expr
 
-import net.postchain.rell.model.R_FilePos
 import net.postchain.rell.model.R_FunctionBase
 import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.model.R_Type
@@ -134,7 +133,7 @@ private class Rt_ExtendableFunctionCombiner_Map(private val type: R_Type): Rt_Ex
             if (v0 != null) {
                 val code = "extendable_fn:map:key_conflict:${k.strCode()}:${v0.strCode()}:${v.strCode()}"
                 val msg = "Map key conflict: ${k.str()}"
-                throw Rt_Error(code, msg)
+                throw Rt_Exception.common(code, msg)
             }
         }
         return false
@@ -157,13 +156,13 @@ class R_FunctionCallTarget_ExtendableUserFunction(
     }
 
     private inner class Rt_FunctionCallTarget_ExtendableUserFunction: Rt_FunctionCallTarget() {
-        override fun call(frame: Rt_CallFrame, values: List<Rt_Value>, callPos: R_FilePos): Rt_Value {
-            val extensions = frame.appCtx.app.functionExtensions.getExtensions(descriptor.uid)
+        override fun call(callCtx: Rt_CallContext, values: List<Rt_Value>): Rt_Value {
+            val extensions = callCtx.appCtx.app.functionExtensions.getExtensions(descriptor.uid)
 
             val rtCombiner = descriptor.combiner.createRtCombiner()
 
             for (ext in extensions) {
-                val value = ext.fnBase.call(frame, values, callPos)
+                val value = ext.fnBase.call(callCtx, values)
                 if (rtCombiner.addExtensionResult(value)) {
                     break
                 }

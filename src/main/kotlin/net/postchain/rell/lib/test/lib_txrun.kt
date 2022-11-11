@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.test
@@ -9,12 +9,15 @@ import net.postchain.base.BaseEContext
 import net.postchain.base.configuration.BlockchainConfigurationData
 import net.postchain.base.data.DatabaseAccess
 import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
 import net.postchain.core.BlockchainConfiguration
 import net.postchain.core.BlockchainConfigurationFactory
 import net.postchain.core.BlockchainContext
 import net.postchain.core.EContext
+import net.postchain.crypto.KeyPair
+import net.postchain.crypto.PrivKey
+import net.postchain.crypto.PubKey
+import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.mapper.GtvObjectMapper
 import net.postchain.gtx.GTXBlockchainConfigurationFactory
@@ -25,7 +28,7 @@ import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.Rt_BlockRunnerStrategy
 import net.postchain.rell.runtime.Rt_CallContext
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.tools.RunPostchainApp
 import net.postchain.rell.utils.*
@@ -46,9 +49,9 @@ object UnitTestBlockRunner {
         val bcCtx = getBlockchainContext(ctx)
 
         RellPostchainModuleEnvironment.set(ctx.globalCtx.pcModuleEnv) {
-            val pubKey = keyPair.pub.toByteArray()
-            val privKey = keyPair.priv.toByteArray()
-            val sigMaker = PostchainUtils.cryptoSystem.buildSigMaker(pubKey, privKey)
+            val pubKey = PubKey(keyPair.pub.toByteArray())
+            val privKey = PrivKey(keyPair.priv.toByteArray())
+            val sigMaker = PostchainUtils.cryptoSystem.buildSigMaker(KeyPair(pubKey, privKey))
 
             val bcData = GtvObjectMapper.fromGtv(gtvConfig, BlockchainConfigurationData::class, mapOf("partialContext" to bcCtx, "sigmaker" to sigMaker))
             val bcConfigFactory: BlockchainConfigurationFactory = GTXBlockchainConfigurationFactory()
@@ -168,7 +171,7 @@ class Rt_DynamicBlockRunnerStrategy(
         }
 
         override fun exit(status: Int): Nothing {
-            throw Rt_Error("block_runner", "Gtv config generation failed")
+            throw Rt_Exception.common("block_runner", "Gtv config generation failed")
         }
     }
 }

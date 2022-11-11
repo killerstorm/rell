@@ -63,15 +63,15 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     @Test fun testAssertEqualsNumericPromotions() {
-        chkAssert("assert_equals(123.0, 456)", "rt_err:assert_equals:dec[123]:dec[456]")
-        chkAssert("assert_equals(123, 456.0)", "rt_err:assert_equals:dec[123]:dec[456]")
+        chkAssert("assert_equals(123.0, 456)", "asrt_err:assert_equals:dec[123]:dec[456]")
+        chkAssert("assert_equals(123, 456.0)", "asrt_err:assert_equals:dec[123]:dec[456]")
         chkAssert("assert_equals(123.0, 123)", "int[0]")
         chkAssert("assert_equals(123, 123.0)", "int[0]")
 
         chkAssert("assert_not_equals(123.0, 456)", "int[0]")
         chkAssert("assert_not_equals(123, 456.0)", "int[0]")
-        chkAssert("assert_not_equals(123.0, 123)", "rt_err:assert_not_equals:dec[123]")
-        chkAssert("assert_not_equals(123, 123.0)", "rt_err:assert_not_equals:dec[123]")
+        chkAssert("assert_not_equals(123.0, 123)", "asrt_err:assert_not_equals:dec[123]")
+        chkAssert("assert_not_equals(123, 123.0)", "asrt_err:assert_not_equals:dec[123]")
 
         // More complex type promotions not supported yet.
         chkAssertEqualsBad("_nullable_int(123)", "123.0", "integer?", "decimal")
@@ -94,13 +94,13 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     private fun chkAssertEquals(e1: String, e2: String, v1: String, v2: String) {
-        chkAssert("assert_equals($e1, $e2)", "rt_err:assert_equals:$v1:$v2")
+        chkAssert("assert_equals($e1, $e2)", "asrt_err:assert_equals:$v1:$v2")
         chkAssert("assert_equals($e1, $e1)", "int[0]")
         chkAssert("assert_equals($e2, $e2)", "int[0]")
 
         chkAssert("assert_not_equals($e1, $e2)", "int[0]")
-        chkAssert("assert_not_equals($e1, $e1)", "rt_err:assert_not_equals:$v1")
-        chkAssert("assert_not_equals($e2, $e2)", "rt_err:assert_not_equals:$v2")
+        chkAssert("assert_not_equals($e1, $e1)", "asrt_err:assert_not_equals:$v1")
+        chkAssert("assert_not_equals($e2, $e2)", "asrt_err:assert_not_equals:$v2")
     }
 
     private fun chkAssertEqualsBad(e1: String, e2: String, t1: String, t2: String) {
@@ -110,8 +110,8 @@ class LibRellTestAssertTest: BaseRellTest(false) {
 
     @Test fun testAssertTrueFalse() {
         chkAssert("assert_true(true)", "int[0]")
-        chkAssert("assert_true(false)", "rt_err:assert_boolean:true")
-        chkAssert("assert_false(true)", "rt_err:assert_boolean:false")
+        chkAssert("assert_true(false)", "asrt_err:assert_boolean:true")
+        chkAssert("assert_false(true)", "asrt_err:assert_boolean:false")
         chkAssert("assert_false(false)", "int[0]")
 
         chkAssert("assert_true(123)", "ct_err:expr_call_argtypes:[FN]:integer")
@@ -121,13 +121,13 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     @Test fun testAssertNull() {
-        chkAssert("assert_null(_nullable_int(123))", "rt_err:assert_null:int[123]")
+        chkAssert("assert_null(_nullable_int(123))", "asrt_err:assert_null:int[123]")
         chkAssert("assert_null(_nullable_int(null))", "int[0]")
         chkAssert("assert_null(123)", "ct_err:expr_call_argtypes:[FN]:integer")
         chkAssert("assert_null(null)", "int[0]")
 
         chkAssert("assert_not_null(_nullable_int(123))", "int[0]")
-        chkAssert("assert_not_null(_nullable_int(null))", "rt_err:assert_not_null")
+        chkAssert("assert_not_null(_nullable_int(null))", "asrt_err:assert_not_null")
         chkAssert("assert_not_null(123)", "ct_err:expr_call_argtypes:[FN]:integer")
         chkAssert("assert_not_null(null)", "ct_err:expr_call_argtypes:[FN]:null")
     }
@@ -166,7 +166,7 @@ class LibRellTestAssertTest: BaseRellTest(false) {
 
     private fun chkAssertCompare(fn: String, op: CmpOp, exprs: List<String>, values: List<String>, i: Int, j: Int) {
         val t = op.fn(i.compareTo(j))
-        val exp = if (t) "int[0]" else "rt_err:assert_compare:${op.op}:${values[i]}:${values[j]}"
+        val exp = if (t) "int[0]" else "asrt_err:assert_compare:${op.op}:${values[i]}:${values[j]}"
         chkAssert("$fn(${exprs[i]}, ${exprs[j]})", exp)
     }
 
@@ -196,7 +196,7 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     private fun chkAssertCompareNP(fn: String, op: CmpOp, a: String, b: String, cmp: Int) {
         val av = "dec[${a.toDouble().toInt()}]"
         val bv = "dec[${b.toDouble().toInt()}]"
-        val exp = if (op.fn(cmp)) "int[0]" else "rt_err:assert_compare:${op.op}:$av:$bv"
+        val exp = if (op.fn(cmp)) "int[0]" else "asrt_err:assert_compare:${op.op}:$av:$bv"
         chkAssert("$fn($a, $b)", exp)
     }
 
@@ -227,9 +227,9 @@ class LibRellTestAssertTest: BaseRellTest(false) {
 
     private fun chkAssertRange(fn: String, op1: CmpOp, op2: CmpOp, exprs: List<String>, values: List<String>, i: Int) {
         val exp = if (!op1.fn(i.compareTo(1))) {
-            "rt_err:assert_compare:${op1.op}:${values[i]}:${values[1]}"
+            "asrt_err:assert_compare:${op1.op}:${values[i]}:${values[1]}"
         } else if (!op2.fn(i.compareTo(3))) {
-            "rt_err:assert_compare:${op2.op}:${values[i]}:${values[3]}"
+            "asrt_err:assert_compare:${op2.op}:${values[i]}:${values[3]}"
         } else {
             "int[0]"
         }
@@ -267,13 +267,60 @@ class LibRellTestAssertTest: BaseRellTest(false) {
         val args = argsStr.split(",")
         val vals = args.map { "dec[${it.toDouble().toInt()}]" }
         val exp = if (!op1.fn(i.compareTo(1))) {
-            "rt_err:assert_compare:${op1.op}:${vals[0]}:${vals[1]}"
+            "asrt_err:assert_compare:${op1.op}:${vals[0]}:${vals[1]}"
         } else if (!op2.fn(i.compareTo(3))) {
-            "rt_err:assert_compare:${op2.op}:${vals[0]}:${vals[2]}"
+            "asrt_err:assert_compare:${op2.op}:${vals[0]}:${vals[2]}"
         } else {
             "int[0]"
         }
         chkAssert("$fn($argsStr)", exp)
+    }
+
+    @Test fun testAssertFails() {
+        chkAssert("assert_fails(integer.from_hex(*))", "ct_err:expr_call_argtypes:[FN]:(text)->integer")
+        chkAssert("assert_fails(123)", "ct_err:expr_call_argtypes:[FN]:integer")
+
+        chkAssert("assert_fails(integer.from_hex('xyz', *))", "int[0]")
+        chkAssert("assert_fails(integer.from_hex('123', *))", "asrt_err:assert_fails:no_fail:fn[integer.from_hex(text[123])]")
+        chkAssert("assert_fails('foo', integer.from_hex('qwer', *))", "asrt_err:assert_fails:mismatch:[foo]:[Invalid hex number: 'qwer']")
+        chkAssert("assert_fails(\"Invalid hex number: 'qwer'\", integer.from_hex('qwer', *))", "int[0]")
+
+        chkAssert("assert_fails(json('', *))", "int[0]")
+        chkAssert("assert_fails(json('{}', *))", "asrt_err:assert_fails:no_fail:fn[json(text[{}])]")
+        chkAssert("assert_fails('Bad JSON: ', json('', *))", "int[0]")
+        chkAssert("assert_fails('error', json('', *))", "asrt_err:assert_fails:mismatch:[error]:[Bad JSON: ]")
+    }
+
+    @Test fun testAssertFailsRequire() {
+        def("function req(v: integer) { require(v >= 0, 'negative: %d'.format(v)); }")
+        chkAssert("assert_fails(req(123, *))", "asrt_err:assert_fails:no_fail:fn[req(int[123])]")
+        chkAssert("assert_fails(req(-123, *))", "int[0]")
+        chkAssert("assert_fails('aaa', req(-123, *))", "asrt_err:assert_fails:mismatch:[aaa]:[negative: -123]")
+        chkAssert("assert_fails('negative: -123', req(-123, *))", "int[0]")
+    }
+
+    @Test fun testAssertFailsAssert() {
+        def("function asrt_true(v: integer) { assert_true(v >= 0); }")
+        def("function asrt_eq(act: integer, exp: integer) { assert_equals(act, exp); }")
+
+        chkAssert("assert_fails(asrt_true(123, *))", "asrt_err:assert_fails:no_fail:fn[asrt_true(int[123])]")
+        chkAssert("assert_fails(asrt_true(-123, *))", "asrt_err:assert_boolean:true")
+        chkAssert("assert_fails('aaa', asrt_true(-123, *))", "asrt_err:assert_boolean:true")
+        chkAssert("assert_fails('negative: -123', asrt_true(-123, *))", "asrt_err:assert_boolean:true")
+
+        chkAssert("assert_fails(asrt_eq(123, 123, *))", "asrt_err:assert_fails:no_fail:fn[asrt_eq(int[123],int[123])]")
+        chkAssert("assert_fails(asrt_eq(123, 456, *))", "asrt_err:assert_equals:int[123]:int[456]")
+        chkAssert("assert_fails('aaa', asrt_eq(123, 456, *))", "asrt_err:assert_equals:int[123]:int[456]")
+        chkAssert("assert_fails('negative: -123', asrt_eq(123, 456, *))", "asrt_err:assert_equals:int[123]:int[456]")
+    }
+
+    @Test fun testAssertFailsResult() {
+        val expr = "integer.from_hex('xy', *)"
+        chk("_type_of(assert_fails($expr))", "text[rell.test.failure]")
+        chk("assert_fails($expr)", "rell.test.failure[Invalid hex number: 'xy']")
+        chk("assert_fails($expr).message", "text[Invalid hex number: 'xy']")
+        chkEx("{ val f: rell.test.failure; f = assert_fails($expr); return f; }", "rell.test.failure[Invalid hex number: 'xy']")
+        chkEx("{ val f: rell.test.failure; f = assert_fails($expr); return f.message; }", "text[Invalid hex number: 'xy']")
     }
 
     private fun chkAssert(expr: String, expected: String) {

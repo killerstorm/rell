@@ -68,7 +68,7 @@ class R_MemberCalculator_DataAttribute(
             } else {
                 "Found more than one object ${baseValue.str()} in the database: ${list.size}"
             }
-            throw Rt_Error("expr_entity_attr_count:${list.size}", msg)
+            throw Rt_Exception.common("expr_entity_attr_count:${list.size}", msg)
         }
 
         checkEquals(list[0].size, 1)

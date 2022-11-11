@@ -1,11 +1,13 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.sql
 
 import net.postchain.rell.model.R_ObjectDefinition
+import net.postchain.rell.runtime.Rt_CommonError
 import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.runtime.Rt_ExecutionContext
 import java.util.*
 
@@ -61,7 +63,7 @@ class SqlObjectsInit(private val exeCtx: Rt_ExecutionContext) {
 
         private fun init0() {
             if (started) {
-                throw cycleError()
+                throw Rt_Exception(cycleError())
             }
 
             started = true
@@ -84,7 +86,7 @@ class SqlObjectsInit(private val exeCtx: Rt_ExecutionContext) {
             val shortStr = cycle.joinToString(",") { it.obj.appLevelName }
             val fullStr = cycle.joinToString(", ") { it.obj.appLevelName }
 
-            return Rt_Error("obj:init_cycle:$shortStr",
+            return Rt_CommonError("obj:init_cycle:$shortStr",
                     "Cannot initialize object '${obj.appLevelName}' because it depends on itself: $fullStr")
         }
     }

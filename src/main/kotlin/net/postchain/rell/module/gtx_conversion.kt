@@ -38,10 +38,10 @@ private class GtvToRtState(val pretty: Boolean) {
     private fun checkRowids(sqlExec: SqlExecutor, sqlCtx: Rt_SqlContext, rEntity: R_EntityDefinition, rowids: Collection<Long>) {
         val existingIds = selectExistingIds(sqlExec, sqlCtx, rEntity, rowids)
         val missingIds = rowids.toSet() - existingIds
-        if (!missingIds.isEmpty()) {
+        if (missingIds.isNotEmpty()) {
             val s = missingIds.toList().sorted()
             val name = rEntity.appLevelName
-            throw Rt_GtvError("obj_missing:[$name]:${missingIds.joinToString(",")}", "Missing objects of entity '$name': $s")
+            throw Rt_GtvError.exception("obj_missing:[$name]:${missingIds.joinToString(",")}", "Missing objects of entity '$name': $s")
         }
     }
 
@@ -242,7 +242,7 @@ class GtvRtConversion_Struct(private val struct: R_Struct): GtvRtConversion() {
             }
         }
 
-        fun errWrongSize(ctx: GtvToRtContext, type: R_Type, expectedCount: Int, actualCount: Int): Rt_BaseError {
+        fun errWrongSize(ctx: GtvToRtContext, type: R_Type, expectedCount: Int, actualCount: Int): Rt_Exception {
             val typeName = type.name
             return GtvRtUtils.errGtv(ctx, "struct_size:$typeName:$expectedCount:$actualCount",
                     "Wrong Gtv array size for struct '$typeName': $actualCount instead of $expectedCount")
@@ -269,7 +269,7 @@ class GtvRtConversion_Enum(private val enum: R_EnumDefinition): GtvRtConversion(
             val attr = enum.attr(name)
             if (attr == null) {
                 val code = "enum:bad_value:$name"
-                throw GtvRtUtils.errGtvType(ctx, enum.type, code, "invalid value for enum '$enumName': '$name'")
+                throw GtvRtUtils.errGtvType(ctx, enum.type, code, "invalid value: '$name'")
             }
             attr
         } else {
@@ -277,7 +277,7 @@ class GtvRtConversion_Enum(private val enum: R_EnumDefinition): GtvRtConversion(
             val attr = enum.attr(value)
             if (attr == null) {
                 val code = "enum:bad_value:$value"
-                throw GtvRtUtils.errGtvType(ctx, enum.type, code, "Invalid value for enum '$enumName': $value")
+                throw GtvRtUtils.errGtvType(ctx, enum.type, code, "invalid value: $value")
             }
             attr
         }
@@ -372,7 +372,7 @@ class GtvRtConversion_Map(val type: R_MapType): GtvRtConversion() {
             for (gtvEntry in GtvRtUtils.gtvToArray(ctx, gtv, type)) {
                 val (key, value) = gtvToRtEntry(ctx, gtvEntry)
                 if (key in tmp) {
-                    throw GtvRtUtils.errGtv(ctx, "map_dup_key:${key.strCode()}", "Map duplicate key: ${key.str()}")
+                    throw GtvRtUtils.errGtv(ctx, "map_dup_key:${key.strCode()}", "Duplicate map key: ${key.str()}")
                 }
                 tmp[key] = value
             }
@@ -473,7 +473,7 @@ object GtvRtConversion_Gtv: GtvRtConversion() {
 sealed class GtvRtConversion_Virtual: GtvRtConversion() {
     final override fun directCompatibility() = R_GtvCompatibility(true, false)
     final override fun rtToGtv(rt: Rt_Value, pretty: Boolean) =
-            throw Rt_GtvError("virtual:to_gtv", "Cannot convert virtual to Gtv")
+            throw Rt_GtvError.exception("virtual:to_gtv", "Cannot convert virtual to Gtv")
 
     companion object {
         fun deserialize(ctx: GtvToRtContext, gtv: Gtv): Gtv {
@@ -723,7 +723,7 @@ object GtvRtUtils {
         val array = gtvToArray(ctx, gtv, rellType)
         val actSize = array.size
         if (actSize != size) {
-            throw errGtvType(ctx, rellType, "$errCode:$size:$actSize", "wrong gtv array size: $actSize instead of $size")
+            throw errGtvType(ctx, rellType, "$errCode:$size:$actSize", "wrong array size: $actSize instead of $size")
         }
         return array
     }
@@ -744,7 +744,7 @@ object GtvRtUtils {
         }
     }
 
-    private fun errGtvType(ctx: GtvToRtContext, rellType: R_Type, actualGtv: Gtv, expectedGtvType: GtvType, e: UserMistake): Rt_BaseError {
+    private fun errGtvType(ctx: GtvToRtContext, rellType: R_Type, actualGtv: Gtv, expectedGtvType: GtvType, e: UserMistake): Rt_Exception {
         val code = "$expectedGtvType:${actualGtv.type}"
         val emsg = e.message
         val msg = when {
@@ -755,19 +755,19 @@ object GtvRtUtils {
         return errGtvType(ctx, rellType, code, msg)
     }
 
-    fun errGtvType(ctx: GtvToRtContext, rellType: R_Type, code: String, msg: String): Rt_BaseError {
+    fun errGtvType(ctx: GtvToRtContext, rellType: R_Type, code: String, msg: String): Rt_Exception {
         val fullCode = "type:[${rellType.strCode()}]:$code"
-        val fullMsg = "decoding type '${rellType.str()}': $msg"
+        val fullMsg = "Decoding type '${rellType.str()}': $msg"
         return errGtv(ctx, fullCode, fullMsg)
     }
 
-    fun errGtv(ctx: GtvToRtContext, code: String, msg: String): Rt_BaseError {
+    fun errGtv(ctx: GtvToRtContext, code: String, msg: String): Rt_Exception {
         var code2 = code
         var msg2 = msg
         if (ctx.param != null) {
             code2 = "$code:${ctx.param.name}"
             msg2 = "$msg (parameter: ${ctx.param.name})"
         }
-        return Rt_GtvError(code2, msg2)
+        return Rt_GtvError.exception(code2, msg2)
     }
 }

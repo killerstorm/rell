@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime
@@ -123,7 +123,7 @@ abstract class Rt_Value {
         return str()
     }
 
-    private fun errType(expected: Rt_CoreValueTypes) = Rt_ValueTypeError(expected.type(), valueType)
+    private fun errType(expected: Rt_CoreValueTypes) = Rt_ValueTypeError.exception(expected.type(), valueType)
 }
 
 sealed class Rt_VirtualValue(val gtv: Gtv): Rt_Value() {
@@ -132,7 +132,7 @@ sealed class Rt_VirtualValue(val gtv: Gtv): Rt_Value() {
     fun toFull(): Rt_Value {
         if (gtv is GtvVirtual) {
             val typeStr = type().name
-            throw Rt_Error("virtual:to_full:notfull:$typeStr", "to_full: value of type $typeStr is not full")
+            throw Rt_Exception.common("virtual:to_full:notfull:$typeStr", "Value of type $typeStr is not full")
         }
         val res = toFull0()
         return res
@@ -200,7 +200,7 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
             }
 
             val res = ofTry(v)
-            return res ?: throw errOverflow("decimal:overflow", "Decimal value overflow")
+            return res ?: throw errOverflow("decimal:overflow", "Decimal value out of range")
         }
 
         fun ofTry(v: BigDecimal): Rt_Value? {
@@ -212,7 +212,7 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
             val v = try {
                 Lib_DecimalMath.parse(s)
             } catch (e: NumberFormatException) {
-                throw Rt_Error("decimal:invalid:$s", "Invalid decimal value: '$s'")
+                throw Rt_Exception.common("decimal:invalid:$s", "Invalid decimal value: '$s'")
             }
             return of(v)
         }
@@ -222,9 +222,9 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
             return of(bd)
         }
 
-        fun errOverflow(code: String, msg: String): Rt_Error {
+        fun errOverflow(code: String, msg: String): Rt_Exception {
             val p = Lib_DecimalMath.DECIMAL_INT_DIGITS
-            return Rt_Error(code, "$msg (allowed range is -10^$p..10^$p, exclusive)")
+            return Rt_Exception.common(code, "$msg (allowed range is -10^$p..10^$p, exclusive)")
         }
     }
 }
@@ -374,7 +374,7 @@ class Rt_ListValue(private val type: R_Type, private val elements: MutableList<R
     companion object {
         fun checkIndex(size: Int, index: Long) {
             if (index < 0 || index >= size) {
-                throw Rt_Error("list:index:$size:$index", "List index out of bounds: $index (size $size)")
+                throw Rt_Exception.common("list:index:$size:$index", "List index out of bounds: $index (size $size)")
             }
         }
 
@@ -421,7 +421,7 @@ class Rt_VirtualListValue(
         Rt_ListValue.checkIndex(elements.size, index)
         val value = elements[index.toInt()]
         if (value == null) {
-            throw Rt_Error("virtual_list:get:novalue:$index", "Element $index has no value")
+            throw Rt_Exception.common("virtual_list:get:novalue:$index", "Element $index has no value")
         }
         return value
     }
@@ -598,7 +598,7 @@ class Rt_VirtualTupleValue(
         val value = elements[index]
         if (value == null) {
             val attr = type.innerType.fields[index].name ?: "$index"
-            throw Rt_Error("virtual_tuple:get:novalue:$attr", "Field '$attr' has no value")
+            throw Rt_Exception.common("virtual_tuple:get:novalue:$attr", "Field '$attr' has no value")
         }
         return value
     }
@@ -699,7 +699,7 @@ class Rt_VirtualStructValue(
         if (value == null) {
             val typeName = type.innerType.name
             val attr = type.innerType.struct.attributesList[index].name
-            throw Rt_Error("virtual_struct:get:novalue:$typeName:$attr", "Attribute '$typeName.$attr' has no value")
+            throw Rt_Exception.common("virtual_struct:get:novalue:$typeName:$attr", "Attribute '$typeName.$attr' has no value")
         }
         return value
     }
@@ -874,10 +874,10 @@ class Rt_FunctionValue(
 
     override fun str() = "${target.str()}(*)"
 
-    fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+    fun call(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         checkEquals(args.size, mapping.wildCount)
         val combinedArgs = mapping.args.map { if (it.wild) args[it.index] else exprValues[it.index] }
-        return target.call(frame, combinedArgs, callerFilePos)
+        return target.call(callCtx, combinedArgs)
     }
 
     fun combine(newType: R_Type, newMapping: R_PartialCallMapping, newArgs: List<Rt_Value>): Rt_Value {

@@ -11,44 +11,44 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
-import org.apache.commons.lang3.StringUtils
 
 object R_SysFunctionUtils {
-    fun call(fn: R_SysFunction, nameMsg: LazyString?, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
+    fun call(callCtx: Rt_CallContext, fn: R_SysFunction, nameMsg: LazyString?, values: List<Rt_Value>): Rt_Value {
         return if (nameMsg == null) {
-            call0(fn, frame, values)
+            call0(callCtx, fn, values)
         } else {
-            callAndCatch(fn, nameMsg, frame, values)
+            callAndCatch(callCtx, fn, nameMsg, values)
         }
     }
 
-    private fun call0(fn: R_SysFunction, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
-        val res = fn.call(frame.defCtx.callCtx, values)
+    private fun call0(callCtx: Rt_CallContext, fn: R_SysFunction, values: List<Rt_Value>): Rt_Value {
+        val res = fn.call(callCtx, values)
         return res
     }
 
-    private fun callAndCatch(fn: R_SysFunction, name: LazyString, frame: Rt_CallFrame, values: List<Rt_Value>): Rt_Value {
+    private fun callAndCatch(callCtx: Rt_CallContext, fn: R_SysFunction, name: LazyString, values: List<Rt_Value>): Rt_Value {
         val res = try {
-            call0(fn, frame, values)
-        } catch (e: Rt_StackTraceError) {
-            throw e
-        } catch (e: Rt_BaseError) {
-            val msg = decorate(name.value, e.message)
-            throw e.updateMessage(msg)
+            call0(callCtx, fn, values)
+        } catch (e: Rt_Exception) {
+            throw if (e.info.extraMessage != null) e else {
+                val extra  = extraMessage(name.value)
+                val info = Rt_ExceptionInfo(e.info.stack, extra)
+                Rt_Exception(e.err, info, e)
+            }
         } catch (e: RellInterpreterCrashException) {
             throw e
         } catch (e: Throwable) {
-            val msg = decorate(name.value, e.message)
-            throw Rt_Error("fn:error:$name:${e.javaClass.canonicalName}", msg)
+            val extra = extraMessage(name.value)
+            val info = Rt_ExceptionInfo(stack = immListOf(), extraMessage = extra)
+            val err = Rt_CommonError("fn:error:$name:${e.javaClass.canonicalName}", e.message ?: "error")
+            throw Rt_Exception(err, info)
         }
         return res
     }
 
-    private fun decorate(name: String, msg: String?): String {
-        val msg2 = StringUtils.defaultIfBlank(msg, "error")
-        return "System function '$name': $msg2"
-    }
+    private fun extraMessage(name: String) = "System function '$name'"
 }
 
 class R_FullFunctionCallExpr(
@@ -73,7 +73,8 @@ class R_FullFunctionCallExpr(
         rtTarget ?: return Rt_NullValue
         val values = args.map { it.evaluate(frame) }
         val values2 = mapping.map { values[it] }
-        val res = rtTarget.call(frame, values2, callPos)
+        val callCtx = frame.callCtx(callPos)
+        val res = rtTarget.call(callCtx, values2)
         return res
     }
 }

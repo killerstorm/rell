@@ -33,7 +33,7 @@ class Rt_GlobalContext(
     private val rellVersion = Rt_RellVersion.getInstance()
 
     fun rellVersion(): Rt_RellVersion {
-        return rellVersion ?: throw Rt_Error("fn:rell.git_info:no_data", "Version information not found")
+        return rellVersion ?: throw Rt_Exception.common("fn:rell.git_info:no_data", "Version information not found")
     }
 }
 
@@ -257,15 +257,19 @@ class Rt_RegularSqlContext private constructor(
             try {
                 res = SqlMeta.loadMetaData(sqlExec, chain.sqlMapping, msgs)
                 msgs.checkErrors()
-            } catch (e: Rt_Error) {
-                throw errInit("external_meta_error:${chain.chainId}:$name:${e.code}",
+            } catch (e: Rt_Exception) {
+                val code = when (e.err) {
+                    is Rt_CommonError -> e.err.code
+                    else -> e.err.javaClass.simpleName
+                }
+                throw errInit("external_meta_error:${chain.chainId}:$name:$code",
                         "Failed to load metadata for external chain '$name' (chain_iid = ${chain.chainId}): ${e.message}")
             }
 
             return res
         }
 
-        private fun errInit(code: String, msg: String): RuntimeException = Rt_Error(code, msg)
+        private fun errInit(code: String, msg: String): RuntimeException = Rt_Exception.common(code, msg)
     }
 }
 
@@ -420,19 +424,30 @@ class Rt_ExecutionContext(
     }
 }
 
-class Rt_CallContext(val defCtx: Rt_DefinitionContext) {
+class Rt_CallContext(val defCtx: Rt_DefinitionContext, val stack: Rt_CallStack?, private val dbUpdateAllowed: Boolean) {
     val exeCtx = defCtx.exeCtx
     val appCtx = exeCtx.appCtx
     val sqlCtx = exeCtx.sqlCtx
     val globalCtx = appCtx.globalCtx
     val chainCtx = appCtx.chainCtx
+
+    fun dbUpdateAllowed() = dbUpdateAllowed && defCtx.dbUpdateAllowed
+
+    fun subContext(filePos: R_FilePos): Rt_CallContext {
+        val subStack = subStack(filePos)
+        return Rt_CallContext(defCtx, subStack, dbUpdateAllowed)
+    }
+
+    fun subStack(filePos: R_FilePos): Rt_CallStack {
+        val stackPos = R_StackPos(defCtx.defId, filePos)
+        return Rt_CallStack(stack, stackPos)
+    }
 }
 
 class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed: Boolean, val defId: R_DefinitionId) {
     val appCtx = exeCtx.appCtx
     val globalCtx = appCtx.globalCtx
     val sqlCtx = exeCtx.sqlCtx
-    val callCtx = Rt_CallContext(this)
 }
 
 abstract class Rt_TxContext {
@@ -472,7 +487,7 @@ class Rt_StaticBlockRunnerStrategy(
 }
 
 object Rt_UnsupportedBlockRunnerStrategy: Rt_BlockRunnerStrategy() {
-    private val errMsg = "Block execution not supported"
+    private const val errMsg = "Block execution not supported"
     override fun createGtvConfig() = throw Rt_Utils.errNotSupported(errMsg)
     override fun getKeyPair() = throw Rt_Utils.errNotSupported(errMsg)
 }

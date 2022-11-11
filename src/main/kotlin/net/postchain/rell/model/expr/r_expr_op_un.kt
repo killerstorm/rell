@@ -19,7 +19,7 @@ object R_UnaryOp_Minus_Integer: R_UnaryOp() {
         val res = try {
             LongMath.checkedSubtract(0, v)
         } catch (e: ArithmeticException) {
-            throw Rt_Error("expr:-:overflow:$v", "Integer overflow: -($v)")
+            throw Rt_Exception.common("expr:-:overflow:$v", "Integer overflow: -($v)")
         }
 
         return Rt_IntValue(res)

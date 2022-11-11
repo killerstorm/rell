@@ -5,27 +5,26 @@
 package net.postchain.rell.lib.test
 
 import net.postchain.rell.compiler.ast.*
-import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.expr.C_ExprUtils
-import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
-import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_Nullable
-import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseCtx
-import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseMatch
-import net.postchain.rell.compiler.base.fn.C_GlobalSpecialFuncCase
+import net.postchain.rell.compiler.base.expr.*
+import net.postchain.rell.compiler.base.fn.*
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_SpecialGlobalFuncCaseMatch
 import net.postchain.rell.compiler.vexpr.V_BinaryOp
 import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.model.R_BooleanType
-import net.postchain.rell.model.R_NullableType
-import net.postchain.rell.model.R_SysFunction_1
-import net.postchain.rell.model.R_UnitType
+import net.postchain.rell.lib.type.C_Lib_Type
+import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_BinaryOp
 import net.postchain.rell.model.expr.R_Expr
+import net.postchain.rell.module.GtvRtConversion
+import net.postchain.rell.module.GtvRtConversion_None
 import net.postchain.rell.runtime.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.immListOf
+
+private const val FAILURE_SNAME = "failure"
+private val FAILURE_QNAME = C_Lib_Test.NAMESPACE_NAME.add(FAILURE_SNAME)
 
 object C_Lib_Test_Assert {
     private val FUNCTIONS = C_GlobalFuncBuilder(C_Lib_Test.NAMESPACE_DEF_PATH)
@@ -35,6 +34,8 @@ object C_Lib_Test_Assert {
             .add("assert_false", R_UnitType, listOf(R_BooleanType), R_Fns.AssertBoolean(false))
             .addEx("assert_null", R_UnitType, listOf(C_ArgTypeMatcher_Nullable), R_Fns.AssertNull)
             .add("assert_not_null", C_FuncCase_AssertNotNull)
+            .add("assert_fails", R_FailureType, listOf(R_FunctionType(listOf(), R_UnitType)), R_Fns.AssertFails1)
+            .add("assert_fails", R_FailureType, listOf(R_TextType, R_FunctionType(listOf(), R_UnitType)), R_Fns.AssertFails2)
 
             .add("assert_lt", C_FuncCase_AssertCompare(C_BinOp_Lt))
             .add("assert_gt", C_FuncCase_AssertCompare(C_BinOp_Gt))
@@ -46,8 +47,9 @@ object C_Lib_Test_Assert {
             .add("assert_ge_le", C_FuncCase_AssertRange(C_BinOp_Ge, C_BinOp_Le))
             .build()
 
-    fun bind(nsBuilder: C_SysNsProtoBuilder) {
-        C_LibUtils.bindFunctions(nsBuilder, FUNCTIONS)
+    fun bind(b: C_SysNsProtoBuilder) {
+        C_Lib_Type_Failure.bind(b)
+        C_LibUtils.bindFunctions(b, FUNCTIONS)
     }
 }
 
@@ -56,7 +58,7 @@ private object R_Fns {
         override fun call(arg: Rt_Value): Rt_Value {
             val v = arg.asBoolean()
             if (v != expected) {
-                throw Rt_Error("assert_boolean:$expected", "expected $expected")
+                throw Rt_AssertError.exception("assert_boolean:$expected", "expected $expected")
             }
             return Rt_UnitValue
         }
@@ -65,7 +67,7 @@ private object R_Fns {
     object AssertNull: R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
             if (arg != Rt_NullValue) {
-                throw Rt_Error("assert_null:${arg.strCode()}", "expected null but was <${arg.str()}>")
+                throw Rt_AssertError.exception("assert_null:${arg.strCode()}", "expected null but was <${arg.str()}>")
             }
             return Rt_UnitValue
         }
@@ -74,9 +76,49 @@ private object R_Fns {
     object AssertNotNull: R_SysFunction_1() {
         override fun call(arg: Rt_Value): Rt_Value {
             if (arg == Rt_NullValue) {
-                throw Rt_Error("assert_not_null", "expected not null")
+                throw Rt_AssertError.exception("assert_not_null", "expected not null")
             }
             return Rt_UnitValue
+        }
+    }
+
+    object AssertFails1: R_SysFunctionEx_1() {
+        override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+            val fn = arg.asFunction()
+            return AssertFails2.call0(ctx, fn, null)
+        }
+    }
+
+    object AssertFails2: R_SysFunctionEx_2() {
+        override fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
+            val expected = arg1.asString()
+            val fn = arg2.asFunction()
+            return call0(ctx, fn, expected)
+        }
+
+        fun call0(ctx: Rt_CallContext, fn: Rt_FunctionValue, expected: String?): Rt_Value {
+            var err: Rt_Error? = null
+            try {
+                fn.call(ctx, immListOf())
+            } catch (e: Rt_Exception) {
+                if (e.err is Rt_AssertError) {
+                    throw e
+                }
+                err = e.err
+            }
+
+            if (err == null) {
+                throw Rt_AssertError.exception("assert_fails:no_fail:${fn.strCode()}", "code did not fail")
+            }
+
+            val message = err.message()
+            if (expected != null && message != expected) {
+                val code = "assert_fails:mismatch:[$expected]:[$message]"
+                val msg = "expected <$expected> but was <$message>"
+                throw Rt_AssertError.exception(code, msg)
+            }
+
+            return Rt_FailureValue(message)
         }
     }
 }
@@ -227,7 +269,7 @@ private class R_AssertEqualsExpr(
         val equalsValue = op.evaluate(actualValue, expectedValue)
         if (!equalsValue.asBoolean()) {
             val code = "assert_equals:${actualValue.strCode()}:${expectedValue.strCode()}"
-            throw Rt_Error(code, "expected <${expectedValue.str()}> but was <${actualValue.str()}>")
+            throw Rt_AssertError.exception(code, "expected <${expectedValue.str()}> but was <${actualValue.str()}>")
         }
         return Rt_UnitValue
     }
@@ -244,7 +286,7 @@ private class R_AssertNotEqualsExpr(
         val equalsValue = op.evaluate(actualValue, expectedValue)
         if (equalsValue.asBoolean()) {
             val code = "assert_not_equals:${actualValue.strCode()}"
-            throw Rt_Error(code, "expected not <${actualValue.str()}>")
+            throw Rt_AssertError.exception(code, "expected not <${actualValue.str()}>")
         }
         return Rt_UnitValue
     }
@@ -267,7 +309,7 @@ private class R_AssertCompareExpr(
             val resValue = op.evaluate(actualValue, expectedValue)
             if (!resValue.asBoolean()) {
                 val code = "assert_compare:${op.code}:${actualValue.strCode()}:${expectedValue.strCode()}"
-                throw Rt_Error(code, "comparison failed: ${actualValue.str()} ${op.code} ${expectedValue.str()}")
+                throw Rt_AssertError.exception(code, "comparison failed: ${actualValue.str()} ${op.code} ${expectedValue.str()}")
             }
         }
     }
@@ -286,4 +328,44 @@ private class R_AssertRangeExpr(
         R_AssertCompareExpr.eval(frame, actualValue, expected2, op2)
         return Rt_UnitValue
     }
+}
+
+private class Rt_AssertError(val code: String, val msg: String): Rt_Error() {
+    override fun code() = "asrt_err:$code"
+    override fun message() = msg
+
+    companion object {
+        fun exception(code: String, msg: String) = Rt_Exception(Rt_AssertError(code, msg))
+    }
+}
+
+private object R_FailureType: R_BasicType(FAILURE_QNAME.str(), C_Lib_Test.typeDefName(FAILURE_QNAME)) {
+    override fun isReference() = true
+    override fun isDirectPure() = false
+    override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_None
+    override fun getLibType(): C_Lib_Type = C_Lib_Type_Failure
+}
+
+private object C_Lib_Type_Failure: C_Lib_Type(FAILURE_SNAME, R_FailureType, defaultMemberFns = false) {
+    val VALUE_TYPE = Rt_LibValueType.of("TEST_FAILURE")
+
+    override fun bindMemberValues(b: MutableList<C_TypeValueMember>) {
+        val name = R_Name.of("message")
+        val attr: C_MemberAttr = C_MemberAttr_SysProperty(name, PropMessage)
+        b.add(C_TypeValueMember_BasicAttr(name, attr, IdeSymbolInfo.MEM_STRUCT_ATTR))
+    }
+
+    private val PropMessage = C_SysMemberProperty.simple(R_TextType, pure = true) { a ->
+        val v = a as Rt_FailureValue
+        v.messageValue
+    }
+}
+
+private class Rt_FailureValue(val message: String): Rt_Value() {
+    val messageValue = Rt_TextValue(message)
+
+    override val valueType = C_Lib_Type_Failure.VALUE_TYPE
+    override fun type(): R_Type = R_FailureType
+    override fun str() = message
+    override fun strCode(showTupleFieldNames: Boolean) = "${R_FailureType.name}[$message]"
 }

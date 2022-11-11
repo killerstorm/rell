@@ -87,7 +87,7 @@ private object BytesFns {
     private fun calcSub(obj: ByteArray, start: Long, end: Long): Rt_Value {
         val len = obj.size
         if (start < 0 || start > len || end < start || end > len) {
-            throw Rt_Error("fn:byte_array.sub:range:$len:$start:$end",
+            throw Rt_Exception.common("fn:byte_array.sub:range:$len:$start:$end",
                 "Invalid range: start = $start, end = $end (length $len)")
         }
         val r = Arrays.copyOfRange(obj, start.toInt(), end.toInt())
@@ -143,7 +143,7 @@ private object BytesFns {
         val r = ByteArray(s.size)
         for (i in s.indices) {
             val b = s[i].asInteger()
-            if (b < 0 || b > 255) throw Rt_Error("fn:byte_array.from_list:$b", "Byte value out of range: $b")
+            if (b < 0 || b > 255) throw Rt_Exception.common("fn:byte_array.from_list:$b", "Byte value out of range: $b")
             r[i] = b.toByte()
         }
         Rt_ByteArrayValue(r)

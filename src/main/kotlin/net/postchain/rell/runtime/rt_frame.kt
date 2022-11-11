@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime
@@ -10,14 +10,13 @@ import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import java.util.*
 
-class Rt_FrameCaller(val frame: Rt_CallFrame, val pos: R_StackPos)
+class Rt_CallStack(val prev: Rt_CallStack?, val pos: R_StackPos)
 
 class Rt_CallFrame(
         val defCtx: Rt_DefinitionContext,
         private val rFrame: R_CallFrame,
-        private val caller: Rt_FrameCaller?,
+        private val stack: Rt_CallStack?,
         state: Rt_CallFrameState?,
-        hasGuardBlock: Boolean
 ) {
     val exeCtx = defCtx.exeCtx
     val sqlExec = exeCtx.sqlExec
@@ -26,7 +25,7 @@ class Rt_CallFrame(
     private var curBlock = rFrame.rootBlock
     private val values = Array<Rt_Value?>(rFrame.size) { null }
 
-    private var beforeGuardBlock = hasGuardBlock
+    private var beforeGuardBlock = rFrame.hasGuardBlock
 
     init {
         if (state != null) {
@@ -88,20 +87,30 @@ class Rt_CallFrame(
         return offset
     }
 
+    fun callCtx() = Rt_CallContext(defCtx, stack, dbUpdateAllowed())
+
+    fun callCtx(filePos: R_FilePos): Rt_CallContext {
+        val subStack = subStack(filePos)
+        return Rt_CallContext(defCtx, subStack, dbUpdateAllowed())
+    }
+
     fun stackTrace(lastPos: R_FilePos): List<R_StackPos> {
         val res = mutableListOf<R_StackPos>()
 
         res.add(R_StackPos(defCtx.defId, lastPos))
 
-        var frame: Rt_CallFrame? = this
-        while (frame != null) {
-            val frameCaller = frame.caller
-            if (frameCaller == null) break
-            res.add(frameCaller.pos)
-            frame = frameCaller.frame
+        var ptr = stack
+        while (ptr != null) {
+            res.add(ptr.pos)
+            ptr = ptr.prev
         }
 
         return res.toImmList()
+    }
+
+    fun subStack(filePos: R_FilePos): Rt_CallStack {
+        val stackPos = R_StackPos(defCtx.defId, filePos)
+        return Rt_CallStack(stack, stackPos)
     }
 
     fun dumpState(): Rt_CallFrameState {
@@ -118,9 +127,9 @@ class Rt_CallFrame(
 
     fun checkDbUpdateAllowed() {
         if (!defCtx.dbUpdateAllowed) {
-            throw Rt_Error("no_db_update:def", "Database modifications are not allowed in this context")
+            throw Rt_Exception.common("no_db_update:def", "Database modifications are not allowed")
         } else if (beforeGuardBlock) {
-            throw Rt_Error("no_db_update:guard", "Database modifications are not allowed inside or before a guard block")
+            throw Rt_Exception.common("no_db_update:guard", "Database modification before or inside a guard block")
         }
     }
 

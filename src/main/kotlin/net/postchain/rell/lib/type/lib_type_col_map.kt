@@ -296,7 +296,7 @@ private object MapFns {
     val Get = C_SysFunction.simple2(pure = true) { a, b ->
         val map = a.asMap()
         val v = map[b]
-        v ?: throw Rt_Error("fn:map.get:novalue:${b.strCode()}", "Key not in map: ${b.str()}")
+        v ?: throw Rt_Exception.common("fn:map.get:novalue:${b.strCode()}", "Key not in map: ${b.str()}")
     }
 
     val GetOrNull = C_SysFunction.simple2(pure = true) { a, b ->
@@ -332,7 +332,7 @@ private object MapFns {
     val Remove = C_SysFunction.simple2 { a, b ->
         val map = a.asMutableMap()
         val v = map.remove(b)
-        v ?: throw Rt_Error("fn:map.remove:novalue:${b.strCode()}", "Key not in map: ${b.str()}")
+        v ?: throw Rt_Exception.common("fn:map.remove:novalue:${b.strCode()}", "Key not in map: ${b.str()}")
     }
 
     val RemoveOrNull = C_SysFunction.simple2 { a, b ->

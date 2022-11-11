@@ -12,7 +12,7 @@ import net.postchain.rell.model.R_DecimalType
 import net.postchain.rell.model.R_IntegerType
 import net.postchain.rell.model.expr.Db_SysFunction
 import net.postchain.rell.runtime.Rt_DecimalValue
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.runtime.Rt_IntValue
 
 object C_Lib_Math {
@@ -43,7 +43,7 @@ private object MathFns {
     val Abs_Integer = C_SysFunction.simple1(Db_SysFunction.simple("abs", "ABS"), pure = true) { a ->
         val v = a.asInteger()
         if (v == Long.MIN_VALUE) {
-            throw Rt_Error("abs:integer:overflow:$v", "Integer overflow: $v")
+            throw Rt_Exception.common("abs:integer:overflow:$v", "Integer overflow: $v")
         }
         val r = Math.abs(v)
         Rt_IntValue(r)

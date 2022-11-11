@@ -87,13 +87,13 @@ object C_Lib_Type_List {
 
     fun rtCheckRepeatArgs(s: Int, n: Long, type: String): Int {
         return if (n < 0) {
-            throw Rt_Error("fn:$type.repeat:n_negative:$n", "Negative count: $n")
+            throw Rt_Exception.common("fn:$type.repeat:n_negative:$n", "Negative count: $n")
         } else if (n > Integer.MAX_VALUE) {
-            throw Rt_Error("fn:$type.repeat:n_out_of_range:$n", "Count out of range: $n")
+            throw Rt_Exception.common("fn:$type.repeat:n_out_of_range:$n", "Count out of range: $n")
         } else {
             val total = LongMath.checkedMultiply(s.toLong(), n) // Must never fail, but using checkedMultiply() for extra safety
             if (total > Integer.MAX_VALUE) {
-                throw Rt_Error("fn:$type.repeat:too_big:$total", "Resulting size is too large: $s * $n = $total")
+                throw Rt_Exception.common("fn:$type.repeat:too_big:$total", "Resulting size is too large: $s * $n = $total")
             }
             total.toInt()
         }
@@ -122,7 +122,7 @@ private object ListFns {
         val list = a.asList()
         val i = b.asInteger()
         if (i < 0 || i >= list.size) {
-            throw Rt_Error("fn:list.get:index:${list.size}:$i", "List index out of bounds: $i (size ${list.size})")
+            throw Rt_Exception.common("fn:list.get:index:${list.size}:$i", "List index out of bounds: $i (size ${list.size})")
         }
         list[i.toInt()]
     }
@@ -149,8 +149,8 @@ private object ListFns {
 
     private fun calcSub(type: R_Type, list: MutableList<Rt_Value>, start: Long, end: Long): Rt_Value {
         if (start < 0 || end < start || end > list.size) {
-            throw Rt_Error("fn:list.sub:args:${list.size}:$start:$end",
-                "Out of range: start = $start, end = $end, size = ${list.size}")
+            throw Rt_Exception.common("fn:list.sub:args:${list.size}:$start:$end",
+                "Invalid range: start = $start, end = $end, size = ${list.size}")
         }
         val r = list.subList(start.toInt(), end.toInt())
         return Rt_ListValue(type, r)
@@ -161,7 +161,7 @@ private object ListFns {
         val i = b.asInteger()
 
         if (i < 0 || i > list.size) {
-            throw Rt_Error("fn:list.add:index:${list.size}:$i", "Index out of range: $i (size ${list.size})")
+            throw Rt_Exception.common("fn:list.add:index:${list.size}:$i", "Index out of range: $i (size ${list.size})")
         }
 
         list.add(i.toInt(), c)
@@ -174,7 +174,7 @@ private object ListFns {
         val col = c.asCollection()
 
         if (i < 0 || i > list.size) {
-            throw Rt_Error("fn:list.add_all:index:${list.size}:$i", "Index out of range: $i (size ${list.size})")
+            throw Rt_Exception.common("fn:list.add_all:index:${list.size}:$i", "Index out of range: $i (size ${list.size})")
         }
 
         val r = list.addAll(i.toInt(), col)
@@ -186,7 +186,7 @@ private object ListFns {
         val i = b.asInteger()
 
         if (i < 0 || i >= list.size) {
-            throw Rt_Error("fn:list.remove_at:index:${list.size}:$i", "Index out of range: $i (size ${list.size})")
+            throw Rt_Exception.common("fn:list.remove_at:index:${list.size}:$i", "Index out of range: $i (size ${list.size})")
         }
 
         val r = list.removeAt(i.toInt())
@@ -198,7 +198,7 @@ private object ListFns {
         val i = b.asInteger()
 
         if (i < 0 || i >= list.size) {
-            throw Rt_Error("fn:list.set:index:${list.size}:$i", "Index out of range: $i (size ${list.size})")
+            throw Rt_Exception.common("fn:list.set:index:${list.size}:$i", "Index out of range: $i (size ${list.size})")
         }
 
         val r = list.set(i.toInt(), c)

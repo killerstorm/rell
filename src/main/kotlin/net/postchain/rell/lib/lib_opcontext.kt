@@ -225,7 +225,7 @@ private object OpCtxFns {
 
     private fun getOpContext(ctx: Rt_CallContext, fnName: String): Rt_OpContext {
         val opCtx = ctx.exeCtx.opCtx
-        return opCtx ?: throw Rt_Error("fn:op_context.$fnName:noop", "Operation context not available")
+        return opCtx ?: throw Rt_Exception.common("fn:op_context.$fnName:noop", "Operation context not available")
     }
 }
 

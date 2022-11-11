@@ -151,7 +151,7 @@ private class R_RequireExpr(
             msgValue.asString()
         }
 
-        throw Rt_RequireError(msg)
+        throw Rt_RequireError.exception(msg)
     }
 }
 

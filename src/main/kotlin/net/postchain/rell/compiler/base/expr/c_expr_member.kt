@@ -164,7 +164,8 @@ class C_MemberAttr_SysProperty(
     private class R_MemberCalculator_SysProperty(private val prop: C_SysMemberProperty): R_MemberCalculator(prop.type) {
         override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
             val args = immListOf(baseValue)
-            return prop.fn.rFn.call(frame.defCtx.callCtx, args)
+            val callCtx = frame.callCtx()
+            return prop.fn.rFn.call(callCtx, args)
         }
     }
 }

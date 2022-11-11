@@ -122,8 +122,8 @@ private abstract class R_TypeSqlAdapter_Some(sqlType: DataType<*>?): R_TypeSqlAd
         }
     }
 
-    private fun errSqlNull(type: R_Type): Rt_Error {
-        return Rt_Error("sql_null:${type.strCode()}", "Got NULL from SQL where expected ${type.str()}")
+    private fun errSqlNull(type: R_Type): Rt_Exception {
+        return Rt_Exception.common("sql_null:${type.strCode()}", "SQL value is NULL for type ${type.str()}")
     }
 }
 

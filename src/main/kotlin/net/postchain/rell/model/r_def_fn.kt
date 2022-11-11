@@ -29,7 +29,7 @@ class R_VarParam(val name: R_Name, val type: R_Type, val ptr: R_VarPtr) {
 
 sealed class R_RoutineDefinition(base: R_DefinitionBase): R_Definition(base) {
     abstract fun params(): List<R_Param>
-    abstract fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value
+    abstract fun call(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value
 }
 
 sealed class R_MountedRoutineDefinition(
@@ -57,8 +57,8 @@ class R_OperationDefinition(
         return null
     }
 
-    override fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
-        throw Rt_Error("call:operation", "Calling operation is not allowed")
+    override fun call(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+        throw Rt_Exception.common("call:operation", "Calling operation is not allowed")
     }
 
     private fun processCallArgs(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_CallFrame {
@@ -111,7 +111,7 @@ sealed class R_QueryBody(
 ) {
     val params = params.toImmList()
 
-    abstract fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_FrameCaller?): Rt_Value
+    abstract fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, stack: Rt_CallStack?): Rt_Value
 }
 
 class R_UserQueryBody(
@@ -122,8 +122,8 @@ class R_UserQueryBody(
 ): R_QueryBody(retType, varParams.map { it.toParam() }) {
     private val varParams = varParams.toImmList()
 
-    override fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_FrameCaller?): Rt_Value {
-        val rtFrame = frame.createRtFrame(defCtx, caller, null)
+    override fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, stack: Rt_CallStack?): Rt_Value {
+        val rtFrame = frame.createRtFrame(defCtx, stack, null)
 
         processArgs(varParams, args, rtFrame)
 
@@ -140,9 +140,9 @@ class R_UserQueryBody(
 }
 
 class R_SysQueryBody(retType: R_Type, params: List<R_Param>, private val fn: R_SysFunction): R_QueryBody(retType, params) {
-    override fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_FrameCaller?): Rt_Value {
-        val ctx = Rt_CallContext(defCtx)
-        return fn.call(ctx, args)
+    override fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, stack: Rt_CallStack?): Rt_Value {
+        val callCtx = Rt_CallContext(defCtx, stack, dbUpdateAllowed = false)
+        return fn.call(callCtx, args)
     }
 }
 
@@ -167,16 +167,12 @@ class R_QueryDefinition(
         return res
     }
 
-    override fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
+    override fun call(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         val body = bodyLate.get()
         checkCallArgs(this, body.params, args)
 
-        val callerStackPos = R_StackPos(frame.defCtx.defId, callerFilePos)
-        val caller = Rt_FrameCaller(frame, callerStackPos)
-
-        val defCtx = frame.defCtx
-        val subDefCtx = Rt_DefinitionContext(defCtx.exeCtx, false, defId)
-        val res = body.call(subDefCtx, args, caller)
+        val subDefCtx = Rt_DefinitionContext(callCtx.defCtx.exeCtx, false, defId)
+        val res = body.call(subDefCtx, args, callCtx.stack)
         return res
     }
 
@@ -231,18 +227,18 @@ class R_FunctionBase {
     fun callTop(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>, dbUpdateAllowed: Boolean): Rt_Value {
         val body = bodyLate.get()
         val defCtx = Rt_DefinitionContext(exeCtx, dbUpdateAllowed, body.frame.defId)
-        val res = call0(defCtx, args, null)
+        val callCtx = Rt_CallContext(defCtx, null, dbUpdateAllowed)
+        val res = call0(callCtx, args)
         return res
     }
 
-    fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
-        val caller = createFrameCaller(frame, callerFilePos)
-        return call0(frame.defCtx, args, caller)
+    fun call(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+        return call0(callCtx, args)
     }
 
-    private fun call0(parentDefCtx: Rt_DefinitionContext, args: List<Rt_Value>, caller: Rt_FrameCaller?): Rt_Value {
+    private fun call0(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         val body = bodyLate.get()
-        val rtSubFrame = createCallFrame(parentDefCtx, caller, body.frame)
+        val rtSubFrame = createCallFrame(callCtx, body.frame)
         processArgs(body.varParams, args, rtSubFrame)
 
         val res = body.body.execute(rtSubFrame)
@@ -252,20 +248,10 @@ class R_FunctionBase {
     }
 
     companion object {
-        fun createFrameCaller(frame: Rt_CallFrame, callerFilePos: R_FilePos): Rt_FrameCaller {
-            val callerStackPos = R_StackPos(frame.defCtx.defId, callerFilePos)
-            return Rt_FrameCaller(frame, callerStackPos)
-        }
-
-        fun createCallFrame(
-                callerDefCtx: Rt_DefinitionContext,
-                caller: Rt_FrameCaller?,
-                targetFrame: R_CallFrame
-        ): Rt_CallFrame {
-            val callerDbUpdateAllowed = caller?.frame?.dbUpdateAllowed() ?: true
-            val dbUpdateAllowed = callerDbUpdateAllowed && callerDefCtx.dbUpdateAllowed
-            val subDefCtx = Rt_DefinitionContext(callerDefCtx.exeCtx, dbUpdateAllowed, targetFrame.defId)
-            return targetFrame.createRtFrame(subDefCtx, caller, null)
+        fun createCallFrame(callCtx: Rt_CallContext, targetFrame: R_CallFrame): Rt_CallFrame {
+            val dbUpdateAllowed = callCtx.dbUpdateAllowed()
+            val subDefCtx = Rt_DefinitionContext(callCtx.defCtx.exeCtx, dbUpdateAllowed, targetFrame.defId)
+            return targetFrame.createRtFrame(subDefCtx, callCtx.stack, null)
         }
     }
 }
@@ -280,8 +266,8 @@ class R_FunctionDefinition(
         return fnBase.callTop(exeCtx, args, dbUpdateAllowed)
     }
 
-    override fun call(frame: Rt_CallFrame, args: List<Rt_Value>, callerFilePos: R_FilePos): Rt_Value {
-        return fnBase.call(frame, args, callerFilePos)
+    override fun call(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
+        return fnBase.call(callCtx, args)
     }
 
     override fun toMetaGtv(): Gtv {
@@ -297,7 +283,7 @@ private fun checkCallArgs(routine: R_RoutineDefinition, params: List<R_Param>, a
     val name = routine.appLevelName
 
     if (args.size != params.size) {
-        throw Rt_Error("fn_wrong_arg_count:$name:${params.size}:${args.size}",
+        throw Rt_Exception.common("fn_wrong_arg_count:$name:${params.size}:${args.size}",
                 "Wrong number of arguments for '$name': ${args.size} instead of ${params.size}")
     }
 
@@ -305,8 +291,8 @@ private fun checkCallArgs(routine: R_RoutineDefinition, params: List<R_Param>, a
         val param = params[i]
         val argType = args[i].type()
         if (!param.type.isAssignableFrom(argType)) {
-            throw Rt_Error("fn_wrong_arg_type:$name:${param.type.strCode()}:${argType.strCode()}",
-                    "Wrong type of argument ${param.name} for '$name': " +
+            throw Rt_Exception.common("fn_wrong_arg_type:$name:${param.type.strCode()}:${argType.strCode()}",
+                    "Wrong type of argument '${param.name}' for '$name': " +
                             "${argType.strCode()} instead of ${param.type.strCode()}")
         }
     }

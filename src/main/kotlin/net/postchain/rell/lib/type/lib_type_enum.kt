@@ -77,7 +77,7 @@ private object EnumFns {
         val name = a.asString()
         val attr = enum.attr(name)
         if (attr == null) {
-            throw Rt_Error("enum_badname:${enum.appLevelName}:$name", "Enum '${enum.simpleName}' has no value '$name'")
+            throw Rt_Exception.common("enum_badname:${enum.appLevelName}:$name", "Enum '${enum.simpleName}' has no value '$name'")
         }
         Rt_EnumValue(enum.type, attr)
     }
@@ -86,7 +86,7 @@ private object EnumFns {
         val value = a.asInteger()
         val attr = enum.attr(value)
         if (attr == null) {
-            throw Rt_Error("enum_badvalue:${enum.appLevelName}:$value", "Enum '${enum.simpleName}' has no value $value")
+            throw Rt_Exception.common("enum_badvalue:${enum.appLevelName}:$value", "Enum '${enum.simpleName}' has no value $value")
         }
         Rt_EnumValue(enum.type, attr)
     }

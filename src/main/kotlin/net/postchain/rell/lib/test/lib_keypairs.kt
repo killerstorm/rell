@@ -13,10 +13,7 @@ import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_ByteArrayType
-import net.postchain.rell.runtime.Rt_ByteArrayValue
-import net.postchain.rell.runtime.Rt_Error
-import net.postchain.rell.runtime.Rt_StructValue
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
@@ -36,7 +33,7 @@ object C_Lib_Test_KeyPairs {
         val v2 = v.asStruct()
         val actualType = v2.type()
         if (actualType != KEYPAIR_TYPE) {
-            throw Rt_Error("type:struct:$KEYPAIR_TYPE:$actualType", "Wrong struct type: $actualType instead of $KEYPAIR_TYPE")
+            throw Rt_Exception.common("type:struct:$KEYPAIR_TYPE:$actualType", "Wrong struct type: $actualType instead of $KEYPAIR_TYPE")
         }
 
         val pub = toByteArray(v2.get(0), 33)

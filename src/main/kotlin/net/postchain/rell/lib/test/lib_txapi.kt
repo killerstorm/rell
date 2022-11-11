@@ -20,7 +20,6 @@ import net.postchain.rell.module.GtvRtConversion
 import net.postchain.rell.module.GtvRtConversion_None
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
-import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.utils.BytesKeyPair
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
@@ -59,6 +58,8 @@ object C_Lib_Test {
         C_Lib_Type_Op.bind(b)
 
         C_Lib_Test_KeyPairs.bind(b)
+        C_Lib_Test_Assert.bind(b)
+
         bindFunctions(b)
 
         nsBuilder.addNamespace(nsName, b.build().toNamespace())
@@ -72,11 +73,12 @@ object C_Lib_Test {
 
         C_Lib_Nop.bindGlobal(fb)
         C_LibUtils.bindFunctions(b, fb.build())
-        C_Lib_Test_Assert.bind(b)
     }
+
+    fun typeDefName(name: C_StringQualifiedName) = C_DefinitionName(C_Lib_Test.MODULE, name)
 }
 
-private fun typeDefName(name: C_StringQualifiedName) = C_DefinitionName(C_Lib_Test.MODULE, name)
+private fun typeDefName(name: C_StringQualifiedName) = C_Lib_Test.typeDefName(name)
 
 private object R_TestBlockType: R_BasicType(C_Lib_Test.BLOCK_TYPE_QNAME.str(), typeDefName(C_Lib_Test.BLOCK_TYPE_QNAME)) {
     override fun isReference() = true
@@ -119,23 +121,23 @@ private class BlockCommonFunctions(
             val block = blockGetter(ctx, arg)
 
             if (!ctx.appCtx.repl && !ctx.appCtx.test) {
-                throw Rt_Error("fn:$fnName:no_repl_test", "Block can be executed only in REPL or test")
+                throw Rt_Exception.common("fn:$fnName:no_repl_test", "Block can be executed only in REPL or test")
             }
 
             try {
                 try {
                     UnitTestBlockRunner.runBlock(ctx, block)
-                } catch (e: Rt_BaseError) {
+                } catch (e: Rt_Exception) {
                     throw e
                 } catch (e: Throwable) {
-                    throw Rt_Error("fn:$fnName:fail:${e.javaClass.canonicalName}", "Block execution failed: $e")
+                    throw Rt_Exception.common("fn:$fnName:fail:${e.javaClass.canonicalName}", "Block execution failed: $e")
                 }
             } catch (e: Throwable) {
                 if (positive) throw e else return Rt_UnitValue
             }
 
             if (!positive) {
-                throw Rt_Error("fn:$fnName:nofail", "Transaction did not fail")
+                throw Rt_Exception.common("fn:$fnName:nofail", "Transaction did not fail")
             }
 
             return Rt_UnitValue
@@ -641,29 +643,12 @@ class RawTestTxValue(
     val signers = signers.toImmList()
 
     override fun toString() = Rt_TestTxValue.toString(ops)
-
-    fun toPostchainGtv(): Gtv {
-        val bodyGtv = GtvFactory.gtv(
-                blockchainRid.toGtv(),
-                ops.map { it.toPostchainGtv() }.toGtv(),
-                signers.map { it.pub.toGtv() }.toGtv()
-        )
-        //val signatures = tx.signatures.map { it.toGtv() }.toGtv()
-        val signaturesGtv = listOf<Gtv>().toGtv()
-        return GtvFactory.gtv(bodyGtv, signaturesGtv)
-    }
 }
 
 class RawTestOpValue(val name: R_MountName, args: List<Gtv>) {
     val args = args.toImmList()
 
     override fun toString() = Rt_TestOpValue.toString(name, args)
-
-    fun toPostchainGtv(): Gtv {
-        val nameGtv = name.str().toGtv()
-        val argsGtv = args.toGtv()
-        return GtvFactory.gtv(nameGtv, argsGtv)
-    }
 }
 
 private fun asTestBlock(v: Rt_Value) = v as Rt_TestBlockValue

@@ -156,7 +156,7 @@ private object TextFns {
         val s2 = b.asString()
         val start = c.asInteger()
         if (start < 0 || start >= s1.length) {
-            throw Rt_Error(
+            throw Rt_Exception.common(
                 "fn:text.index_of:index:${s1.length}:$start",
                 "Index out of bounds: $start (length ${s1.length})"
             )
@@ -175,7 +175,7 @@ private object TextFns {
         val s2 = b.asString()
         val start = c.asInteger()
         if (start < 0 || start >= s1.length) {
-            throw Rt_Error(
+            throw Rt_Exception.common(
                 "fn:text.last_index_of:index:${s1.length}:$start",
                 "Index out of bounds: $start (length ${s1.length})"
             )
@@ -247,7 +247,7 @@ private object TextFns {
         val res = try {
             Pattern.matches(pattern, s)
         } catch (e: PatternSyntaxException) {
-            throw Rt_Error("fn:text.matches:bad_regex", "Invalid regular expression: $pattern")
+            throw Rt_Exception.common("fn:text.matches:bad_regex", "Invalid regular expression: $pattern")
         }
         Rt_BooleanValue(res)
     }
@@ -289,9 +289,9 @@ private object TextFns {
         val s = a.asString()
         val index = b.asInteger()
         if (index < 0 || index >= s.length) {
-            throw Rt_Error(
+            throw Rt_Exception.common(
                 "fn:text.char_at:index:${s.length}:$index",
-                "Text index out of bounds: $index (length ${s.length})"
+                "Index out of bounds: $index (length ${s.length})"
             )
         }
         val r = s[index.toInt()]
@@ -320,9 +320,9 @@ private object TextFns {
     private fun calcSub(s: String, start: Long, end: Long): Rt_Value {
         val len = s.length
         if (start < 0 || start > len || end < start || end > len) {
-            throw Rt_Error(
+            throw Rt_Exception.common(
                 "fn:text.sub:range:$len:$start:$end",
-                "Invalid substring range: start = $start, end = $end (length $len)"
+                "Invalid range: start = $start, end = $end (length $len)"
             )
         }
         return Rt_TextValue(s.substring(start.toInt(), end.toInt()))

@@ -1,7 +1,7 @@
 RELEASE NOTES 0.10.11 (2022-??-??)
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-1. Language: "list", "set", "map" keywords removed.
+1. Language: "list", "set", "map" keywords removed
 
 Words "list", "set" and "map" are now regular names, not keywords. Not a significant change, but a step towards
 supporting arbitrary generic library types in the future.
@@ -11,13 +11,13 @@ Practical implication: names "list", "set", "map" can be used in code (for varia
 Method ._set() of type list<T> was deprecated (with warning) and a new method .set() added to be used instead.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-2. Library: new method "sort" instead of the old "_sort" one.
+2. Library: new method "sort" instead of the old "_sort" one
 
 As keyword "sort" was removed in 0.10.10 (and word "sort" became a regular name), a new method .sort() was added to
 replace the old method ._sort() of list<T>. The old method was deprecated (with warning).
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-3. Library: new functions: "repeat", "reverse", "reversed".
+3. Library: new functions: "repeat", "reverse", "reversed"
 
 list<T>.repeat(n: integer): list<T>
 
@@ -80,7 +80,7 @@ rowid.to_integer(): integer
     Returns the integer value of the rowid.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-6. Library: op_context.exists.
+6. Library: op_context.exists
 
 op_context.exists: boolean
 
@@ -88,14 +88,48 @@ op_context.exists: boolean
     properties of "op_context", this property is always available, but returns "false" if there is no operation.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-7. Tools: multirun.sh --sqllog
+7. Library: function "assert_fails" for unit tests
+
+assert_fails(f: () -> unit): rell.test.failure
+assert_fails(expected: text, f: () -> unit): rell.test.failure
+
+    Fails when the passed function value "f" does not fail. The passed function can fail with any kind of error,
+    including a requirement error or a system function error, but except a test assertion error.
+
+    If the passed function fails and "expected" is specified, the actual error message must be equal to it.
+
+New type "rell.test.failure" is used to describe the actual error. It has the following members:
+
+message: text;
+
+    Error message. For a requirement error, it's the message which was passed to require().
+
+Use partial function application to pass a function to assert_fails():
+
+    function foo(x: integer) {
+        require(x >= 0, "x is negative: " + x);
+    }
+
+    ...
+
+    assert_fails(foo(-123, *));                        // OK
+    assert_fails("x is negative: -123", foo(-123, *)); // OK
+    assert_fails(foo(123, *));                         // Fails
+
+Use the returned value if non-exact error message matching is needed:
+
+    val f = assert_fails(foo(-123, *));
+    assert_true(f.message.starts_with("x is negative: "));
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+8. Tools: multirun.sh --sqllog
 
 New argument of multirun.sh:
 
     --sqllog     Enable SQL logging
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-8. Bug fixes
+9. Bug fixes
 
 - False "Wrong operand types..." compilation error on expression: T in list<T?>.
 - Conversion from gtv big integer value to decimal.

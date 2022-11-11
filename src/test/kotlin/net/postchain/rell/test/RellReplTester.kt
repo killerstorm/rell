@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -7,7 +7,6 @@ package net.postchain.rell.test
 import net.postchain.rell.compiler.base.utils.C_Message
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplInterpreter
 import net.postchain.rell.repl.ReplOutputChannel
@@ -74,13 +73,13 @@ class RellReplTester(
             output.add("CTE:$s")
         }
 
-        override fun printRuntimeError(e: Rt_BaseError, stack: List<R_StackPos>?) {
-            val e2 = if (e is Rt_StackTraceError) e.realCause else e
-            val s = when (e2) {
-                is Rt_Error -> e2.code
-                is Rt_GtvError -> "gtv:${e2.code}"
-                is Rt_RequireError -> "req:${e2.userMsg}"
-                else -> throw RuntimeException("Unexpected exception", e2)
+        override fun printRuntimeError(e: Rt_Exception) {
+            val err = e.err
+            val s = when (err) {
+                is Rt_CommonError -> err.code
+                is Rt_GtvError -> "gtv:${err.code}"
+                is Rt_RequireError -> "req:${err.userMsg}"
+                else -> throw RuntimeException("Unexpected exception: ${err.javaClass.simpleName}", e)
             }
             output.add("RTE:$s")
         }

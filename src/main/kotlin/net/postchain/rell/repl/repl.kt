@@ -166,10 +166,8 @@ class ReplInterpreter private constructor(
         try {
             code()
             return true
-        } catch (e: Rt_StackTraceError) {
-            outChannel.printRuntimeError(e, e.stack)
-        } catch (e: Rt_BaseError) {
-            outChannel.printRuntimeError(e, null)
+        } catch (e: Rt_Exception) {
+            outChannel.printRuntimeError(e)
         } catch (e: Throwable) {
             outChannel.printPlatformRuntimeError(e)
         }

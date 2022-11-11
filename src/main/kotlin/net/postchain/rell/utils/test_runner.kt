@@ -168,9 +168,9 @@ object TestRunner {
 
 private fun printException(e: Throwable) {
     when (e) {
-        is Rt_StackTraceError -> {
-            val msg = Rt_Utils.appendStackTrace("Error: ${e.message}", e.stack)
-            System.out.println(msg)
+        is Rt_Exception -> {
+            val msg = Rt_Utils.appendStackTrace("Error: ${e.message}", e.info.stack)
+            println(msg)
         }
         else -> {
             e.printStackTrace(System.out)

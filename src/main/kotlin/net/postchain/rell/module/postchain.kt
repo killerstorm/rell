@@ -82,11 +82,8 @@ private class ErrorHandler(val printer: Rt_Printer, private val wrapCtErrors: Bo
         } catch (e: ProgrammerMistake) {
             val msg = processError(msgSupplier, e)
             throw ProgrammerMistake(msg, e)
-        } catch (e: Rt_StackTraceError) {
-            val msg = processError(msgSupplier, e, e.stack)
-            throw if (wrapRtErrors) UserMistake(msg) else e
-        } catch (e: Rt_BaseError) {
-            val msg = processError(msgSupplier, e)
+        } catch (e: Rt_Exception) {
+            val msg = processError(msgSupplier, e, e.info.stack)
             throw if (wrapRtErrors) UserMistake(msg) else e
         } catch (e: C_Error){
             val msg = processError(msgSupplier, e)
@@ -158,7 +155,7 @@ private class RellGTXOperation(
         handleError {
             val params = rOperation.params()
             if (data.args.size != params.size) {
-                throw Rt_Error("operation:[${rOperation.appLevelName}]:arg_count:${data.args.size}:${params.size}",
+                throw Rt_Exception.common("operation:[${rOperation.appLevelName}]:arg_count:${data.args.size}:${params.size}",
                     "Wrong argument count: ${data.args.size} instead of ${params.size}")
             }
             if (!gtvToRtCtx.isSet()) {
@@ -326,7 +323,7 @@ private class RellPostchainModule(
             val exp = expArgNames.joinToString(",")
             val act = actArgNames.joinToString(",")
             val code = "query:wrong_arg_names:${rQuery.appLevelName}:$exp:$act"
-            throw Rt_Error(code, "Wrong arguments: $actArgNames instead of $expArgNames")
+            throw Rt_Exception.common(code, "Wrong arguments: $actArgNames instead of $expArgNames")
         }
 
         val gtvToRtCtx = GtvToRtContext.make(GTV_QUERY_PRETTY)

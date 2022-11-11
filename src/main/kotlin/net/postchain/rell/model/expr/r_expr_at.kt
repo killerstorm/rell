@@ -85,7 +85,7 @@ class R_AtExprExtras(private val limit: R_Expr?, private val offset: R_Expr?) {
         if (v < 0) {
             val codeFmt = "expr:at:$part:negative:$v"
             val msgFmt = "Negative $part: $v"
-            throw Rt_Error(codeFmt, msgFmt)
+            throw Rt_Exception.common(codeFmt, msgFmt)
         }
 
         return v
@@ -123,7 +123,7 @@ abstract class R_AtExpr(
             if (!cardinality.matches(count)) {
                 val code = "at:wrong_count:$count"
                 val msg = if (count == 0) "No $itemMsg found" else "Multiple $itemMsg found: $count"
-                throw Rt_Error(code, msg)
+                throw Rt_Exception.common(code, msg)
             }
         }
     }
