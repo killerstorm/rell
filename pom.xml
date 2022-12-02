@@ -14,7 +14,6 @@
         <postchain.version>3.7.0-SNAPSHOT</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <kotlin.version>1.6.21</kotlin.version>
-        <junit.version>4.12</junit.version>
         <dist-classifier>dist</dist-classifier>
     </properties>
 
@@ -82,7 +81,7 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-collections4</artifactId>
-            <version>4.1</version>
+            <version>4.3</version>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
@@ -93,7 +92,6 @@
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
-            <version>4.5.3</version>
         </dependency>
 
         <dependency>
@@ -117,7 +115,6 @@
         <dependency>
             <groupId>org.jooq</groupId>
             <artifactId>jooq</artifactId>
-            <version>3.10.4</version>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -157,7 +154,7 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>${junit.version}</version>
+            <version>4.13.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
