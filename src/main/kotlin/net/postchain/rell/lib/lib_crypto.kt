@@ -23,7 +23,7 @@ import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.etherjar.PrivateKey
 import net.postchain.rell.utils.etherjar.Signer
 import net.postchain.rell.utils.immListOf
-import org.spongycastle.jcajce.provider.digest.Keccak
+import org.bouncycastle.jcajce.provider.digest.Keccak
 import java.math.BigInteger
 import java.security.MessageDigest
 

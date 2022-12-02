@@ -19,9 +19,9 @@
 
 package net.postchain.rell.utils.etherjar;
 
-import org.spongycastle.crypto.params.ECPrivateKeyParameters;
-import org.spongycastle.math.ec.ECPoint;
-import org.spongycastle.math.ec.FixedPointCombMultiplier;
+import org.bouncycastle.crypto.params.ECPrivateKeyParameters;
+import org.bouncycastle.math.ec.ECPoint;
+import org.bouncycastle.math.ec.FixedPointCombMultiplier;
 
 import java.math.BigInteger;
 

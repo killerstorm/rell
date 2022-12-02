@@ -28,7 +28,7 @@ import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
 import org.jooq.util.postgres.PostgresDataType
 import org.postgresql.util.PGobject
-import org.spongycastle.util.Arrays
+import org.bouncycastle.util.Arrays
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.util.*
