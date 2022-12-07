@@ -37,6 +37,7 @@ import java.io.FileOutputStream
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
+import java.util.Properties
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -53,7 +54,11 @@ object SqlTestUtils {
             url += (if ("?" in url) "&" else "?") + "currentSchema=$schema"
         }
 
-        val con = DriverManager.getConnection(url, prop.user, prop.password)
+        val jdbcProperties = Properties()
+        jdbcProperties.setProperty("user", prop.user)
+        jdbcProperties.setProperty("password", prop.password)
+        jdbcProperties.setProperty("binaryTransfer", "false")
+        val con = DriverManager.getConnection(url, jdbcProperties)
         var resource: AutoCloseable? = con
         try {
             freeDiskSpace(con)

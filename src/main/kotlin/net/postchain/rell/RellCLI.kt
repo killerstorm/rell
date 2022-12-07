@@ -22,6 +22,7 @@ import net.postchain.rell.sql.*
 import net.postchain.rell.utils.*
 import picocli.CommandLine
 import java.sql.DriverManager
+import java.util.Properties
 import kotlin.system.exitProcess
 
 @Suppress("unused")
@@ -243,7 +244,9 @@ private fun runWithSqlManager(args: RellCliArgs, logSqlErrors: Boolean, code: (S
 
     if (dbUrl != null) {
         val schema = SqlUtils.extractDatabaseSchema(dbUrl)
-        DriverManager.getConnection(dbUrl).use { con ->
+        val jdbcProperties = Properties()
+        jdbcProperties.setProperty("binaryTransfer", "false")
+        DriverManager.getConnection(dbUrl, jdbcProperties).use { con ->
             con.autoCommit = true
             val sqlMgr = ConnectionSqlManager(con, args.sqlLog)
             runWithSqlManager(schema, sqlMgr, logSqlErrors, code)

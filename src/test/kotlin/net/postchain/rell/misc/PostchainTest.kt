@@ -30,7 +30,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
         )
 
         sqlAccess().initializeApp(con, PostchainUtils.DATABASE_VERSION)
@@ -40,7 +40,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
         )
     }
 
@@ -55,7 +55,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
         )
 
         val bcRid1 = RellTestUtils.strToBlockchainRid("CEED")
@@ -69,7 +69,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "c123.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_rid:bytea)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
         )
 
         sa.initializeApp(con, PostchainUtils.DATABASE_VERSION)
@@ -82,7 +82,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "c123.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_rid:bytea)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
         )
 
         val bcRid2 = RellTestUtils.strToBlockchainRid("FEED")
@@ -99,7 +99,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "c456.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_rid:bytea)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp without time zone)"
+                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
         )
     }
 
