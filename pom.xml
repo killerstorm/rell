@@ -254,6 +254,7 @@
                             <classpathPrefix/>
                             <mainClass>net.postchain.rellr.RellCliKt</mainClass>
                             <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                         </manifest>
                     </archive>
                 </configuration>
