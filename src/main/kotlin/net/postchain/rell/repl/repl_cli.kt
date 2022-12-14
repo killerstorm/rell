@@ -65,8 +65,7 @@ object ReplShell {
         val v = Rt_RellVersion.getInstance()
         if (v == null) return "Version unknown"
         val ver = v.properties[Rt_RellVersionProperty.RELL_VERSION] ?: "[unknown version]"
-        val time = v.properties[Rt_RellVersionProperty.RELL_BUILD_TIME] ?: "unknown time"
-        return "Rell $ver ($time)"
+        return "Rell $ver"
     }
 
     private fun createConsole(): ReplConsole {
