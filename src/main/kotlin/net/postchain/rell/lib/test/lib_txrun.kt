@@ -53,11 +53,11 @@ object UnitTestBlockRunner {
             val privKey = PrivKey(keyPair.priv.toByteArray())
             val sigMaker = PostchainUtils.cryptoSystem.buildSigMaker(KeyPair(pubKey, privKey))
 
-            val bcData = GtvObjectMapper.fromGtv(gtvConfig, BlockchainConfigurationData::class, mapOf("partialContext" to bcCtx, "sigmaker" to sigMaker))
+            val bcData = GtvObjectMapper.fromGtv(gtvConfig, BlockchainConfigurationData::class)
             val bcConfigFactory: BlockchainConfigurationFactory = GTXBlockchainConfigurationFactory()
             ctx.exeCtx.sqlExec.connection { con ->
                 val eCtx = createEContext(con, bcCtx)
-                val bcConfig = bcConfigFactory.makeBlockchainConfiguration(bcData, eCtx)
+                val bcConfig = bcConfigFactory.makeBlockchainConfiguration(bcData, bcCtx, sigMaker, eCtx)
                 withSavepoint(con) {
                     processBlock(bcConfig, eCtx, block)
                 }
@@ -132,7 +132,7 @@ object UnitTestBlockRunner {
         val chainId = ctx.sqlCtx.mainChainMapping().chainId
         val nodeId = 0
         val nodeRid = "13".repeat(32).hexStringToByteArray()
-        return BaseBlockchainContext(bcRid, nodeId, chainId, nodeRid)
+        return BaseBlockchainContext(chainId, bcRid, nodeId, nodeRid)
     }
 
     fun makeGtvConfig(cliEnv: RellCliEnv, sourceDir: C_SourceDir, modules: List<R_ModuleName>, pubKey: Bytes33): Gtv {
