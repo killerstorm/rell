@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
@@ -131,9 +131,11 @@ class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv
         )
         b.update(srcGtv, "gtx", "rell")
 
+        configGen.checkModuleArgs(app.args)
+
         if (app.args.isNotEmpty()) {
-            val argsGtv = app.args.mapKeys{ (k, _) -> k.str() }.mapValues{ (_, v) -> gtv(v) }
-            b.update(gtv(argsGtv), "gtx", "rell", "moduleArgs")
+            val argsGtv = gtv(app.args.mapKeys{ (k, _) -> k.str() })
+            b.update(argsGtv, "gtx", "rell", "moduleArgs")
         }
 
         val gtv = b.build()

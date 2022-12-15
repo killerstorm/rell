@@ -60,7 +60,7 @@ private fun convertArgs(ctx: GtvToRtContext, params: List<R_Param>, args: List<G
     return args.mapIndexed { index, arg ->
         val param = params[index]
         val type = param.type
-        val subCtx = ctx.update(param)
+        val subCtx = ctx.updateSymbol(GtvToRtSymbol_Param(param), true)
         type.gtvToRt(subCtx, arg)
     }
 }

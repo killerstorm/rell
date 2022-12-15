@@ -8,6 +8,8 @@ import net.postchain.common.exception.UserMistake
 import net.postchain.gtv.*
 import net.postchain.gtv.merkle.proof.GtvMerkleProofTreeFactory
 import net.postchain.gtv.merkle.proof.toGtvVirtual
+import net.postchain.rell.compiler.base.utils.C_CodeMsg
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
@@ -59,11 +61,28 @@ private class GtvToRtState(val pretty: Boolean) {
     }
 }
 
-class GtvToRtContext private constructor(private val state: GtvToRtState, val param: R_Param?) {
+sealed class GtvToRtSymbol {
+    abstract fun codeMsg(): C_CodeMsg
+}
+
+class GtvToRtSymbol_Param(private val param: R_Param): GtvToRtSymbol() {
+    override fun codeMsg() = "param:${param.name}" toCodeMsg "parameter: ${param.name}"
+}
+
+class GtvToRtSymbol_Attr(private val typeName: String, private val attr: R_Attribute): GtvToRtSymbol() {
+    override fun codeMsg() = "attr:[$typeName]:${attr.name}" toCodeMsg "attribute: $typeName.${attr.name}"
+}
+
+class GtvToRtContext private constructor(
+    private val state: GtvToRtState,
+    val symbol: GtvToRtSymbol?,
+    private val keepSymbol: Boolean,
+) {
     val pretty = state.pretty
 
-    fun update(param: R_Param?): GtvToRtContext {
-        return if (param === this.param) this else GtvToRtContext(state, param)
+    fun updateSymbol(symbol: GtvToRtSymbol, keep: Boolean = false): GtvToRtContext {
+        if (this.symbol != null && this.keepSymbol) return this
+        return if (symbol === this.symbol) this else GtvToRtContext(state, symbol, keep)
     }
 
     fun trackRecord(entity: R_EntityDefinition, rowid: Long) = state.trackRecord(entity, rowid)
@@ -72,7 +91,7 @@ class GtvToRtContext private constructor(private val state: GtvToRtState, val pa
     companion object {
         fun make(pretty: Boolean): GtvToRtContext {
             val state = GtvToRtState(pretty)
-            return GtvToRtContext(state, null)
+            return GtvToRtContext(state, null, false)
         }
     }
 }
@@ -214,7 +233,8 @@ class GtvRtConversion_Struct(private val struct: R_Struct): GtvRtConversion() {
                 throw GtvRtUtils.errGtv(ctx, "struct_nokey:$typeName:$key", "Key missing in Gtv dictionary: field '$typeName.$key'")
             }
             val gtvField = gtvFields.getValue(key)
-            attr.type.gtvToRt(ctx, gtvField)
+            val attrCtx = ctx.updateSymbol(GtvToRtSymbol_Attr(struct.name, attr))
+            attr.type.gtvToRt(attrCtx, gtvField)
         }.toMutableList()
 
         return Rt_StructValue(type, rtFields)
@@ -224,7 +244,11 @@ class GtvRtConversion_Struct(private val struct: R_Struct): GtvRtConversion() {
         val type = struct.type
         val gtvAttrValues = gtvToAttrValues(ctx, type, struct, gtv)
         val attrs = struct.attributesList
-        val rtAttrValues = gtvAttrValues.mapIndexed { i, gtvField -> attrs[i].type.gtvToRt(ctx, gtvField) }.toMutableList()
+        val rtAttrValues = gtvAttrValues.mapIndexed { i, gtvField ->
+            val attr = attrs[i]
+            val attrCtx = ctx.updateSymbol(GtvToRtSymbol_Attr(struct.name, attr))
+            attr.type.gtvToRt(attrCtx, gtvField)
+        }.toMutableList()
         return Rt_StructValue(type, rtAttrValues)
     }
 
@@ -518,7 +542,10 @@ class GtvRtConversion_VirtualStruct(private val type: R_VirtualStructType): GtvR
             val attrValues = decodeAttrs(ctx, type, v)
             val rtAttrValues = type.innerType.struct.attributesList.mapIndexed { i, attr ->
                 val gtvAttr = if (i < attrValues.size) attrValues[i] else null
-                if (gtvAttr == null) null else decodeVirtualElement(ctx, attr.type, gtvAttr)
+                if (gtvAttr == null) null else {
+                    val attrCtx = ctx.updateSymbol(GtvToRtSymbol_Attr(type.name, attr))
+                    decodeVirtualElement(attrCtx, attr.type, gtvAttr)
+                }
             }
             return Rt_VirtualStructValue(v, type, rtAttrValues)
         }
@@ -764,9 +791,10 @@ object GtvRtUtils {
     fun errGtv(ctx: GtvToRtContext, code: String, msg: String): Rt_Exception {
         var code2 = code
         var msg2 = msg
-        if (ctx.param != null) {
-            code2 = "$code:${ctx.param.name}"
-            msg2 = "$msg (parameter: ${ctx.param.name})"
+        if (ctx.symbol != null) {
+            val symCodeMsg = ctx.symbol.codeMsg()
+            code2 = "$code:${symCodeMsg.code}"
+            msg2 = "$msg (${symCodeMsg.msg})"
         }
         return Rt_GtvError.exception(code2, msg2)
     }

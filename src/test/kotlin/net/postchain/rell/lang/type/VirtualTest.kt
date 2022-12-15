@@ -1184,11 +1184,11 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtual("gtv", expr, argToGtv("['A','B']", "[[0]]"), "gtv_err:type:[integer]:INTEGER:STRING")
 
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("[123,456]"),
-                "gtv_err:virtual:deserialize:java.lang.IllegalStateException:x")
+                "gtv_err:virtual:deserialize:java.lang.IllegalStateException:param:x")
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("{'A':123}"),
-                "gtv_err:virtual:type:GtvDictionary:x")
+                "gtv_err:virtual:type:GtvDictionary:param:x")
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("['A','B']", "[[0]]"),
-                "gtv_err:type:[integer]:INTEGER:STRING:x")
+                "gtv_err:type:[integer]:INTEGER:STRING:param:x")
     }
 
     @Test fun testOperatorsErr() {

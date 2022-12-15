@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.misc
@@ -13,6 +13,7 @@ import net.postchain.rell.tools.runcfg.RellRunConfigParams
 import net.postchain.rell.utils.*
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -350,6 +351,70 @@ class RunConfigGenTest {
                 </chains>
             </run>
         """)
+    }
+
+    @Test fun testModuleArgsValidation() {
+        val sourceFiles = mapOf(
+            "app.rell" to "module; struct module_args { x: integer; y: text; }",
+        )
+
+        val tpl = """
+            <run>
+                <nodes><config>#</config></nodes>
+                <chains>
+                    <chain name="app" iid="33">
+                        <config height="0">
+                            %s
+                        </config>
+                    </chain>
+                </chains>
+            </run>
+        """
+
+        var e = assertFailsWith<RellCliErr> {
+            generate(sourceFiles, mapOf(), tpl.format("""<app module="app"/>"""))
+        }
+        assertEquals("Missing module_args for module(s): app", e.message)
+
+        e = assertFailsWith {
+            generate(sourceFiles, mapOf(), tpl.format("""<app module="app"><args module="app"></args></app>"""))
+        }
+        assertEquals("Bad module_args for module 'app': Wrong Gtv array size for struct 'app:module_args': 0 instead of 2", e.message)
+
+        e = assertFailsWith {
+            generate(sourceFiles, mapOf(), tpl.format("""
+                <app module="app">
+                    <args module="app">
+                        <arg key="x"><int>123</int></arg>
+                        <arg key="y"><int>456</int></arg>
+                    </args>
+                </app>
+            """))
+        }
+        assertEquals("Bad module_args for module 'app': Decoding type 'text': expected STRING, actual INTEGER (attribute: app:module_args.y)", e.message)
+
+        // Must succeed.
+        generate(sourceFiles, mapOf(), tpl.format("""
+            <app module="app">
+                <args module="app">
+                    <arg key="x"><int>123</int></arg>
+                    <arg key="y"><string>Hello</string></arg>
+                </args>
+            </app>
+        """))
+
+        // Must succeed: no error on extra module.
+        generate(sourceFiles, mapOf(), tpl.format("""
+            <app module="app">
+                <args module="app">
+                    <arg key="x"><int>123</int></arg>
+                    <arg key="y"><string>Hello</string></arg>
+                </args>
+                <args module="foo">
+                    <arg key="x"><int>123</int></arg>
+                </args>
+            </app>
+        """))
     }
 
     @Test(expected = TestRellCliEnvExitException::class)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
@@ -68,7 +68,7 @@ class Rcfg_TestModule(val module: R_ModuleName)
 
 class Rcfg_App(
         val module: R_ModuleName,
-        val args: Map<R_ModuleName, Map<String, Gtv>>,
+        val args: Map<R_ModuleName, Gtv>,
         val addDefaults: Boolean
 )
 

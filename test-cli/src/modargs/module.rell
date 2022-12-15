@@ -1,0 +1,4 @@
+module;
+
+import modargs.foo;
+import modargs.bar;

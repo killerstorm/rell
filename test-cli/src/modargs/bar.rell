@@ -1,0 +1,8 @@
+module;
+
+struct module_args {
+    a: text;
+    b: integer;
+}
+
+query bar_args() = chain_context.args;

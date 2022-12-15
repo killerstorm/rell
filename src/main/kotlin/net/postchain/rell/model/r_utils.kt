@@ -34,6 +34,7 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
     private val str = parts.joinToString(".")
 
     fun str() = str
+    fun displayStr() = if (str.isEmpty()) "''" else str
     fun isEmpty() = parts.isEmpty()
     fun size() = parts.size
 

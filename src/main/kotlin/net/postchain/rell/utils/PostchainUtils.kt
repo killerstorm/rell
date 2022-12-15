@@ -20,6 +20,7 @@ import net.postchain.gtx.StandardOpsGTXModule
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
+import net.postchain.rell.model.R_StructDefinition
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.runtime.Rt_ChainContext
 import net.postchain.rell.runtime.Rt_Value
@@ -86,12 +87,16 @@ object PostchainUtils {
                             "but type ${argsStruct.moduleLevelName} defined in the code")
                 }
 
-                val convCtx = GtvToRtContext.make(true)
-                val rtArgs = argsStruct.type.gtvToRt(convCtx, gtvArgs)
+                val rtArgs = moduleArgsGtvToRt(argsStruct, gtvArgs)
                 moduleArgs[rModule.name] = rtArgs
             }
         }
 
         return Rt_ChainContext(rawConfig, moduleArgs, blockchainRid)
+    }
+
+    fun moduleArgsGtvToRt(struct: R_StructDefinition, gtv: Gtv): Rt_Value {
+        val convCtx = GtvToRtContext.make(true)
+        return struct.type.gtvToRt(convCtx, gtv)
     }
 }

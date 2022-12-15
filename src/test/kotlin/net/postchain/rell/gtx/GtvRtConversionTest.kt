@@ -177,14 +177,14 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         tst.gtvResult = false
 
         chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello"}}""", "foo[x=int[123],b=bar[p=boolean[true],q=text[Hello]]]")
-        chkQueryArg("foo", """{"x":123,"b":{"p":2,"q":"Hello"}}""", "gtv_err:type:[boolean]:bad_value:2")
-        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":456}}""", "gtv_err:type:[text]:STRING:INTEGER")
+        chkQueryArg("foo", """{"x":123,"b":{"p":2,"q":"Hello"}}""", "gtv_err:type:[boolean]:bad_value:2:attr:[bar]:p")
+        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":456}}""", "gtv_err:type:[text]:STRING:INTEGER:attr:[bar]:q")
         chkQueryArg("foo", """{"b":{"p":1,"q":"Hello"}}""", "gtv_err:struct_size:foo:2:1")
-        chkQueryArg("foo", """{"x":123,"b":null}""", "gtv_err:type:[bar]:ARRAY:NULL")
+        chkQueryArg("foo", """{"x":123,"b":null}""", "gtv_err:type:[bar]:ARRAY:NULL:attr:[foo]:b")
         chkQueryArg("foo", """{"x":123}""", "gtv_err:struct_size:foo:2:1")
-        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3")
+        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3:attr:[foo]:b")
 
-        chkQueryArg("qaz", """{"b":{"p":2,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3")
+        chkQueryArg("qaz", """{"b":{"p":2,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3:attr:[qaz]:b")
         chkQueryArg("qaz", """{"b":null}""", "qaz[b=null]")
         chkQueryArg("qaz", """{}""", "gtv_err:struct_size:qaz:1:0")
     }
@@ -204,14 +204,14 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
 
         chkOpArg("foo", """[123,[1,"Hello"]]""", "foo[x=int[123],b=bar[p=boolean[true],q=text[Hello]]]")
         chkOpArg("foo", """{"x":123,"b":{"p":1,"q":"Hello"}}""", "gtv_err:type:[foo]:ARRAY:DICT")
-        chkOpArg("foo", """[123,[2,"Hello"]]""", "gtv_err:type:[boolean]:bad_value:2")
-        chkOpArg("foo", """[123,[1,456]]""", "gtv_err:type:[text]:STRING:INTEGER")
+        chkOpArg("foo", """[123,[2,"Hello"]]""", "gtv_err:type:[boolean]:bad_value:2:attr:[bar]:p")
+        chkOpArg("foo", """[123,[1,456]]""", "gtv_err:type:[text]:STRING:INTEGER:attr:[bar]:q")
         chkOpArg("foo", """[[1,"Hello"]]""", "gtv_err:struct_size:foo:2:1")
-        chkOpArg("foo", """[123,null]""", "gtv_err:type:[bar]:ARRAY:NULL")
+        chkOpArg("foo", """[123,null]""", "gtv_err:type:[bar]:ARRAY:NULL:attr:[foo]:b")
         chkOpArg("foo", """[123]""", "gtv_err:struct_size:foo:2:1")
-        chkOpArg("foo", """[123,[1,"Hello",456]]""", "gtv_err:struct_size:bar:2:3")
+        chkOpArg("foo", """[123,[1,"Hello",456]]""", "gtv_err:struct_size:bar:2:3:attr:[foo]:b")
 
-        chkOpArg("qaz", """[[2,"Hello",456]]""", "gtv_err:struct_size:bar:2:3")
+        chkOpArg("qaz", """[[2,"Hello",456]]""", "gtv_err:struct_size:bar:2:3:attr:[qaz]:b")
         chkOpArg("qaz", """[null]""", "qaz[b=null]")
         chkOpArg("qaz", """[]""", "gtv_err:struct_size:qaz:1:0")
     }
