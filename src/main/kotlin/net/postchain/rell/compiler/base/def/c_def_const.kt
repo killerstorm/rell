@@ -1,11 +1,10 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
 
 import net.postchain.rell.compiler.ast.S_Expr
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.expr.C_ExprContext
@@ -13,7 +12,10 @@ import net.postchain.rell.compiler.base.expr.C_ExprHint
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
-import net.postchain.rell.compiler.base.utils.*
+import net.postchain.rell.compiler.base.utils.C_CodeMsg
+import net.postchain.rell.compiler.base.utils.C_GraphUtils
+import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_ConstantValueEvalContext
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_GlobalConstantExpr
@@ -21,8 +23,10 @@ import net.postchain.rell.model.R_CtErrorType
 import net.postchain.rell.model.R_GlobalConstantDefinition
 import net.postchain.rell.model.R_GlobalConstantId
 import net.postchain.rell.model.R_Type
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_CommonError
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.One
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmMap
@@ -36,7 +40,8 @@ class C_GlobalConstantDefinition(
 ) {
     fun compileRead(exprCtx: C_ExprContext, name: C_Name): V_Expr {
         val header = headerGetter.get()
-        val type = C_FunctionUtils.compileReturnType(exprCtx, name, header) ?: R_CtErrorType
+        val lazyName = LazyPosString.of(name.pos, name.str)
+        val type = C_FunctionUtils.compileReturnType(exprCtx, lazyName, header) ?: R_CtErrorType
         val vExpr = V_GlobalConstantExpr(exprCtx, name.pos, type, varUid, rDef.constId, header)
         return C_LocalVarRef.smartNullable(exprCtx, vExpr, type, varUid, rDef.simpleName, SMART_KIND)
     }
@@ -142,7 +147,7 @@ class C_GlobalConstantFunctionBody(
         val actualType = vExpr.type
 
         return if (bodyCtx.explicitRetType == null) {
-            C_Types.checkNotUnit(bodyCtx.defCtx.msgCtx, sExpr.startPos, actualType, bodyCtx.defNames.simpleName) {
+            C_Types.checkNotUnit(bodyCtx.defCtx.msgCtx, sExpr.startPos, actualType, bodyCtx.defName.simpleName) {
                 "def:const" toCodeMsg "global constant"
             }
             vExpr
@@ -177,8 +182,10 @@ class C_GlobalConstantFunctionBody(
         val vExpr = compile()
         return try {
             vExpr.constantValue(ctx)
-        } catch (e: Rt_Error) {
-            bodyCtx.appCtx.msgCtx.error(vExpr.pos, e.code, e.msg)
+        } catch (e: Rt_Exception) {
+            when (e.err) {
+                is Rt_CommonError -> bodyCtx.appCtx.msgCtx.error(vExpr.pos, e.err.code, e.fullMessage())
+            }
             null
         } catch (e: Throwable) {
             // ignore

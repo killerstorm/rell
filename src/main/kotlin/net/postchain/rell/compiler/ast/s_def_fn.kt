@@ -77,7 +77,7 @@ abstract class S_FunctionBody {
 
     fun compileQuery(ctx: C_FunctionBodyContext): R_QueryBody {
         val statementVars = processStatementVars()
-        val fnCtx = C_FunctionContext(ctx.defCtx, ctx.defNames.appLevelName, ctx.explicitRetType, statementVars)
+        val fnCtx = C_FunctionContext(ctx.defCtx, ctx.defName.appLevelName, ctx.explicitRetType, statementVars)
         val frameCtx = C_FrameContext.create(fnCtx)
         val actParams = ctx.forParams.compile(frameCtx)
 
@@ -89,7 +89,7 @@ abstract class S_FunctionBody {
 
     fun compileFunction(ctx: C_FunctionBodyContext): R_FunctionBody {
         val statementVars = processStatementVars()
-        val fnCtx = C_FunctionContext(ctx.defCtx, ctx.defNames.appLevelName, ctx.explicitRetType, statementVars)
+        val fnCtx = C_FunctionContext(ctx.defCtx, ctx.defName.appLevelName, ctx.explicitRetType, statementVars)
         val frameCtx = C_FrameContext.create(fnCtx)
         val actParams = ctx.forParams.compile(frameCtx)
 
@@ -150,7 +150,7 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
         val cBody = body.compile(stmtCtx)
 
         C_Errors.check(cBody.returnAlways, bodyCtx.namePos) {
-            val nameStr = bodyCtx.defNames.qualifiedName
+            val nameStr = bodyCtx.defName.qualifiedName
             "query_noreturn:$nameStr" toCodeMsg "Query '$nameStr': not all code paths return value"
         }
 
@@ -163,7 +163,7 @@ class S_FunctionBodyFull(val body: S_Statement): S_FunctionBody() {
         val retType = stmtCtx.fnCtx.actualReturnType()
         if (retType != R_UnitType) {
             C_Errors.check(cBody.returnAlways, bodyCtx.namePos) {
-                val nameStr = bodyCtx.defNames.qualifiedName
+                val nameStr = bodyCtx.defName.qualifiedName
                 "fun_noreturn:$nameStr" toCodeMsg "Function '$nameStr': not all code paths return value"
             }
         }

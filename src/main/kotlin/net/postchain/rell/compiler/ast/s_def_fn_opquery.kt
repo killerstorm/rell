@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -17,10 +17,10 @@ import net.postchain.rell.compiler.base.modifier.C_ModifierValues
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.*
-import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.*
 
 class S_OperationDefinition(
@@ -39,14 +39,15 @@ class S_OperationDefinition(
 
         val mods = C_ModifierValues(C_ModifierTargetType.OPERATION, cName)
         val modMount = mods.field(C_ModifierFields.MOUNT)
+        val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(ctx, mods)
 
-        val names = ctx.nsCtx.defNames(cName)
+        val cDefBase = ctx.defBase(cName)
         val mountName = ctx.mountName(modMount, cName)
         checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.OPERATION, mountName, PostchainUtils.STD_OPS)
 
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION, names.defId)
-        val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OPERATION, cDefBase.defId)
+        val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
         val mirrorStructs = C_Utils.createMirrorStructs(ctx.appCtx, defBase, defCtx.definitionType, operation = mountName)
 
@@ -54,7 +55,7 @@ class S_OperationDefinition(
         val cOperation = C_OperationGlobalFunction(rOperation, ideInfo)
 
         ctx.appCtx.defsAdder.addOperation(rOperation)
-        ctx.nsBuilder.addOperation(cName, cOperation, ideInfo)
+        ctx.nsBuilder.addOperation(cDefBase.nsMemBase(ideInfo, modDeprecated), cName, cOperation)
         ctx.mntBuilder.addOperation(name, rOperation)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -148,20 +149,21 @@ class S_QueryDefinition(
 
         val mods = C_ModifierValues(C_ModifierTargetType.QUERY, cName)
         val modMount = mods.field(C_ModifierFields.MOUNT)
+        val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(ctx, mods)
 
-        val names = ctx.nsCtx.defNames(cName)
+        val cDefBase = ctx.defBase(cName)
         val mountName = ctx.mountName(modMount, cName)
         checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.QUERY, mountName, PostchainUtils.STD_QUERIES)
 
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.QUERY, names.defId)
-        val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.QUERY, cDefBase.defId)
+        val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
         val rQuery = R_QueryDefinition(defBase, mountName)
         val cQuery = C_QueryGlobalFunction(rQuery, ideInfo)
 
         ctx.appCtx.defsAdder.addQuery(rQuery)
-        ctx.nsBuilder.addQuery(cName, cQuery, ideInfo)
+        ctx.nsBuilder.addQuery(cDefBase.nsMemBase(ideInfo, modDeprecated), cName, cQuery)
         ctx.mntBuilder.addQuery(name, rQuery)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -173,7 +175,7 @@ class S_QueryDefinition(
     }
 
     private fun compileHeader(defCtx: C_DefinitionContext, cQuery: C_QueryGlobalFunction): C_QueryFunctionHeader {
-        val header = C_FunctionUtils.compileQueryHeader(defCtx, name, cQuery.rQuery.names, params, retType, body)
+        val header = C_FunctionUtils.compileQueryHeader(defCtx, name, cQuery.rQuery.defName, params, retType, body)
         cQuery.setHeader(header)
         return header
     }

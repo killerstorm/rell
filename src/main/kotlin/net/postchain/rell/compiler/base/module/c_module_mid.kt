@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.module
@@ -10,11 +10,11 @@ import net.postchain.rell.compiler.ast.S_Modifiers
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.modifier.*
+import net.postchain.rell.compiler.base.namespace.C_NamespaceMemberBase
 import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_EnumDefinition
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.queueOf
 import net.postchain.rell.utils.toImmList
@@ -112,10 +112,10 @@ class C_MidModuleMember_Basic(
 class C_MidModuleMember_Enum(
     private val cName: C_Name,
     private val rEnum: R_EnumDefinition,
-    private val ideInfo: IdeSymbolInfo,
+    private val memBase: C_NamespaceMemberBase,
 ): C_MidModuleMember() {
     override fun compile(ctx: C_MidMemberContext): C_ExtModuleMember {
-        return C_ExtModuleMember_Enum(cName, rEnum, ideInfo)
+        return C_ExtModuleMember_Enum(cName, rEnum, memBase)
     }
 }
 
@@ -154,6 +154,7 @@ class C_MidModuleMember_Namespace(
         val mods = C_ModifierValues(C_ModifierTargetType.NAMESPACE, name = qualifiedName?.last)
         val modExternal = mods.field(C_ModifierFields.EXTERNAL_CHAIN)
         val modMount = mods.field(C_ModifierFields.MOUNT)
+        val modDeprecated = if (qualifiedName == null) null else mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(ctx.modifierCtx, mods)
 
         val mount = modMount.value()?.process(true)
@@ -162,7 +163,7 @@ class C_MidModuleMember_Namespace(
         val subCtx = C_MidMemberContext(ctx.modCtx, ctx.modifierCtx, extChainName)
         val subMembers = members.map { it.compile(subCtx) }
 
-        return C_ExtModuleMember_Namespace(qualifiedName, subMembers, mount, extChainName)
+        return C_ExtModuleMember_Namespace(qualifiedName, subMembers, mount, extChainName, modDeprecated?.value())
     }
 }
 

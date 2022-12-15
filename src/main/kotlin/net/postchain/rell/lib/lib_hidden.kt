@@ -1,11 +1,10 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
 
 import net.postchain.rell.compiler.ast.S_Expr
-import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.fn.*
@@ -21,11 +20,12 @@ import net.postchain.rell.runtime.Rt_RowidValue
 import net.postchain.rell.runtime.Rt_TextValue
 import net.postchain.rell.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.checkEquals
 
 object C_Lib_Hidden {
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
-        val fb = C_GlobalFuncBuilder(null)
+        val fb = C_GlobalFuncBuilder()
 
         fb.add("_crash", R_UnitType, listOf(R_TextType), HiddenFns.Crash)
         fb.add("_type_of", C_SysFn_TypeOf)
@@ -62,7 +62,7 @@ private class C_SysFn_Nop(private val print: Boolean): C_GlobalSpecialFuncCase()
 private object C_SysFn_TypeOf: C_SpecialSysGlobalFunction(IdeSymbolInfo.DEF_FUNCTION_SYSTEM) {
     override fun paramCount() = 1
 
-    override fun compileCall0(ctx: C_ExprContext, name: C_Name, args: List<S_Expr>): V_Expr {
+    override fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr {
         checkEquals(1, args.size)
 
         val arg = args[0]

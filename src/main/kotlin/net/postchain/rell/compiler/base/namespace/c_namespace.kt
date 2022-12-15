@@ -1,52 +1,45 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.namespace
 
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.base.core.*
-import net.postchain.rell.compiler.base.def.C_GlobalConstantDefinition
-import net.postchain.rell.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.compiler.base.def.C_OperationGlobalFunction
-import net.postchain.rell.compiler.base.expr.*
+import net.postchain.rell.compiler.base.core.C_DefinitionName
+import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_QualifiedName
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprMember
 import net.postchain.rell.compiler.base.utils.C_MessageType
-import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
-import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.lib.type.C_Lib_Type_Struct
-import net.postchain.rell.model.*
-import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.utils.LateGetter
-import net.postchain.rell.utils.checkEquals
-import net.postchain.rell.utils.immMapOf
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.compiler.base.utils.toCodeMsg
+import net.postchain.rell.model.R_Name
+import net.postchain.rell.utils.*
 
 class C_Deprecated(
-        private val useInstead: String,
+        private val useInstead: String?,
         val error: Boolean = false
 ) {
     fun detailsCode(): String {
-        return ":$useInstead"
+        return if (useInstead != null) ":$useInstead" else ""
     }
 
     fun detailsMessage(): String {
-        return ", use '$useInstead' instead"
+        return if (useInstead != null) ", use '$useInstead' instead" else ""
     }
 }
 
-enum class C_DeclarationType(val msg: String) {
+enum class C_DeclarationType(val msg: String, val article: String = "a") {
     MODULE("module"),
     NAMESPACE("namespace"),
     TYPE("type"),
-    ENTITY("entity"),
+    ENTITY("entity", "an"),
     STRUCT("struct"),
-    ENUM("enum"),
-    OBJECT("object"),
+    ENUM("enum", "an"),
+    OBJECT("object", "an"),
     FUNCTION("function"),
-    OPERATION("operation"),
+    OPERATION("operation", "an"),
     QUERY("query"),
-    IMPORT("import"),
+    IMPORT("import", "an"),
     CONSTANT("constant"),
     PROPERTY("property"),
     ;
@@ -54,91 +47,53 @@ enum class C_DeclarationType(val msg: String) {
     val capitalizedMsg = msg.capitalize()
 }
 
-class C_DefProxyDeprecation(val type: C_DeclarationType, val deprecated: C_Deprecated)
+class C_DefDeprecation(val defName: C_DefinitionName, val deprecated: C_Deprecated)
 
-class C_DefProxy<T> private constructor(
-        private val def: T,
-        val ideInfo: IdeSymbolInfo,
-        private val ambiguous: Boolean = false,
-        private val deprecation: C_DefProxyDeprecation? = null
+class C_NamespaceElement(
+    val member: C_NamespaceMember,
+    allMembers: List<C_NamespaceMember>,
 ) {
-    fun getDef(msgCtx: C_MessageContext, name: C_QualifiedName): T {
-        access(msgCtx, name)
-        return def
-    }
+    private val allMembers = allMembers.toImmList()
 
-    fun getDefQuiet(): T = def
-
-    fun update(
-            ideInfo: IdeSymbolInfo = this.ideInfo,
-            ambiguous: Boolean = this.ambiguous,
-            deprecation: C_DefProxyDeprecation? = this.deprecation
-    ): C_DefProxy<T> {
-        return if (ideInfo === this.ideInfo && ambiguous == this.ambiguous && deprecation === this.deprecation) this else
-            C_DefProxy(def, ideInfo, ambiguous, deprecation)
-    }
-
-    fun access(msgCtx: C_MessageContext, name: C_QualifiedName) {
-        if (ambiguous) {
-            val lastName = name.last
-            val qName = name.str()
-            msgCtx.error(lastName.pos, "name:ambig:$qName", "Name '$qName' is ambiguous")
+    fun access(msgCtx: C_MessageContext, nameFn: () -> C_QualifiedName) {
+        if (allMembers.size > 1) {
+            val qName = nameFn()
+            val qNameStr = qName.str()
+            val listCodeMsg = allMembers.map {
+                val declType = it.declarationType()
+                val defName = it.defName.appLevelName
+                "$declType:$defName" toCodeMsg "${declType.msg} $defName"
+            }
+            val listCode = listCodeMsg.joinToString(",") { it.code }
+            val listMsg = listCodeMsg.joinToString { it.msg }
+            msgCtx.error(qName.last.pos, "name:ambig:$qNameStr:[$listCode]", "Name '$qNameStr' is ambiguous: $listMsg")
         }
 
-        if (deprecation != null) {
-            val simpleName = name.last
-            deprecatedMessage(msgCtx, simpleName.pos, simpleName.str, deprecation)
+        if (member.deprecation != null) {
+            val qName = nameFn()
+            val nameStr = member.deprecation.defName.appLevelName
+            deprecatedMessage(msgCtx, qName.last.pos, nameStr, member.declarationType(), member.deprecation.deprecated)
         }
+    }
+
+    fun toExprMember(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_ExprMember {
+        access(ctx.msgCtx) { qName }
+        val expr = member.toExpr(ctx, qName, implicitAttrMatchName)
+        return C_ExprMember(expr, member.ideInfo)
     }
 
     companion object {
-        fun create(type: R_Type, ideInfo: IdeSymbolInfo, deprecated: C_Deprecated? = null): C_DefProxy<R_Type> {
-            return createGeneric(type, ideInfo, C_DeclarationType.TYPE, deprecated)
-        }
-
-        fun create(
-                namespace: C_Namespace,
-                ideInfo: IdeSymbolInfo = IdeSymbolInfo.DEF_NAMESPACE,
-                deprecated: C_Deprecated? = null
-        ): C_DefProxy<C_Namespace> {
-            return createGeneric(namespace, ideInfo, C_DeclarationType.NAMESPACE, deprecated)
-        }
-
-        fun create(fn: C_GlobalFunction, deprecated: C_Deprecated? = null): C_DefProxy<C_GlobalFunction> {
-            return createGeneric(fn, fn.ideInfo, C_DeclarationType.FUNCTION, deprecated)
-        }
-
-        fun create(value: C_NamespaceValue): C_DefProxy<C_NamespaceValue> {
-            return createGeneric(value, value.ideInfo)
-        }
-
-        private fun <T> createGeneric(def: T, ideInfo: IdeSymbolInfo): C_DefProxy<T> {
-            return C_DefProxy(def, ideInfo)
-        }
-
-        private fun <T> createGeneric(
-                def: T,
-                ideInfo: IdeSymbolInfo,
-                type: C_DeclarationType,
-                deprecated: C_Deprecated?
-        ): C_DefProxy<T> {
-            val deprecation = if (deprecated == null) null else C_DefProxyDeprecation(type, deprecated)
-            return C_DefProxy(def, ideInfo, deprecation = deprecation)
-        }
-
         fun deprecatedMessage(
-                msgCtx: C_MessageContext,
-                pos: S_Pos,
-                nameMsg: String,
-                deprecation: C_DefProxyDeprecation
+            msgCtx: C_MessageContext,
+            pos: S_Pos,
+            nameMsg: String,
+            declarationType: C_DeclarationType,
+            deprecated: C_Deprecated,
         ) {
-            val type = deprecation.type
-            val deprecated = deprecation.deprecated
-
-            val typeStr = type.msg.capitalize()
+            val typeStr = declarationType.msg.capitalize()
             val depCode = deprecated.detailsCode()
             val depStr = deprecated.detailsMessage()
-            val code = "deprecated:$type:$nameMsg$depCode"
+            val code = "deprecated:$declarationType:$nameMsg$depCode"
             val msg = "$typeStr '$nameMsg' is deprecated$depStr"
 
             val error = deprecated.error || msgCtx.globalCtx.compilerOptions.deprecatedError
@@ -149,98 +104,51 @@ class C_DefProxy<T> private constructor(
     }
 }
 
-sealed class C_DefTransformer<T, R> {
-    abstract fun transform(def: T): R?
-}
-
-class C_DefTransformer_None<T>: C_DefTransformer<T, T>() {
-    override fun transform(def: T) = def
-}
-
-object C_DefTransformer_Entity: C_DefTransformer<R_Type, R_EntityDefinition>() {
-    override fun transform(def: R_Type) = (def as? R_EntityType)?.rEntity
-}
-
-object C_DefTransformer_Object: C_DefTransformer<C_NamespaceValue, R_ObjectDefinition>() {
-    override fun transform(def: C_NamespaceValue) = (def as? C_NamespaceValue_Object)?.rObject
-}
-
-object C_DefTransformer_Operation: C_DefTransformer<C_GlobalFunction, R_OperationDefinition>() {
-    override fun transform(def: C_GlobalFunction) = (def as? C_OperationGlobalFunction)?.rOp
-}
-
-class C_DefRef<T>(
-        val msgCtx: C_MessageContext,
-        val qName: C_QualifiedName,
-        private val proxy: C_DefProxy<T>
+class C_NamespaceEntry(
+    directMembers: List<C_NamespaceMember>,
+    importMembers: List<C_NamespaceMember>,
 ) {
-    fun getDef(): T {
-        val res = proxy.getDef(msgCtx, qName)
-        return res
+    val directMembers = directMembers.toImmList()
+    val importMembers = importMembers.toImmList()
+
+    init {
+        check(this.directMembers.isNotEmpty() || this.importMembers.isNotEmpty())
     }
 
-    fun ideSymbolInfo(): IdeSymbolInfo = proxy.ideInfo
-
-    fun <R> sub(subName: C_Name, subProxy: C_DefProxy<R>) = C_DefRef(msgCtx, qName.add(subName), subProxy)
-
-    fun <R> toResolution(
-            refNameHand: C_QualifiedNameHandle,
-            ideInfos: List<IdeSymbolInfo>,
-            transformer: C_DefTransformer<T, R>
-    ): C_DefResolution<R>? {
-        checkEquals(ideInfos.size, refNameHand.parts.size)
-        val def = proxy.getDefQuiet()
-        val resDef = transformer.transform(def)
-        return if (resDef == null) null else C_DefResolution(resDef, this, refNameHand, ideInfos)
-    }
-}
-
-class C_NamespaceRef(
-        private val msgCtx: C_MessageContext,
-        private val path: List<C_Name>,
-        private val ns: C_Namespace
-) {
-    fun namespace(name: C_Name) = get(name, C_Namespace::namespace)
-    fun type(name: C_Name) = get(name, C_Namespace::type)
-    fun value(name: C_Name) = get(name, C_Namespace::value)
-    fun function(name: C_Name) = get(name, C_Namespace::function)
-
-    private fun <T> get(name: C_Name, getter: (C_Namespace, R_Name) -> C_DefProxy<T>?): C_DefRef<T>? {
-        val proxy = getter(ns, name.rName)
-        return wrap(name, proxy)
+    fun hasTag(tags: List<C_NamespaceMemberTag>): Boolean {
+        return directMembers.any { it.hasTag(tags) } || importMembers.any { it.hasTag(tags) }
     }
 
-    private fun <T> wrap(name: C_Name, proxy: C_DefProxy<T>?): C_DefRef<T>? {
-        return if (proxy == null) null else C_DefRef(msgCtx, C_QualifiedName(path + name), proxy)
+    fun element(tag: C_NamespaceMemberTag): C_NamespaceElement {
+        return element(immListOf(tag))
     }
 
-    companion object {
-        fun create(msgCtx: C_MessageContext, name: C_QualifiedName, ns: C_Namespace): C_NamespaceRef {
-            return C_NamespaceRef(msgCtx, name.parts, ns)
-        }
+    fun element(tags: List<C_NamespaceMemberTag> = immListOf()): C_NamespaceElement {
+        return element0(tags) ?: element0(immListOf())!!
+    }
 
-        fun create(ref: C_DefRef<C_Namespace>): C_NamespaceRef {
-            val ns = ref.getDef()
-            return C_NamespaceRef(ref.msgCtx, ref.qName.parts, ns)
+    private fun element0(tags: List<C_NamespaceMemberTag>): C_NamespaceElement? {
+        val members = directMembers.filter { it.hasTag(tags) }
+            .ifEmpty { importMembers.filter { it.hasTag(tags) } }
+        return when {
+            members.isEmpty() -> null
+            members.size == 1 -> C_NamespaceElement(members[0], immListOf())
+            else -> C_NamespaceElement(members[0], members)
         }
     }
 }
 
 sealed class C_Namespace {
-    abstract fun namespace(name: R_Name): C_DefProxy<C_Namespace>?
-    abstract fun type(name: R_Name): C_DefProxy<R_Type>?
-    abstract fun value(name: R_Name): C_DefProxy<C_NamespaceValue>?
-    abstract fun function(name: R_Name): C_DefProxy<C_GlobalFunction>?
-
+    abstract fun getEntry(name: R_Name): C_NamespaceEntry?
     abstract fun addTo(b: C_NamespaceBuilder)
 
+    fun getElement(name: R_Name, tags: List<C_NamespaceMemberTag> = immListOf()): C_NamespaceElement? {
+        val entry = getEntry(name)
+        return entry?.element(tags)
+    }
+
     companion object {
-        val EMPTY: C_Namespace = C_BasicNamespace(
-                namespaces = immMapOf(),
-                types = immMapOf(),
-                values = immMapOf(),
-                functions = immMapOf()
-        )
+        val EMPTY: C_Namespace = C_BasicNamespace(immMapOf())
 
         fun makeLate(getter: LateGetter<C_Namespace>): C_Namespace {
             return C_LateNamespace(getter)
@@ -248,194 +156,43 @@ sealed class C_Namespace {
     }
 }
 
-private class C_BasicNamespace(
-        namespaces: Map<R_Name, C_DefProxy<C_Namespace>>,
-        types: Map<R_Name, C_DefProxy<R_Type>>,
-        values: Map<R_Name, C_DefProxy<C_NamespaceValue>>,
-        functions: Map<R_Name, C_DefProxy<C_GlobalFunction>>
-): C_Namespace() {
-    private val namespaces = namespaces.toImmMap()
-    private val types = types.toImmMap()
-    private val values = values.toImmMap()
-    private val functions = functions.toImmMap()
+private class C_BasicNamespace(entries: Map<R_Name, C_NamespaceEntry>): C_Namespace() {
+    private val entries = entries.toImmMap()
 
-    override fun namespace(name: R_Name) = namespaces[name]
-    override fun type(name: R_Name) = types[name]
-    override fun value(name: R_Name) = values[name]
-    override fun function(name: R_Name) = functions[name]
+    override fun getEntry(name: R_Name): C_NamespaceEntry? {
+        return entries[name]
+    }
 
     override fun addTo(b: C_NamespaceBuilder) {
-        namespaces.forEach { b.addNamespace(it.key, it.value) }
-        types.forEach { b.addType(it.key, it.value) }
-        values.forEach { b.addValue(it.key, it.value) }
-        functions.forEach { b.addFunction(it.key, it.value) }
+        entries.forEach { b.add(it.key, it.value) }
     }
 }
 
 private class C_LateNamespace(private val getter: LateGetter<C_Namespace>): C_Namespace() {
-    override fun namespace(name: R_Name) = getter.get().namespace(name)
-    override fun type(name: R_Name) = getter.get().type(name)
-    override fun value(name: R_Name) = getter.get().value(name)
-    override fun function(name: R_Name) = getter.get().function(name)
+    override fun getEntry(name: R_Name) = getter.get().getEntry(name)
     override fun addTo(b: C_NamespaceBuilder) = getter.get().addTo(b)
 }
 
-class C_NamespaceElement(
-        val namespace: C_DefProxy<C_Namespace>? = null,
-        val type: C_DefProxy<R_Type>? = null,
-        val value: C_DefProxy<C_NamespaceValue>? = null,
-        val function: C_DefProxy<C_GlobalFunction>? = null
-) {
-    init {
-        check(namespace != null || type != null || value != null || function != null)
-    }
-
-    fun ideInfo(): IdeSymbolInfo {
-        return when {
-            type != null -> type.ideInfo
-            value != null -> value.ideInfo
-            function != null -> function.ideInfo
-            namespace != null -> namespace.ideInfo
-            else -> throw IllegalStateException()
-        }
-    }
-
-    companion object {
-        fun create(
-                namespace: C_DefProxy<C_Namespace>? = null,
-                type: C_DefProxy<R_Type>? = null,
-                value: C_NamespaceValue? = null,
-                function: C_GlobalFunction? = null
-        ): C_NamespaceElement {
-            return C_NamespaceElement(
-                    namespace = namespace,
-                    type = type,
-                    value = if (value == null) null else C_DefProxy.create(value),
-                    function = if (function == null) null else C_DefProxy.create(function)
-            )
-        }
-    }
-}
-
 class C_NamespaceBuilder {
-    private val namespaces = mutableMapOf<R_Name, C_DefProxy<C_Namespace>>()
-    private val types = mutableMapOf<R_Name, C_DefProxy<R_Type>>()
-    private val values = mutableMapOf<R_Name, C_DefProxy<C_NamespaceValue>>()
-    private val functions = mutableMapOf<R_Name, C_DefProxy<C_GlobalFunction>>()
+    private val directMembers = mutableMultimapOf<R_Name, C_NamespaceMember>()
+    private val importMembers = mutableMultimapOf<R_Name, C_NamespaceMember>()
 
-    fun add(name: R_Name, elem: C_NamespaceElement) {
-        if (elem.namespace != null) addDef(namespaces, name, elem.namespace)
-        if (elem.type != null) addDef(types, name, elem.type)
-        if (elem.value != null) addDef(values, name, elem.value)
-        if (elem.function != null) addDef(functions, name, elem.function)
+    fun add(name: R_Name, member: C_NamespaceMember) {
+        directMembers.put(name, member)
     }
 
-    fun addNamespace(name: R_Name, ns: C_DefProxy<C_Namespace>) = addDef(namespaces, name, ns)
-    fun addType(name: R_Name, type: C_DefProxy<R_Type>) = addDef(types, name, type)
-    fun addValue(name: R_Name, value: C_DefProxy<C_NamespaceValue>) = addDef(values, name, value)
-    fun addFunction(name: R_Name, function: C_DefProxy<C_GlobalFunction>) = addDef(functions, name, function)
-
-    private fun <T> addDef(map: MutableMap<R_Name, C_DefProxy<T>>, name: R_Name, def: C_DefProxy<T>) {
-        check(name !in map) { "$name ${map.keys.sorted()}" }
-        map[name] = def
+    fun add(name: R_Name, entry: C_NamespaceEntry) {
+        directMembers.putAll(name, entry.directMembers)
+        importMembers.putAll(name, entry.importMembers)
     }
 
     fun build(): C_Namespace {
-        return C_BasicNamespace(namespaces.toMap(), types.toMap(), values.toMap(), functions.toMap())
-    }
-}
-
-class C_NamespaceValueContext(val exprCtx: C_ExprContext) {
-    val defCtx = exprCtx.defCtx
-    val globalCtx = defCtx.globalCtx
-    val msgCtx = defCtx.msgCtx
-    val modCtx = defCtx.modCtx
-}
-
-abstract class C_NamespaceValue(val ideInfo: IdeSymbolInfo) {
-    abstract fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr
-}
-
-abstract class C_NamespaceValue_VExpr(ideInfo: IdeSymbolInfo): C_NamespaceValue(ideInfo) {
-    protected abstract fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr
-
-    final override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
-        val vExpr = toExpr0(ctx, name)
-        return C_VExpr(vExpr)
-    }
-}
-
-class C_NamespaceValue_RtValue(
-        ideInfo: IdeSymbolInfo,
-        private val value: Rt_Value
-): C_NamespaceValue_VExpr(ideInfo) {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
-        return V_ConstantValueExpr(ctx.exprCtx, name.pos, value)
-    }
-}
-
-class C_NamespaceValue_SysFunction(
-        ideInfo: IdeSymbolInfo,
-        private val resultType: R_Type,
-        private val fn: R_SysFunction,
-        private val pure: Boolean
-): C_NamespaceValue_VExpr(ideInfo) {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
-        return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, resultType, fn, name, pure = pure)
-    }
-}
-
-class C_NamespaceValue_Entity(
-        ideInfo: IdeSymbolInfo,
-        private val type: R_Type
-): C_NamespaceValue(ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
-        return C_TypeExpr(name.last.pos, type)
-    }
-}
-
-class C_NamespaceValue_Enum(
-        ideInfo: IdeSymbolInfo,
-        private val rEnum: R_EnumDefinition
-): C_NamespaceValue(ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName) = C_EnumExpr(ctx.msgCtx, name, rEnum)
-}
-
-class C_NamespaceValue_Namespace(
-        private val nsProxy: C_DefProxy<C_Namespace>
-): C_NamespaceValue(nsProxy.ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
-        val ns = nsProxy.getDef(ctx.msgCtx, name)
-        val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, ns)
-        return C_NamespaceExpr(name, nsRef)
-    }
-}
-
-class C_NamespaceValue_Object(
-        ideInfo: IdeSymbolInfo,
-        val rObject: R_ObjectDefinition
-): C_NamespaceValue(ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
-        return C_ObjectExpr(ctx.exprCtx, name, rObject)
-    }
-}
-
-class C_NamespaceValue_Struct(
-        ideInfo: IdeSymbolInfo,
-        private val struct: R_Struct
-): C_NamespaceValue(ideInfo) {
-    override fun toExpr(ctx: C_NamespaceValueContext, name: C_QualifiedName): C_Expr {
-        val ns = C_Lib_Type_Struct.getNamespace(struct)
-        val nsRef = C_NamespaceRef.create(ctx.msgCtx, name, ns)
-        return C_NamespaceStructExpr(name, struct, nsRef)
-    }
-}
-
-class C_NamespaceValue_GlobalConstant(
-        ideInfo: IdeSymbolInfo,
-        private val cDef: C_GlobalConstantDefinition
-): C_NamespaceValue_VExpr(ideInfo) {
-    override fun toExpr0(ctx: C_NamespaceValueContext, name: C_QualifiedName): V_Expr {
-        return cDef.compileRead(ctx.exprCtx, name.last)
+        val names = directMembers.keySet() + importMembers.keySet()
+        val entries = names.associateWith {
+            val directMems = directMembers.get(it).toImmList()
+            val importMems = importMembers.get(it).toImmList()
+            C_NamespaceEntry(directMems, importMems)
+        }.toImmMap()
+        return C_BasicNamespace(entries)
     }
 }

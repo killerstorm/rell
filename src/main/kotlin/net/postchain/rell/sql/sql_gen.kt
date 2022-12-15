@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.sql
@@ -28,10 +28,22 @@ object SqlGen {
     val RELL_SYS_FUNCTIONS = mapOf(
             genFunctionSubstr1(SqlConstants.FN_BYTEA_SUBSTR1, "BYTEA"),
             genFunctionSubstr2(SqlConstants.FN_BYTEA_SUBSTR2, "BYTEA"),
+            genFunctionRepeat(SqlConstants.FN_TEXT_REPEAT, "TEXT"),
             genFunctionSubstr1(SqlConstants.FN_TEXT_SUBSTR1, "TEXT"),
             genFunctionSubstr2(SqlConstants.FN_TEXT_SUBSTR2, "TEXT"),
-            genFunctionTextGetChar(SqlConstants.FN_TEXT_GETCHAR)
+            genFunctionTextGetChar(SqlConstants.FN_TEXT_GETCHAR),
     ).toImmMap()
+
+    private fun genFunctionRepeat(name: String, type: String): Pair<String, String> {
+        return name to """
+                CREATE FUNCTION "$name"(v $type, i INT) RETURNS $type AS $$
+                BEGIN
+                    IF i < 0 THEN RAISE EXCEPTION '$name: i = %', i; END IF;
+                    RETURN REPEAT(v, i);
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
 
     private fun genFunctionSubstr1(name: String, type: String): Pair<String, String> {
         return name to """
@@ -180,15 +192,7 @@ object SqlGen {
 }
 
 private fun getSqlType(t: R_Type): DataType<*> {
-    val st = getSqlType0(t)
-    return st.nullable(false)
-}
-
-private fun getSqlType0(t: R_Type): DataType<*> {
-    when (t) {
-        is R_PrimitiveType -> return t.sqlType
-        is R_EntityType -> return SQLDataType.BIGINT
-        is R_EnumType -> return SQLDataType.INTEGER
-        else -> throw Exception("SQL type not implemented for $t")
-    }
+    val sqlType = t.sqlAdapter.sqlType
+    sqlType ?: throw Exception("Type $t is not SQL-compatible")
+    return sqlType.nullable(false)
 }

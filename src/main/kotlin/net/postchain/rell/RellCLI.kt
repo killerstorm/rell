@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell
@@ -22,6 +22,7 @@ import net.postchain.rell.sql.*
 import net.postchain.rell.utils.*
 import picocli.CommandLine
 import java.sql.DriverManager
+import java.util.Properties
 import kotlin.system.exitProcess
 
 @Suppress("unused")
@@ -130,7 +131,7 @@ private fun runApp(
 
 private fun runSingleModuleTests(args: RellCliArgsEx, app: R_App, module: R_Module, entryRoutine: R_QualifiedName?) {
     val fns = TestRunner.getTestFunctions(module, TestMatcher.ANY)
-            .filter { entryRoutine == null || it.names.qualifiedName == entryRoutine.str() }
+            .filter { entryRoutine == null || it.defName.qualifiedName == entryRoutine.str() }
     runTests(args, app, fns)
 }
 
@@ -243,7 +244,9 @@ private fun runWithSqlManager(args: RellCliArgs, logSqlErrors: Boolean, code: (S
 
     if (dbUrl != null) {
         val schema = SqlUtils.extractDatabaseSchema(dbUrl)
-        DriverManager.getConnection(dbUrl).use { con ->
+        val jdbcProperties = Properties()
+        jdbcProperties.setProperty("binaryTransfer", "false")
+        DriverManager.getConnection(dbUrl, jdbcProperties).use { con ->
             con.autoCommit = true
             val sqlMgr = ConnectionSqlManager(con, args.sqlLog)
             runWithSqlManager(schema, sqlMgr, logSqlErrors, code)
@@ -330,7 +333,12 @@ private fun createRegularAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt
 }
 
 private fun createGlobalCtx(args: RellCliArgsEx): Rt_GlobalContext {
-    return RellCliUtils.createGlobalContext(args.raw.typeCheck, args.compilerOptions, false)
+    return RellCliUtils.createGlobalContext(
+        args.compilerOptions,
+        typeCheck = args.raw.typeCheck,
+        runXmlTest = false,
+        sqlLog = args.raw.sqlLog,
+    )
 }
 
 private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: List<String>, json: Boolean): List<Rt_Value> {
@@ -430,7 +438,7 @@ private class RellAppLauncher(
         val rtRes = sqlMgr.execute(entryPoint.transaction) { sqlExec ->
             val exeCtx = Rt_ExecutionContext(appCtx, opCtx, sqlCtx, sqlExec)
 
-            val gtvCtx = GtvToRtContext(true)
+            val gtvCtx = GtvToRtContext.make(true)
             val rtArgs = parseArgs(entryPoint, gtvCtx, args.args ?: listOf(), args.json || args.jsonArgs)
             gtvCtx.finish(exeCtx)
 
@@ -446,8 +454,8 @@ private class RellAppLauncher(
     private fun callEntryPoint(exeCtx: Rt_ExecutionContext, rtArgs: List<Rt_Value>): Rt_Value? {
         val res = try {
             entryPoint.call(exeCtx, rtArgs)
-        } catch (e: Rt_StackTraceError) {
-            val msg = Rt_Utils.appendStackTrace("ERROR ${e.message}", e.stack)
+        } catch (e: Rt_Exception) {
+            val msg = Rt_Utils.appendStackTrace("ERROR ${e.message}", e.info.stack)
             System.err.println(msg)
             exitProcess(1)
         }

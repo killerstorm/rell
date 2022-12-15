@@ -22,6 +22,7 @@ import net.postchain.rell.model.R_QueryDefinition
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.R_UserQueryBody
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.LazyPosString
 
 class C_QueryFunctionHeader(
         explicitType: R_Type?,
@@ -42,7 +43,7 @@ class C_QueryGlobalFunction(val rQuery: R_QueryDefinition, ideInfo: IdeSymbolInf
         headerLate.set(header)
     }
 
-    override fun compileCall(ctx: C_ExprContext, name: C_Name, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
         val header = headerLate.get()
         val retType = C_FunctionUtils.compileReturnType(ctx, name, header)
         val callInfo = C_FunctionCallInfo.forDirectFunction(name, header.params)

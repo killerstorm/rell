@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.type
@@ -41,9 +41,9 @@ class TypeTest: BaseRellTest() {
                 """json[{"a":5,"b":[1,2,3],"c":{"x":10,"y":20}}]""")
 
         // Bad argument
-        chkEx("= json();", "ct_err:expr_call_argtypes:json:")
-        chkEx("= json(1234);", "ct_err:expr_call_argtypes:json:integer")
-        chkEx("= json(json('{}'));", "ct_err:expr_call_argtypes:json:json")
+        chkEx("= json();", "ct_err:expr_call_argtypes:[json]:")
+        chkEx("= json(1234);", "ct_err:expr_call_argtypes:[json]:integer")
+        chkEx("= json(json('{}'));", "ct_err:expr_call_argtypes:[json]:json")
         chkEx("= json('');", "rt_err:fn_json_badstr")
         chkEx("= json('{]');", "rt_err:fn_json_badstr")
     }
@@ -247,5 +247,90 @@ class TypeTest: BaseRellTest() {
         chkCompile("function f(unit) {}", "ct_err:type:attr_var:unit:unit")
         chkCompile("function f(unit = 123) {}", "ct_err:type:attr_var:unit:unit")
         chkCompile("function f(unit: integer) {}", "OK")
+    }
+
+    @Test fun testCollectionsNameShadowingNamespace() {
+        chkCompile("struct list {}", "ct_err:name_conflict:sys:list:TYPE")
+        chkCompile("struct set {}", "ct_err:name_conflict:sys:set:TYPE")
+        chkCompile("struct map {}", "ct_err:name_conflict:sys:map:TYPE")
+        chkCompile("namespace { struct list {} }", "ct_err:name_conflict:sys:list:TYPE")
+        chkCompile("namespace { struct set {} }", "ct_err:name_conflict:sys:set:TYPE")
+        chkCompile("namespace { struct map {} }", "ct_err:name_conflict:sys:map:TYPE")
+
+        chkFull("namespace ns { struct list {} function f() = list(); } query q() = ns.f();", "ns.list[]")
+        chkFull("namespace ns { struct set {} function f() = set(); } query q() = ns.f();", "ns.set[]")
+        chkFull("namespace ns { struct map {} function f() = map(); } query q() = ns.f();", "ns.map[]")
+
+        chkCompile("namespace ns { struct list {} function f() = list<integer>(); }", "ct_err:type:not_generic:ns.list")
+        chkCompile("namespace ns { struct set {} function f() = set<integer>(); }", "ct_err:type:not_generic:ns.set")
+        chkCompile("namespace ns { struct map {} function f() = map<integer,text>(); }", "ct_err:type:not_generic:ns.map")
+        chkCompile("namespace ns { struct list {} function f() = list([1]); }", "ct_err:attr_implic_unknown:0:list<integer>")
+        chkCompile("namespace ns { struct set {} function f() = set([1]); }", "ct_err:attr_implic_unknown:0:list<integer>")
+        chkCompile("namespace ns { struct map {} function f() = map([1:'A']); }", "ct_err:attr_implic_unknown:0:map<integer,text>")
+    }
+
+    @Test fun testCollectionsNameShadowingLocal() {
+        def("function f(x: list<boolean>) = 123;")
+        def("function g(x: map<boolean,text>) = 123;")
+        chkEx("{ val list = 123; return list; }", "int[123]")
+        chkEx("{ val set = 123; return set; }", "int[123]")
+        chkEx("{ val map = 123; return map; }", "int[123]")
+        chkEx("{ val list = 123; return list<integer>(); }", "list<integer>[]")
+        chkEx("{ val set = 123; return set<integer>(); }", "set<integer>[]")
+        chkEx("{ val map = 123; return map<integer,text>(); }", "map<integer,text>[]")
+        chkEx("{ val list = 123; return list([true]); }", "list<boolean>[boolean[true]]")
+        chkEx("{ val set = 123; return set([true]); }", "set<boolean>[boolean[true]]")
+        chkEx("{ val map = 123; return map([true:'ABC']); }", "map<boolean,text>[boolean[true]=text[ABC]]")
+        chkEx("{ val list = f(*); return list([true]); }", "int[123]")
+        chkEx("{ val set = f(*); return set([true]); }", "int[123]")
+        chkEx("{ val map = g(*); return map([true:'ABC']); }", "int[123]")
+    }
+
+    @Test fun testGenericTypeNoArgs() {
+        chkCompile("function f(x: list) {}", "ct_err:type:generic:no_args:list")
+        chkCompile("function f(x: set) {}", "ct_err:type:generic:no_args:set")
+        chkCompile("function f(x: map) {}", "ct_err:type:generic:no_args:map")
+
+        chkCompile("function f(x: struct<list>) {}", "ct_err:type:generic:no_args:list")
+        chkCompile("function f(x: struct<set>) {}", "ct_err:type:generic:no_args:set")
+        chkCompile("function f(x: struct<map>) {}", "ct_err:type:generic:no_args:map")
+        chkCompile("function f(x: struct<list<integer>>) {}", "ct_err:type:struct:bad_type:list<integer>")
+        chkCompile("function f(x: struct<set<integer>>) {}", "ct_err:type:struct:bad_type:set<integer>")
+        chkCompile("function f(x: struct<map<integer,text>>) {}", "ct_err:type:struct:bad_type:map<integer,text>")
+    }
+
+    @Test fun testGenericTypeAmbiguousSyntax() {
+        def("function f(x: boolean, y: boolean) = 123;")
+        def("function g(x: list<integer>) = 123;")
+
+        chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return f(a < b, c > d); }", "int[123]")
+
+        chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return f(a < b, c > ()); }",
+            "ct_err:[expr:call:missing_args:[f]:1:y][unknown_name:a][unknown_name:b][unknown_name:c]")
+        chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return f(a < b, c > . d()); }",
+            "ct_err:[expr:call:missing_args:[f]:1:y][unknown_name:a][unknown_name:b][unknown_name:c]")
+
+        chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return g(list<integer>()); }", "int[123]")
+        chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return g(list<integer>.from_gtv(gtv.from_json('[]'))); }", "int[123]")
+    }
+
+    @Test fun testNonGenericTypeUsedAsGeneric() {
+        def("struct rec {}")
+        def("entity user {}")
+        def("enum color {}")
+        def("function g() {}")
+
+        chkCompile("function f(x: integer<boolean>) {}", "ct_err:type:not_generic:integer")
+        chkCompile("function f(x: text<decimal>) {}", "ct_err:type:not_generic:text")
+        chkCompile("function f(x: rec<integer>) {}", "ct_err:type:not_generic:rec")
+        chkCompile("function f(x: user<integer>) {}", "ct_err:type:not_generic:user")
+        chkCompile("function f(x: color<integer>) {}", "ct_err:type:not_generic:color")
+        chkCompile("function f(x: g<integer>) {}", "ct_err:wrong_name:type:function:g")
+    }
+
+    @Test fun testRawGenericType() {
+        chk("list.from_gtv('')", "ct_err:unknown_name:[list]:from_gtv")
+        chk("set.from_gtv('')", "ct_err:unknown_name:[set]:from_gtv")
+        chk("map.from_gtv('')", "ct_err:unknown_name:[map]:from_gtv")
     }
 }

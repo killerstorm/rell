@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.type
@@ -99,31 +99,31 @@ class FunctionTypeTest: BaseRellTest(false) {
             }
         """)
 
-        val errType = "expr_call_argtype:?"
+        val errType = "expr_call_argtype:[?]"
 
         chk("fns().f0()", "text[lo0]")
-        chk("fns().f0(123)", "ct_err:expr:call:too_many_args:?:0:1")
-        chk("fns().f0(123, 'Hello')", "ct_err:expr:call:too_many_args:?:0:2")
+        chk("fns().f0(123)", "ct_err:expr:call:too_many_args:[?]:0:1")
+        chk("fns().f0(123, 'Hello')", "ct_err:expr:call:too_many_args:[?]:0:2")
 
-        chk("fns().f1()", "ct_err:expr:call:missing_args:?:0")
+        chk("fns().f1()", "ct_err:expr:call:missing_args:[?]:0")
         chk("fns().f1(123)", "text[lo1:123]")
         chk("fns().f1('Hello')", "ct_err:$errType:0:integer:text")
-        chk("fns().f1(123, 'Hello')", "ct_err:expr:call:too_many_args:?:1:2")
+        chk("fns().f1(123, 'Hello')", "ct_err:expr:call:too_many_args:[?]:1:2")
 
-        chk("fns().f2()", "ct_err:expr:call:missing_args:?:0,1")
-        chk("fns().f2(123)", "ct_err:expr:call:missing_args:?:1")
-        chk("fns().f2('Hello')", "ct_err:[expr:call:missing_args:?:1][$errType:0:integer:text]")
+        chk("fns().f2()", "ct_err:expr:call:missing_args:[?]:0,1")
+        chk("fns().f2(123)", "ct_err:expr:call:missing_args:[?]:1")
+        chk("fns().f2('Hello')", "ct_err:[expr:call:missing_args:[?]:1][$errType:0:integer:text]")
         chk("fns().f2(123, 'Hello')", "text[lo2:123:Hello]")
         chk("fns().f2('Hello', 123)", "ct_err:[$errType:0:integer:text][$errType:1:text:integer]")
         chk("fns().f2('Hello', 'World')", "ct_err:$errType:0:integer:text")
-        chk("fns().f2(123, 'Hello', 456)", "ct_err:expr:call:too_many_args:?:2:3")
-        chk("fns().f2(123, 'Hello', 'World')", "ct_err:expr:call:too_many_args:?:2:3")
+        chk("fns().f2(123, 'Hello', 456)", "ct_err:expr:call:too_many_args:[?]:2:3")
+        chk("fns().f2(123, 'Hello', 'World')", "ct_err:expr:call:too_many_args:[?]:2:3")
     }
 
     @Test fun testArgumentByName() {
         def("function f(x: integer) = x * x;")
-        chk("f(*)(x = 7)", "ct_err:[expr:call:missing_args:?:0][expr:call:unknown_named_arg:?:x]")
-        chk("f(*)(y = 7)", "ct_err:[expr:call:missing_args:?:0][expr:call:unknown_named_arg:?:y]")
+        chk("f(*)(x = 7)", "ct_err:[expr:call:missing_args:[?]:0][expr:call:unknown_named_arg:[?]:x]")
+        chk("f(*)(y = 7)", "ct_err:[expr:call:missing_args:[?]:0][expr:call:unknown_named_arg:[?]:y]")
         chk("f(*)(7)", "int[49]")
     }
 
@@ -406,8 +406,8 @@ class FunctionTypeTest: BaseRellTest(false) {
         chk("s1().to_gtv", "int[123]")
         chk("s1().to_gtv()", "gtv[[123]]")
         chk("s2().to_gtv", "fn[integer.from_hex(text[7b])]")
-        chk("s2().to_gtv()", "int[123]")
+        chk("s2().to_gtv()", "ct_err:name:ambig:to_gtv:[attribute,function]")
         chk("s3().to_gtv", "fn[g()]")
-        chk("s3().to_gtv()", "gtv[123]")
+        chk("s3().to_gtv()", "ct_err:name:ambig:to_gtv:[attribute,function]")
     }
 }

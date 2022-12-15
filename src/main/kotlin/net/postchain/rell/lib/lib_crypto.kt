@@ -1,15 +1,17 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
 
 import net.postchain.crypto.CURVE_PARAMS
 import net.postchain.crypto.Signature
+import net.postchain.rell.compiler.base.core.C_DefinitionName
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_SysFunction
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_BooleanType
 import net.postchain.rell.model.R_ByteArrayType
 import net.postchain.rell.model.R_IntegerType
@@ -21,7 +23,7 @@ import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.etherjar.PrivateKey
 import net.postchain.rell.utils.etherjar.Signer
 import net.postchain.rell.utils.immListOf
-import org.spongycastle.jcajce.provider.digest.Keccak
+import org.bouncycastle.jcajce.provider.digest.Keccak
 import java.math.BigInteger
 import java.security.MessageDigest
 
@@ -30,14 +32,14 @@ private val SIGNATURE_TYPE = R_TupleType.create(R_ByteArrayType, R_ByteArrayType
 object C_Lib_Crypto {
     private const val NAMESPACE_NAME = "crypto"
 
-    private val GLOBAL_FUNCTIONS = C_GlobalFuncBuilder(null)
+    private val GLOBAL_FUNCTIONS = C_GlobalFuncBuilder()
             .add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Sha256)
             .add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Keccak256)
             .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), CryptoFns.VerifySignature)
             .add("eth_ecrecover", R_ByteArrayType, listOf(R_ByteArrayType, R_ByteArrayType, R_IntegerType, R_ByteArrayType), CryptoFns.EthEcRecover)
             .build()
 
-    private val NAMESPACE_FNS = C_GlobalFuncBuilder(NAMESPACE_NAME)
+    private val NAMESPACE_FNS = C_GlobalFuncBuilder(C_DefinitionName(C_LibUtils.DEFAULT_MODULE_STR, NAMESPACE_NAME).toPath())
             .add("sha256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Sha256)
             .add("keccak256", R_ByteArrayType, listOf(R_ByteArrayType), CryptoFns.Keccak256)
             .add("verify_signature", R_BooleanType, listOf(R_ByteArrayType, R_ByteArrayType, R_ByteArrayType), CryptoFns.VerifySignature)
@@ -52,7 +54,7 @@ object C_Lib_Crypto {
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
         C_LibUtils.bindFunctions(nsBuilder, GLOBAL_FUNCTIONS)
 
-        val b = C_SysNsProtoBuilder()
+        val b = C_SysNsProtoBuilder(nsBuilder.basePath.subPath(NAMESPACE_NAME))
         C_LibUtils.bindFunctions(b, NAMESPACE_FNS)
         nsBuilder.addNamespace(NAMESPACE_NAME, b.build().toNamespace())
     }
@@ -78,7 +80,7 @@ private object CryptoFns {
             val signature = Signature(b.asByteArray(), c.asByteArray())
             PostchainUtils.cryptoSystem.verifyDigest(digest, signature)
         } catch (e: Exception) {
-            throw Rt_Error("verify_signature", e.message ?: "")
+            throw Rt_Exception.common("verify_signature", e.message ?: "Signature verification crashed")
         }
         Rt_BooleanValue(res)
     }
@@ -152,7 +154,7 @@ private object CryptoFns {
     private fun checkPrivKeySize(privKey: ByteArray, fn: String) {
         val expPrivKeySize = 32
         Rt_Utils.check(privKey.size == expPrivKeySize) {
-            "fn:$fn:privkey_size:${privKey.size}" to "Wrong size of private key: ${privKey.size} instead of $expPrivKeySize"
+            "fn:$fn:privkey_size:${privKey.size}" toCodeMsg "Wrong size of private key: ${privKey.size} instead of $expPrivKeySize"
         }
     }
 }

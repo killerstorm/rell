@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.utils
@@ -24,19 +24,13 @@ import net.postchain.rell.compiler.vexpr.V_ParameterDefaultValueExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.utils.toGtv
-import net.postchain.rell.utils.ThreadLocalContext
-import net.postchain.rell.utils.immListOf
-import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmMap
-import org.jooq.impl.SQLDataType
-import java.math.BigDecimal
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.*
 import java.util.*
 
 typealias C_CodeMsgSupplier = () -> C_CodeMsg
 
 class C_CodeMsg(val code: String, val msg: String) {
-    fun toPair() = code to msg
-
     override fun toString() = code
 }
 
@@ -67,6 +61,7 @@ class C_Error: RuntimeException {
         fun more(pos: S_Pos, code: String, errMsg: String) = C_Error(pos, code, errMsg)
         fun stop(pos: S_Pos, code: String, errMsg: String) = C_Error(pos, code, errMsg)
         fun stop(pos: S_Pos, codeMsg: C_CodeMsg) = C_Error(pos, codeMsg)
+        fun stop(err: C_PosCodeMsg) = C_Error(err.pos, err.code, err.msg)
         fun other(pos: S_Pos, code: String, errMsg: String) = C_Error(pos, code, errMsg)
     }
 }
@@ -179,9 +174,9 @@ object C_Utils {
             sqlMapping: R_EntitySqlMapping,
             attrs: List<C_SysAttribute>
     ): R_EntityDefinition {
-        val moduleKey = R_ModuleKey(R_ModuleName.EMPTY, chain?.name)
-        val names = createDefNames(moduleKey, C_StringQualifiedName.of(simpleName.str))
-        val defBase = R_DefinitionBase(names, R_CallFrame.NONE_INIT_FRAME_GETTER)
+        val moduleKey = R_ModuleKey(C_LibUtils.DEFAULT_MODULE, chain?.name)
+        val cDefBase = createDefBase(moduleKey, C_StringQualifiedName.of(simpleName.str))
+        val defBase = cDefBase.rBase(R_CallFrame.NONE_INIT_FRAME_GETTER)
 
         val mountName = R_MountName.of(simpleName.str)
 
@@ -265,7 +260,8 @@ object C_Utils {
                 name,
                 name.toGtv(),
                 mirrorStructs = null,
-                initFrameGetter = R_CallFrame.NONE_INIT_FRAME_GETTER
+                initFrameGetter = R_CallFrame.NONE_INIT_FRAME_GETTER,
+                ideInfo = IdeSymbolInfo.DEF_STRUCT,
         )
         val rAttrs = attrs.mapIndexed { i, attr -> attr.name to attr.compile(i, false) }.toMap().toImmMap()
         rStruct.setAttributes(rAttrs)
@@ -281,11 +277,11 @@ object C_Utils {
     fun createSysQuery(executor: C_CompilerExecutor, simpleName: String, type: R_Type, fn: R_SysFunction): R_QueryDefinition {
         val moduleName = RELL_MODULE_NAME
         val moduleKey = R_ModuleKey(moduleName, null)
-        val names = createDefNames(moduleKey, C_StringQualifiedName.of(simpleName))
+        val cDefBase = createDefBase(moduleKey, C_StringQualifiedName.of(simpleName))
 
         val mountName = R_MountName(moduleName.parts + R_Name.of(simpleName))
 
-        val defBase = R_DefinitionBase(names, R_CallFrame.NONE_INIT_FRAME_GETTER)
+        val defBase = cDefBase.rBase(R_CallFrame.NONE_INIT_FRAME_GETTER)
         val query = R_QueryDefinition(defBase, mountName)
 
         executor.onPass(C_CompilerPass.EXPRESSIONS) {
@@ -296,12 +292,15 @@ object C_Utils {
         return query
     }
 
-    fun createDefNames(module: R_ModuleKey, qualifiedName: C_StringQualifiedName): R_DefinitionNames {
-        val moduleStr = module.str()
-        val qualifiedNameStr = qualifiedName.str()
-        val simpleName = qualifiedName.last
-        val defId = R_DefinitionId(moduleStr, qualifiedNameStr)
-        return R_DefinitionNames(moduleStr, qualifiedNameStr, simpleName, defId)
+    fun createDefBase(module: R_ModuleKey, qualifiedName: C_StringQualifiedName): C_DefinitionBase {
+        val cDefName = createDefName(module, qualifiedName)
+        val defName = cDefName.toRDefName()
+        val defId = R_DefinitionId(defName.module, defName.qualifiedName)
+        return C_DefinitionBase(defId, cDefName, defName)
+    }
+
+    private fun createDefName(module: R_ModuleKey, qualifiedName: C_StringQualifiedName): C_DefinitionName {
+        return C_DefinitionName(module.str(), qualifiedName)
     }
 
     fun fullName(namespacePath: String?, name: String): String {
@@ -309,9 +308,8 @@ object C_Utils {
     }
 
     fun appLevelName(module: C_ModuleKey, name: C_QualifiedName): String {
-        val moduleName = module.keyStr()
         val nameStr = name.str()
-        return R_DefinitionId.appLevelName(moduleName, nameStr)
+        return R_DefinitionName.appLevelName(module.keyStr(), nameStr)
     }
 
     fun checkGtvCompatibility(
@@ -327,6 +325,13 @@ object C_Utils {
         if (!flag) {
             val fullMsg = "$errMsg is not Gtv-compatible: ${type.strCode()}"
             msgCtx.error(pos, "$errCode:${type.strCode()}", fullMsg)
+        }
+    }
+
+    fun getFullNameLazy(type: R_Type, name: R_Name): LazyString {
+        return LazyString.of {
+            val baseType = C_Types.removeNullable(type)
+            "${baseType.strCode()}.$name"
         }
     }
 }

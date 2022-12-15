@@ -1,27 +1,50 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
 
+import net.postchain.rell.compiler.base.expr.C_MemberAttr
+import net.postchain.rell.compiler.base.expr.C_MemberAttr_SysProperty
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember_BasicAttr
 import net.postchain.rell.compiler.base.fn.C_SysMemberProperty
+import net.postchain.rell.compiler.base.namespace.C_Namespace
+import net.postchain.rell.compiler.base.namespace.C_NamespaceProperty
+import net.postchain.rell.compiler.base.namespace.C_NamespaceProperty_RtValue
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncTable
 import net.postchain.rell.compiler.base.utils.C_LibUtils
-import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
 import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.Db_SysFunction
 import net.postchain.rell.runtime.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.toImmMap
 
 object C_Lib_Type_Enum {
-    val PROPERTIES = mapOf(
-            "name" to C_SysMemberProperty(R_TextType, EnumFns.Name, pure = true),
-            "value" to C_SysMemberProperty(R_IntegerType, EnumFns.Value, pure = true)
+    private val PROPERTIES = mapOf(
+            "name" to EnumFns.Name,
+            "value" to EnumFns.Value,
         )
         .mapKeys { R_Name.of(it.key) }.toImmMap()
 
-    fun getStaticFns(type: R_EnumType): C_GlobalFuncTable {
+    fun getStaticNs(type: R_EnumType): C_Namespace {
+        val valuesMap = getStaticValues(type)
+        val values = valuesMap.entries.map { it.key.str to it.value }.toTypedArray()
+        val fns = getStaticFns(type)
+        return C_LibUtils.makeNs(type.enum.cDefName.toPath(), fns, *values)
+    }
+
+    private fun getStaticValues(type: R_EnumType): Map<R_Name, C_NamespaceProperty> {
+        return type.enum.attrs
+            .map {
+                it.rName to C_NamespaceProperty_RtValue(it.ideInfo, Rt_EnumValue(type, it))
+            }
+            .toMap()
+            .toImmMap()
+    }
+
+    private fun getStaticFns(type: R_EnumType): C_GlobalFuncTable {
         val b = C_LibUtils.typeGlobalFuncBuilder(type)
 
         b.add("values", R_ListType(type), listOf(), EnumFns.Values(type.enum))
@@ -31,9 +54,13 @@ object C_Lib_Type_Enum {
         return b.build()
     }
 
-    fun getMemberFns(type: R_EnumType): C_MemberFuncTable {
-        return C_LibUtils.typeMemFuncBuilder(type)
-            .build()
+    fun getValueMembers(type: R_EnumType): List<C_TypeValueMember> {
+        val fns = C_LibUtils.typeMemFuncBuilder(type).build()
+        val attrMembers = PROPERTIES.entries.map {
+            val attr: C_MemberAttr = C_MemberAttr_SysProperty(it.key, it.value)
+            C_TypeValueMember_BasicAttr(it.key, attr, IdeSymbolInfo.MEM_STRUCT_ATTR)
+        }
+        return C_LibUtils.makeValueMembers(type, fns, attrMembers)
     }
 }
 
@@ -50,7 +77,7 @@ private object EnumFns {
         val name = a.asString()
         val attr = enum.attr(name)
         if (attr == null) {
-            throw Rt_Error("enum_badname:${enum.appLevelName}:$name", "Enum '${enum.simpleName}' has no value '$name'")
+            throw Rt_Exception.common("enum_badname:${enum.appLevelName}:$name", "Enum '${enum.simpleName}' has no value '$name'")
         }
         Rt_EnumValue(enum.type, attr)
     }
@@ -59,18 +86,18 @@ private object EnumFns {
         val value = a.asInteger()
         val attr = enum.attr(value)
         if (attr == null) {
-            throw Rt_Error("enum_badvalue:${enum.appLevelName}:$value", "Enum '${enum.simpleName}' has no value $value")
+            throw Rt_Exception.common("enum_badvalue:${enum.appLevelName}:$value", "Enum '${enum.simpleName}' has no value $value")
         }
         Rt_EnumValue(enum.type, attr)
     }
 
-    val Name = C_SysFunction.simple1(pure = true) { a ->
+    val Name = C_SysMemberProperty.simple(R_TextType, pure = true) { a ->
         val attr = a.asEnum()
         Rt_TextValue(attr.name)
     }
 
     // Effectively a no-op, as enums are represented by their numeric values on SQL level.
-    val Value = C_SysFunction.simple1(Db_SysFunction.template("enum_value", 1, "(#0)"), pure = true) { a ->
+    val Value = C_SysMemberProperty.simple(R_IntegerType, Db_SysFunction.template("enum_value", 1, "(#0)"), pure = true) { a ->
         val attr = a.asEnum()
         Rt_IntValue(attr.value.toLong())
     }

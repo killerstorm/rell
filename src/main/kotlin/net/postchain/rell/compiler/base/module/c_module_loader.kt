@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.module
@@ -36,13 +36,13 @@ class C_ModuleLoader(
     private val selectedModules = mutableSetOf<R_ModuleName>()
     private var loadingTestDependencies = false // Looks like a hack (depends on methods invocation order), but fine.
 
-    private val loaderModules = mutableListOf<C_LoaderModule>()
+    private val resultModules = mutableListOf<C_LoaderModule>()
     private var done = false
 
     fun finish(): List<C_MidModule> {
         check(!done)
         done = true
-        val midModules = loaderModules.map { it.toMidModule(it.moduleName in selectedModules) }
+        val midModules = resultModules.map { it.toMidModule(it.moduleName in selectedModules) }
         return midModules.toImmList()
     }
 
@@ -161,7 +161,9 @@ class C_ModuleLoader(
                     isTestDependency = loadingTestDependencies
             )
 
-            loaderModules.add(ldrModule)
+            if (C_ModuleUtils.isAllowedModuleName(moduleName)) {
+                resultModules.add(ldrModule)
+            }
 
             if (parentName != null) {
                 loadModule0(parentName, false)

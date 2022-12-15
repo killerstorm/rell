@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model
@@ -15,8 +15,8 @@ data class R_VarPtr(val name: String, val blockUid: R_FrameBlockUid, val offset:
 class R_FrameBlock(val parentUid: R_FrameBlockUid?, val uid: R_FrameBlockUid, val offset: Int, val size: Int)
 
 class R_CallFrame(val defId: R_DefinitionId, val size: Int, val rootBlock: R_FrameBlock, val hasGuardBlock: Boolean) {
-    fun createRtFrame(defCtx: Rt_DefinitionContext, caller: Rt_FrameCaller?, state: Rt_CallFrameState?): Rt_CallFrame {
-        return Rt_CallFrame(defCtx, this, caller, state, hasGuardBlock)
+    fun createRtFrame(defCtx: Rt_DefinitionContext, stack: Rt_CallStack?, state: Rt_CallFrameState?): Rt_CallFrame {
+        return Rt_CallFrame(defCtx, this, stack, state)
     }
 
     companion object {

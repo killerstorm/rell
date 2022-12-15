@@ -1,20 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ~ Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+  -->
+
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
 
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>net.postchain.rell</groupId>
     <artifactId>rell</artifactId>
-    <version>0.10.10</version>
+    <version>0.11.0</version>
     <packaging>jar</packaging>
 
     <name>rell</name>
 
     <properties>
-        <postchain.version>3.6.0</postchain.version>
+        <postchain.version>3.7.0</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.build.outputTimestamp>10</project.build.outputTimestamp>
         <kotlin.version>1.6.21</kotlin.version>
-        <junit.version>4.12</junit.version>
+        <kotlin.compiler.jvmTarget>11</kotlin.compiler.jvmTarget>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
         <dist-classifier>dist</dist-classifier>
     </properties>
 
@@ -26,7 +33,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-assembly-plugin</artifactId>
-                        <version>2.6</version>
+                        <version>3.3.0</version>
                         <executions>
                             <execution>
                                 <id>make-archive</id>
@@ -72,6 +79,7 @@
         <dependency>
             <groupId>net.postchain</groupId>
             <artifactId>postchain-devtools</artifactId>
+            <scope>test</scope>
         </dependency>
 
         <dependency>
@@ -81,7 +89,7 @@
         <dependency>
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-collections4</artifactId>
-            <version>4.1</version>
+            <version>4.3</version>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
@@ -92,7 +100,6 @@
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
-            <version>4.5.3</version>
         </dependency>
 
         <dependency>
@@ -116,11 +123,15 @@
         <dependency>
             <groupId>org.jooq</groupId>
             <artifactId>jooq</artifactId>
-            <version>3.10.4</version>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
         </dependency>
 
         <dependency>
@@ -151,7 +162,7 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>${junit.version}</version>
+            <version>4.13.1</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -208,7 +219,7 @@
                 <configuration>
                     <includeOnlyProperties>
                         <includeOnlyProperty>^git\.branch$</includeOnlyProperty>
-                        <includeOnlyProperty>^git\.build\.(time|version)$</includeOnlyProperty>
+                        <includeOnlyProperty>^git\.build\.version$</includeOnlyProperty>
                         <includeOnlyProperty>^git\.commit\.id\.(abbrev|full)$</includeOnlyProperty>
                         <includeOnlyProperty>^git\.commit\.message\.(full|short)$</includeOnlyProperty>
                         <includeOnlyProperty>^git\.commit\.time$</includeOnlyProperty>
@@ -222,7 +233,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>properties-maven-plugin</artifactId>
-                <version>1.0.0</version>
+                <version>1.1.0</version>
                 <executions>
                     <execution>
                         <phase>generate-resources</phase>
@@ -239,7 +250,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>3.2.2</version>
                 <configuration>
                     <archive>
                         <manifest>
@@ -247,6 +258,7 @@
                             <classpathPrefix/>
                             <mainClass>net.postchain.rellr.RellCliKt</mainClass>
                             <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+                            <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                         </manifest>
                     </archive>
                 </configuration>

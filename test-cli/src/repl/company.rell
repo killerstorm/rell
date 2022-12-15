@@ -1,3 +1,7 @@
 module;
 
 entity company { name; address: text; }
+
+operation add_company(name, address: text) {
+    create company(name, address);
+}

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.module
@@ -71,7 +71,7 @@ class ModuleTest: BaseRellTest(false) {
         file("dir/foo.rell", "syntax error")
         chkCompile("", "OK")
         chkCompile("import dir.foo;", "ct_err:dir/foo.rell:syntax")
-        chkCompile("import dir.foo; query q() = foo.f();", "ct_err:[main.rell:unknown_name:foo.f][dir/foo.rell:syntax]")
+        chkCompile("import dir.foo; query q() = foo.f();", "ct_err:[main.rell:unknown_name:[foo]:f][dir/foo.rell:syntax]")
     }
 
     @Test fun testImportCompilationError() {
@@ -90,13 +90,12 @@ class ModuleTest: BaseRellTest(false) {
 
     @Test fun testImportCompilationError2() {
         file("lib/a.rell", "module; entity user { a: integer; b: text; c: boolean; x: ERROR; }")
-        chkCompile("import lib.a; query q() = (a.user@{}).a;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).b;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).c;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
-        chkCompile("import lib.a; query q() = (a.user@{}).z;",
-                "ct_err:[main.rell:unknown_member:[lib.a:user]:z][lib/a.rell:unknown_def:type:ERROR]")
-        chkCompile("import lib.a; query q() = 123;", "ct_err:lib/a.rell:unknown_def:type:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).a;", "ct_err:lib/a.rell:unknown_name:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).b;", "ct_err:lib/a.rell:unknown_name:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).c;", "ct_err:lib/a.rell:unknown_name:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).x;", "ct_err:lib/a.rell:unknown_name:ERROR")
+        chkCompile("import lib.a; query q() = (a.user@{}).z;", "ct_err:[main.rell:unknown_member:[lib.a:user]:z][lib/a.rell:unknown_name:ERROR]")
+        chkCompile("import lib.a; query q() = 123;", "ct_err:lib/a.rell:unknown_name:ERROR")
     }
 
     @Test fun testImportAliasConflict() {
@@ -334,13 +333,13 @@ class ModuleTest: BaseRellTest(false) {
 
     private fun chkSystemDefsNotVisibleFromOutside() {
         chkFull("import a; query q(): a.rec = a.rec();", "a:rec[x=int[123]]")
-        chkFull("import a; query q(): a.integer = 123;", "ct_err:unknown_def:type:a.integer")
-        chkFull("import a; query q(): a.boolean = false;", "ct_err:unknown_def:type:a.boolean")
-        chkFull("import a; query q(): a.text = 'Abc';", "ct_err:unknown_def:type:a.text")
-        chkFull("import a; query q(): a.byte_array = x'1234';", "ct_err:unknown_def:type:a.byte_array")
-        chkFull("import a; query q() = a.abs(-123);", "ct_err:unknown_name:a.abs")
+        chkFull("import a; query q(): a.integer = 123;", "ct_err:unknown_name:a.integer")
+        chkFull("import a; query q(): a.boolean = false;", "ct_err:unknown_name:a.boolean")
+        chkFull("import a; query q(): a.text = 'Abc';", "ct_err:unknown_name:a.text")
+        chkFull("import a; query q(): a.byte_array = x'1234';", "ct_err:unknown_name:a.byte_array")
+        chkFull("import a; query q() = a.abs(-123);", "ct_err:unknown_name:[a]:abs")
         chkFull("import a; query q() = abs(-123);", "int[123]")
-        chkFull("import a; query q() = a.integer.MIN_VALUE;", "ct_err:unknown_name:a.integer")
+        chkFull("import a; query q() = a.integer.MIN_VALUE;", "ct_err:unknown_name:[a]:integer")
         chkFull("import a; query q() = integer.MIN_VALUE;", "int[-9223372036854775808]")
     }
 
@@ -604,6 +603,24 @@ class ModuleTest: BaseRellTest(false) {
         file("a/b/f/module.rell", "@test module; function f_f() {}")
         tst.testModules("a")
         chkAppFns("d_f", "f_f")
+    }
+
+    @Test fun testRellModuleFile() {
+        file("rell.rell", "module;")
+        file("a/rell.rell", "module; val X = 123;")
+        chkCompile("import rell;", "ct_err:[main.rell:import:not_found:rell][rell.rell:module:reserved_name:rell]")
+        chkCompile("import r: rell;", "ct_err:[main.rell:import:not_found:rell][rell.rell:module:reserved_name:rell]")
+        chkCompile("import r: a.rell; function f() = r.X;", "OK")
+    }
+
+    @Test fun testRellModuleDir() {
+        file("rell/module.rell", "")
+        file("rell/a.rell", "module;")
+        file("a/rell.rell", "module; val X = 123;")
+        chkCompile("import rell;", "ct_err:import:not_found:rell")
+        chkCompile("import r: rell;", "ct_err:import:not_found:rell")
+        chkCompile("import rell.a;", "ct_err:[main.rell:import:not_found:rell.a][rell/a.rell:module:reserved_name:rell.a]")
+        chkCompile("import r: a.rell; function f() = r.X;", "OK")
     }
 
     private fun chkAppFns(vararg expected: String) {

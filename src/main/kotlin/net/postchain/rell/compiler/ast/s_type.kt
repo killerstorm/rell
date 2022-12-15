@@ -1,15 +1,19 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.base.core.C_CompilerPass
+import net.postchain.rell.compiler.base.core.C_DefinitionType
 import net.postchain.rell.compiler.base.core.C_NamespaceContext
 import net.postchain.rell.compiler.base.core.C_Types
+import net.postchain.rell.compiler.base.def.C_TypeDef_Generic
+import net.postchain.rell.compiler.base.def.C_TypeDef_Normal
 import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.namespace.C_NamespaceMemberTag
 import net.postchain.rell.compiler.base.utils.C_Error
-import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
@@ -32,17 +36,20 @@ sealed class S_Type(val pos: S_Pos) {
 
     open fun compileMirrorStructType(ctx: C_NamespaceContext, mutable: Boolean): R_StructType? {
         val rParamType = compileOpt(ctx)
-        return if (rParamType == null) null else compileMirrorStructType0(rParamType, mutable)
+        return if (rParamType == null) null else compileMirrorStructType0(ctx, rParamType, mutable)
     }
 
-    protected fun compileMirrorStructType0(rParamType: R_Type, mutable: Boolean): R_StructType {
+    protected fun compileMirrorStructType0(ctx: C_NamespaceContext, rParamType: R_Type, mutable: Boolean): R_StructType? {
         return if (rParamType is R_EntityType) {
             val rEntity = rParamType.rEntity
             val rStruct = rEntity.mirrorStructs.getStruct(mutable)
             rStruct.type
         } else {
-            throw C_Error.more(pos, "type:struct:bad_type:${rParamType.strCode()}",
-                    "Invalid struct parameter type: ${rParamType.str()}")
+            if (rParamType.isNotError()) {
+                ctx.msgCtx.error(pos, "type:struct:bad_type:${rParamType.strCode()}",
+                        "Invalid struct parameter type: ${rParamType.str()}")
+            }
+            null
         }
     }
 }
@@ -50,35 +57,63 @@ sealed class S_Type(val pos: S_Pos) {
 class S_NameType(private val name: S_QualifiedName): S_Type(name.pos) {
     override fun compile0(ctx: C_NamespaceContext): R_Type {
         val nameHand = name.compile(ctx)
-        return ctx.getType(nameHand)
+        val typeDef = ctx.getType(nameHand)
+        return typeDef?.toRType(ctx.msgCtx, name.pos) ?: R_CtErrorType
     }
 
     override fun compileMirrorStructType(ctx: C_NamespaceContext, mutable: Boolean): R_StructType? {
         val nameHand = name.compile(ctx)
-        val typeRes = ctx.getTypeOpt(nameHand)
-        var rParamType = typeRes?.getDef()
 
-        if (rParamType == null) {
-            val objRes = ctx.getObjectOpt(nameHand)
-            if (objRes != null) {
-                val obj = objRes.getDef()
-                rParamType = obj.rEntity.type
-            }
+        val nameRes = ctx.resolveName(nameHand, C_NamespaceMemberTag.MIRRORABLE)
+
+        val obj = nameRes.getObject(error = false, unknownInfo = false)
+        if (obj != null) {
+            val rParamType = obj.rEntity.type
+            return compileMirrorStructType0(ctx, rParamType, mutable)
         }
 
-        if (rParamType != null) {
-            return compileMirrorStructType0(rParamType, mutable)
-        }
-
-        val opRes = ctx.getOperationOpt(nameHand)
-        val rOp = opRes?.getDef()
+        val rOp = nameRes.getOperation(error = false, unknownInfo = false)
         if (rOp != null) {
             val rStruct = rOp.mirrorStructs.getStruct(mutable)
             return rStruct.type
         }
 
-        rParamType = ctx.getType(nameHand) // Must throw an exception, as type has been already checked.
-        return compileMirrorStructType0(rParamType, mutable)
+        val typeDef = nameRes.getType()
+        if (typeDef != null) {
+            val rParamType = typeDef.toRType(ctx.msgCtx, name.pos)
+            return compileMirrorStructType0(ctx, rParamType, mutable)
+        }
+
+        return null
+    }
+}
+
+class S_GenericType(private val name: S_QualifiedName, private val args: List<S_Type>): S_Type(name.pos) {
+    override fun compile0(ctx: C_NamespaceContext): R_Type {
+        val rPosArgs = args.mapNotNull {
+            val rType = it.compileOpt(ctx)
+            if (rType == null) null else S_PosValue(it.pos, rType)
+        }
+
+        val nameHand = name.compile(ctx)
+        val typeDef = ctx.getType(nameHand)
+
+        return when (typeDef) {
+            null -> R_CtErrorType
+            is C_TypeDef_Normal -> {
+                val type = typeDef.type
+                ctx.msgCtx.error(name.pos, "type:not_generic:${type.strCode()}", "Type '${type.str()}' is not generic")
+                R_CtErrorType
+            }
+            is C_TypeDef_Generic -> {
+                if (rPosArgs.size != args.size) {
+                    // Some args failed to compile.
+                    R_CtErrorType
+                } else {
+                    typeDef.type.compileType(ctx, name.pos, rPosArgs)
+                }
+            }
+        }
     }
 }
 
@@ -107,43 +142,6 @@ class S_TupleType(pos: S_Pos, private val fields: List<S_NameOptValue<S_Type>>):
         }
 
         return R_TupleType(rFields)
-    }
-}
-
-sealed class S_CollectionType(pos: S_Pos, private val element: S_Type): S_Type(pos) {
-    protected fun compileElementType(ctx: C_NamespaceContext, collectionKind: String): R_Type {
-        val rElementType0 = element.compile(ctx)
-        return C_Types.checkNotUnit(ctx.msgCtx, element.pos, rElementType0, null) {
-            "$collectionKind:elem" toCodeMsg "$collectionKind element"
-        }
-    }
-}
-
-class S_ListType(pos: S_Pos, element: S_Type): S_CollectionType(pos, element) {
-    override fun compile0(ctx: C_NamespaceContext): R_Type {
-        val rElementType = compileElementType(ctx, "list")
-        return R_ListType(rElementType)
-    }
-}
-
-class S_SetType(pos: S_Pos, element: S_Type): S_CollectionType(pos, element) {
-    override fun compile0(ctx: C_NamespaceContext): R_Type {
-        val rElementType = compileElementType(ctx, "set")
-        C_Utils.checkSetElementType(ctx, pos, rElementType)
-        return R_SetType(rElementType)
-    }
-}
-
-class S_MapType(pos: S_Pos, val key: S_Type, val value: S_Type): S_Type(pos) {
-    override fun compile0(ctx: C_NamespaceContext): R_Type {
-        val rKey = compileElementType(ctx, key)
-        val rValue = compileElementType(ctx, value)
-        C_Utils.checkMapKeyType(ctx, pos, rKey)
-        return R_MapType(R_MapKeyValueTypes(rKey, rValue))
-    }
-
-    private fun compileElementType(ctx: C_NamespaceContext, type: S_Type): R_Type {
-        return C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.compile(ctx), null) { "map_elem" toCodeMsg "map element" }
     }
 }
 

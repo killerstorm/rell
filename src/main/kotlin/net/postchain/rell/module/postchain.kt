@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.module
@@ -8,9 +8,9 @@ import mu.KLogging
 import net.postchain.base.BaseBlockBuilderExtension
 import net.postchain.base.data.DatabaseAccess
 import net.postchain.common.BlockchainRid
-import net.postchain.common.data.ByteArrayKey
 import net.postchain.common.exception.ProgrammerMistake
 import net.postchain.common.exception.UserMistake
+import net.postchain.common.types.WrappedByteArray
 import net.postchain.core.EContext
 import net.postchain.core.Transactor
 import net.postchain.core.TxEContext
@@ -36,13 +36,14 @@ import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 object RellVersions {
-    const val VERSION_STR = "0.10.10"
+    const val VERSION_STR = "0.11.0"
     val VERSION = R_LangVersion.of(VERSION_STR)
 
     val SUPPORTED_VERSIONS =
             listOf(
                 "0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6", "0.10.7", "0.10.8", "0.10.9",
-                "0.10.10"
+                "0.10.10", "0.10.11",
+                "0.11.0",
             )
             .map { R_LangVersion.of(it) }
             .toImmSet()
@@ -58,8 +59,10 @@ object ConfigConstants {
 
 private fun convertArgs(ctx: GtvToRtContext, params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
-        val type = params[index].type
-        type.gtvToRt(ctx, arg)
+        val param = params[index]
+        val type = param.type
+        val subCtx = ctx.updateSymbol(GtvToRtSymbol_Param(param), true)
+        type.gtvToRt(subCtx, arg)
     }
 }
 
@@ -80,11 +83,8 @@ private class ErrorHandler(val printer: Rt_Printer, private val wrapCtErrors: Bo
         } catch (e: ProgrammerMistake) {
             val msg = processError(msgSupplier, e)
             throw ProgrammerMistake(msg, e)
-        } catch (e: Rt_StackTraceError) {
-            val msg = processError(msgSupplier, e, e.stack)
-            throw if (wrapRtErrors) UserMistake(msg) else e
-        } catch (e: Rt_BaseError) {
-            val msg = processError(msgSupplier, e)
+        } catch (e: Rt_Exception) {
+            val msg = processError(msgSupplier, e, e.info.stack)
             throw if (wrapRtErrors) UserMistake(msg) else e
         } catch (e: C_Error){
             val msg = processError(msgSupplier, e)
@@ -156,10 +156,11 @@ private class RellGTXOperation(
         handleError {
             val params = rOperation.params()
             if (data.args.size != params.size) {
-                throw UserMistake("Wrong argument count: ${data.args.size} instead of ${params.size}")
+                throw Rt_Exception.common("operation:[${rOperation.appLevelName}]:arg_count:${data.args.size}:${params.size}",
+                    "Wrong argument count: ${data.args.size} instead of ${params.size}")
             }
             if (!gtvToRtCtx.isSet()) {
-                gtvToRtCtx.set(GtvToRtContext(GTV_OPERATION_PRETTY))
+                gtvToRtCtx.set(GtvToRtContext.make(GTV_OPERATION_PRETTY))
             }
             if (!args.isSet()) {
                 args.set(convertArgs(gtvToRtCtx.get(), params, data.args.toList()))
@@ -197,7 +198,7 @@ private class RellGTXOperation(
     }
 
     private class Rt_TxChainHeightProvider(private val ctx: TxEContext): Rt_ChainHeightProvider {
-        override fun getChainHeight(rid: ByteArrayKey, id: Long): Long? {
+        override fun getChainHeight(rid: WrappedByteArray, id: Long): Long? {
             return try {
                 ctx.getChainDependencyHeight(id)
             } catch (e: Exception) {
@@ -318,13 +319,16 @@ private class RellPostchainModule(
 
         val argMap = gtvArgs.asDict().filterKeys { it != "type" }
         val actArgNames = argMap.keys
-        val expArgNames = params.map { it.name }.toSet()
+        val expArgNames = params.map { it.name.str }.toSet()
         if (actArgNames != expArgNames) {
-            throw UserMistake("Wrong arguments: $actArgNames instead of $expArgNames")
+            val exp = expArgNames.joinToString(",")
+            val act = actArgNames.joinToString(",")
+            val code = "query:wrong_arg_names:${rQuery.appLevelName}:$exp:$act"
+            throw Rt_Exception.common(code, "Wrong arguments: $actArgNames instead of $expArgNames")
         }
 
-        val gtvToRtCtx = GtvToRtContext(GTV_QUERY_PRETTY)
-        val args = params.map { argMap.getValue(it.name) }
+        val gtvToRtCtx = GtvToRtContext.make(GTV_QUERY_PRETTY)
+        val args = params.map { argMap.getValue(it.name.str) }
         val rtArgs = convertArgs(gtvToRtCtx, params, args)
         gtvToRtCtx.finish(exeCtx)
 
@@ -342,7 +346,8 @@ class RellPostchainModuleEnvironment(
         val wrapRtErrors: Boolean = true,
         val forceTypeCheck: Boolean = false,
         val dbInitLogLevel: Int = DEFAULT_DB_INIT_LOG_LEVEL,
-        val hiddenLib: Boolean = false
+        val hiddenLib: Boolean = false,
+        val sqlLog: Boolean = false,
 ) {
     companion object {
         val DEFAULT = RellPostchainModuleEnvironment()
@@ -360,7 +365,7 @@ class RellPostchainModuleEnvironment(
 }
 
 class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): GTXModuleFactory {
-    val env = env ?: RellPostchainModuleEnvironment.get()
+    private val env = env ?: RellPostchainModuleEnvironment.get()
 
     override fun makeModule(config: Gtv, blockchainRID: BlockchainRid): GTXModule {
         val gtxNode = config.asDict().getValue("gtx").asDict()
@@ -386,15 +391,14 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
             val modLogPrinter = getModulePrinter(env.logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
             val modOutPrinter = getModulePrinter(env.outPrinter, combinedPrinter, copyOutput)
 
-            val sqlLogging = rellNode["sqlLog"]?.asBoolean() ?: false
             val typeCheck = env.forceTypeCheck || (rellNode["typeCheck"]?.asBoolean() ?: false)
             val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: env.dbInitLogLevel
 
             val moduleConfig = RellModuleConfig(
-                    sqlLogging = sqlLogging,
+                    sqlLogging = env.sqlLog,
                     typeCheck = typeCheck,
                     dbInitLogLevel = dbInitLogLevel,
-                    compilerOptions = compilerOptions
+                    compilerOptions = compilerOptions,
             )
 
             RellPostchainModule(

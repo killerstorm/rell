@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.utils
@@ -137,9 +137,10 @@ object RellCliUtils: KLogging() {
     }
 
     fun createGlobalContext(
-            typeCheck: Boolean,
             compilerOptions: C_CompilerOptions,
-            runXmlTest: Boolean
+            typeCheck: Boolean,
+            runXmlTest: Boolean,
+            sqlLog: Boolean,
     ): Rt_GlobalContext {
         // There was a request to suppress SqlInit logging for unit tests (when run from Eclipse).
         val dbInitLogLevel = when {
@@ -151,7 +152,8 @@ object RellCliUtils: KLogging() {
                 outPrinter = Rt_OutPrinter,
                 logPrinter = Rt_LogPrinter(),
                 forceTypeCheck = typeCheck,
-                dbInitLogLevel = dbInitLogLevel
+                dbInitLogLevel = dbInitLogLevel,
+                sqlLog = sqlLog,
         )
 
         return Rt_GlobalContext(

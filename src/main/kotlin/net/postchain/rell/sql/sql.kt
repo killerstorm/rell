@@ -1,13 +1,14 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.sql
 
-import net.postchain.base.Storage
+import mu.KLogging
 import net.postchain.base.withReadConnection
 import net.postchain.base.withWriteConnection
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.core.Storage
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immSetOf
 import net.postchain.rell.utils.toImmSet
@@ -26,6 +27,7 @@ object SqlConstants {
 
     const val FN_BYTEA_SUBSTR1 = "rell_bytea_substr1"
     const val FN_BYTEA_SUBSTR2 = "rell_bytea_substr2"
+    const val FN_TEXT_REPEAT = "rell_text_repeat"
     const val FN_TEXT_SUBSTR1 = "rell_text_substr1"
     const val FN_TEXT_SUBSTR2 = "rell_text_substr2"
     const val FN_TEXT_GETCHAR = "rell_text_getchar"
@@ -67,10 +69,10 @@ class SqlConnectionLogger(private val logging: Boolean) {
     private val conId = idCounter.getAndIncrement()
 
     fun log(s: String) {
-        if (logging) println("[$conId] $s")
+        if (logging) logger.info("[{}] {}", conId, s)
     }
 
-    companion object {
+    companion object: KLogging() {
         private val idCounter = AtomicLong()
     }
 }
@@ -154,7 +156,7 @@ object NoConnSqlExecutor: SqlExecutor() {
     override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) = throw err()
     override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) = throw err()
 
-    private fun err() = Rt_Error("no_sql", "No database connection")
+    private fun err() = Rt_Exception.common("no_sql", "No database connection")
 }
 
 class ConnectionSqlManager(private val con: Connection, logging: Boolean): SqlManager() {

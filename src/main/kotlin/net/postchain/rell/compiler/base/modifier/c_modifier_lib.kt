@@ -1,11 +1,12 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.modifier
 
 import net.postchain.rell.compiler.ast.S_KeywordModifierKind
 import net.postchain.rell.compiler.ast.S_QualifiedName
+import net.postchain.rell.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.model.expr.R_AtWhatSort
 
 enum class C_AtSummarizationKind(val annotation: String) {
@@ -29,6 +30,7 @@ object C_ModifierFields {
 
     val LOG = C_ModifierField.flagAnnotation("log")
     val TEST = C_ModifierField.flagAnnotation(C_Annotations.TEST)
+    val DEPRECATED = C_Annotation_Deprecated.FIELD
 
     val ABSTRACT = C_ModifierField.flagKeyword(S_KeywordModifierKind.ABSTRACT)
     val OVERRIDE = C_ModifierField.flagKeyword(S_KeywordModifierKind.OVERRIDE)
@@ -38,6 +40,17 @@ object C_ModifierFields {
     val OMIT = C_ModifierField.flagAnnotation("omit")
     val SORT = C_ModifierField.choiceAnnotations(mapOf(C_Annotations.SORT to R_AtWhatSort.ASC, C_Annotations.SORT_DESC to R_AtWhatSort.DESC))
     val SUMMARIZATION = C_ModifierField.choiceAnnotations(C_AtSummarizationKind.values().associateBy { it.annotation })
+}
+
+private object C_Annotation_Deprecated {
+    val FIELD = C_ModifierField.valueAnnotation("deprecated", Evaluator, hidden = true)
+
+    private object Evaluator: C_ModifierEvaluator<C_Deprecated>() {
+        override fun evaluate(ctx: C_ModifierContext, modLink: C_ModifierLink, args: List<C_AnnotationArg>): C_Deprecated {
+            C_AnnUtils.checkArgsNone(ctx, modLink.name, args)
+            return C_Deprecated(useInstead = null, error = true)
+        }
+    }
 }
 
 private object C_Annotation_Extend {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -25,7 +25,6 @@ class ExternalTest: BaseRellTest() {
             .tx(2004, 1004, "BEEF04", "2004", "1234")
             .tx(2005, 1005, "BEEF05", "2005", "1234")
             .list()
-
     }
 
     @Test fun testSimple() {

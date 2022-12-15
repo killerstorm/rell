@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.misc
@@ -636,18 +636,20 @@ class SqlInitTest: BaseContextTest(useSql = true) {
                 "rell_bytea_substr1",
                 "rell_bytea_substr2",
                 "rell_text_getchar",
+                "rell_text_repeat",
                 "rell_text_substr1",
                 "rell_text_substr2"
         )
 
         execSql("DROP FUNCTION rell_bytea_substr2; DROP FUNCTION rell_text_substr1;")
-        chkFunctions("c0.make_rowid", "rell_bytea_substr1", "rell_text_getchar", "rell_text_substr2")
+        chkFunctions("c0.make_rowid", "rell_bytea_substr1", "rell_text_getchar", "rell_text_repeat", "rell_text_substr2")
         chkInit("")
         chkFunctions(
                 "c0.make_rowid",
                 "rell_bytea_substr1",
                 "rell_bytea_substr2",
                 "rell_text_getchar",
+                "rell_text_repeat",
                 "rell_text_substr1",
                 "rell_text_substr2"
         )

@@ -281,7 +281,7 @@ private object DecFns {
         val v = a.asDecimal()
         val power = b.asInteger()
         if (power < 0) {
-            throw Rt_Error("decimal.pow:negative_power:$power", "Negative power: $power")
+            throw Rt_Exception.common("decimal.pow:negative_power:$power", "Negative power: $power")
         }
 
         val r = Lib_DecimalMath.power(v, power.toInt())
@@ -291,7 +291,7 @@ private object DecFns {
     val Sqrt = C_SysFunction.simple1(Db_SysFunction.simple("decimal.sqrt", "SQRT"), pure = true) { a ->
         val v = a.asDecimal()
         if (v < BigDecimal.ZERO) {
-            throw Rt_Error("decimal.sqrt:negative:$v", "Negative value")
+            throw Rt_Exception.common("decimal.sqrt:negative:$v", "Negative value")
         }
         TODO()
     }
@@ -310,7 +310,7 @@ private object DecFns {
         val bi = v.toBigInteger()
         if (bi < BIG_INT_MIN || bi > BIG_INT_MAX) {
             val s = v.round(MathContext(20, RoundingMode.DOWN))
-            throw Rt_Error("decimal.to_integer:overflow:$s", "Decimal value is out of integer range: $s")
+            throw Rt_Exception.common("decimal.to_integer:overflow:$s", "Value out of range: $s")
         }
         val r = bi.toLong()
         Rt_IntValue(r)

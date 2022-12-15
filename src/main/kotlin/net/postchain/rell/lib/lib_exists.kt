@@ -1,12 +1,10 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
 
 import net.postchain.rell.compiler.ast.S_Expr
-import net.postchain.rell.compiler.base.core.C_Name
-import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
@@ -26,11 +24,12 @@ import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.checkEquals
 
 object C_Lib_Exists {
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
-        val fb = C_GlobalFuncBuilder(null)
+        val fb = C_GlobalFuncBuilder()
         fb.add("exists", C_SysFn_Exists(false))
         fb.add("empty", C_SysFn_Exists(true))
         C_LibUtils.bindFunctions(nsBuilder, fb.build())
@@ -40,7 +39,7 @@ object C_Lib_Exists {
 private class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction(IdeSymbolInfo.DEF_FUNCTION_SYSTEM) {
     override fun paramCount() = 1
 
-    override fun compileCall0(ctx: C_ExprContext, name: C_Name, args: List<S_Expr>): V_Expr {
+    override fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr {
         checkEquals(1, args.size)
 
         val arg = args[0]
@@ -85,7 +84,7 @@ private class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFuncti
 
 private class V_ExistsExpr(
         exprCtx: C_ExprContext,
-        private val name: C_Name,
+        private val name: LazyPosString,
         private val subExpr: V_Expr,
         private val condition: R_RequireCondition,
         private val not: Boolean,
@@ -97,7 +96,7 @@ private class V_ExistsExpr(
     override fun toRExpr0(): R_Expr {
         val fn = R_SysFn_Exists(condition, not)
         val rArgs = listOf(subExpr.toRExpr())
-        return C_ExprUtils.createSysCallRExpr(R_BooleanType, fn, rArgs, C_QualifiedName(name))
+        return C_ExprUtils.createSysCallRExpr(R_BooleanType, fn, rArgs, name)
     }
 
     override fun toDbExpr0(): Db_Expr {

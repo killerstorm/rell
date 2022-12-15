@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -275,7 +275,7 @@ class AtExprCollectionTest: BaseRellTest(false) {
     @Test fun testWhatAttributesFunction() {
         tst.strictToString = false
         val from = "['Bob', 'Alice']"
-        chk("$from @*{} ( .size() )", "ct_err:expr_attr_unknown:size")
+        chk("$from @*{} ( .size() )", "[3, 5]")
         chk("$from @*{} ( $.size() )", "[3, 5]")
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model
@@ -11,12 +11,12 @@ import org.apache.commons.lang3.StringUtils
 import java.util.*
 
 class R_DefinitionId(val module: String, val definition: String) {
-    override fun toString() = appLevelName(module, definition)
+    override fun toString() = str(module, definition)
 
     companion object {
         val ERROR = R_DefinitionId("<error>", "<error>")
 
-        fun appLevelName(module: String, definition: String) = "$module:$definition"
+        fun str(module: String, definition: String) = "$module:$definition"
     }
 }
 
@@ -34,6 +34,7 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
     private val str = parts.joinToString(".")
 
     fun str() = str
+    fun displayStr() = if (str.isEmpty()) "''" else str
     fun isEmpty() = parts.isEmpty()
     fun size() = parts.size
 
@@ -46,11 +47,6 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
         return true
     }
 
-    fun parent(): T {
-        check(parts.isNotEmpty()) { "Trying to get a parent name of an empty name" }
-        return create(parts.subList(0, parts.size - 1))
-    }
-
     fun child(name: R_Name): T {
         return create(parts + name)
     }
@@ -58,14 +54,6 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
     fun child(name: String): T {
         val rName = R_Name.of(name)
         return child(rName)
-    }
-
-    fun child(name: T): T {
-        return when {
-            isEmpty() -> name
-            name.isEmpty() -> self()
-            else -> create(parts + name.parts)
-        }
     }
 
     protected abstract fun self(): T
@@ -87,29 +75,38 @@ private fun <T: R_GenericQualifiedName<T>> qNameOf0(s: String, empty: T, create:
     return requireNotNull(res) { s }
 }
 
-private fun <T: R_GenericQualifiedName<T>> qNameOfOpt0(s: String, empty: T, create: (List<R_Name>) -> T): T? {
+private fun <T: R_GenericQualifiedName<T>> qNameOfOpt0(s: String, empty: T?, create: (List<R_Name>) -> T): T? {
     if (s == "") return empty
     val parts = R_Name.listOfOpt(s)
     return if (parts == null) null else create(parts)
 }
 
 class R_QualifiedName(parts: List<R_Name>): R_GenericQualifiedName<R_QualifiedName>(parts) {
+    init {
+        check(parts.isNotEmpty())
+    }
+
     override fun self() = this
     override fun create(parts: List<R_Name>) = R_QualifiedName(parts)
 
     companion object {
-        val EMPTY = R_QualifiedName(listOf())
-        fun of(s: String) = qNameOf0(s, EMPTY) { R_QualifiedName(it) }
-        fun ofOpt(s: String) = qNameOfOpt0(s, EMPTY) { R_QualifiedName(it) }
+        fun of(s: String): R_QualifiedName = requireNotNull(ofOpt(s)) { s }
+        fun ofOpt(s: String): R_QualifiedName? = qNameOfOpt0(s, null) { R_QualifiedName(it) }
     }
 }
 
-class R_ModuleName(parts: List<R_Name>): R_GenericQualifiedName<R_ModuleName>(parts) {
+class R_ModuleName private constructor(parts: List<R_Name>): R_GenericQualifiedName<R_ModuleName>(parts) {
     override fun self() = this
-    override fun create(parts: List<R_Name>) = R_ModuleName(parts)
+    override fun create(parts: List<R_Name>) = of(parts)
+
+    fun parent(): R_ModuleName {
+        check(parts.isNotEmpty()) { "Trying to get a parent name of an empty name" }
+        return R_ModuleName(parts.subList(0, parts.size - 1))
+    }
 
     companion object {
         val EMPTY = R_ModuleName(listOf())
+        fun of(parts: List<R_Name>) = if (parts.isEmpty()) EMPTY else R_ModuleName(parts)
         fun of(s: String) = qNameOf0(s, EMPTY) { R_ModuleName(it) }
         fun ofOpt(s: String) = qNameOfOpt0(s, EMPTY) { R_ModuleName(it) }
     }

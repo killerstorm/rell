@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.type
@@ -29,8 +29,8 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chkType("struct<integer>", "ct_err:type:struct:bad_type:integer")
 
         chkType("struct<my_struct>", "ct_err:type:struct:bad_type:my_struct")
-        chkType("struct<my_function>", "ct_err:unknown_def:type:my_function")
-        chkType("struct<my_query>", "ct_err:unknown_def:type:my_query")
+        chkType("struct<my_function>", "ct_err:wrong_name:type:function:my_function")
+        chkType("struct<my_query>", "ct_err:wrong_name:type:query:my_query")
         chkType("struct<my_enum>", "ct_err:type:struct:bad_type:my_enum")
         chkType("struct<my_entity?>", "ct_err:type:struct:bad_type:my_entity?")
 
@@ -89,8 +89,8 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         val t = RellCodeTester(tstCtx)
         t.def(def)
         val init = "val s = struct<data>(x = 123, y = 'abc');"
-        t.chkEx("{ $init s.x = 456; return 0; }", "ct_err:update_attr_not_mutable:x")
-        t.chkEx("{ $init s.y = 'xyz'; return 0; }", "ct_err:update_attr_not_mutable:y")
+        t.chkEx("{ $init s.x = 456; return 0; }", "ct_err:attr_not_mutable:x")
+        t.chkEx("{ $init s.y = 'xyz'; return 0; }", "ct_err:attr_not_mutable:y")
     }
 
     @Test fun testInstanceMemberFunctions() {
@@ -119,7 +119,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         t.chk("""struct<data>.from_gtv(gtv.from_json('[123,"abc"]'))""", "struct<data>[x=int[123],y=text[abc]]")
         t.chk("""struct<data>.from_gtv_pretty(gtv.from_json('{"x":123,"y":"abc"}'))""", "struct<data>[x=int[123],y=text[abc]]")
         t.chk("struct<data>.from_bytes(x'a50e300ca30302017ba2050c03616263')", "struct<data>[x=int[123],y=text[abc]]")
-        t.chk("struct<data>.bad_name()", "ct_err:unknown_name:struct<data>.bad_name")
+        t.chk("struct<data>.bad_name()", "ct_err:unknown_name:[struct<data>]:bad_name")
     }
 
     @Test fun testSystemEntity() {
@@ -172,7 +172,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("(user@?{'Bob'})?.to_struct()", "struct<user>[name=text[Bob],rating=int[123]]")
         chk("(user@?{'Alice'})?.to_struct()", "null")
 
-        chk("(user@{}).to_struct(123)", "ct_err:expr_call_argtypes:user.to_struct:integer")
+        chk("(user@{}).to_struct(123)", "ct_err:expr_call_argtypes:[user.to_struct]:integer")
         chk("(user@{}).to_error()", "ct_err:unknown_member:[user]:to_error")
     }
 
@@ -183,14 +183,14 @@ class MirrorStructEntityTest: BaseRellTest(false) {
 
         chk("user@{} (user.to_struct())", "struct<user>[name=text[Bob],rating=int[123]]")
         chk("(a:user)@{} (a.to_struct())", "struct<user>[name=text[Bob],rating=int[123]]")
-        chk("user@{} (.to_struct())", "ct_err:expr_attr_unknown:to_struct")
+        chk("user@{} (.to_struct())", "struct<user>[name=text[Bob],rating=int[123]]")
 
         chk("user@{} (.name, user.to_struct(), .rating)",
                 "(name=text[Bob],struct<user>[name=text[Bob],rating=int[123]],rating=int[123])")
 
         chk("user@{} (s = user.to_struct())", "(s=struct<user>[name=text[Bob],rating=int[123]])")
 
-        chk("user@{} (user.to_struct().name)", "ct_err:expr_sqlnotallowed")
+        chk("user@{} (user.to_struct().name)", "text[Bob]")
         chk("user@{} ('' + user.to_struct())", "ct_err:expr_sqlnotallowed")
         chk("user@{} (user.to_struct() == struct<user>('Bob',123))", "ct_err:expr_sqlnotallowed")
 
@@ -198,7 +198,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("user @ { user.to_struct() == struct<user>('Bob',123) }", "ct_err:expr_sqlnotallowed")
         chk("user @ { user.to_struct().name == 'Bob' }", "ct_err:expr_sqlnotallowed")
 
-        chk("user@{} (user.to_struct(123))", "ct_err:expr_call_argtypes:user.to_struct:integer")
+        chk("user@{} (user.to_struct(123))", "ct_err:expr_call_argtypes:[user.to_struct]:integer")
         chk("user@{} (user.to_error())", "ct_err:unknown_member:[user]:to_error")
     }
 
@@ -280,7 +280,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("user @ {} ( state.to_struct() )", "struct<state>[x=int[123],y=text[abc]]")
         chk("(user@*{}) @ {} ( state.to_struct() )", "struct<state>[x=int[123],y=text[abc]]")
 
-        chk("_type_of(state.to_struct(123))", "ct_err:expr_call_argtypes:state.to_struct:integer")
+        chk("_type_of(state.to_struct(123))", "ct_err:expr_call_argtypes:[state.to_struct]:integer")
         chk("_type_of(state.to_error())", "ct_err:unknown_member:[state]:to_error")
     }
 
@@ -364,7 +364,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("(e: my_entity) @ {} ( e.to_struct() )", "struct<my_entity>[x=text[abc],y=int[123]]")
         chk("(e: my_entity) @ {} ( e.to_mutable_struct() )", "struct<mutable my_entity>[x=text[abc],y=int[123]]")
 
-        chkEx("{ val s = (e: my_entity) @{} ( e.to_struct() ); s.x = 'xyz'; return s; }", "ct_err:update_attr_not_mutable:x")
+        chkEx("{ val s = (e: my_entity) @{} ( e.to_struct() ); s.x = 'xyz'; return s; }", "ct_err:attr_not_mutable:x")
 
         chkEx("{ val s = (e: my_entity) @{} ( e.to_mutable_struct() ); s.x = 'xyz'; return s; }",
                 "struct<mutable my_entity>[x=text[xyz],y=int[123]]")

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -420,6 +420,25 @@ class AtExprComplexWhatTest: BaseRellTest() {
         chkOut("hello", "0")
         chk("data @ {} ( ft('hello', false)?.char_at(fi(.i - 111), *) ) limit 1", "null")
         chkOut("hello")
+    }
+
+    @Test fun testMemberValueEntityAttr() {
+        initData()
+        def("function f(c: city) = c;")
+        chk("city @* {} ( f($).name )", "ct_err:expr_sqlnotallowed") //TODO support
+    }
+
+    @Test fun testMemberValueStructAttr() {
+        initData()
+        def("struct s { name; }")
+        def("function f(c: city) = s(c.name);")
+        chk("city @* {} ( f($).name )", "list<text>[text[Berlin],text[Paris],text[Madrid]]")
+    }
+
+    @Test fun testMemberValueTupleAttr() {
+        initData()
+        def("function f(c: city) = (name = c.name);")
+        chk("city @* {} ( f($).name )", "list<text>[text[Berlin],text[Paris],text[Madrid]]")
     }
 
     private fun chkSel(what: String, type: String, vararg values: String) {

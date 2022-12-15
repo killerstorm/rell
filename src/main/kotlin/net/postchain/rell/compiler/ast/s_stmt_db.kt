@@ -1,11 +1,10 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.base.core.C_LambdaBlock
-import net.postchain.rell.compiler.base.core.C_NameValue
 import net.postchain.rell.compiler.base.core.C_Statement
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Error
@@ -39,8 +38,10 @@ class S_UpdateTarget_Simple(
             stmtPos: S_Pos,
             atExprId: R_AtExprId,
             subValues: MutableList<V_Expr>
-    ): C_UpdateTarget {
+    ): C_UpdateTarget? {
         val cAtEntities = compileFromEntities(ctx, atExprId, from)
+        cAtEntities ?: return null
+
         val rAtEntities = cAtEntities.map { it.toRAtEntity() }
         val entity = rAtEntities[0]
         val extraEntities = rAtEntities.subList(1, rAtEntities.size)
@@ -55,23 +56,25 @@ class S_UpdateTarget_Simple(
         return C_UpdateTarget(rTarget, cFrom)
     }
 
-    private fun compileFromEntities(ctx: C_ExprContext, atExprId: R_AtExprId, from: List<S_AtExprFrom>): List<C_AtEntity> {
-        val cFrom = from.map { f -> compileFromEntity(ctx, atExprId, f) }
-        return cFrom.map { (_, entity) -> entity }
+    private fun compileFromEntities(ctx: C_ExprContext, atExprId: R_AtExprId, from: List<S_AtExprFrom>): List<C_AtEntity>? {
+        val cFrom0 = from.map { f -> compileFromEntity(ctx, atExprId, f) }
+        val cFrom = cFrom0.filterNotNull()
+        return if (cFrom.size != cFrom0.size) null else cFrom
     }
 
-    private fun compileFromEntity(ctx: C_ExprContext, atExprId: R_AtExprId, from: S_AtExprFrom): C_NameValue<C_AtEntity> {
+    private fun compileFromEntity(ctx: C_ExprContext, atExprId: R_AtExprId, from: S_AtExprFrom): C_AtEntity? {
         val explicitAlias = from.alias?.compile(ctx, IdeSymbolInfo(IdeSymbolKind.LOC_AT_ALIAS))
 
         val entityNameHand = from.entityName.compile(ctx.symCtx)
-        val entity = ctx.nsCtx.getEntity(entityNameHand)
-
         val entityName = entityNameHand.qName
         val alias = explicitAlias ?: entityName.last
 
+        val entity = ctx.nsCtx.getEntity(entityNameHand)
+        entity ?: return null
+
         val atEntityId = ctx.appCtx.nextAtEntityId(atExprId)
         val atEntity = C_AtEntity(alias.pos, entity, alias.rName, explicitAlias != null, atEntityId)
-        return C_NameValue(alias, atEntity)
+        return atEntity
     }
 }
 

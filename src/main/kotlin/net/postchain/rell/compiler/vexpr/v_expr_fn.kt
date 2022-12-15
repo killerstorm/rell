@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
@@ -16,6 +16,7 @@ import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.compiler.base.utils.C_SpecialGlobalFuncCaseMatch
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
+import net.postchain.rell.runtime.Rt_CallContext
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
@@ -57,21 +58,6 @@ class V_SysSpecialGlobalCaseCallExpr(
     override fun globalConstantRestriction() = match.globalConstantRestriction(caseCtx)
 
     override fun toRExpr0() = match.compileCallR(exprCtx, caseCtx)
-}
-
-// Just a wrapper which adds implicit at-expr what attribute name.
-class V_SysMemberPropertyExpr(
-        exprCtx: C_ExprContext,
-        private val expr: V_Expr,
-        private val propName: R_Name
-): V_Expr(exprCtx, expr.pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(expr.type, expr)
-
-    override fun toRExpr0() = expr.toRExpr()
-    override fun toDbExpr0() = expr.toDbExpr()
-    override fun toDbExprWhat0() = expr.toDbExprWhat()
-
-    override fun implicitAtWhatAttrName() = propName // That's the only purpose of this class.
 }
 
 class V_FunctionCallArgs(
@@ -117,7 +103,7 @@ sealed class V_FunctionCallExpr(
     ): R_Expr
 
     protected abstract fun callTarget(
-            frame: Rt_CallFrame,
+            callCtx: Rt_CallContext,
             rtTarget: Rt_FunctionCallTarget,
             argValues: List<Rt_Value>
     ): Rt_Value
@@ -140,7 +126,8 @@ sealed class V_FunctionCallExpr(
                 val rtTarget = rTarget.evaluateTarget(frame, targetValues)
                 rtTarget ?: return Rt_NullValue
                 val argValues = values.subList(targetExprs.size, values.size).map { it.value() }
-                return callTarget(frame, rtTarget, argValues)
+                val callCtx = frame.callCtx()
+                return callTarget(callCtx, rtTarget, argValues)
             }
         }
 
@@ -160,9 +147,10 @@ class V_FullFunctionCallExpr(
 
     override fun globalConstantRestriction() = target.globalConstantRestriction()
 
-    override fun callTarget(frame: Rt_CallFrame, rtTarget: Rt_FunctionCallTarget, argValues: List<Rt_Value>): Rt_Value {
+    override fun callTarget(callCtx: Rt_CallContext, rtTarget: Rt_FunctionCallTarget, argValues: List<Rt_Value>): Rt_Value {
         val values2 = callArgs.mapping.map { argValues[it] }
-        return rtTarget.call(frame, values2, callFilePos)
+        val subCallCtx = callCtx.subContext(callFilePos)
+        return rtTarget.call(subCallCtx, values2)
     }
 
     override fun toRExpr0(rTarget: R_FunctionCallTarget, rTargetExprs: List<R_Expr>, rArgExprs: List<R_Expr>): R_Expr {
@@ -189,7 +177,7 @@ class V_PartialFunctionCallExpr(
         return R_PartialFunctionCallExpr(resType, rTarget, mapping, rTargetExprs, rArgExprs)
     }
 
-    override fun callTarget(frame: Rt_CallFrame, rtTarget: Rt_FunctionCallTarget, argValues: List<Rt_Value>): Rt_Value {
+    override fun callTarget(callCtx: Rt_CallContext, rtTarget: Rt_FunctionCallTarget, argValues: List<Rt_Value>): Rt_Value {
         return rtTarget.createFunctionValue(resType, mapping, argValues)
     }
 }

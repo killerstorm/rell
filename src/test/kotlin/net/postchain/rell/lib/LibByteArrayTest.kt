@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -14,7 +14,7 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array('')", "byte_array[]")
         chk("byte_array('0')", "rt_err:fn:byte_array.from_hex")
         chk("byte_array('0g')", "rt_err:fn:byte_array.from_hex")
-        chk("byte_array(123)", "ct_err:expr_call_argtypes:byte_array:integer")
+        chk("byte_array(123)", "ct_err:expr_call_argtypes:[byte_array]:integer")
     }
 
     @Test fun testSha256() {
@@ -29,10 +29,10 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array.from_list([18, 52, 171, 205])", "byte_array[1234abcd]")
         chk("byte_array.from_list([0, 255])", "byte_array[00ff]")
 
-        chk("byte_array.from_list()", "ct_err:expr_call_argtypes:from_list:")
-        chk("byte_array.from_list(list<text>())", "ct_err:expr_call_argtypes:from_list:list<text>")
-        chk("byte_array.from_list(['Hello'])", "ct_err:expr_call_argtypes:from_list:list<text>")
-        chk("byte_array.from_list(set<integer>())", "ct_err:expr_call_argtypes:from_list:set<integer>")
+        chk("byte_array.from_list()", "ct_err:expr_call_argtypes:[byte_array.from_list]:")
+        chk("byte_array.from_list(list<text>())", "ct_err:expr_call_argtypes:[byte_array.from_list]:list<text>")
+        chk("byte_array.from_list(['Hello'])", "ct_err:expr_call_argtypes:[byte_array.from_list]:list<text>")
+        chk("byte_array.from_list(set<integer>())", "ct_err:expr_call_argtypes:[byte_array.from_list]:set<integer>")
         chk("byte_array.from_list([-1])", "rt_err:fn:byte_array.from_list:-1")
         chk("byte_array.from_list([256])", "rt_err:fn:byte_array.from_list:256")
     }
@@ -102,9 +102,9 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array.from_hex('DEADBEEF')", "byte_array[deadbeef]")
         chk("byte_array.from_hex('123456')", "byte_array[123456]")
 
-        chk("byte_array.from_hex()", "ct_err:expr_call_argtypes:from_hex:")
-        chk("byte_array.from_hex(1234)", "ct_err:expr_call_argtypes:from_hex:integer")
-        chk("byte_array.from_hex(true)", "ct_err:expr_call_argtypes:from_hex:boolean")
+        chk("byte_array.from_hex()", "ct_err:expr_call_argtypes:[byte_array.from_hex]:")
+        chk("byte_array.from_hex(1234)", "ct_err:expr_call_argtypes:[byte_array.from_hex]:integer")
+        chk("byte_array.from_hex(true)", "ct_err:expr_call_argtypes:[byte_array.from_hex]:boolean")
 
         chk("byte_array.from_hex('0')", "rt_err:fn:byte_array.from_hex")
         chk("byte_array.from_hex('0g')", "rt_err:fn:byte_array.from_hex")
@@ -139,9 +139,9 @@ class LibByteArrayTest: BaseRellTest(false) {
         chk("byte_array.from_base64('yv66vt6tvu8=')", "byte_array[cafebabedeadbeef]")
         chk("byte_array.from_base64('!@#%^')", "rt_err:fn:byte_array.from_base64")
 
-        chk("byte_array.from_base64()", "ct_err:expr_call_argtypes:from_base64:")
-        chk("byte_array.from_base64(1234)", "ct_err:expr_call_argtypes:from_base64:integer")
-        chk("byte_array.from_base64(true)", "ct_err:expr_call_argtypes:from_base64:boolean")
+        chk("byte_array.from_base64()", "ct_err:expr_call_argtypes:[byte_array.from_base64]:")
+        chk("byte_array.from_base64(1234)", "ct_err:expr_call_argtypes:[byte_array.from_base64]:integer")
+        chk("byte_array.from_base64(true)", "ct_err:expr_call_argtypes:[byte_array.from_base64]:boolean")
     }
 
     @Test fun testIterable() {
@@ -151,5 +151,35 @@ class LibByteArrayTest: BaseRellTest(false) {
         chkEx("{ for (x in x'05000F80') return _type_of(x); return '?'; }", "text[integer]")
         chkEx("{ val l = list<integer>(); for (x in x'05000F80') l.add(x); return l; }",
                 "list<integer>[int[5],int[0],int[15],int[128]]")
+    }
+
+    @Test fun testRepeat() {
+        chk("_type_of(x'123456'.repeat(3))", "text[byte_array]")
+
+        chk("x'123456'.repeat(0)", "byte_array[]")
+        chk("x'123456'.repeat(1)", "byte_array[123456]")
+        chk("x'123456'.repeat(2)", "byte_array[123456123456]")
+        chk("x'123456'.repeat(3)", "byte_array[123456123456123456]")
+        chk("x'123456'.repeat(4)", "byte_array[123456123456123456123456]")
+        chk("x'123456'.repeat(5)", "byte_array[123456123456123456123456123456]")
+
+        chk("x''.repeat(3)", "byte_array[]")
+        chk("x'12'.repeat(3)", "byte_array[121212]")
+        chk("x'1234'.repeat(3)", "byte_array[123412341234]")
+
+        chk("x'123456'.repeat(-1)", "rt_err:fn:byte_array.repeat:n_negative:-1")
+        chk("x'123456'.repeat(-1234567890123456)", "rt_err:fn:byte_array.repeat:n_negative:-1234567890123456")
+        chk("x'123456'.repeat(0x80000000)", "rt_err:fn:byte_array.repeat:n_out_of_range:2147483648")
+        chk("x'123456'.repeat(0x7FFFFFFF)", "rt_err:fn:byte_array.repeat:too_big:6442450941")
+    }
+
+    @Test fun testReversed() {
+        chk("_type_of(x'123456'.reversed())", "text[byte_array]")
+        chk("x''.reversed()", "byte_array[]")
+        chk("x'12'.reversed()", "byte_array[12]")
+        chk("x'1234'.reversed()", "byte_array[3412]")
+        chk("x'123456'.reversed()", "byte_array[563412]")
+        chk("x'12345678'.reversed()", "byte_array[78563412]")
+        chk("x'123456789a'.reversed()", "byte_array[9a78563412]")
     }
 }

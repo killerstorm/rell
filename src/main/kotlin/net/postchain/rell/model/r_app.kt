@@ -1,10 +1,11 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
+import net.postchain.rell.compiler.base.core.C_DefinitionName
 import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.model.expr.R_FunctionExtensionsTable
@@ -15,30 +16,38 @@ import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
-class R_DefinitionNames(
+class R_DefinitionName(
         val module: String,
         val qualifiedName: String,
         val simpleName: String,
-        val defId: R_DefinitionId
 ) {
-    val appLevelName = if (module.isEmpty()) qualifiedName else R_DefinitionId.appLevelName(module, qualifiedName)
+    val appLevelName = appLevelName(module, qualifiedName)
 
     override fun toString() = appLevelName
+
+    companion object {
+        fun appLevelName(module: String, qualifiedName: String): String {
+            return if (module.isEmpty()) qualifiedName else R_DefinitionId.str(module, qualifiedName)
+        }
+    }
 }
 
 class R_DefinitionBase(
-        val names: R_DefinitionNames,
-        val initFrameGetter: C_LateGetter<R_CallFrame>
+    val defId: R_DefinitionId,
+    val defName: R_DefinitionName,
+    val cDefName: C_DefinitionName,
+    val initFrameGetter: C_LateGetter<R_CallFrame>,
 )
 
 abstract class R_Definition(base: R_DefinitionBase) {
-    val names = base.names
+    val defId = base.defId
+    val defName = base.defName
+    val cDefName = base.cDefName
     val initFrameGetter = base.initFrameGetter
 
-    val simpleName = names.simpleName
-    val moduleLevelName = names.qualifiedName
-    val appLevelName = names.appLevelName
-    val defId = names.defId
+    val simpleName = defName.simpleName
+    val moduleLevelName = defName.qualifiedName
+    val appLevelName = defName.appLevelName
 
     abstract fun toMetaGtv(): Gtv
 
@@ -129,8 +138,16 @@ class R_Attribute(
 }
 
 data class R_ModuleKey(val name: R_ModuleName, val externalChain: String?) {
-    fun str() = if (externalChain == null) name.toString() else "$name[$externalChain]"
+    fun str() = str(name, externalChain)
     override fun toString() = str()
+
+    companion object {
+        val EMPTY = R_ModuleKey(R_ModuleName.EMPTY, null)
+
+        fun str(name: R_ModuleName, externalChain: String?): String {
+            return if (externalChain == null) name.toString() else "$name[$externalChain]"
+        }
+    }
 }
 
 class R_Module(

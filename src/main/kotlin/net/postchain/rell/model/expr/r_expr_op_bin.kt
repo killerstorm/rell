@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.expr
@@ -263,7 +263,7 @@ object R_BinaryOp_Mul_Decimal: R_BinaryOp_Arith_Decimal("*") {
 object R_BinaryOp_Div_Integer: R_BinaryOp_Arith_Integer("/") {
     override fun evaluate(left: Long, right: Long): Long {
         if (right == 0L) {
-            throw Rt_Error("expr:/:div0:$left", "Division by zero: $left / $right")
+            throw Rt_Exception.common("expr:/:div0:$left", "Division by zero: $left / $right")
         }
         return left / right
     }
@@ -272,7 +272,7 @@ object R_BinaryOp_Div_Integer: R_BinaryOp_Arith_Integer("/") {
 object R_BinaryOp_Div_Decimal: R_BinaryOp_Arith_Decimal("/") {
     override fun evaluate(left: BigDecimal, right: BigDecimal): BigDecimal {
         if (right.signum() == 0) {
-            throw Rt_Error("expr:/:div0", "Decimal division by zero: operator '/'")
+            throw Rt_Exception.common("expr:/:div0", "Division by zero: /")
         }
         return Lib_DecimalMath.divide(left, right)
     }
@@ -281,7 +281,7 @@ object R_BinaryOp_Div_Decimal: R_BinaryOp_Arith_Decimal("/") {
 object R_BinaryOp_Mod_Integer: R_BinaryOp_Arith_Integer("%") {
     override fun evaluate(left: Long, right: Long): Long {
         if (right == 0L) {
-            throw Rt_Error("expr:%:div0:$left", "Division by zero: $left % $right")
+            throw Rt_Exception.common("expr:%:div0:$left", "Division by zero: $left % $right")
         }
         return left % right
     }
@@ -290,7 +290,7 @@ object R_BinaryOp_Mod_Integer: R_BinaryOp_Arith_Integer("%") {
 object R_BinaryOp_Mod_Decimal: R_BinaryOp_Arith_Decimal("%") {
     override fun evaluate(left: BigDecimal, right: BigDecimal): BigDecimal {
         if (right.signum() == 0) {
-            throw Rt_Error("expr:%:div0", "Decimal division by zero: operator '%'")
+            throw Rt_Exception.common("expr:%:div0", "Division by zero: %")
         }
         return Lib_DecimalMath.remainder(left, right)
     }
@@ -356,10 +356,10 @@ object R_BinaryOp_In_Range: R_BinaryOp("in") {
     }
 }
 
-private fun errIntOverflow(op: String, left: Long, right: Long): Rt_Error {
-    return Rt_Error("expr:$op:overflow:$left:$right", "Integer overflow: $left $op $right")
+private fun errIntOverflow(op: String, left: Long, right: Long): Rt_Exception {
+    return Rt_Exception.common("expr:$op:overflow:$left:$right", "Integer overflow: $left $op $right")
 }
 
-private fun errDecOverflow(op: String): Rt_Error {
-    return Rt_DecimalValue.errOverflow("expr:$op:overflow", "Decimal overflow in operator '$op'")
+private fun errDecOverflow(op: String): Rt_Exception {
+    return Rt_DecimalValue.errOverflow("expr:$op:overflow", "Decimal overflow: operator '$op'")
 }

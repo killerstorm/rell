@@ -1,11 +1,11 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime
 
 import mu.KLogging
-import net.postchain.common.data.ByteArrayKey
+import net.postchain.common.types.WrappedByteArray
 import net.postchain.rell.model.R_MountName
 import net.postchain.rell.sql.SqlConstants
 import net.postchain.rell.utils.toImmSet
@@ -86,9 +86,9 @@ class Rt_ChainSqlMapping(val chainId: Long) {
 }
 
 interface Rt_ChainHeightProvider {
-    fun getChainHeight(rid: ByteArrayKey, id: Long): Long?
+    fun getChainHeight(rid: WrappedByteArray, id: Long): Long?
 }
 
 class Rt_ConstantChainHeightProvider(private val height: Long): Rt_ChainHeightProvider {
-    override fun getChainHeight(rid: ByteArrayKey, id: Long) = height
+    override fun getChainHeight(rid: WrappedByteArray, id: Long) = height
 }

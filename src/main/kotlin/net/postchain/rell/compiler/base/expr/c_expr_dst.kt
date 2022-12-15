@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.expr
@@ -31,7 +31,7 @@ abstract class C_Destination {
     ): R_Expr
 }
 
-class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destination() {
+class C_Destination_Simple(private val rDstExpr: R_DestinationExpr): C_Destination() {
     override fun type() = rDstExpr.type
 
     override fun compileAssignStatement(ctx: C_ExprContext, srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
@@ -50,7 +50,7 @@ class C_SimpleDestination(private val rDstExpr: R_DestinationExpr): C_Destinatio
     }
 }
 
-class C_EntityAttrDestination(
+class C_Destination_EntityAttr(
         private val base: V_Expr,
         private val rEntity: R_EntityDefinition,
         private val attr: R_Attribute
@@ -110,7 +110,7 @@ class C_EntityAttrDestination(
     }
 }
 
-class C_ObjectAttrDestination(
+class C_Destination_ObjectAttr(
         private val rObject: R_ObjectDefinition,
         private val attr: R_Attribute
 ): C_Destination() {

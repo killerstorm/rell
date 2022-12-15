@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.sql
@@ -19,8 +19,8 @@ import net.postchain.rell.model.expr.R_CreateExpr
 import net.postchain.rell.model.expr.R_CreateExprAttr
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_DefinitionContext
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.runtime.Rt_ExecutionContext
-import net.postchain.rell.runtime.Rt_StackTraceError
 import net.postchain.rell.runtime.utils.Rt_Messages
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.utils.PostchainUtils
@@ -460,10 +460,10 @@ private class SqlStepAction_InsertObject(private val rObject: R_ObjectDefinition
     override fun run(ctx: SqlStepCtx) {
         try {
             ctx.objsInit.initObject(rObject)
-        } catch (e: Rt_StackTraceError) {
+        } catch (e: Rt_Exception) {
             ctx.logger.error {
                 val head = "Failed to insert record for object '${rObject.appLevelName}': ${e.message}"
-                Rt_Utils.appendStackTrace(head, e.stack)
+                Rt_Utils.appendStackTrace(head, e.info.stack)
             }
             throw e
         }

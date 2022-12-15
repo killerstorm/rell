@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.fn
@@ -13,10 +13,10 @@ import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_FunctionCallArgs
-import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.R_PartialArgMapping
 import net.postchain.rell.model.expr.R_PartialCallMapping
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import org.apache.commons.lang3.mutable.MutableBoolean
@@ -37,7 +37,7 @@ class C_EffectivePartialArguments(
 }
 
 sealed class C_FullCallArguments(protected val ctx: C_ExprContext) {
-    abstract fun compileSimpleArgs(functionName: R_Name): List<V_Expr>?
+    abstract fun compileSimpleArgs(functionName: LazyString): List<V_Expr>
     abstract fun compileComplexArgs(callInfo: C_FunctionCallInfo): V_FunctionCallArgs?
 }
 
@@ -85,7 +85,7 @@ private class C_GenericCallArgs<T>(
     val positional = positional.toImmList()
     val named = named.toImmList()
 
-    fun checkNoNamedArgs(ctx: C_ExprContext, fnName: R_Name?) {
+    fun checkNoNamedArgs(ctx: C_ExprContext, fnName: LazyString?) {
         val arg = named.firstOrNull()
         if (arg != null) {
             C_Errors.errNamedArgsNotSupported(ctx.msgCtx, fnName, arg.name)
@@ -116,7 +116,7 @@ private sealed class C_CallArgsAdapter<ArgT> {
             if (m == null && argType.isNotError()) {
                 val paramName = param.nameCodeMsg()
                 val fnNameCode = callInfo.functionName ?: "?"
-                val code = "expr_call_argtype:$fnNameCode:${paramName.code}:${paramType.strCode()}:${argType.strCode()}"
+                val code = "expr_call_argtype:[$fnNameCode]:${paramName.code}:${paramType.strCode()}:${argType.strCode()}"
                 val msg = "Wrong argument type for parameter ${paramName.msg}: ${argType.str()} instead of ${paramType.str()}"
                 ctx.msgCtx.error(callInfo.callPos, code, msg)
             }
@@ -164,7 +164,7 @@ private class C_FullCallArguments_Impl(
         ctx: C_ExprContext,
         private val args: C_InternalCallArguments_Full
 ): C_FullCallArguments(ctx) {
-    override fun compileSimpleArgs(functionName: R_Name): List<V_Expr> {
+    override fun compileSimpleArgs(functionName: LazyString): List<V_Expr> {
         return args.compileSimplePositionalArgs(ctx, functionName)
     }
 
@@ -195,7 +195,7 @@ private sealed class C_InternalCallArguments
 private class C_InternalCallArguments_Full(
         private val genArgs: C_GenericCallArgs<V_Expr>
 ): C_InternalCallArguments() {
-    fun compileSimplePositionalArgs(ctx: C_ExprContext, fnName: R_Name?): List<V_Expr> {
+    fun compileSimplePositionalArgs(ctx: C_ExprContext, fnName: LazyString?): List<V_Expr> {
         genArgs.checkNoNamedArgs(ctx, fnName)
         return genArgs.mixed
     }
@@ -230,7 +230,7 @@ private class C_InternalCallArguments_Full(
         val codeStr = missingParams.joinToString(",") { it.nameCodeMsg().code }
         val missingNames = missingParams.mapNotNull { it.name }
         val msgStr = if (missingNames.isNotEmpty()) missingNames.joinToString(", ") else "${missingNames.size}"
-        ctx.msgCtx.error(callInfo.callPos, "expr:call:missing_args:$fnNameCode:$codeStr", "Missing argument(s): $msgStr")
+        ctx.msgCtx.error(callInfo.callPos, "expr:call:missing_args:[$fnNameCode]:$codeStr", "Missing argument(s): $msgStr")
     }
 }
 
@@ -348,7 +348,7 @@ private class C_EffectiveArgsBinder<ArgT>(
         var msg = "Too many arguments"
         if (callInfo.functionName != null) msg += " for function '${callInfo.functionName}'"
         msg += ": $actCount instead of $expCount"
-        ctx.msgCtx.error(callInfo.callPos, "expr:call:too_many_args:$fnNameCode:$expCount:$actCount", msg)
+        ctx.msgCtx.error(callInfo.callPos, "expr:call:too_many_args:[$fnNameCode]:$expCount:$actCount", msg)
     }
 
     private fun bindNamedArgument(
@@ -364,10 +364,10 @@ private class C_EffectiveArgsBinder<ArgT>(
             val fnNameCode = callInfo.functionNameCode()
             val fnMsg = if (callInfo.functionName == null) "Function" else "Function '${callInfo.functionName}'"
             val msg = "$fnMsg has no parameter '$name'"
-            ctx.msgCtx.error(name.pos, "expr:call:unknown_named_arg:$fnNameCode:$name", msg)
+            ctx.msgCtx.error(name.pos, "expr:call:unknown_named_arg:[$fnNameCode]:$name", msg)
         } else if (res[i] != null) {
             val fnNameCode = callInfo.functionNameCode()
-            ctx.msgCtx.error(name.pos, "expr:call:named_arg_already_specified:$fnNameCode:$name",
+            ctx.msgCtx.error(name.pos, "expr:call:named_arg_already_specified:[$fnNameCode]:$name",
                     "Value for parameter '$name' specified more than once")
         } else {
             bindArgument(ctx, callInfo, res, i, arg, argIndex)

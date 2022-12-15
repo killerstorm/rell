@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -11,7 +11,8 @@ import net.postchain.rell.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.compiler.base.modifier.*
 import net.postchain.rell.compiler.base.module.*
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
-import net.postchain.rell.compiler.base.namespace.C_NamespaceValueContext
+import net.postchain.rell.compiler.base.namespace.C_NamespaceMemberBase
+import net.postchain.rell.compiler.base.namespace.C_NamespacePropertyContext
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.vexpr.V_ConstantValueEvalContext
 import net.postchain.rell.lib.C_Lib_OpContext
@@ -215,6 +216,7 @@ class S_EntityDefinition(
         val modExternal = mods.field(C_ModifierFields.EXTERNAL_CHAIN)
         val modMount = mods.field(C_ModifierFields.MOUNT)
         val modLog = mods.field(C_ModifierFields.LOG)
+        val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(ctx, mods)
 
         val extChain = ctx.externalChain(modExternal)
@@ -222,7 +224,7 @@ class S_EntityDefinition(
         val isExternalChain = extChainRef != null
         val rFlags = compileFlags(ctx, isExternalChain, modLog.hasValue())
 
-        val names = ctx.nsCtx.defNames(cName, extChain)
+        val cDefBase = ctx.defBase(cName, extChain)
 
         val isExternalChainOrModule = isExternalChain || ctx.modCtx.external
 
@@ -232,8 +234,8 @@ class S_EntityDefinition(
         }
 
         C_Errors.check(!isExternalChainOrModule || rFlags.log, cName.pos) {
-            "def_entity_external_nolog:${names.simpleName}" toCodeMsg
-            "External entity '${names.simpleName}' must have '${C_Constants.LOG_ANNOTATION}' annotation"
+            "def_entity_external_nolog:${cDefBase.simpleName}" toCodeMsg
+            "External entity '${cDefBase.simpleName}' must have '${C_Constants.LOG_ANNOTATION}' annotation"
         }
 
         val mountName = ctx.mountName(modMount, cName)
@@ -243,8 +245,8 @@ class S_EntityDefinition(
             R_EntitySqlMapping_External(mountName, extChainRef)
         }
 
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.ENTITY, names.defId)
-        val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.ENTITY, cDefBase.defId)
+        val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
         val rExternalEntity = if (extChainRef == null) null else R_ExternalEntity(extChainRef, true)
 
@@ -260,7 +262,7 @@ class S_EntityDefinition(
         )
 
         ctx.appCtx.defsAdder.addEntity(C_Entity(cName.pos, rEntity))
-        ctx.nsBuilder.addEntity(cName, rEntity, ideInfo)
+        ctx.nsBuilder.addEntity(cDefBase.nsMemBase(ideInfo, modDeprecated), cName, rEntity)
         ctx.mntBuilder.addEntity(cName.pos, rEntity)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -306,7 +308,8 @@ class S_EntityDefinition(
 
         val sysDefs = extChain?.sysDefs ?: ctx.modCtx.sysDefs
         val rEntity = entGetter(sysDefs)
-        ctx.nsBuilder.addEntity(cName, rEntity, ideInfo, addToModule = false)
+        val cNsMemBase = C_NamespaceMemberBase(rEntity.cDefName, ideInfo, null)
+        ctx.nsBuilder.addEntity(cNsMemBase, cName, rEntity, addToModule = false)
     }
 
     private fun checkHeaderNoModifier(ctx: C_MountContext, modValue: C_ModifierValue<*>) {
@@ -372,8 +375,8 @@ class S_EntityDefinition(
             val sysDefs = extChain?.sysDefs ?: defCtx.modCtx.sysDefs
             val txType = sysDefs.transactionEntity.type
             val expr = if (extChain == null) {
-                val nsValueCtx = C_NamespaceValueContext(defCtx.initExprCtx)
-                C_Lib_OpContext.transactionRExpr(nsValueCtx, cName.pos)
+                val propCtx = C_NamespacePropertyContext(defCtx.initExprCtx)
+                C_Lib_OpContext.transactionRExpr(propCtx, cName.pos)
             } else {
                 C_ExprUtils.errorRExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
             }
@@ -429,14 +432,15 @@ class S_ObjectDefinition(
 
         val mods = C_ModifierValues(C_ModifierTargetType.OBJECT, cName)
         val modMount = mods.field(C_ModifierFields.MOUNT)
+        val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(ctx, mods)
 
-        val names = ctx.nsCtx.defNames(cName)
+        val cDefBase = ctx.defBase(cName)
         val mountName = ctx.mountName(modMount, cName)
         val sqlMapping = R_EntitySqlMapping_Regular(mountName)
 
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OBJECT, names.defId)
-        val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OBJECT, cDefBase.defId)
+        val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
         val rEntity = C_Utils.createEntity(
                 ctx.appCtx,
@@ -452,7 +456,7 @@ class S_ObjectDefinition(
         val rObject = R_ObjectDefinition(defBase, rEntity)
 
         ctx.appCtx.defsAdder.addObject(rObject)
-        ctx.nsBuilder.addObject(cName, rObject, ideInfo)
+        ctx.nsBuilder.addObject(cDefBase.nsMemBase(ideInfo, modDeprecated), cName, rObject)
         ctx.mntBuilder.addObject(name, rObject)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -496,24 +500,25 @@ class S_StructDefinition(
 
         ctx.checkNotExternal(name.pos, C_DeclarationType.STRUCT)
 
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_STRUCT)
+        val ideInfo = IdeSymbolInfo.DEF_STRUCT
         val cName = name.compile(ctx, ideInfo)
 
         val mods = C_ModifierValues(C_ModifierTargetType.STRUCT, cName)
+        val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(ctx, mods)
 
-        val names = ctx.nsCtx.defNames(cName)
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.STRUCT, names.defId)
-        val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
+        val cDefBase = ctx.defBase(cName)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.STRUCT, cDefBase.defId)
+        val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
-        val rStruct = R_Struct(names.appLevelName, names.appLevelName.toGtv(), defBase.initFrameGetter, mirrorStructs = null)
+        val rStruct = R_Struct(cDefBase.appLevelName, cDefBase.appLevelName.toGtv(), defBase.initFrameGetter, mirrorStructs = null, ideInfo = ideInfo)
         val rStructDef = R_StructDefinition(defBase, rStruct)
 
         val attrsLate = C_LateInit<List<C_CompiledAttribute>>(C_CompilerPass.MEMBERS, immListOf())
         val cStruct = C_Struct(cName, rStructDef, attrsLate.getter)
 
         ctx.appCtx.defsAdder.addStruct(rStruct)
-        ctx.nsBuilder.addStruct(cStruct, ideInfo)
+        ctx.nsBuilder.addStruct(cDefBase.nsMemBase(ideInfo, modDeprecated), cStruct)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
             membersPass(defCtx, cName, cStruct, attrsLate)
@@ -562,27 +567,29 @@ class S_EnumDefinition(
 
         val modifierCtx = C_ModifierContext(ctx.msgCtx, ctx.symCtx)
         val mods = C_ModifierValues(C_ModifierTargetType.ENUM, cName)
+        val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(modifierCtx, mods)
 
         val set = mutableSetOf<String>()
         val rAttrs = mutableListOf<R_EnumAttr>()
 
         for (attr in attrs) {
-            val attrIdeInfo = IdeSymbolInfo(IdeSymbolKind.MEM_ENUM_ATTR)
+            val attrIdeInfo = IdeSymbolInfo(IdeSymbolKind.MEM_ENUM_VALUE)
             val cAttrName = attr.compile(ctx.symCtx, attrIdeInfo)
             if (set.add(cAttrName.str)) {
-                rAttrs.add(R_EnumAttr(cAttrName.str, rAttrs.size, attrIdeInfo))
+                rAttrs.add(R_EnumAttr(cAttrName.rName, rAttrs.size, attrIdeInfo))
             } else {
-                ctx.msgCtx.error(attr.pos, "enum_dup:$attr", "Duplicate enum constant: '$cAttrName'")
+                ctx.msgCtx.error(attr.pos, "enum_dup:$attr", "Duplicate enum value: '$cAttrName'")
             }
         }
 
-        val fullName = C_StringQualifiedName.of(ctx.namespaceName, cName.rName)
-        val names = C_Utils.createDefNames(R_ModuleKey(ctx.moduleName, null), fullName)
-        val defBase = R_DefinitionBase(names, R_CallFrame.NONE_INIT_FRAME_GETTER)
+        val fullName = C_StringQualifiedName.ofRNames(ctx.namespacePath.parts + cName.rName)
+        val cDefBase = C_Utils.createDefBase(R_ModuleKey(ctx.moduleName, null), fullName)
+        val defBase = cDefBase.rBase(R_CallFrame.NONE_INIT_FRAME_GETTER)
 
         val rEnum = R_EnumDefinition(defBase, rAttrs.toList())
-        return C_MidModuleMember_Enum(cName, rEnum, ideInfo)
+        val memBase = cDefBase.nsMemBase(ideInfo, modDeprecated)
+        return C_MidModuleMember_Enum(cName, rEnum, memBase)
     }
 
     override fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder) {
@@ -601,7 +608,7 @@ class S_NamespaceDefinition(
 ): S_Definition(pos, modifiers) {
     override fun compile(ctx: C_ModuleDefinitionContext): C_MidModuleMember {
         val cQualifiedName = qualifiedName?.compile(ctx.symCtx, IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE))
-        val subCtx = ctx.namespace(cQualifiedName?.toRName() ?: R_QualifiedName.EMPTY)
+        val subCtx = ctx.namespace(cQualifiedName?.toPath() ?: C_RNamePath.EMPTY)
         val midMembers = definitions.mapNotNull { it.compile(subCtx) }
         return C_MidModuleMember_Namespace(modifiers, cQualifiedName, midMembers)
     }
@@ -644,34 +651,36 @@ class S_GlobalConstantDefinition(
     override fun compileBasic(ctx: C_MountContext) {
         val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
         val cName = name.compile(ctx, ideInfo)
+
         val mods = C_ModifierValues(C_ModifierTargetType.CONSTANT, cName)
+        val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(ctx, mods)
 
-        val names = ctx.nsCtx.defNames(cName)
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.CONSTANT, names.defId)
+        val cDefBase = ctx.defBase(cName)
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.CONSTANT, cDefBase.defId)
         val errorExpr = C_ExprUtils.errorVExpr(defCtx.initExprCtx, expr.startPos)
 
         val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_GlobalConstantFunctionHeader.ERROR)
         val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_GlobalConstantBody.ERROR)
         val exprLate = C_LateInit(C_CompilerPass.EXPRESSIONS, errorExpr)
 
-        val cDef = ctx.appCtx.addConstant(ctx.modCtx.rModuleKey, names) { constId ->
+        val cDef = ctx.appCtx.addConstant(ctx.modCtx.rModuleKey, cDefBase.defName) { constId ->
             val filePos = cName.pos.toFilePos()
-            val defBase = R_DefinitionBase(names, defCtx.initFrameGetter)
+            val defBase = cDefBase.rBase(defCtx.initFrameGetter)
             val rDef = R_GlobalConstantDefinition(defBase, constId, filePos, bodyLate.getter)
             val typePos = type?.pos ?: cName.pos
-            val varUid = ctx.modCtx.nextConstVarUid(names.qualifiedName)
+            val varUid = ctx.modCtx.nextConstVarUid(cDefBase.qualifiedName)
             C_GlobalConstantDefinition(rDef, typePos, varUid, headerLate.getter, exprLate.getter)
         }
 
-        ctx.nsBuilder.addConstant(cName, cDef, ideInfo)
+        ctx.nsBuilder.addConstant(cDefBase.nsMemBase(ideInfo, modDeprecated), cName, cDef)
 
         if (cName.str == "_") {
             ctx.msgCtx.error(cName.pos, "def:const:wildcard", "Name '$cName' is a wildcard, not allowed for constants")
         }
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
-            val header = C_FunctionUtils.compileGlobalConstantHeader(defCtx, cName, names, type, expr, cDef.rDef.constId)
+            val header = C_FunctionUtils.compileGlobalConstantHeader(defCtx, cName, cDefBase.defName, type, expr, cDef.rDef.constId)
             headerLate.set(header)
 
             ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {

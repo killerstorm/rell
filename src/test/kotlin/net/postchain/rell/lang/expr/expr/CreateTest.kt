@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.expr
@@ -90,7 +90,7 @@ class CreateTest: BaseRellTest() {
     }
 
     @Test fun testErr() {
-        chkOp("create foo(x = 123);", "ct_err:unknown_def:entity:foo")
+        chkOp("create foo(x = 123);", "ct_err:unknown_name:foo")
 
         chkOp("create city(foo = 123);", "ct_err:attr_unknown_name:foo")
 

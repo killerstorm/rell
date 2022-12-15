@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.expr
@@ -23,7 +23,7 @@ class StatementTest: BaseRellTest() {
     @Test fun testVar() {
         chkEx("{ var x = 123; return x; }", "int[123]")
         chkEx("{ var x = 123; x = 456; return x; }", "int[456]")
-        chkEx("{ var x; return 0; }", "ct_err:unknown_name_type:x")
+        chkEx("{ var x; return 0; }", "ct_err:unknown_name:x")
         chkEx("{ var x: integer = 123; return x; }", "int[123]")
         chkEx("{ var x: integer; x = 123; return x; }", "int[123]")
         chkEx("{ var x: integer; x = 'Hello'; return 0; }", "ct_err:stmt_assign_type:[integer]:[text]")
@@ -479,7 +479,7 @@ class StatementTest: BaseRellTest() {
     @Test fun testTypeFormsVar() {
         def("namespace ns { struct data { x: integer; } }")
         chkEx("{ var x: integer; return _type_of(x); }", "text[integer]")
-        chkEx("{ var x; return _type_of(x); }", "ct_err:unknown_name_type:x")
+        chkEx("{ var x; return _type_of(x); }", "ct_err:unknown_name:x")
         chkEx("{ var integer; return _type_of(integer); }", "text[integer]")
         chkEx("{ var x = 123; return _type_of(x); }", "text[integer]")
         chkEx("{ var ns.data; return _type_of(data); }", "text[ns.data]")
@@ -489,9 +489,9 @@ class StatementTest: BaseRellTest() {
     @Test fun testTypeFormsStruct() {
         def("namespace ns { struct data { x: integer; } }")
         chkTypeFormsStruct("struct s { x: integer; }", "z.x", "text[integer]")
-        chkTypeFormsStruct("struct s { x; }", "z.x", "ct_err:unknown_name_type:x")
+        chkTypeFormsStruct("struct s { x; }", "z.x", "ct_err:unknown_name:x")
         chkTypeFormsStruct("struct s { integer; }", "z.integer", "text[integer]")
-        chkTypeFormsStruct("struct s { x = 123; }", "z.x", "ct_err:unknown_name_type:x")
+        chkTypeFormsStruct("struct s { x = 123; }", "z.x", "ct_err:unknown_name:x")
         chkTypeFormsStruct("struct s { ns.data; }", "z.data", "text[ns.data]")
         chkTypeFormsStruct("struct s { integer = 'hello'; }", "z.integer", "ct_err:attr_type:integer:[integer]:[text]")
     }

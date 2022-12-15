@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -25,7 +25,7 @@ import net.postchain.rell.runtime.Rt_Value
 
 object C_Lib_Print {
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
-        val fb = C_GlobalFuncBuilder(null)
+        val fb = C_GlobalFuncBuilder()
         fb.add("print", C_SysFn_Print(false))
         fb.add("log", C_SysFn_Print(true))
         C_LibUtils.bindFunctions(nsBuilder, fb.build())

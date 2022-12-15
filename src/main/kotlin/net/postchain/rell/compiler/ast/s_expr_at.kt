@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -27,21 +27,25 @@ import net.postchain.rell.utils.toImmList
 class S_AtExprFrom(val alias: S_Name?, val entityName: S_QualifiedName)
 
 sealed class S_AtExprWhat {
-    abstract fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat
+    abstract fun compile(ctx: C_ExprContext, hint: C_ExprHint, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat
 }
 
 class S_AtExprWhat_Default: S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat {
+    override fun compile(ctx: C_ExprContext, hint: C_ExprHint, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat {
         return from.makeDefaultWhat()
     }
 }
 
 class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat {
-        val vAttrExpr = ctx.resolveAttr(path[0])
-        var expr: C_Expr = C_VExpr(vAttrExpr)
-        for (step in path.subList(1, path.size)) {
-            expr = expr.member(ctx, step, false, C_ExprHint.DEFAULT)
+    override fun compile(ctx: C_ExprContext, hint: C_ExprHint, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat {
+        var expr = S_AttrExpr.compileAttr(ctx, C_ExprHint.DEFAULT, path[0])
+
+        for (i in 1 until path.size) {
+            val step = path[i]
+            val stepHand = step.compile(ctx)
+            val member = expr.member(ctx, stepHand.name, C_ExprHint.DEFAULT)
+            stepHand.setIdeInfo(member.ideInfo)
+            expr = member.expr
         }
 
         val vExpr = expr.value()
@@ -57,7 +61,7 @@ class S_AtExprWhatComplexField(
 )
 
 class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExprWhat() {
-    override fun compile(ctx: C_ExprContext, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat {
+    override fun compile(ctx: C_ExprContext, hint: C_ExprHint, from: C_AtFrom, subValues: MutableList<V_Expr>): V_DbAtWhat {
         val procFields = processFields(ctx)
         subValues.addAll(procFields.map { it.vExpr })
 
@@ -295,13 +299,13 @@ class S_AtExprWhere(val exprs: List<S_Expr>) {
     }
 
     private fun matchWhereAttribute(
-            ctx: C_ExprContext,
-            idx: Int,
-            exprPos: S_Pos,
-            name: R_Name,
-            entityAttrsByName: List<C_ExprContextAttr>,
-            varType: R_Type
-    ): C_ExprContextAttr {
+        ctx: C_ExprContext,
+        idx: Int,
+        exprPos: S_Pos,
+        name: R_Name,
+        entityAttrsByName: List<C_AtFromImplicitAttr>,
+        varType: R_Type
+    ): C_AtFromImplicitAttr {
         val entityAttrsByType = if (entityAttrsByName.isNotEmpty()) {
             entityAttrsByName.filter { it.type == varType }
         } else {
@@ -355,27 +359,28 @@ class S_AtExpr(
         val offset: S_Expr?
 ): S_Expr(from.startPos) {
     override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
-        return compileInternal(ctx, null)
+        return compileInternal(ctx, hint, null)
     }
 
     override fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_AtContext): C_Expr {
-        return compileInternal(ctx, parentAtCtx)
+        return compileInternal(ctx, C_ExprHint.DEFAULT, parentAtCtx)
     }
 
-    private fun compileInternal(ctx: C_ExprContext, parentAtCtx: C_AtContext?): C_Expr {
+    private fun compileInternal(ctx: C_ExprContext, hint: C_ExprHint, parentAtCtx: C_AtContext?): C_Expr {
         val subValues = mutableListOf<V_Expr>()
 
         val atExprId = ctx.appCtx.nextAtExprId()
         val fromCtx = C_AtFromContext(cardinality.pos, atExprId, parentAtCtx)
         val cFrom = from.compileFrom(ctx, fromCtx, subValues)
 
-        val cDetails = compileDetails(ctx, atExprId, cFrom, subValues)
+        val cDetails = compileDetails(ctx, hint, atExprId, cFrom, subValues)
         val vExpr = cFrom.compile(cDetails)
-        return C_VExpr(vExpr)
+        return C_ValueExpr(vExpr)
     }
 
     private fun compileDetails(
             ctx: C_ExprContext,
+            hint: C_ExprHint,
             atExprId: R_AtExprId,
             cFrom: C_AtFrom,
             subValues: MutableList<V_Expr>
@@ -383,7 +388,7 @@ class S_AtExpr(
         val innerCtx = cFrom.innerExprCtx()
         val vWhere = where.compile(innerCtx, atExprId, subValues)
 
-        val cWhat = what.compile(innerCtx, cFrom, subValues)
+        val cWhat = what.compile(innerCtx, hint, cFrom, subValues)
         val cResult = compileAtResult(cWhat.allFields)
 
         val vLimit = compileLimitOffset(limit, "limit", ctx, subValues)
@@ -445,7 +450,7 @@ class S_AtExpr(
     }
 
     companion object {
-        fun findWhereContextAttrsByType(ctx: C_ExprContext, type: R_Type): List<C_ExprContextAttr> {
+        fun findWhereContextAttrsByType(ctx: C_ExprContext, type: R_Type): List<C_AtFromImplicitAttr> {
             return if (type == R_BooleanType) {
                 listOf()
             } else {

@@ -1,19 +1,21 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.test
 
-import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
+import net.postchain.crypto.secp256k1_derivePubKey
+import net.postchain.rell.compiler.base.core.C_DefinitionPath
 import net.postchain.rell.compiler.base.def.C_SysAttribute
-import net.postchain.rell.compiler.base.namespace.C_Namespace
+import net.postchain.rell.compiler.base.namespace.C_NamespaceProperty_RtValue
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_ByteArrayType
 import net.postchain.rell.runtime.Rt_ByteArrayValue
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.runtime.Rt_StructValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.runtime.utils.Rt_Utils
@@ -31,11 +33,50 @@ object C_Lib_Test_KeyPairs {
 
     val KEYPAIR_TYPE = KEYPAIR_STRUCT.type
 
+    private val PREDEFINED_KEYPAIRS = createPredefinedKeyPairs()
+
+    private val DEF_PATH = C_DefinitionPath(C_Lib_Test.MODULE, C_Lib_Test.MODULE_NAME.parts.map { it.str })
+
+    private val KEYPAIRS_NAMESPACE = C_LibUtils.makeNsValues(
+            DEF_PATH,
+            PREDEFINED_KEYPAIRS.mapValues { e -> keyPairToStruct(e.value) }
+    )
+
+    private val PUBKEYS_NAMESPACE = C_LibUtils.makeNsValues(
+            DEF_PATH,
+            PREDEFINED_KEYPAIRS.mapValues { Rt_ByteArrayValue(it.value.pub.toByteArray()) }
+    )
+
+    private val PRIVKEYS_NAMESPACE = C_LibUtils.makeNsValues(
+            DEF_PATH,
+            PREDEFINED_KEYPAIRS.mapValues { Rt_ByteArrayValue(it.value.priv.toByteArray()) }
+    )
+
+    fun bind(b: C_SysNsProtoBuilder) {
+        b.addNamespace("keypairs", KEYPAIRS_NAMESPACE)
+        b.addNamespace("privkeys", PRIVKEYS_NAMESPACE)
+        b.addNamespace("pubkeys", PUBKEYS_NAMESPACE)
+        b.addStruct("keypair", KEYPAIR_STRUCT, IdeSymbolInfo(IdeSymbolKind.DEF_STRUCT))
+
+        val keyPairValue = keyPairToStruct(UnitTestBlockRunner.getTestKeyPair())
+        b.addProperty("BLOCKCHAIN_SIGNER_KEYPAIR", C_NamespaceProperty_RtValue(IdeSymbolInfo.DEF_CONSTANT, keyPairValue))
+    }
+
+    private fun createPredefinedKeyPairs(): Map<String, BytesKeyPair> {
+        // Names are taken from https://en.wikipedia.org/wiki/Alice_and_Bob
+        val names = listOf("bob", "alice", "trudy", "charlie", "dave", "eve", "frank", "grace", "heidi")
+        return names.mapIndexed { i, name ->
+            val privKeyBytes = (i + 1).toString().repeat(64).hexStringToByteArray()
+            val pubKeyBytes = secp256k1_derivePubKey(privKeyBytes)
+            name to BytesKeyPair(privKeyBytes, pubKeyBytes)
+        }.toMap().toImmMap()
+    }
+
     fun structToKeyPair(v: Rt_Value): BytesKeyPair {
         val v2 = v.asStruct()
         val actualType = v2.type()
         if (actualType != KEYPAIR_TYPE) {
-            throw Rt_Error("type:struct:$KEYPAIR_TYPE:$actualType", "Wrong struct type: $actualType instead of $KEYPAIR_TYPE")
+            throw Rt_Exception.common("type:struct:$KEYPAIR_TYPE:$actualType", "Wrong struct type: $actualType instead of $KEYPAIR_TYPE")
         }
 
         val pub = toByteArray(v2.get(0), 33)
@@ -45,43 +86,15 @@ object C_Lib_Test_KeyPairs {
 
     private fun toByteArray(v: Rt_Value, n: Int): ByteArray {
         val bs = v.asByteArray()
-        Rt_Utils.check(bs.size == n) { "keypair:wrong_byte_array_size:$n:${bs.size}" to
+        Rt_Utils.check(bs.size == n) { "keypair:wrong_byte_array_size:$n:${bs.size}" toCodeMsg
                 "Wrong byte array size: ${bs.size} instead of $n" }
         return bs
     }
 
-    private val PREDEFINED_KEYPAIRS = createPredefinedKeyPairs()
-
-    private val KEYPAIRS_NAMESPACE = C_LibUtils.makeNsValues(
-            PREDEFINED_KEYPAIRS.mapValues {
-                val attrs = listOf(it.value.pub, it.value.priv)
-                        .map { Rt_ByteArrayValue(it.toByteArray()) as Rt_Value }
-                        .toMutableList()
-                Rt_StructValue(KEYPAIR_TYPE, attrs)
-            }
-    )
-
-    private val PUBKEYS_NAMESPACE = C_LibUtils.makeNsValues(
-            PREDEFINED_KEYPAIRS.mapValues { Rt_ByteArrayValue(it.value.pub.toByteArray()) }
-    )
-
-    private val PRIVKEYS_NAMESPACE = C_LibUtils.makeNsValues(
-            PREDEFINED_KEYPAIRS.mapValues { Rt_ByteArrayValue(it.value.priv.toByteArray()) }
-    )
-
-    fun bind(b: C_SysNsProtoBuilder) {
-        b.addNamespace("keypairs", KEYPAIRS_NAMESPACE)
-        b.addNamespace("privkeys", PRIVKEYS_NAMESPACE)
-        b.addNamespace("pubkeys", PUBKEYS_NAMESPACE)
-        b.addStruct("keypair", KEYPAIR_STRUCT, IdeSymbolInfo(IdeSymbolKind.DEF_STRUCT))
-    }
-
-    private fun createPredefinedKeyPairs(): Map<String, BytesKeyPair> {
-        val names = listOf("bob", "alice", "trudy")
-        return names.mapIndexed { i, name ->
-            val privKeyBytes = (i + 1).toString().repeat(64).hexStringToByteArray()
-            val pubKeyBytes = secp256k1_derivePubKey(privKeyBytes)
-            name to BytesKeyPair(privKeyBytes, pubKeyBytes)
-        }.toMap().toImmMap()
+    private fun keyPairToStruct(keyPair: BytesKeyPair): Rt_Value {
+        val attrs = listOf(keyPair.pub, keyPair.priv)
+            .map { Rt_ByteArrayValue(it.toByteArray()) as Rt_Value }
+            .toMutableList()
+        return Rt_StructValue(KEYPAIR_TYPE, attrs)
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
@@ -8,13 +8,14 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
 import net.postchain.rell.compiler.base.core.C_AppContext
 import net.postchain.rell.compiler.base.core.C_MessageContext
-import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_AtExprId
+import net.postchain.rell.model.R_FrameBlock
+import net.postchain.rell.model.R_Name
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_ForIterator
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.*
 
 class V_AtEntityExpr(
@@ -38,59 +39,6 @@ class V_AtEntityExpr(
     override fun toDbExpr0(): Db_Expr {
         val rAtEntity = cAtEntity.toRAtEntityValidated(exprCtx, pos, ambiguous)
         return Db_EntityExpr(rAtEntity)
-    }
-
-    override fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
-        val entity = cAtEntity.rEntity
-        val valueMember = memberValue(ctx, memberName, entity)
-        val fnMember = memberFunction(memberName, safe, entity)
-
-        val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
-        if (res == null) {
-            C_Errors.errUnknownMember(ctx.msgCtx, entity.type, memberName)
-            return C_ExprMember(C_ExprUtils.errorExpr(ctx, memberName.pos), IdeSymbolInfo.UNKNOWN)
-        }
-
-        return res
-    }
-
-    private fun memberValue(ctx: C_ExprContext, memberName: C_Name, entity: R_EntityDefinition): C_ExprMember? {
-        val attrRef = C_EntityAttrRef.resolveByName(entity, memberName.rName)
-        attrRef ?: return null
-        val attrExpr = C_VExpr(V_AtAttrExpr(ctx, pos, cAtEntity, ambiguous, attrRef))
-        return C_ExprMember(attrExpr, attrRef.ideSymbolInfo())
-    }
-
-    private fun memberFunction(memberName: C_Name, safe: Boolean, entity: R_EntityDefinition): C_ExprMember? {
-        val memberRef = C_MemberRef(this, memberName, safe)
-        val res = C_MemberResolver.functionForType(entity.type, memberRef)
-        return res
-    }
-}
-
-class V_AtAttrExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        private val cAtEntity: C_AtEntity,
-        private val entityAmbiguous: Boolean,
-        private val attrRef: C_EntityAttrRef
-): V_Expr(exprCtx, pos) {
-    override fun exprInfo0() = V_ExprInfo(
-            attrRef.type(),
-            immListOf(),
-            dependsOnDbAtEntity = true,
-            dependsOnAtExprs = immSetOf(cAtEntity.atExprId)
-    )
-
-    override fun implicitAtWhereAttrName() = attrRef.attrName
-    override fun implicitAtWhatAttrName() = attrRef.attrName
-
-    override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
-
-    override fun toDbExpr0(): Db_Expr {
-        val rAtEntity = cAtEntity.toRAtEntityValidated(exprCtx, pos, entityAmbiguous)
-        val dbExpr = Db_EntityExpr(rAtEntity)
-        return attrRef.createDbContextAttrExpr(dbExpr)
     }
 }
 
@@ -117,9 +65,15 @@ class V_DbAtWhatField(
 ) {
     fun isIgnored() = flags.omit && flags.sort == null && summarization == null
 
-    fun toDbField(): Db_AtWhatField {
+    fun toDbField(nested: Boolean): Db_AtWhatField {
         val cWhatValue = if (expr.info.dependsOnDbAtEntity || V_AtUtils.hasWhatModifiers(flags)) {
-            expr.toDbExprWhat()
+            if (nested) {
+                // Nested "at" doesn't support complex what (e. g. exists, in - complex what doesn't make sense).
+                val dbExpr = expr.toDbExpr()
+                C_DbAtWhatValue_Simple(dbExpr)
+            } else {
+                expr.toDbExprWhat()
+            }
         } else {
             val rExpr = expr.toRExpr()
             val dbWhatValue = Db_AtWhatValue_RExpr(rExpr)
@@ -151,8 +105,8 @@ class V_AtExprBase(
     fun innerExprs(): List<V_Expr> = innerExprs
     fun referencedAtExprIds(): Set<R_AtExprId> = refAtExprIds
 
-    fun toDbBase(): Db_AtExprBase {
-        val dbWhat = what.map { it.toDbField() }
+    fun toDbBase(nested: Boolean): Db_AtExprBase {
+        val dbWhat = what.map { it.toDbField(nested) }
         val dbWhere = where?.toDbExpr()
         return Db_AtExprBase(from, dbWhat, dbWhere)
     }
@@ -174,7 +128,7 @@ class V_TopDbAtExpr(
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("at_expr", null)
 
     override fun toRExpr0(): R_Expr {
-        val dbBase = base.toDbBase()
+        val dbBase = base.toDbBase(false)
         val rExtras = extras.toRExtras()
         return R_DbAtExpr(resultType, dbBase, cardinality, rExtras, internals)
     }
@@ -202,7 +156,7 @@ class V_NestedDbAtExpr(
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
 
     override fun toDbExpr0(): Db_Expr {
-        val dbBase = base.toDbBase()
+        val dbBase = base.toDbBase(true)
         val rExtras = extras.toRExtras()
         return Db_NestedAtExpr(resultType, dbBase, rExtras, rBlock)
     }
@@ -262,7 +216,7 @@ class V_ColAtExpr(
         private val cardinality: R_AtCardinality,
         private val extras: V_AtExprExtras,
         private val block: R_FrameBlock,
-        private val param: R_VarParam,
+        private val param: R_ColAtParam,
         private val resVarFacts: C_ExprVarFacts
 ): V_Expr(exprCtx, pos) {
     override fun exprInfo0(): V_ExprInfo {

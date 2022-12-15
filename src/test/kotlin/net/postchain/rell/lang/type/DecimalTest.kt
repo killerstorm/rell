@@ -357,8 +357,8 @@ class DecimalTest: BaseRellTest(false) {
 
         chk("f(123, 456)", "dec[579]")
         chk("f(decimal(123), 456)", "dec[579]")
-        chk("f(123, decimal(456))", "ct_err:expr_call_argtype:f:1:y:integer:decimal")
-        chk("f(decimal(123), decimal(456))", "ct_err:expr_call_argtype:f:1:y:integer:decimal")
+        chk("f(123, decimal(456))", "ct_err:expr_call_argtype:[f]:1:y:integer:decimal")
+        chk("f(decimal(123), decimal(456))", "ct_err:expr_call_argtype:[f]:1:y:integer:decimal")
 
         chk("g(123, 456)", "dec[56088]")
         chk("g(decimal(123), 456)", "dec[56088]")

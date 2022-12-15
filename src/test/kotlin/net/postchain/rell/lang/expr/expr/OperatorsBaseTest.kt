@@ -1,10 +1,9 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.expr
 
-import net.postchain.rell.compiler.base.utils.C_Constants
 import net.postchain.rell.lang.type.DecimalTest
 import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.test.BaseResourcefulTest
@@ -860,10 +859,29 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("#0.like(#1)", "boolean[false]", vText("Hello\nWorld"), vText("Hello World"))
     }
 
+    @Test fun testLibTextRepeat() {
+        chkExpr("#0.repeat(#1)", "text[]", vText(""), vInt(0))
+        chkExpr("#0.repeat(#1)", "text[]", vText("abc"), vInt(0))
+        chkExpr("#0.repeat(#1)", "text[abc]", vText("abc"), vInt(1))
+        chkExpr("#0.repeat(#1)", "text[abcabc]", vText("abc"), vInt(2))
+        chkExpr("#0.repeat(#1)", "text[abcabcabc]", vText("abc"), vInt(3))
+        chkExpr("#0.repeat(#1)", errRt("fn:text.repeat:n_negative:-1"), vText("abc"), vInt(-1))
+        chkExpr("#0.repeat(#1)", errRt("fn:text.repeat:n_out_of_range:2147483648"), vText("abc"), vInt(0x80000000))
+    }
+
     @Test fun testLibTextReplace() {
         chkExpr("#0.replace(#1, #2)", "text[Bye World]", vText("Hello World"), vText("Hello"), vText("Bye"))
         chkExpr("#0.replace(#1, #2)", "text[Hell0 W0rld]", vText("Hello World"), vText("o"), vText("0"))
         chkExpr("#0.replace(#1, #2)", "text[Hello World]", vText("Hello World"), vText("Bye"), vText("Tschus"))
+    }
+
+    @Test fun testLibTextReversed() {
+        chkExpr("#0.reversed()", "text[]", vText(""))
+        chkExpr("#0.reversed()", "text[a]", vText("a"))
+        chkExpr("#0.reversed()", "text[ba]", vText("ab"))
+        chkExpr("#0.reversed()", "text[cba]", vText("abc"))
+        chkExpr("#0.reversed()", "text[dcba]", vText("abcd"))
+        chkExpr("#0.reversed()", "text[edcba]", vText("abcde"))
     }
 
     @Test fun testLibTextSize() {
@@ -971,7 +989,7 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkDecimalConstructor("1.0", "dec[1]")
         chkDecimalConstructor("1.00000", "dec[1]")
 
-        chkExpr("decimal(false)", "ct_err:expr_call_argtypes:decimal:boolean")
+        chkExpr("decimal(false)", "ct_err:expr_call_argtypes:[decimal]:boolean")
         chkDecimalConstructor("", errRt("decimal:invalid:"))
         chkDecimalConstructor("Hello", errRt("decimal:invalid:Hello"))
         chkDecimalConstructor("0x1234", errRt("decimal:invalid:0x1234"))

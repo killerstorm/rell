@@ -1,0 +1,22 @@
+<!--
+  ~ Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+  -->
+
+<run wipe-db="true">
+    <nodes>
+        <config src="node-config.properties" add-signers="true" />
+        <test-config src="node-config.properties" />
+    </nodes>
+    <chains>
+        <chain name="test" iid="1">
+            <config height="0">
+                <app module="modargs">
+                    <args module="modargs.foo">
+                        <arg key="x"><int>123</int></arg>
+                        <arg key="y"><string>Bob</string></arg>
+                    </args>
+                </app>
+            </config>
+        </chain>
+    </chains>
+</run>

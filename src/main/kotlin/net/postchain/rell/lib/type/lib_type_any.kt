@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -8,10 +8,7 @@ import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.Db_SysFunction
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.runtime.Rt_ByteArrayValue
-import net.postchain.rell.runtime.Rt_Error
-import net.postchain.rell.runtime.Rt_GtvValue
-import net.postchain.rell.runtime.Rt_TextValue
+import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.utils.PostchainUtils
 
@@ -37,8 +34,8 @@ object C_Lib_Type_Any {
     fun ToGtv(type: R_Type, pretty: Boolean, name: String) = C_SysFunction.simple1(pure = true) { a ->
         val gtv = try {
             type.rtToGtv(a, pretty)
-        } catch (e: Exception) {
-            throw Rt_Error(name, e.message ?: "")
+        } catch (e: Throwable) {
+            throw Rt_Exception.common(name, e.message ?: "error")
         }
         Rt_GtvValue(gtv)
     }
@@ -47,9 +44,8 @@ object C_Lib_Type_Any {
         pure = type.completeFlags().pure
     ) { ctx, a ->
         val gtv = a.asGtv()
-        //TODO FIXME construct error code only on error
-        Rt_Utils.wrapErr("fn:[$name]:from_gtv:$pretty") {
-            val convCtx = GtvToRtContext(pretty)
+        Rt_Utils.wrapErr({ "fn:[$name]:from_gtv:$pretty" }) {
+            val convCtx = GtvToRtContext.make(pretty)
             val res = type.gtvToRt(convCtx, gtv)
             convCtx.finish(ctx.exeCtx)
             res

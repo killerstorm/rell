@@ -19,6 +19,7 @@ import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget_Operation
 import net.postchain.rell.lib.test.R_TestOpType
 import net.postchain.rell.model.R_OperationDefinition
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.LazyPosString
 
 class C_OperationFunctionHeader(val params: C_FormalParameters) {
     companion object {
@@ -33,7 +34,7 @@ class C_OperationGlobalFunction(val rOp: R_OperationDefinition, ideInfo: IdeSymb
         headerLate.set(header)
     }
 
-    override fun compileCall(ctx: C_ExprContext, name: C_Name, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
         val header = headerLate.get()
         val callInfo = C_FunctionCallInfo.forDirectFunction(name, header.params)
         val callTarget = C_FunctionCallTarget_Operation(ctx, callInfo, rOp)

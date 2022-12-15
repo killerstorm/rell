@@ -5,22 +5,32 @@
 package net.postchain.rell.tools
 
 import mu.KotlinLogging
-import net.postchain.StorageBuilder
+import mu.withLoggingContext
+import net.postchain.PostchainNode
+import net.postchain.api.internal.BlockchainApi
 import net.postchain.api.rest.infra.RestApiConfig
+import net.postchain.base.gtv.GtvToBlockchainRidFactory
+import net.postchain.base.withReadWriteConnection
 import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
 import net.postchain.config.app.AppConfig
-import net.postchain.config.node.NodeConfigurationProviderFactory
+import net.postchain.core.EContext
 import net.postchain.crypto.secp256k1_derivePubKey
-import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
+import net.postchain.metrics.BLOCKCHAIN_RID_TAG
+import net.postchain.metrics.CHAIN_IID_TAG
+import net.postchain.metrics.NODE_PUBKEY_TAG
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_LogPrinter
 import net.postchain.rell.runtime.Rt_PrinterFactory
 import net.postchain.rell.sql.SqlInitLogging
-import net.postchain.rell.utils.*
+import net.postchain.rell.utils.MainRellCliEnv
+import net.postchain.rell.utils.RellBaseCliArgs
+import net.postchain.rell.utils.RellCliLogUtils
+import net.postchain.rell.utils.RellCliUtils
+import net.postchain.rell.utils.checkEquals
 import picocli.CommandLine
 import java.io.File
 import java.util.logging.LogManager
@@ -54,15 +64,26 @@ private fun main0(args: RunPostchainAppArgs) {
     val template = RunPostchainApp.genBlockchainConfigTemplate(nodeAppConf.pubKeyByteArray, args.sqlLog)
     val bcConf = configGen.makeConfig(template)
 
-    val node = PostchainTestNode(nodeAppConf, true)
-    val brid = node.addBlockchain(0, bcConf)
-    node.startBlockchain(0)
+    val node = PostchainNode(nodeAppConf, true)
+    val chainId = 0L
+    val brid = GtvToBlockchainRidFactory.calculateBlockchainRid(bcConf, node.postchainContext.cryptoSystem)
+    withLoggingContext(
+        NODE_PUBKEY_TAG to nodeAppConf.pubKey,
+        CHAIN_IID_TAG to chainId.toString(),
+        BLOCKCHAIN_RID_TAG to brid.toHex()
+    ) {
+        withReadWriteConnection(node.postchainContext.storage, chainId) { eContext: EContext ->
+            BlockchainApi.initializeBlockchain(eContext, brid, override = true, bcConf)
+        }
 
-    log.info("")
-    log.info("POSTCHAIN APP STARTED")
-    log.info("    REST API port:  ${RestApiConfig.fromAppConfig(nodeAppConf).port}")
-    log.info("    blockchain RID: ${brid.toHex()}")
-    log.info("")
+        node.startBlockchain(chainId)
+
+        log.info("")
+        log.info("POSTCHAIN APP STARTED")
+        log.info("    REST API port:  ${RestApiConfig.fromAppConfig(nodeAppConf).port}")
+        log.info("    blockchain RID: ${brid.toHex()}")
+        log.info("")
+    }
 }
 
 object RunPostchainApp {

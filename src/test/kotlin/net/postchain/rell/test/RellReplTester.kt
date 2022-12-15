@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -7,13 +7,15 @@ package net.postchain.rell.test
 import net.postchain.rell.compiler.base.utils.C_Message
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplInterpreter
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.repl.ReplValueFormat
 import net.postchain.rell.repl.ReplValueFormatter
-import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.Rt_Exception
+import net.postchain.rell.runtime.Rt_GlobalContext
+import net.postchain.rell.runtime.Rt_Printer
+import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.SqlManager
 import java.util.*
 import kotlin.test.assertEquals
@@ -74,15 +76,9 @@ class RellReplTester(
             output.add("CTE:$s")
         }
 
-        override fun printRuntimeError(e: Rt_BaseError, stack: List<R_StackPos>?) {
-            val e2 = if (e is Rt_StackTraceError) e.realCause else e
-            val s = when (e2) {
-                is Rt_Error -> e2.code
-                is Rt_GtvError -> "gtv:${e2.code}"
-                is Rt_RequireError -> "req:${e2.userMsg}"
-                else -> throw RuntimeException("Unexpected exception", e2)
-            }
-            output.add("RTE:$s")
+        override fun printRuntimeError(e: Rt_Exception) {
+            val code = e.err.code()
+            output.add(code)
         }
 
         override fun printPlatformRuntimeError(e: Throwable) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
@@ -35,13 +35,13 @@ class ChainContextTest : BaseGtxTest() {
         chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration")
 
         tst.moduleArgs("" to "12345")
-        chkUserMistake("", "Module initialization failed: Type error: ")
+        chkUserMistake("", "Module initialization failed: Decoding type 'module_args': expected ARRAY, actual INTEGER")
 
         tst.moduleArgs("" to "{'p':'Hello','q':123}")
         chkUserMistake("", "Module initialization failed: Key missing in Gtv dictionary: ")
 
         tst.moduleArgs("" to "{'n':'Hello','s':123}")
-        chkUserMistake("", "Module initialization failed: Type error: ")
+        chkUserMistake("", "Module initialization failed: Decoding type 'text': expected STRING, actual INTEGER")
 
         tst.moduleArgs("" to "{'s':'Hello','n':123}")
         chk("chain_context.args", "{'n':123,'s':'Hello'}")
@@ -71,16 +71,16 @@ class ChainContextTest : BaseGtxTest() {
         chk("a.f()", "{'x':'Hello'}")
         chk("b.f()", "{'y':123}")
         chk("c.f()", "{'z':'456.789'}")
-        chk("a.chain_context", "ct_err:unknown_name:a.chain_context")
-        chk("a.chain_context.args", "ct_err:unknown_name:a.chain_context")
+        chk("a.chain_context", "ct_err:unknown_name:[a]:chain_context")
+        chk("a.chain_context.args", "ct_err:unknown_name:[a]:chain_context")
 
-        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.c" to "{'q':456.789}")
+        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.c" to "{'q':'456.789'}")
         chkUserMistake("", "Module initialization failed: Key missing in Gtv dictionary")
 
         tst.moduleArgs()
         chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration for module 'lib.a'")
 
-        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.d" to "{'z':456.789}")
+        tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.d" to "{'z':'456.789'}")
         chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration for module 'lib.c'")
     }
 

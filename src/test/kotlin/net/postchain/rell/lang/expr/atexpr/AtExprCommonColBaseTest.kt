@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -16,13 +16,14 @@ abstract class AtExprCommonColBaseTest: AtExprCommonBaseTest() {
         initDataUserCompanyCity()
 
         chk("$fromUser @* {} ( _=.name, $fromCompany @ {} (.user_attr) limit 1 )",
-                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user")
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:$:user")
+
         chk("(u:$fromUser) @* {} ( $fromCompany @ {} (u.name) limit 1 )", "[Bob, Alice, Trudy]")
 
         chkNestedAttributes("$fromUser @* {} ( _=.name, $fromCompany @ {} (.user_attr) limit 1 )",
-                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user",
-                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user",
-                "ct_err:at_expr:attr:belongs_to_outer:user_attr:user"
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:$:user",
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:$:user",
+                "ct_err:at_expr:attr:belongs_to_outer:user_attr:$:user"
         )
     }
 
@@ -40,7 +41,7 @@ abstract class AtExprCommonColBaseTest: AtExprCommonBaseTest() {
         f("inner1", "o.ref.foo_value", "I11")
         f("inner1", "o.ref.bar_value", "I12")
 
-        f("inner2", "o.value", "ct_err:at_where:var_manyattrs_type:0:value:value:i.foo_value,i.bar_value")
+        f("inner2", "o.value", "ct_err:at_where:var_manyattrs_type:0:value:value:[i:inner2.foo_value,i:inner2.bar_value]")
         f("inner2", "i.foo_value == o.value", "I22")
         f("inner2", "i.bar_value == o.value", "I23")
         f("inner2", "o.foo_value", "I20")
@@ -48,9 +49,9 @@ abstract class AtExprCommonColBaseTest: AtExprCommonBaseTest() {
         f("inner2", "i.foo_value", "ct_err:at_where:type:0:[boolean]:[value]")
         f("inner2", "i.bar_value", "ct_err:at_where:type:0:[boolean]:[value]")
 
-        f("inner2", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:i.foo_value,i.bar_value")
-        f("inner2", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:i.foo_value,i.bar_value")
-        f("inner2", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:i.foo_value,i.bar_value")
+        f("inner2", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:[i:inner2.foo_value,i:inner2.bar_value]")
+        f("inner2", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:[i:inner2.foo_value,i:inner2.bar_value]")
+        f("inner2", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:[i:inner2.foo_value,i:inner2.bar_value]")
         f("inner2", "i.foo_value == o.ref.foo_value", "I20")
         f("inner2", "i.bar_value == o.ref.bar_value", "I21")
         f("inner2", "i.foo_value == o.ref.value", "I22")
@@ -65,9 +66,9 @@ abstract class AtExprCommonColBaseTest: AtExprCommonBaseTest() {
         f("inner3", "i.foo_value", "ct_err:at_where:type:0:[boolean]:[value]")
         f("inner3", "i.bar_value", "ct_err:at_where:type:0:[boolean]:[value]")
 
-        f("inner3", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:i.value,i.foo_value,i.bar_value")
-        f("inner3", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:i.value,i.foo_value,i.bar_value")
-        f("inner3", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:i.value,i.foo_value,i.bar_value")
+        f("inner3", "o.ref.value", "ct_err:at_attr_type_ambig:0:value:[i:inner3.value,i:inner3.foo_value,i:inner3.bar_value]")
+        f("inner3", "o.ref.foo_value", "ct_err:at_attr_type_ambig:0:value:[i:inner3.value,i:inner3.foo_value,i:inner3.bar_value]")
+        f("inner3", "o.ref.bar_value", "ct_err:at_attr_type_ambig:0:value:[i:inner3.value,i:inner3.foo_value,i:inner3.bar_value]")
         f("inner3", "i.value == o.ref.value", "I30")
         f("inner3", "i.foo_value == o.ref.foo_value", "I31")
         f("inner3", "i.bar_value == o.ref.bar_value", "I32")

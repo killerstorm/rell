@@ -1,12 +1,11 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_LocalVarRef
-import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
@@ -18,7 +17,6 @@ import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_AssignStatement
 import net.postchain.rell.model.stmt.R_Statement
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmSet
 
@@ -50,7 +48,7 @@ class V_LocalVarExpr(
                 throw C_Error.stop(pos, "expr_assign_val:$name", "Value of '$name' cannot be changed")
             }
         }
-        return C_LocalVarDestination()
+        return C_Destination_LocalVar()
     }
 
     private fun checkInitialized() {
@@ -60,7 +58,7 @@ class V_LocalVarExpr(
         }
     }
 
-    private inner class C_LocalVarDestination: C_Destination() {
+    private inner class C_Destination_LocalVar: C_Destination() {
         override fun type() = varRef.target.type
         override fun effectiveType() = varRef.target.type
 
@@ -116,10 +114,10 @@ class V_SmartNullableExpr(
 
     override fun destination(): C_Destination {
         val dst = subExpr.destination()
-        return if (smartType == null) dst else C_SmartNullableDestination(dst, smartType)
+        return if (smartType == null) dst else C_Destination_SmartNullable(dst, smartType)
     }
 
-    private class C_SmartNullableDestination(
+    private class C_Destination_SmartNullable(
             val destination: C_Destination,
             val effectiveType: R_Type
     ): C_Destination() {
@@ -149,37 +147,8 @@ class V_ObjectExpr(
         private val rObject: R_ObjectDefinition
 ): V_Expr(exprCtx, qName.pos) {
     override fun exprInfo0() = V_ExprInfo.simple(rObject.type)
-
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("object", null)
-
     override fun toRExpr0() = R_ObjectExpr(rObject.type)
-    override fun toDbExpr0() = C_ExprUtils.toDbExpr(pos, toRExpr())
-
-    override fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
-        val valueMember = memberValue(ctx, memberName)
-        val fnMember = memberFunction(memberName, safe)
-
-        val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
-        if (res == null) {
-            C_Errors.errUnknownMember(ctx.msgCtx, rObject.type, memberName)
-            return C_ExprMember(C_ExprUtils.errorExpr(ctx, memberName.pos), IdeSymbolInfo.UNKNOWN)
-        }
-
-        return res
-    }
-
-    private fun memberValue(ctx: C_ExprContext, memberName: C_Name): C_ExprMember? {
-        val attr = rObject.rEntity.attributes[memberName.rName]
-        attr ?: return null
-        val attrExpr = C_VExpr(V_ObjectAttrExpr(ctx, memberName.pos, rObject, attr))
-        return C_ExprMember(attrExpr, attr.ideInfo)
-    }
-
-    private fun memberFunction(memberName: C_Name, safe: Boolean): C_ExprMember? {
-        val memberRef = C_MemberRef(this, memberName, safe)
-        val res = C_MemberResolver.functionForType(rObject.type, memberRef)
-        return res
-    }
 }
 
 class V_ObjectAttrExpr(
@@ -193,14 +162,14 @@ class V_ObjectAttrExpr(
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("object_attr", null)
 
     override fun toRExpr0() = createAccessExpr()
-    override fun toDbExpr0() = C_ExprUtils.toDbExpr(pos, toRExpr())
+    override fun toDbExpr0() = C_ExprUtils.toDbExpr(exprCtx.msgCtx, pos, toRExpr())
 
     override fun destination(): C_Destination {
         if (!attr.mutable) {
             throw C_Errors.errAttrNotMutable(pos, attr.name)
         }
         exprCtx.checkDbUpdateAllowed(pos)
-        return C_ObjectAttrDestination(rObject, attr)
+        return C_Destination_ObjectAttr(rObject, attr)
     }
 
     private fun createAccessExpr(): R_Expr {

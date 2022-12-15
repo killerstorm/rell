@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -144,7 +144,7 @@ class S_UnaryExpr(startPos: S_Pos, val op: S_PosValue<S_UnaryOp>, val expr: S_Ex
         val vExpr = cExpr.value()
         checkUnitType(vExpr.type)
         val vResExpr = op.value.compile(ctx, startPos, op.pos, vExpr)
-        return C_VExpr(vResExpr)
+        return C_ValueExpr(vResExpr)
     }
 
     private fun checkUnitType(type: R_Type) = C_Utils.checkUnitType(op.pos, type) {

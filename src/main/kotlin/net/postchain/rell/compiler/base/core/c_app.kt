@@ -110,11 +110,11 @@ class C_AppContext(
     fun nextAtEntityId(exprId: R_AtExprId) = C_InternalAppUtils.nextAtEntityId(exprId)
 
     fun addConstant(
-            moduleKey: R_ModuleKey,
-            names: R_DefinitionNames,
-            maker: (R_GlobalConstantId) -> C_GlobalConstantDefinition
+        moduleKey: R_ModuleKey,
+        defName: R_DefinitionName,
+        maker: (R_GlobalConstantId) -> C_GlobalConstantDefinition
     ): C_GlobalConstantDefinition {
-        val id = R_GlobalConstantId(allConstants.size, appUid, moduleKey, names.appLevelName, names.qualifiedName)
+        val id = R_GlobalConstantId(allConstants.size, appUid, moduleKey, defName.appLevelName, defName.qualifiedName)
         val cDef = maker(id)
         allConstants.add(cDef.rDef)
         newConstants.add(cDef)

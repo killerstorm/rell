@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.namespace
@@ -7,6 +7,7 @@ package net.postchain.rell.compiler.base.namespace
 import net.postchain.rell.compiler.base.module.C_ModuleKey
 import net.postchain.rell.utils.LateInit
 import net.postchain.rell.utils.ListVsMap
+import net.postchain.rell.utils.immListOfNotNull
 import net.postchain.rell.utils.toImmList
 
 object C_NsRes_ResultMaker {
@@ -66,48 +67,21 @@ private class C_NsRes_InternalMaker {
         return b.build()
     }
 
-    private fun makeDef(directDef: C_NsImp_Def?, importDefs: Collection<C_NsImp_Def>): C_NamespaceElement {
+    private fun makeDef(directDef: C_NsImp_Def?, importDefs: Collection<C_NsImp_Def>): C_NamespaceEntry {
         val directElem = if (directDef == null) null else makeDef0(directDef)
         val importElems = importDefs.map { makeDef0(it) }
-        val importElem = mergeElements(importElems)
-
-        return C_NamespaceElement(
-                namespace = directElem?.namespace ?: importElem?.namespace,
-                type = directElem?.type ?: importElem?.type,
-                value = directElem?.value ?: importElem?.value,
-                function = directElem?.function ?: importElem?.function
-        )
+        return C_NamespaceEntry(immListOfNotNull(directElem), importElems)
     }
 
-    private fun makeDef0(def: C_NsImp_Def): C_NamespaceElement {
+    private fun makeDef0(def: C_NsImp_Def): C_NamespaceMember {
         return when (def) {
-            is C_NsImp_Def_Simple -> def.elem
+            is C_NsImp_Def_Simple -> def.member
             is C_NsImp_Def_Namespace -> {
                 val impNs = def.ns()
                 val ns = makeNamespace(impNs)
-                val nsProxy = C_DefProxy.create(ns, def.ideInfo)
-                C_NsDef_UserNamespace(nsProxy).toNamespaceElement()
+                val base = C_NamespaceMemberBase(def.defName, def.ideInfo, def.deprecated)
+                C_NamespaceMember_UserNamespace(base, ns)
             }
-        }
-    }
-
-    private fun mergeElements(elems: List<C_NamespaceElement>): C_NamespaceElement? {
-        return if (elems.isEmpty()) null else C_NamespaceElement(
-                namespace = mergeDefs(elems) { it.namespace },
-                type = mergeDefs(elems) { it.type },
-                value = mergeDefs(elems) { it.value },
-                function = mergeDefs(elems) { it.function }
-        )
-    }
-
-    private fun <T> mergeDefs(elems: List<C_NamespaceElement>, getter: (C_NamespaceElement) -> C_DefProxy<T>?): C_DefProxy<T>? {
-        val defs = elems.mapNotNull(getter)
-        return if (defs.isEmpty()) {
-            null
-        } else if (defs.size == 1) {
-            defs[0]
-        } else {
-            defs[0].update(ambiguous = true)
         }
     }
 }

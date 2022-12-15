@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.expr
@@ -283,8 +283,46 @@ class ExpressionTest: BaseRellTest(false) {
         chk("123 not in map<integer,text>()", "boolean[true]")
     }
 
+    @Test fun testInNullable() {
+        chk("5 in list<integer?>([5, null])", "boolean[true]")
+        chk("6 in list<integer?>([5, null])", "boolean[false]")
+        chk("null in list<integer?>([5, null])", "boolean[true]")
+        chk("null in list<integer?>([5, 6])", "boolean[false]")
+
+        chk("5 in set<integer?>([5, null])", "boolean[true]")
+        chk("6 in set<integer?>([5, null])", "boolean[false]")
+        chk("null in set<integer?>([5, null])", "boolean[true]")
+        chk("null in set<integer?>([5, 6])", "boolean[false]")
+
+        chk("5 in map<integer?,text>([5:'a', null:'b'])", "boolean[true]")
+        chk("6 in map<integer?,text>([5:'a', null:'b'])", "boolean[false]")
+        chk("null in map<integer?,text>([5:'a', null:'b'])", "boolean[true]")
+        chk("null in map<integer?,text>([5:'a', 6:'b'])", "boolean[false]")
+    }
+
+    @Test fun testInPromotion() {
+        chk("5 in list<decimal>([5.0, 7.0])", "boolean[true]")
+        chk("6 in list<decimal>([5.0, 7.0])", "boolean[false]")
+        chk("7 in list<decimal>([5.0, 7.0])", "boolean[true]")
+
+        chk("5 in set<decimal>([5.0, 7.0])", "boolean[true]")
+        chk("6 in set<decimal>([5.0, 7.0])", "boolean[false]")
+        chk("7 in set<decimal>([5.0, 7.0])", "boolean[true]")
+
+        chk("5 in map<decimal,text>([5.0:'a', 7.0:'b'])", "boolean[true]")
+        chk("6 in map<decimal,text>([5.0:'a', 7.0:'b'])", "boolean[false]")
+        chk("7 in map<decimal,text>([5.0:'a', 7.0:'b'])", "boolean[true]")
+
+        chk("5 in list<decimal?>([5.0, null])", "boolean[true]")
+        chk("7 in list<decimal?>([5.0, null])", "boolean[false]")
+        chk("5 in set<decimal?>([5.0, null])", "boolean[true]")
+        chk("7 in set<decimal?>([5.0, null])", "boolean[false]")
+        chk("5 in map<decimal?,text>([5.0:'a', null:'b'])", "boolean[true]")
+        chk("7 in map<decimal?,text>([5.0:'a', null:'b'])", "boolean[false]")
+    }
+
     @Test fun testNamespace() {
-        chk("integer", "ct_err:expr_novalue:namespace")
+        chk("integer", "ct_err:expr_novalue:type:[integer]")
         chk("integer('123')", "int[123]")
         chk("integer.from_hex('1234')", "int[4660]")
         chk("integer.MAX_VALUE", "int[9223372036854775807]")
@@ -295,7 +333,7 @@ class ExpressionTest: BaseRellTest(false) {
         def("entity user { name: text; score: integer; }")
         chkOp("create user('Bob',-5678);")
 
-        chk("user @ { .score == integer }", "ct_err:expr_novalue:namespace")
+        chk("user @ { .score == integer }", "ct_err:expr_novalue:type:[integer]")
         chk("user @ { .score == integer('-5678') } ( .name )", "text[Bob]")
         chk("user @ { .score == -5678 } ( .name, integer('1234') )", "(name=text[Bob],int[1234])")
         chk("user @ { .score == -integer.from_hex('162e') } ( .name )", "text[Bob]")
@@ -476,10 +514,10 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testVariables() {
-        chkEx("{ val x = integer; return 0; }", "ct_err:expr_novalue:namespace")
-        chkEx("{ val x = chain_context; return 0; }", "ct_err:expr_novalue:namespace")
-        chkEx("{ var x: text; x = integer; return 0; }", "ct_err:expr_novalue:namespace")
-        chkEx("{ var x: text; x = chain_context; return 0; }", "ct_err:expr_novalue:namespace")
+        chkEx("{ val x = integer; return 0; }", "ct_err:expr_novalue:type:[integer]")
+        chkEx("{ val x = chain_context; return 0; }", "ct_err:expr_novalue:namespace:[chain_context]")
+        chkEx("{ var x: text; x = integer; return 0; }", "ct_err:expr_novalue:type:[integer]")
+        chkEx("{ var x: text; x = chain_context; return 0; }", "ct_err:expr_novalue:namespace:[chain_context]")
     }
 
     @Test fun testNameStructVsLocal() {
@@ -607,9 +645,9 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testNamedArgumentsInSysFunctions() {
-        chk("abs(x=123)", "ct_err:expr:call:named_args_not_allowed:abs:x")
+        chk("abs(x=123)", "ct_err:expr:call:named_args_not_allowed:[abs]:x")
         chk("abs(123)", "int[123]")
-        chk("'hello'.sub(start=3)", "ct_err:expr:call:named_args_not_allowed:sub:start")
+        chk("'hello'.sub(start=3)", "ct_err:expr:call:named_args_not_allowed:[text.sub]:start")
         chk("'hello'.sub(3)", "text[lo]")
     }
 
@@ -632,5 +670,19 @@ class ExpressionTest: BaseRellTest(false) {
         chk("(123,'hello',true)[1/0]", "ct_err:eval_fail:expr:/:div0:1")
         chk("when(0) { 0 -> 123; else -> 456 }", "int[123]")
         chk("when(0) { 1/0 -> 123; else -> 456 }", "ct_err:eval_fail:expr:/:div0:1")
+    }
+
+    @Test fun testNamespacePath() {
+        def("namespace a.b.c { val x = 123; }")
+
+        chk("a.b.c.x", "int[123]")
+        chk("(a).b.c.x", "ct_err:expr_novalue:namespace:[a]")
+        chk("(((a).b).c).x", "ct_err:expr_novalue:namespace:[a]")
+        chk("(a.b.c).x", "ct_err:expr_novalue:namespace:[a.b.c]")
+        chk("(a.b.c.x)", "int[123]")
+
+        chk("a?.b.c.x", "ct_err:expr_novalue:namespace:[a]")
+        chk("a.b.c?.x", "ct_err:expr_novalue:namespace:[a.b.c]")
+        chk("a?.b?.c?.x", "ct_err:expr_novalue:namespace:[a]")
     }
 }

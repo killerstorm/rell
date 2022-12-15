@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.misc
@@ -112,7 +112,7 @@ class RellConfigGenTest {
         check(cRes.app != null)
 
         val templateGtv = if (templateXml == null) GtvFactory.gtv(mapOf()) else PostchainUtils.xmlToGtv(templateXml)
-        val configGen = RellConfigGen(sourceDir, RellVersions.VERSION, modules, cRes.files)
+        val configGen = RellConfigGen(sourceDir, RellVersions.VERSION, modules, cRes.files, cRes.app)
 
         val actualGtv = configGen.makeConfig(templateGtv)
         val actualXml = RellConfigGen.configToText(actualGtv)

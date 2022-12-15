@@ -3,3 +3,7 @@ module;
 import ^.company;
 
 entity user { name; company.company; }
+
+operation add_user(name, company.company) {
+    create user(name, company);
+}

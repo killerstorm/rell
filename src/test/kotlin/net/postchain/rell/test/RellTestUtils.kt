@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -19,12 +19,11 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.immListOf
 
 object RellTestUtils {
     const val MAIN_FILE = "main.rell"
 
-    const val RELL_VER = "0.10.10"
+    const val RELL_VER = "0.11.0"
 
     val DEFAULT_COMPILER_OPTIONS = C_CompilerOptions.builder().hiddenLib(true).build()
 
@@ -115,22 +114,7 @@ object RellTestUtils {
 
     fun rtErrToResult(e: Throwable): TestCallResult {
         return when (e) {
-            is Rt_StackTraceError -> {
-                val err = rtErrToString(e.realCause)
-                TestCallResult(err, e.stack)
-            }
-            else -> {
-                val err = rtErrToString(e)
-                TestCallResult(err, immListOf())
-            }
-        }
-    }
-
-    private fun rtErrToString(e: Throwable): String {
-        return when (e) {
-            is Rt_Error -> "rt_err:" + e.code
-            is Rt_RequireError -> "req_err:" + if (e.userMsg != null) "[${e.userMsg}]" else "null"
-            is Rt_GtvError -> "gtv_err:" + e.code
+            is Rt_Exception -> TestCallResult(e.err.code(), e.info.stack)
             else -> throw e
         }
     }
@@ -227,7 +211,7 @@ object RellTestUtils {
 
     object Rt_TestTxContext: Rt_TxContext() {
         override fun emitEvent(type: String, data: Gtv) {
-            throw Rt_Utils.errNotSupported("not supported in tests")
+            throw Rt_Utils.errNotSupported("Not supported in tests")
         }
     }
 }

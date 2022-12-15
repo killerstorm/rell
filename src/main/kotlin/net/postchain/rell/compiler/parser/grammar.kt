@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.parser
@@ -7,15 +7,9 @@ package net.postchain.rell.compiler.parser
 import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.Grammar
 import com.github.h0tk3y.betterParse.grammar.parser
-import com.github.h0tk3y.betterParse.lexer.Token
-import com.github.h0tk3y.betterParse.lexer.TokenMatch
-import com.github.h0tk3y.betterParse.parser.ErrorResult
-import com.github.h0tk3y.betterParse.parser.ParseResult
-import com.github.h0tk3y.betterParse.parser.Parsed
 import com.github.h0tk3y.betterParse.parser.Parser
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.base.core.C_Name
-import net.postchain.rell.compiler.base.utils.C_Parser
 import net.postchain.rell.model.R_KeyIndexKind
 import net.postchain.rell.model.expr.R_AtCardinality
 import net.postchain.rell.utils.immListOf
@@ -97,8 +91,6 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val INDEX by relltok("index")
     private val KEY by relltok("key")
     private val LIMIT by relltok("limit")
-    private val LIST by relltok("list")
-    private val MAP by relltok("map")
     private val MODULE by relltok("module")
     private val MUTABLE by relltok("mutable")
     private val NAMESPACE by relltok("namespace")
@@ -110,7 +102,6 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val QUERY by relltok("query")
     private val RECORD by relltok("record")
     private val RETURN by relltok("return")
-    private val SET by relltok("set")
     private val STRUCT by relltok("struct")
     private val TRUE by relltok("true")
     private val UPDATE by relltok("update")
@@ -152,11 +143,9 @@ object S_Grammar : Grammar<S_RellFile>() {
         }
     }
 
-    private val listType by ( LIST * -LT * typeRef * -GT) map { (kw, type) -> S_ListType(kw.pos, type) }
-    private val setType by ( SET * -LT * typeRef * -GT) map { (kw, type) -> S_SetType(kw.pos, type) }
-
-    private val mapType by ( MAP * -LT * typeRef * -COMMA * typeRef * -GT) map { (kw, key, value ) ->
-        S_MapType(kw.pos, key, value)
+    private val genericType by ( qualifiedName * -LT * separatedTerms(typeRef, COMMA, false) * -GT ) map {
+        (name, args) ->
+        S_GenericType(name, args)
     }
 
     private val virtualType by ( VIRTUAL * -LT * typeRef * -GT ) map { (kw, type) -> S_VirtualType(kw.pos, type) }
@@ -169,11 +158,9 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 
     private val primaryType by (
-            nameType
+            genericType
+            or nameType
             or tupleType
-            or listType
-            or setType
-            or mapType
             or virtualType
             or mirrorStructType
     )
@@ -267,14 +254,14 @@ object S_Grammar : Grammar<S_RellFile>() {
         (posDeprecated, name, annotations2, clauses) ->
         val (pos, deprecated) = posDeprecated
         val deprecatedKwPos = if (deprecated) pos else null
-        annotatedDef {
+        AnnotatedDef {
             S_EntityDefinition(pos, it, deprecatedKwPos, name, annotations2 ?: listOf(), clauses)
         }
     }
 
     private val objectDef by ( OBJECT * name * -LCURL * zeroOrMore(attributeDefinition) * -RCURL ) map {
         (kw, name, attrs) ->
-        annotatedDef { S_ObjectDefinition(kw.pos, it, name, attrs) }
+        AnnotatedDef { S_ObjectDefinition(kw.pos, it, name, attrs) }
     }
 
     private val structKeyword by (STRUCT map { it.pos to false }) or (RECORD map { it.pos to true })
@@ -283,12 +270,12 @@ object S_Grammar : Grammar<S_RellFile>() {
         (posDeprecated, name, attrs) ->
         val (pos, deprecated) = posDeprecated
         val deprecatedKwPos = if (deprecated) pos else null
-        annotatedDef { S_StructDefinition(pos, it, deprecatedKwPos, name, attrs) }
+        AnnotatedDef { S_StructDefinition(pos, it, deprecatedKwPos, name, attrs) }
     }
 
     private val enumDef by ( ENUM * name * -LCURL * separatedTerms(name, COMMA, true) * optional(COMMA) * -RCURL ) map {
         (kw, name, values) ->
-        annotatedDef { S_EnumDefinition(kw.pos, it, name, values) }
+        AnnotatedDef { S_EnumDefinition(kw.pos, it, name, values) }
     }
 
     private val binaryOperator = (
@@ -332,7 +319,7 @@ object S_Grammar : Grammar<S_RellFile>() {
             or ( DOUBLEQUESTION mapNode { S_UnaryOp_IsNull } )
     )
 
-    private val nameExpr by name map { S_NameExpr(it) }
+    private val nameExpr by name map { S_NameExpr(S_QualifiedName(it)) }
     private val dollarExpr by DOLLAR map { S_DollarExpr(it.pos) }
     private val attrExpr by ( DOT * name) map { (pos, name) -> S_AttrExpr(pos.pos, name) }
 
@@ -440,28 +427,6 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
     private val mapLiteralExpr by emptyMapLiteralExpr or nonEmptyMapLiteralExpr
 
-    private val listExprType by -LT * type * -GT
-
-    private val exprArgs by -LPAR * separatedTerms(expressionRef, COMMA, true) * -RPAR
-
-    private val listExpr by ( LIST * optional(listExprType) * optional(exprArgs) ) map {
-        (kw, type, args) ->
-        S_ListExpr(kw.pos, type, args)
-    }
-
-    private val setExpr by ( SET * optional(listExprType) * optional(exprArgs) ) map {
-        (kw, type, args) ->
-        S_SetExpr(kw.pos, type, args)
-    }
-
-    private val mapExprType by ( -LT * type * -COMMA * type * -GT)
-
-    private val mapExpr by ( MAP * optional(mapExprType) * optional(exprArgs) ) map {
-        ( kw, types, args ) ->
-        val keyValueTypes = if (types == null) null else Pair(types.t1, types.t2)
-        S_MapExpr(kw.pos, keyValueTypes, args)
-    }
-
     private val mirrorStructExpr by mirrorStructType0 map {
         (kw, mutable, type) ->
         S_MirrorStructExpr(kw.pos, mutable != null, type)
@@ -485,22 +450,6 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val virtualTypeExpr by virtualType map { S_TypeExpr(it) }
 
-    private val baseExprHead by (
-            nameExpr
-            or dollarExpr
-            or attrExpr
-            or literalExpr
-            or parenthesesExpr
-            or createExpr
-            or listLiteralExpr
-            or mapLiteralExpr
-            or listExpr
-            or setExpr
-            or mapExpr
-            or mirrorStructExpr
-            or virtualTypeExpr
-    )
-
     private val callArg by ( optional(name * -ASSIGN) * callArgValue) map {
         (name, value) ->
         S_CallArgument(name, value)
@@ -508,20 +457,20 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val callArgs by ( -LPAR * separatedTerms(callArg, COMMA, true) * -RPAR)
 
-    private val baseExprTailMember by ( -DOT * name) map { name -> BaseExprTail_Member(name) }
-    private val baseExprTailSubscript by ( LBRACK * expressionRef * -RBRACK) map { (pos, expr) -> BaseExprTail_Subscript(pos.pos, expr) }
-    private val baseExprTailNotNull by (NOTNULL) map { BaseExprTail_NotNull(it.pos) }
-    private val baseExprTailSafeMember by ( -SAFECALL * name) map { name -> BaseExprTail_SafeMember(name) }
-    private val baseExprTailUnaryPostfixOp by unaryPostfixOperator map { BaseExprTail_UnaryPostfixOp(it.pos, it.value) }
+    private val baseExprTailMember by ( -DOT * name) map { name -> G_BaseExprTail_Member(name) }
+    private val baseExprTailSubscript by ( LBRACK * expressionRef * -RBRACK) map { (pos, expr) -> G_BaseExprTail_Subscript(pos.pos, expr) }
+    private val baseExprTailNotNull by (NOTNULL) map { G_BaseExprTail_NotNull(it.pos) }
+    private val baseExprTailSafeMember by ( -SAFECALL * name) map { name -> G_BaseExprTail_SafeMember(name) }
+    private val baseExprTailUnaryPostfixOp by unaryPostfixOperator map { G_BaseExprTail_UnaryPostfixOp(it.pos, it.value) }
 
     private val baseExprTailCall by callArgs map { args ->
-        BaseExprTail_Call(args)
+        G_BaseExprTail_Call(args)
     }
 
     private val baseExprTailAt by ( atExprAt * atExprWhere * optional(atExprWhat) * optional(atExprModifiers) ) map {
         ( cardinality, where, whatOpt, mods ) ->
         val what = whatOpt ?: S_AtExprWhat_Default()
-        BaseExprTail_At(cardinality.pos, cardinality.value, where, what, mods?.limit, mods?.offset)
+        G_BaseExprTail_At(cardinality.pos, cardinality.value, where, what, mods?.limit, mods?.offset)
     }
 
     private val baseExprTailNoCallNoAt by (
@@ -534,14 +483,34 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val baseExprTail by ( baseExprTailNoCallNoAt or baseExprTailCall or baseExprTailAt )
 
+    private val genericTypeExpr by ( genericType * ( baseExprTailMember or baseExprTailCall ) ) map {
+        (type, tail) ->
+        val baseExpr = S_TypeExpr(type)
+        tail.toExpr(baseExpr)
+    }
+
+    private val baseExprHead by (
+            genericTypeExpr
+            or nameExpr
+            or dollarExpr
+            or attrExpr
+            or literalExpr
+            or parenthesesExpr
+            or createExpr
+            or listLiteralExpr
+            or mapLiteralExpr
+            or mirrorStructExpr
+            or virtualTypeExpr
+    )
+
     private val baseExpr: Parser<S_Expr> by ( baseExprHead * zeroOrMore(baseExprTail) ) map {
         ( head, tails ) ->
-        tailsToExpr(head, tails)
+        G_BaseExprTail.tailsToExpr(head, tails)
     }
 
     private val baseExprNoCallNoAt by ( baseExprHead * zeroOrMore(baseExprTailNoCallNoAt) ) map {
         ( head, tails ) ->
-        tailsToExpr(head, tails)
+        G_BaseExprTail.tailsToExpr(head, tails)
     }
 
     private val ifExpr by ( IF * -LPAR * expressionRef * -RPAR * expressionRef * -ELSE * expressionRef) map {
@@ -734,29 +703,29 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val formalParameters by ( -LPAR * separatedTerms(formalParameter, COMMA, true) * -RPAR)
 
     private val opDef by ( OPERATION * name * formalParameters * blockStmt ) map {
-        (kw, name, params, body) -> annotatedDef { S_OperationDefinition(kw.pos, it, name, params, body) }
+        (kw, name, params, body) -> AnnotatedDef { S_OperationDefinition(kw.pos, it, name, params, body) }
     }
 
     private val functionBodyShort by (-ASSIGN * expression * -SEMI) map { S_FunctionBodyShort(it) }
     private val functionBodyFull by blockStmt map { stmt -> S_FunctionBodyFull(stmt) }
-    private val functionBodyNone by SEMI map { null as S_FunctionBody? }
+    private val functionBodyNone by SEMI map { null }
     private val functionBody by ( functionBodyShort or functionBodyFull or functionBodyNone)
 
     private val queryBody by ( functionBodyShort or functionBodyFull)
 
     private val queryDef by ( QUERY * name * formalParameters * optional(-COLON * type) * queryBody ) map {
         (kw, name, params, type, body) ->
-        annotatedDef { S_QueryDefinition(kw.pos, it, name, params, type, body) }
+        AnnotatedDef { S_QueryDefinition(kw.pos, it, name, params, type, body) }
     }
 
     private val functionDef by ( FUNCTION * optional(qualifiedName) * formalParameters * optional(-COLON * type) * functionBody ) map {
         (kw, name, params, type, body) ->
-        annotatedDef { S_FunctionDefinition(kw.pos, it, name, params, type, body) }
+        AnnotatedDef { S_FunctionDefinition(kw.pos, it, name, params, type, body) }
     }
 
     private val namespaceDef by ( NAMESPACE * optional(qualifiedName) * -LCURL * zeroOrMore(parser(this::annotatedDef)) * -RCURL ) map {
         (kw, name, defs) ->
-        annotatedDef { S_NamespaceDefinition(kw.pos, it, name, defs) }
+        AnnotatedDef { S_NamespaceDefinition(kw.pos, it, name, defs) }
     }
 
     private val absoluteImportModule by qualifiedName map { S_ImportModulePath(null, it) }
@@ -784,17 +753,17 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val importDef by ( IMPORT * optional( name * -COLON) * importModule * optional(importTarget) * -SEMI ) map {
         (kw, alias, module, target) ->
-        annotatedDef { S_ImportDefinition(kw.pos, it, alias, module, target ?: S_DefaultImportTarget()) }
+        AnnotatedDef { S_ImportDefinition(kw.pos, it, alias, module, target ?: S_DefaultImportTarget()) }
     }
 
     private val includeDef by ( INCLUDE * STRING * -SEMI) map {
         (kw, _) ->
-        annotatedDef { S_IncludeDefinition(kw.pos) }
+        AnnotatedDef { S_IncludeDefinition(kw.pos) }
     }
 
     private val constantDef by ( VAL * name * optional(-COLON * typeRef) * -ASSIGN * expressionRef * -SEMI ) map {
         (kw, name, type, expr) ->
-        annotatedDef { S_GlobalConstantDefinition(kw.pos, it, name, type, expr) }
+        AnnotatedDef { S_GlobalConstantDefinition(kw.pos, it, name, type, expr) }
     }
 
     private val replDef: Parser<AnnotatedDef> by (
@@ -861,59 +830,8 @@ object S_Grammar : Grammar<S_RellFile>() {
     }
 }
 
-private fun tailsToExpr(head: S_Expr, tails: List<BaseExprTail>): S_Expr {
-    var expr = head
-    for (tail in tails) {
-        expr = tail.toExpr(expr)
-    }
-    return expr
-}
-
 private class AnnotatedDef(private val creator: (S_Modifiers) -> S_Definition) {
     fun createDef(modifiers: List<S_Modifier>) = creator(S_Modifiers(modifiers))
-}
-
-private fun annotatedDef(creator: (S_Modifiers) -> S_Definition): AnnotatedDef = AnnotatedDef(creator)
-
-private sealed class BaseExprTail {
-    abstract fun toExpr(base: S_Expr): S_Expr
-}
-
-private class BaseExprTail_Member(val name: S_Name): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_MemberExpr(base, name)
-}
-
-private class BaseExprTail_SafeMember(val name: S_Name): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_SafeMemberExpr(base, name)
-}
-
-private class BaseExprTail_Subscript(val pos: S_Pos, val expr: S_Expr): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_SubscriptExpr(pos, base, expr)
-}
-
-private class BaseExprTail_Call(val args: List<S_CallArgument>): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_CallExpr(base, args)
-}
-
-private class BaseExprTail_NotNull(val pos: S_Pos): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_UnaryExpr(base.startPos, S_PosValue(pos, S_UnaryOp_NotNull), base)
-}
-
-private class BaseExprTail_UnaryPostfixOp(val pos: S_Pos, val op: S_UnaryOp): BaseExprTail() {
-    override fun toExpr(base: S_Expr) = S_UnaryExpr(base.startPos, S_PosValue(pos, op), base)
-}
-
-private class BaseExprTail_At(
-        val pos: S_Pos,
-        val cardinality: R_AtCardinality,
-        val where: S_AtExprWhere,
-        val what: S_AtExprWhat,
-        val limit: S_Expr?,
-        val offset: S_Expr?
-): BaseExprTail() {
-    override fun toExpr(base: S_Expr): S_Expr {
-        return S_AtExpr(base, S_PosValue(pos, cardinality), where, what, limit, offset)
-    }
 }
 
 private class AtExprMods(val limit: S_Expr?, val offset: S_Expr?)
@@ -921,22 +839,3 @@ private class AtExprMods(val limit: S_Expr?, val offset: S_Expr?)
 private infix fun <T> Parser<RellTokenMatch>.mapNode(transform: (RellTokenMatch) -> T): Parser<S_PosValue<T>> = MapCombinator(this) {
     S_PosValue(it, transform(it))
 }
-
-class RellToken(val name: String, val token: Token): Parser<RellTokenMatch> {
-    override fun tryParse(tokens: Sequence<TokenMatch>): ParseResult<RellTokenMatch> {
-        val r = token.tryParse(tokens)
-        if (r is ErrorResult) {
-            return r
-        }
-
-        r as Parsed<TokenMatch>
-
-        val t = r.value
-        val file = C_Parser.currentFile()
-        val pos = S_BasicPos(file, t.row, t.column)
-
-        return Parsed(RellTokenMatch(pos, t.text), r.remainder)
-    }
-}
-
-class RellTokenMatch(val pos: S_Pos, val text: String)

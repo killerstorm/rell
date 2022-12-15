@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -10,7 +10,7 @@ import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.model.R_JsonType
 import net.postchain.rell.model.R_TextType
 import net.postchain.rell.model.expr.Db_SysFunction
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.runtime.Rt_JsonValue
 import net.postchain.rell.runtime.Rt_TextValue
 
@@ -31,7 +31,7 @@ private object JsonFns {
         val r = try {
             Rt_JsonValue.parse(s)
         } catch (e: IllegalArgumentException) {
-            throw Rt_Error("fn_json_badstr", "Bad JSON: $s")
+            throw Rt_Exception.common("fn_json_badstr", "Bad JSON: $s")
         }
         r
     }

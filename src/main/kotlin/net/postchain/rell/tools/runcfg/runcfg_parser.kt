@@ -1,10 +1,11 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvFactory
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.utils.Bytes32
@@ -236,7 +237,7 @@ object RunConfigParser {
         val addDefaults = attrs.getBooleanOpt("add-defaults") ?: true
         attrs.checkNoMore()
 
-        val args = mutableMapOf<R_ModuleName, Map<String, Gtv>>()
+        val args = mutableMapOf<R_ModuleName, Gtv>()
 
         for (elem in app.elems) {
             when (elem.tag) {
@@ -252,22 +253,23 @@ object RunConfigParser {
         return Rcfg_App(module, args.toImmMap(), addDefaults)
     }
 
-    private fun parseModuleArgs(args: RellXmlElement): Pair<R_ModuleName, Map<String, Gtv>> {
+    private fun parseModuleArgs(args: RellXmlElement): Pair<R_ModuleName, Gtv> {
         args.checkNoText()
 
         val attrs = args.attrs()
         val module = getModuleNameAttr(args, attrs, "module")
         attrs.checkNoMore()
 
-        val res = mutableMapOf<String, Gtv>()
+        val map = mutableMapOf<String, Gtv>()
 
         for (elem in args.elems) {
             val (key, gtv) = parseModuleArg(elem)
-            elem.check(key !in res) { "duplicate module arg key: '$key'" }
-            res[key] = gtv
+            elem.check(key !in map) { "duplicate module arg key: '$key'" }
+            map[key] = gtv
         }
 
-        return Pair(module, res)
+        val gtvArgs: Gtv = GtvFactory.gtv(map)
+        return Pair(module, gtvArgs)
     }
 
     private fun parseModuleArg(elem: RellXmlElement): Pair<String, Gtv> {

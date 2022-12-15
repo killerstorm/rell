@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -24,8 +24,8 @@ class LibRangeTest: BaseRellTest(false) {
         chk("range(1,0,-1)", "range[1,0,-1]")
         chk("range(10,0,-1)", "range[10,0,-1]")
 
-        chk("range()", "ct_err:expr_call_argtypes:range:")
-        chk("range(1,2,3,4)", "ct_err:expr_call_argtypes:range:integer,integer,integer,integer")
+        chk("range()", "ct_err:expr_call_argtypes:[range]:")
+        chk("range(1,2,3,4)", "ct_err:expr_call_argtypes:[range]:integer,integer,integer,integer")
     }
 
     @Test fun testIn() {
@@ -148,5 +148,28 @@ class LibRangeTest: BaseRellTest(false) {
         chk("($M-2) in $R", "boolean[false]")
         chk("($M-1) in $R", "boolean[false]")
         chk("$M in $R", "boolean[true]")
+    }
+
+    /*@Test*/ fun testReversed() {
+        tst.strictToString = false
+
+        chk("range(0)", "range(0,0,1)")
+        chk("range(0).reversed()", "range(0,0,-1)")
+        chk("list(range(0).reversed())", "[]")
+
+        chk("range(1).reversed()", "range(1,0,-1)")
+        chk("list(range(1).reversed())", "[0]")
+        chk("range(2).reversed()", "range(2,0,-1)")
+        chk("list(range(2).reversed())", "[1, 0]")
+        chk("range(3).reversed()", "range(3,0,-1)")
+        chk("list(range(3).reversed())", "[2, 1, 0]")
+
+        chk("range(3, 8).reversed()", "range(7,2,-1)")
+        chk("list(range(3, 7).reversed())", "[7, 6, 5, 4, 3]")
+
+        chk("range(5, 35, 7)", "range(5,35,7)")
+        chk("list(range(5, 35, 7))", "[5, 12, 19, 26, 33]")
+        chk("range(5, 33, 7).reversed()", "range(33,4,-7)")
+        chk("list(range(5, 33, 7).reversed())", "[33, 26, 19, 12, 5]")
     }
 }

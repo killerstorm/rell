@@ -136,7 +136,8 @@ class R_Struct(
         val name: String,
         val typeMetaGtv: Gtv,
         val initFrameGetter: C_LateGetter<R_CallFrame>,
-        val mirrorStructs: R_MirrorStructs?
+        val mirrorStructs: R_MirrorStructs?,
+        val ideInfo: IdeSymbolInfo,
 ) {
     private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, ERROR_BODY)
     private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, ERROR_STRUCT_FLAGS)
@@ -209,16 +210,16 @@ class R_MirrorStructs(
             mutable: Boolean
     ): R_Struct {
         val mutableStr = if (mutable) "mutable " else ""
-        val structName = "struct<$mutableStr${defBase.names.appLevelName}>"
+        val structName = "struct<$mutableStr${defBase.defName.appLevelName}>"
 
         val structMetaGtv = mapOf(
                 "type" to "struct".toGtv(),
                 "definition_type" to defType.toGtv(),
-                "definition" to defBase.names.appLevelName.toGtv(),
+                "definition" to defBase.defName.appLevelName.toGtv(),
                 "mutable" to mutable.toGtv()
         ).toGtv()
 
-        return R_Struct(structName, structMetaGtv, defBase.initFrameGetter, mirrorStructs = this)
+        return R_Struct(structName, structMetaGtv, defBase.initFrameGetter, mirrorStructs = this, ideInfo = IdeSymbolInfo.DEF_STRUCT)
     }
 }
 
@@ -228,7 +229,9 @@ class R_StructDefinition(base: R_DefinitionBase, val struct: R_Struct): R_Defini
     override fun toMetaGtv() = struct.toMetaGtv()
 }
 
-class R_EnumAttr(val name: String, val value: Int, val ideInfo: IdeSymbolInfo) {
+class R_EnumAttr(val rName: R_Name, val value: Int, val ideInfo: IdeSymbolInfo) {
+    val name = rName.str
+
     // Currently returning an empty map, in the future there may be some values.
     fun toMetaGtv() = mapOf(
             "value" to value.toGtv()

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -248,9 +248,9 @@ class S_AssignStatement(val dstExpr: S_Expr, val op: S_PosValue<S_AssignOpCode>,
     }
 
     override fun discoverVars0(map: MutableTypedKeyMap): C_StatementVars {
-        val name = dstExpr.asName()
-        return if (name == null) C_StatementVars.EMPTY else {
-            val rName = name.getRNameSpecial()
+        val qName = dstExpr.asName()
+        return if (qName == null) C_StatementVars.EMPTY else {
+            val rName = qName.parts.first().getRNameSpecial()
             C_StatementVars(immSetOf(), immSetOf(rName))
         }
     }

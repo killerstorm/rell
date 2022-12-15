@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.test
@@ -9,30 +9,33 @@ import net.postchain.base.BaseEContext
 import net.postchain.base.configuration.BlockchainConfigurationData
 import net.postchain.base.data.DatabaseAccess
 import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.common.hexStringToByteArray
 import net.postchain.core.BlockchainConfiguration
 import net.postchain.core.BlockchainConfigurationFactory
 import net.postchain.core.BlockchainContext
 import net.postchain.core.EContext
+import net.postchain.crypto.KeyPair
+import net.postchain.crypto.PrivKey
+import net.postchain.crypto.PubKey
+import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.mapper.GtvObjectMapper
 import net.postchain.gtx.GTXBlockchainConfigurationFactory
-import net.postchain.gtx.data.GTXDataBuilder
+import net.postchain.gtx.GtxBuilder
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.Rt_BlockRunnerStrategy
 import net.postchain.rell.runtime.Rt_CallContext
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.tools.RunPostchainApp
 import net.postchain.rell.utils.*
 import java.sql.Connection
 
 object UnitTestBlockRunner {
-    private val TEST_KEY_PAIR: BytesKeyPair by lazy {
+    private val TEST_KEYPAIR: BytesKeyPair = let {
         val privKey = "42".repeat(32).hexStringToByteArray()
         val pubKey = secp256k1_derivePubKey(privKey)
         BytesKeyPair(privKey, pubKey)
@@ -46,16 +49,15 @@ object UnitTestBlockRunner {
         val bcCtx = getBlockchainContext(ctx)
 
         RellPostchainModuleEnvironment.set(ctx.globalCtx.pcModuleEnv) {
-            val pubKey = keyPair.pub.toByteArray()
-            val privKey = keyPair.priv.toByteArray()
-            val sigMaker = PostchainUtils.cryptoSystem.buildSigMaker(pubKey, privKey)
+            val pubKey = PubKey(keyPair.pub.toByteArray())
+            val privKey = PrivKey(keyPair.priv.toByteArray())
+            val sigMaker = PostchainUtils.cryptoSystem.buildSigMaker(KeyPair(pubKey, privKey))
 
-            val bcData = GtvObjectMapper.fromGtv(gtvConfig, BlockchainConfigurationData::class, mapOf("partialContext" to bcCtx, "sigmaker" to sigMaker))
+            val bcData = GtvObjectMapper.fromGtv(gtvConfig, BlockchainConfigurationData::class)
             val bcConfigFactory: BlockchainConfigurationFactory = GTXBlockchainConfigurationFactory()
-            val bcConfig = bcConfigFactory.makeBlockchainConfiguration(bcData)
-
             ctx.exeCtx.sqlExec.connection { con ->
                 val eCtx = createEContext(con, bcCtx)
+                val bcConfig = bcConfigFactory.makeBlockchainConfiguration(bcData, bcCtx, sigMaker, eCtx)
                 withSavepoint(con) {
                     processBlock(bcConfig, eCtx, block)
                 }
@@ -90,7 +92,6 @@ object UnitTestBlockRunner {
     private fun processBlock(bcConfig: BlockchainConfiguration, eCtx: EContext, block: Rt_TestBlockValue) {
         val txFactory = bcConfig.getTransactionFactory()
 
-        bcConfig.initializeDB(eCtx)
         val blockBuilder = bcConfig.makeBlockBuilder(eCtx)
 
         blockBuilder.begin(null)
@@ -108,22 +109,22 @@ object UnitTestBlockRunner {
     }
 
     private fun prepareTxBytes(bcConfig: BlockchainConfiguration, tx: RawTestTxValue): ByteArray {
-        val signers = tx.signers.map { it.pub.toByteArray() }.toTypedArray()
-        val dataBuilder = GTXDataBuilder(bcConfig.blockchainRid, signers, PostchainUtils.cryptoSystem)
+        val signers = tx.signers.map { it.pub.toByteArray() }
+        val dataBuilder = GtxBuilder(bcConfig.blockchainRid, signers, PostchainUtils.cryptoSystem)
 
         for (op in tx.ops) {
-            dataBuilder.addOperation(op.name.str(), op.args.toTypedArray())
+            dataBuilder.addOperation(op.name.str(), *op.args.toTypedArray())
         }
-        dataBuilder.finish()
+        val sigBuilder = dataBuilder.finish()
 
         for (keyPair in tx.signers) {
             val pubKey = keyPair.pub.toByteArray()
             val privKey = keyPair.priv.toByteArray()
             val sigMaker = PostchainUtils.cryptoSystem.buildSigMaker(pubKey, privKey)
-            dataBuilder.sign(sigMaker)
+            sigBuilder.sign(sigMaker)
         }
 
-        return dataBuilder.serialize()
+        return sigBuilder.buildGtx().encode()
     }
 
     private fun getBlockchainContext(ctx: Rt_CallContext): BlockchainContext {
@@ -131,7 +132,7 @@ object UnitTestBlockRunner {
         val chainId = ctx.sqlCtx.mainChainMapping().chainId
         val nodeId = 0
         val nodeRid = "13".repeat(32).hexStringToByteArray()
-        return BaseBlockchainContext(bcRid, nodeId, chainId, nodeRid)
+        return BaseBlockchainContext(chainId, bcRid, nodeId, nodeRid)
     }
 
     fun makeGtvConfig(cliEnv: RellCliEnv, sourceDir: C_SourceDir, modules: List<R_ModuleName>, pubKey: Bytes33): Gtv {
@@ -147,7 +148,7 @@ object UnitTestBlockRunner {
     }
 
     fun getTestKeyPair(): BytesKeyPair {
-        return TEST_KEY_PAIR
+        return TEST_KEYPAIR
     }
 }
 
@@ -170,7 +171,7 @@ class Rt_DynamicBlockRunnerStrategy(
         }
 
         override fun exit(status: Int): Nothing {
-            throw Rt_Error("block_runner", "Gtv config generation failed")
+            throw Rt_Exception.common("block_runner", "Gtv config generation failed")
         }
     }
 }

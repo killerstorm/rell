@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.utils
@@ -20,6 +20,7 @@ import net.postchain.gtx.StandardOpsGTXModule
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
+import net.postchain.rell.model.R_StructDefinition
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.runtime.Rt_ChainContext
 import net.postchain.rell.runtime.Rt_Value
@@ -55,7 +56,7 @@ object PostchainUtils {
     fun gtvToXml(v: Gtv): String = GtvMLEncoder.encodeXMLGtv(v)
 
     fun gtvToJson(v: Gtv): String = GSON.toJson(v, Gtv::class.java)
-    fun jsonToGtv(s: String): Gtv = GSON.fromJson<Gtv>(s, Gtv::class.java) ?: GtvNull
+    fun jsonToGtv(s: String): Gtv = GSON.fromJson(s, Gtv::class.java) ?: GtvNull
     fun gtvToJsonPretty(v: Gtv): String = PRETTY_GSON.toJson(v, Gtv::class.java)
 
     fun merkleHash(v: Gtv): ByteArray = v.merkleHash(merkleCalculator)
@@ -86,12 +87,16 @@ object PostchainUtils {
                             "but type ${argsStruct.moduleLevelName} defined in the code")
                 }
 
-                val convCtx = GtvToRtContext(true)
-                val rtArgs = argsStruct.type.gtvToRt(convCtx, gtvArgs)
+                val rtArgs = moduleArgsGtvToRt(argsStruct, gtvArgs)
                 moduleArgs[rModule.name] = rtArgs
             }
         }
 
         return Rt_ChainContext(rawConfig, moduleArgs, blockchainRid)
+    }
+
+    fun moduleArgsGtvToRt(struct: R_StructDefinition, gtv: Gtv): Rt_Value {
+        val convCtx = GtvToRtContext.make(true)
+        return struct.type.gtvToRt(convCtx, gtv)
     }
 }

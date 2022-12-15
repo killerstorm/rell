@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -11,9 +11,9 @@ class NamespaceTest: BaseRellTest() {
     @Test fun testSimple() {
         def("namespace foo { function bar(): integer = 123; }")
         chk("foo.bar()", "int[123]")
-        chk("foo.bar", "ct_err:expr_novalue:function")
+        chk("foo.bar", "ct_err:expr_novalue:function:[foo.bar]")
         chk("bar()", "ct_err:unknown_name:bar")
-        chk("foo", "ct_err:expr_novalue:namespace")
+        chk("foo", "ct_err:expr_novalue:namespace:[foo]")
         chk("bar", "ct_err:unknown_name:bar")
     }
 
@@ -21,9 +21,9 @@ class NamespaceTest: BaseRellTest() {
         def("namespace foo { namespace bar { function f(): integer = 123; } }")
         chk("foo.bar.f()", "int[123]")
         chk("f()", "ct_err:unknown_name:f")
-        chk("foo.f()", "ct_err:unknown_name:foo.f")
-        chk("foo", "ct_err:expr_novalue:namespace")
-        chk("foo.bar", "ct_err:expr_novalue:namespace")
+        chk("foo.f()", "ct_err:unknown_name:[foo]:f")
+        chk("foo", "ct_err:expr_novalue:namespace:[foo]")
+        chk("foo.bar", "ct_err:expr_novalue:namespace:[foo.bar]")
     }
 
     @Test fun testNameResolution() {
@@ -43,8 +43,8 @@ class NamespaceTest: BaseRellTest() {
         chk("foo.f()", "int[123]")
         chk("foo.g()", "int[123]")
         chk("foo.bar.h()", "int[123]")
-        chk("foo.bar.f()", "ct_err:unknown_name:foo.bar.f")
-        chk("foo.bar.g()", "ct_err:unknown_name:foo.bar.g")
+        chk("foo.bar.f()", "ct_err:unknown_name:[foo.bar]:f")
+        chk("foo.bar.g()", "ct_err:unknown_name:[foo.bar]:g")
     }
 
     @Test fun testNameResolution2() {
@@ -60,6 +60,28 @@ class NamespaceTest: BaseRellTest() {
         chk("foo.f()", "int[456]")
         chk("foo.g()", "int[456]")
         chk("foo.h()", "int[456]")
+    }
+
+    @Test fun testQualifiedNameResolution() {
+        def("namespace a.b.c { struct s { x: integer = 123; } }")
+
+        chk("a.b.c.s()", "a.b.c.s[x=int[123]]")
+        chk("a.b.c.x()", "ct_err:unknown_name:[a.b.c]:x")
+        chk("a.b.x()", "ct_err:unknown_name:[a.b]:x")
+        chk("a.x()", "ct_err:unknown_name:[a]:x")
+        chk("x()", "ct_err:unknown_name:x")
+        chk("a.b.x.c()", "ct_err:unknown_name:[a.b]:x")
+        chk("a.x.c.d()", "ct_err:unknown_name:[a]:x")
+        chk("x.a.b.c()", "ct_err:unknown_name:x")
+
+        chk("list<a.b.c.s>()", "list<a.b.c.s>[]")
+        chk("list<a.b.c.x>()", "ct_err:unknown_name:a.b.c.x")
+        chk("list<a.b.x>()", "ct_err:unknown_name:a.b.x")
+        chk("list<a.x>()", "ct_err:unknown_name:a.x")
+        chk("list<x>()", "ct_err:unknown_name:x")
+        chk("list<a.b.x.c>()", "ct_err:unknown_name:a.b.x")
+        chk("list<a.x.b.c>()", "ct_err:unknown_name:a.x")
+        chk("list<x.a.b.c>()", "ct_err:unknown_name:x")
     }
 
     @Test fun testNameConflict() {
@@ -122,9 +144,9 @@ class NamespaceTest: BaseRellTest() {
     @Test fun testEntities() {
         def("namespace foo { entity bar { x: integer; } }")
         insert("c0.foo.bar", "x", "0,123")
-        chk("foo.bar @ {} ( foo.bar )", "ct_err:expr_novalue:type")
+        chk("foo.bar @ {} ( foo.bar )", "ct_err:expr_novalue:type:[foo.bar]")
         chk("foo.bar @ {} ( bar )", "foo.bar[0]")
-        chk("foo.bar @ {} ( foo )", "ct_err:expr_novalue:namespace")
+        chk("foo.bar @ {} ( foo )", "ct_err:expr_novalue:namespace:[foo]")
         chk("foo.bar @ {} ( bar, _=bar.x, _=.x )", "(foo.bar[0],int[123],int[123])")
     }
 
@@ -162,12 +184,12 @@ class NamespaceTest: BaseRellTest() {
         chk("foo.e.A", "foo.e[A]")
         chk("foo.bar.g()", "int[789]")
 
-        chk("foo.f", "ct_err:expr_novalue:function")
-        chk("foo.user", "ct_err:expr_novalue:type")
+        chk("foo.f", "ct_err:expr_novalue:function:[foo.f]")
+        chk("foo.user", "ct_err:expr_novalue:type:[foo.user]")
         chk("foo.state", "foo.state")
-        chk("foo.r", "ct_err:expr_novalue:struct")
-        chk("foo.e", "ct_err:expr_novalue:enum")
-        chk("foo.bar", "ct_err:expr_novalue:namespace")
+        chk("foo.r", "ct_err:expr_novalue:struct:[foo.r]")
+        chk("foo.e", "ct_err:expr_novalue:enum:[foo.e]")
+        chk("foo.bar", "ct_err:expr_novalue:namespace:[foo.bar]")
     }
 
     @Test fun testPredefinedNamespaces() {
@@ -262,9 +284,9 @@ class NamespaceTest: BaseRellTest() {
         chk("a.g()", "int[579]")
         chk("a.b.h()", "int[1491]")
 
-        chk("a.f()", "ct_err:unknown_name:a.f")
-        chk("a.b.f()", "ct_err:unknown_name:a.b.f")
-        chk("a.b.g()", "ct_err:unknown_name:a.b.g")
+        chk("a.f()", "ct_err:unknown_name:[a]:f")
+        chk("a.b.f()", "ct_err:unknown_name:[a.b]:f")
+        chk("a.b.g()", "ct_err:unknown_name:[a.b]:g")
     }
 
     @Test fun testSysDefInNamespace() {
@@ -285,7 +307,7 @@ class NamespaceTest: BaseRellTest() {
         def("namespace x.y.z { function f() = 123; }")
         chk("x.y.z.f()", "int[123]")
         chk("f()", "ct_err:unknown_name:f")
-        chk("x.f()", "ct_err:unknown_name:x.f")
+        chk("x.f()", "ct_err:unknown_name:[x]:f")
     }
 
     @Test fun testComplexNamespaceMerging() {

@@ -1,0 +1,176 @@
+RELEASE NOTES 0.11.0 (2022-12-15)
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+1. Upgrade to Postchain 3.7.0
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Language: "list", "set", "map" keywords removed
+
+Words "list", "set" and "map" are now regular names, not keywords. Not a significant change, but a step towards
+supporting arbitrary generic library types in the future.
+
+Practical implication: names "list", "set", "map" can be used in code (for variables, attributes, etc.).
+
+Method ._set() of type list<T> was deprecated (with warning) and a new method .set() added to be used instead.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+3. Library: new method "sort" instead of the old "_sort" one
+
+As keyword "sort" was removed in 0.10.10 (and word "sort" became a regular name), a new method .sort() was added to
+replace the old method ._sort() of list<T>. The old method was deprecated (with warning).
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Library: new functions: "repeat", "reverse", "reversed"
+
+list<T>.repeat(n: integer): list<T>
+
+    Returns a new list, which is the old list repeated "n" times. Always creates a new list (even if n = 1).
+
+list<T>.reverse()
+
+    Reverses the list in place, returns nothing.
+
+list<T>.reversed(): list<T>
+
+    Returns a reversed copy of the list. Always creates a new list (even if the old list is empty or has one element).
+
+text.repeat(n: integer): text
+
+    Returns the text repeated "n" times. SQL-compatible.
+
+text.reversed(): text
+
+    Returns a reversed copy of the text. SQL-compatible.
+
+byte_array.repeat(n: integer): byte_array
+
+    Returns the byte array repeated "n" times.
+
+byte_array.reversed(): byte_array
+
+    Returns a reversed copy of the byte array.
+
+* For repeat(n), the argument must be non-negative and less than 2^31, and the size of the resulting value must be less
+  than 2^31.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+5. Library: new functions of type "map": get_or_null(), get_or_default(), remove_or_null()
+
+map<K, V>.get_or_null(key: K): V?
+
+    Returns null if the key is not in the map, otherwise returns the associated value. Unlike .get(K), which throws an
+    exception in such case.
+
+map<K, V>.get_or_default(key: K, default_value: V2): V2
+
+    Returns a default value if the key is not in the map, otherwise returns the associated value.
+    The type of the default value can be a supertype of "V". For instance, the default value can be "V?" or "null",
+    even if "V" is not nullable.
+
+map<K, V>.remove_or_null(key: K): V?
+
+    Removes the specified key from the map. Returns null if the key is not in the map.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+6. Library: conversion between "rowid" and "integer"
+
+rowid(integer): rowid
+
+    Converts an integer to rowid. The value must be non-negative.
+
+rowid.to_integer(): integer
+
+    Returns the integer value of the rowid.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+7. Library: op_context.exists
+
+op_context.exists: boolean
+
+    New property, which is "true" if the code is called from an operation (directly or indirectly). Unlike other
+    properties of "op_context", this property is always available, but returns "false" if there is no operation.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+8. Library: function assert_fails() for unit tests
+
+assert_fails(f: () -> unit): rell.test.failure
+assert_fails(expected: text, f: () -> unit): rell.test.failure
+
+    Fails when the passed function value "f" does not fail. The passed function can fail with any kind of error,
+    including a requirement error or a system function error, but except a test assertion error.
+
+    If the passed function fails and "expected" is specified, the actual error message must be equal to it.
+
+New type "rell.test.failure" is used to describe the actual error. It has the following members:
+
+message: text;
+
+    Error message. For a requirement error, it's the message which was passed to require().
+
+Use partial function application to pass a function to assert_fails():
+
+    function foo(x: integer) {
+        require(x >= 0, "x is negative: " + x);
+    }
+
+    ...
+
+    assert_fails(foo(-123, *));                        // OK
+    assert_fails("x is negative: -123", foo(-123, *)); // OK
+    assert_fails(foo(123, *));                         // Fails
+
+Use the returned value if non-exact error message matching is needed:
+
+    val f = assert_fails(foo(-123, *));
+    assert_true(f.message.starts_with("x is negative: "));
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+9. Library: function .run_must_fail() with error message check
+
+The function run_must_fail() in types rell.test.block, rell.test.tx and rell.test.op changed to return a failure object
+and check error message:
+
+run_must_fail(): rell.test.failure
+run_must_fail(expected: text): rell.test.failure
+
+    Return type of the old function run_must_fail() changed from "unit" to "rell.test.failure".
+    When "expected" is specified, the call fails if the actual error message differs from the expected one.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+10. Library: constant rell.test.BLOCKCHAIN_SIGNER_KEYPAIR
+
+The keypair used to sign blockchain blocks in unit tests:
+
+val BLOCKCHAIN_SIGNER_KEYPAIR: rell.test.keypair = rell.test.keypair(
+    priv = x'4242424242424242424242424242424242424242424242424242424242424242',
+    pub = x'0324653eac434488002cc06bbfb7f10fe18991e35f9fe4302dbea6d2353dc0ab1c'
+);
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+11. Tools: multirun.sh --sqllog
+
+New argument of multirun.sh:
+
+    --sqllog     Enable SQL logging
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+12. Tools: singletest.sh removed
+
+Old utility used to run XML Postchain tests, obsolete now.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+13. Tools: module_args validation in multigen.sh and multirun.sh
+
+Actual values of module_args specified in run.xml are now checked at compile-time in multigen.sh and multirun.sh to
+make sure that:
+
+(1) Module args for all active modules that define module_args structure are spcified in run.xml.
+(2) Types of values match types of attributes.
+
+In the past, those checks were performed at run-time.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+14. Bug fixes
+
+(1) False "Wrong operand types..." compilation error on expression: T in list<T?>.
+(2) Conversion from gtv big integer value to decimal.

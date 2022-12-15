@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime.utils
@@ -8,7 +8,9 @@ import mu.KLogger
 import net.postchain.common.BlockchainRid
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
+import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.R_CallFrame
 import net.postchain.rell.model.R_FilePos
 import net.postchain.rell.model.R_FunctionBase
@@ -130,14 +132,14 @@ class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Bo
                 System.err.println("SQL: " + sql)
                 e.printStackTrace()
             }
-            throw Rt_Error("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")
+            throw Rt_Exception.common("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")
         }
     }
 }
 
 class Rt_Messages(private val logger: KLogger) {
     private val warningCodes = mutableListOf<String>()
-    private val errors = mutableListOf<Rt_Error>()
+    private val errors = mutableListOf<Rt_CommonError>()
 
     fun warning(code: String, msg: String) {
         warningCodes.add(code)
@@ -145,7 +147,7 @@ class Rt_Messages(private val logger: KLogger) {
     }
 
     fun error(code: String, msg: String) {
-        errors.add(Rt_Error(code, msg))
+        errors.add(Rt_CommonError(code, msg))
     }
 
     fun errorIfNotEmpty(list: Collection<String>, code: String, msg: String) {
@@ -162,30 +164,35 @@ class Rt_Messages(private val logger: KLogger) {
         }
 
         if (errors.size == 1) {
-            throw errors[0]
+            throw Rt_Exception(errors[0])
         }
 
-        val code = errors.map { it.code }.joinToString(",")
-        val msg = errors.mapNotNull { it.message }.joinToString("\n")
-        throw Rt_Error(code, msg)
+        val code = errors.joinToString(",") { it.code }
+        val msg = errors.joinToString("\n") { it.message() }
+        throw Rt_Exception.common(code, msg)
     }
 
     fun warningCodes() = warningCodes.toList()
 }
 
 object Rt_Utils {
-    fun errNotSupported(msg: String): Rt_Error {
-        return Rt_Error("not_supported", msg)
+    fun errNotSupported(msg: String): Rt_Exception {
+        return Rt_Exception.common("not_supported", msg)
     }
 
     fun <T> wrapErr(errCode: String, code: () -> T): T {
+        return wrapErr({ errCode }, code)
+    }
+
+    fun <T> wrapErr(errCodeFn: () -> String, code: () -> T): T {
         try {
             val res = code()
             return res
-        } catch (e: Rt_BaseError) {
+        } catch (e: Rt_Exception) {
             throw e
         } catch (e: Throwable) {
-            throw Rt_Error(errCode, e.message ?: "")
+            val errCode = errCodeFn()
+            throw Rt_Exception.common(errCode, e.message ?: "error")
         }
     }
 
@@ -193,17 +200,17 @@ object Rt_Utils {
         return if (stack.isEmpty()) msg else (msg + "\n" + stack.joinToString("\n") { "\tat $it" })
     }
 
-    fun check(b: Boolean, msgProvider: () -> Pair<String, String>) {
+    fun check(b: Boolean, msgProvider: () -> C_CodeMsg) {
         if (!b) {
-            val (code, msg) = msgProvider()
-            throw Rt_Error(code, msg)
+            val codeMsg = msgProvider()
+            throw Rt_Exception.common(codeMsg.code, codeMsg.msg)
         }
     }
 
-    fun <T> checkNotNull(value: T?, msgProvider: () -> Pair<String, String>): T {
+    fun <T> checkNotNull(value: T?, msgProvider: () -> C_CodeMsg): T {
         if (value == null) {
-            val (code, msg) = msgProvider()
-            throw Rt_Error(code, msg)
+            val codeMsg = msgProvider()
+            throw Rt_Exception.common(codeMsg.code, codeMsg.msg)
         }
         return value
     }
@@ -212,7 +219,7 @@ object Rt_Utils {
         check(expected == actual) {
             val code = "check_equals:$expected:$actual"
             val msg = "expected <$expected> actual <$actual>"
-            code to msg
+            code toCodeMsg msg
         }
     }
 
@@ -223,9 +230,10 @@ object Rt_Utils {
             filePos: R_FilePos?,
             rFrameGetter: C_LateGetter<R_CallFrame>
     ): Rt_Value {
-        val caller = if (filePos == null || frame == null) null else R_FunctionBase.createFrameCaller(frame, filePos)
+        val stack = if (filePos == null || frame == null) null else frame.subStack(filePos)
         val rSubFrame = rFrameGetter.get()
-        val subFrame = R_FunctionBase.createCallFrame(defCtx, caller, rSubFrame)
+        val callCtx = Rt_CallContext(defCtx, stack, frame?.dbUpdateAllowed() ?: true)
+        val subFrame = R_FunctionBase.createCallFrame(callCtx, rSubFrame)
         return expr.evaluate(subFrame)
     }
 }

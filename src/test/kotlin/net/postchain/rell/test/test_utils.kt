@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -37,6 +37,7 @@ import java.io.FileOutputStream
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
+import java.util.Properties
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -53,7 +54,11 @@ object SqlTestUtils {
             url += (if ("?" in url) "&" else "?") + "currentSchema=$schema"
         }
 
-        val con = DriverManager.getConnection(url, prop.user, prop.password)
+        val jdbcProperties = Properties()
+        jdbcProperties.setProperty("user", prop.user)
+        jdbcProperties.setProperty("password", prop.password)
+        jdbcProperties.setProperty("binaryTransfer", "false")
+        val con = DriverManager.getConnection(url, jdbcProperties)
         var resource: AutoCloseable? = con
         try {
             freeDiskSpace(con)
@@ -247,7 +252,7 @@ object GtvTestUtils {
 
     fun decodeGtvOpArgs(params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
         checkEquals(args.size, params.size)
-        val ctx = GtvToRtContext(false)
+        val ctx = GtvToRtContext.make(false)
         return args.mapIndexed { i, gtv ->
             params[i].type.gtvToRt(ctx, gtv)
         }
@@ -259,7 +264,7 @@ object GtvTestUtils {
 
     private fun decodeGtvArgs(params: List<R_Param>, args: List<String>, pretty: Boolean): List<Rt_Value> {
         checkEquals(args.size, params.size)
-        val ctx = GtvToRtContext(pretty)
+        val ctx = GtvToRtContext.make(pretty)
         return args.mapIndexed { i, arg ->
             val gtv = decodeGtvStr(arg)
             params[i].type.gtvToRt(ctx, gtv)

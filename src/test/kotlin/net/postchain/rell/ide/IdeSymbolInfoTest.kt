@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.ide
@@ -57,14 +57,14 @@ class IdeSymbolInfoTest: BaseIdeSymbolInfoTest() {
                 "f:DEF_FUNCTION_EXTEND"
         )
 
-        chkSymsErr("@extend(lib.foo) function f() {}", "fn:extend:not_found:lib.foo",
+        chkSymsErr("@extend(lib.foo) function f() {}", "unknown_name:lib.foo",
                 "extend:MOD_ANNOTATION",
                 "lib:DEF_IMPORT_MODULE",
                 "foo:UNKNOWN",
                 "f:DEF_FUNCTION_EXTEND"
         )
 
-        chkSymsErr("@extend(foo.bar) function f() {}", "fn:extend:not_found:foo.bar",
+        chkSymsErr("@extend(foo.bar) function f() {}", "unknown_name:foo",
                 "extend:MOD_ANNOTATION",
                 "foo:UNKNOWN",
                 "bar:UNKNOWN",
@@ -401,7 +401,7 @@ class IdeSymbolInfoTest: BaseIdeSymbolInfoTest() {
         chkExpr("(d:data) @* {} ( d.rowid )", "d:LOC_AT_ALIAS", "data:DEF_ENTITY", "d:LOC_AT_ALIAS", "rowid:MEM_ENTITY_ATTR_ROWID")
 
         chkExprErr("(a:data,b:data) @* {} ( .i )",
-                "at_attr_name_ambig:i:a.i,b.i",
+                "at_attr_name_ambig:i:[a:data:i,b:data:i]",
                 "a:LOC_AT_ALIAS",
                 "data:DEF_ENTITY",
                 "b:LOC_AT_ALIAS",
@@ -508,12 +508,12 @@ class IdeSymbolInfoTest: BaseIdeSymbolInfoTest() {
     @Test fun testExprEnumMembers() {
         file("module.rell", "enum colors { red, green, blue }")
 
-        chkExpr("colors.red", "colors:DEF_ENUM", "red:MEM_ENUM_ATTR")
-        chkExpr("colors.green", "colors:DEF_ENUM", "green:MEM_ENUM_ATTR")
-        chkExpr("colors.blue", "colors:DEF_ENUM", "blue:MEM_ENUM_ATTR")
+        chkExpr("colors.red", "colors:DEF_ENUM", "red:MEM_ENUM_VALUE")
+        chkExpr("colors.green", "colors:DEF_ENUM", "green:MEM_ENUM_VALUE")
+        chkExpr("colors.blue", "colors:DEF_ENUM", "blue:MEM_ENUM_VALUE")
 
-        chkExpr("colors.red.name", "colors:DEF_ENUM", "red:MEM_ENUM_ATTR", "name:MEM_SYS_PROPERTY")
-        chkExpr("colors.red.value", "colors:DEF_ENUM", "red:MEM_ENUM_ATTR", "value:MEM_SYS_PROPERTY")
+        chkExpr("colors.red.name", "colors:DEF_ENUM", "red:MEM_ENUM_VALUE", "name:MEM_STRUCT_ATTR")
+        chkExpr("colors.red.value", "colors:DEF_ENUM", "red:MEM_ENUM_VALUE", "value:MEM_STRUCT_ATTR")
 
         chkExpr("colors.values()", "colors:DEF_ENUM", "values:DEF_FUNCTION_SYSTEM")
         chkExpr("colors.value('red')", "colors:DEF_ENUM", "value:DEF_FUNCTION_SYSTEM")
@@ -549,44 +549,43 @@ class IdeSymbolInfoTest: BaseIdeSymbolInfoTest() {
         chkExpr("f(x = 123, y = 'Hello')", "f:DEF_FUNCTION_REGULAR", "x:EXPR_CALL_ARG", "y:EXPR_CALL_ARG")
         chkExpr("f(y = 'Hello', x = 123)", "f:DEF_FUNCTION_REGULAR", "y:EXPR_CALL_ARG", "x:EXPR_CALL_ARG")
 
-        chkExprErr("f(x = 123, y = 'Hello', foo = 0)", "expr:call:unknown_named_arg:f:foo",
+        chkExprErr("f(x = 123, y = 'Hello', foo = 0)", "expr:call:unknown_named_arg:[f]:foo",
                 "f:DEF_FUNCTION_REGULAR",
                 "x:EXPR_CALL_ARG",
                 "y:EXPR_CALL_ARG",
                 "foo:UNKNOWN"
         )
 
-        chkExprErr("f()", "expr:call:missing_args:f:0:x,1:y", "f:DEF_FUNCTION_REGULAR")
-        chkExprErr("f(123)", "expr:call:missing_args:f:1:y", "f:DEF_FUNCTION_REGULAR")
-        chkExprErr("f('hello', 123)", "expr_call_argtype:f:0:x:integer:text,expr_call_argtype:f:1:y:text:integer",
-                "f:DEF_FUNCTION_REGULAR")
-        chkExprErr("f(123, 'hello', true)", "expr:call:too_many_args:f:2:3", "f:DEF_FUNCTION_REGULAR")
+        chkExprErr("f()", "expr:call:missing_args:[f]:0:x,1:y", "f:DEF_FUNCTION_REGULAR")
+        chkExprErr("f(123)", "expr:call:missing_args:[f]:1:y", "f:DEF_FUNCTION_REGULAR")
+        chkExprErr("f('hello', 123)", "expr_call_argtype:[f]:0:x:integer:text,expr_call_argtype:[f]:1:y:text:integer", "f:DEF_FUNCTION_REGULAR")
+        chkExprErr("f(123, 'hello', true)", "expr:call:too_many_args:[f]:2:3", "f:DEF_FUNCTION_REGULAR")
 
         chkExpr("o(x = 123)", "o:DEF_OPERATION", "x:EXPR_CALL_ARG")
 
-        chkExprErr("o(x = 123, foo = 456)", "expr:call:unknown_named_arg:o:foo",
+        chkExprErr("o(x = 123, foo = 456)", "expr:call:unknown_named_arg:[o]:foo",
                 "o:DEF_OPERATION",
                 "x:EXPR_CALL_ARG",
                 "foo:UNKNOWN"
         )
 
-        chkExprErr("p()(x = 123)", "expr:call:missing_args:?:0,expr:call:unknown_named_arg:?:x",
+        chkExprErr("p()(x = 123)", "expr:call:missing_args:[?]:0,expr:call:unknown_named_arg:[?]:x",
                 "p:DEF_FUNCTION_REGULAR",
                 "x:UNKNOWN"
         )
 
-        chkExprErr("integer.from_text(s = '123')", "expr:call:named_args_not_allowed:from_text:s",
+        chkExprErr("integer.from_text(s = '123')", "expr:call:named_args_not_allowed:[integer.from_text]:s",
                 "integer:DEF_TYPE",
                 "from_text:DEF_FUNCTION_SYSTEM",
                 "s:UNKNOWN"
         )
 
-        chkExprErr("'Hello'.size(x = 123)", "expr_call_argtypes:text.size:integer,expr:call:named_args_not_allowed:size:x",
+        chkExprErr("'Hello'.size(x = 123)", "expr_call_argtypes:[text.size]:integer,expr:call:named_args_not_allowed:[text.size]:x",
                 "size:DEF_FUNCTION_SYSTEM",
                 "x:UNKNOWN"
         )
 
-        chkExprErr("'Hello'.char_at(i = 123)", "expr:call:named_args_not_allowed:char_at:i",
+        chkExprErr("'Hello'.char_at(i = 123)", "expr:call:named_args_not_allowed:[text.char_at]:i",
                 "char_at:DEF_FUNCTION_SYSTEM",
                 "i:UNKNOWN"
         )
@@ -720,10 +719,10 @@ class IdeSymbolInfoTest: BaseIdeSymbolInfoTest() {
         chkExprErr("s().x", "attr_missing:x", "s:DEF_STRUCT", "x:UNKNOWN")
         chkExprErr("s().p.x", "attr_missing:x", "s:DEF_STRUCT", "p:UNKNOWN", "x:UNKNOWN")
 
-        chkExprErr("abs().a", "expr_call_argtypes:abs:", "abs:DEF_FUNCTION_SYSTEM", "a:UNKNOWN")
-        chkExprErr("abs().f()", "expr_call_argtypes:abs:", "abs:DEF_FUNCTION_SYSTEM", "f:UNKNOWN")
-        chkExprErr("abs().a.b", "expr_call_argtypes:abs:", "abs:DEF_FUNCTION_SYSTEM", "a:UNKNOWN", "b:UNKNOWN")
-        chkExprErr("abs().a.b()", "expr_call_argtypes:abs:", "abs:DEF_FUNCTION_SYSTEM", "a:UNKNOWN", "b:UNKNOWN")
+        chkExprErr("abs().a", "expr_call_argtypes:[abs]:", "abs:DEF_FUNCTION_SYSTEM", "a:UNKNOWN")
+        chkExprErr("abs().f()", "expr_call_argtypes:[abs]:", "abs:DEF_FUNCTION_SYSTEM", "f:UNKNOWN")
+        chkExprErr("abs().a.b", "expr_call_argtypes:[abs]:", "abs:DEF_FUNCTION_SYSTEM", "a:UNKNOWN", "b:UNKNOWN")
+        chkExprErr("abs().a.b()", "expr_call_argtypes:[abs]:", "abs:DEF_FUNCTION_SYSTEM", "a:UNKNOWN", "b:UNKNOWN")
     }
 
     @Test fun testExprObjectAttr() {
@@ -779,25 +778,36 @@ class IdeSymbolInfoTest: BaseIdeSymbolInfoTest() {
                 "data:DEF_ENTITY"
         )
 
-        chkUnknownType("lib.ns.c", "lib:DEF_IMPORT_MODULE", "ns:DEF_NAMESPACE", "c:UNKNOWN")
-        chkUnknownType("lib.b.c", "lib:DEF_IMPORT_MODULE", "b:UNKNOWN", "c:UNKNOWN")
-        chkUnknownType("a.b.c", "a:UNKNOWN", "b:UNKNOWN", "c:UNKNOWN")
+        chkUnknownType("lib.ns.c", "lib.ns.c", "lib:DEF_IMPORT_MODULE", "ns:DEF_NAMESPACE", "c:UNKNOWN")
+        chkUnknownType("lib.b.c", "lib.b", "lib:DEF_IMPORT_MODULE", "b:UNKNOWN", "c:UNKNOWN")
+        chkUnknownType("a.b.c", "a", "a:UNKNOWN", "b:UNKNOWN", "c:UNKNOWN")
     }
 
-    private fun chkUnknownType(type: String, vararg expected: String) {
-        chkSymsErr("struct s { x: $type; }", "unknown_def:type:$type", "s:DEF_STRUCT", "x:MEM_STRUCT_ATTR", *expected)
+    private fun chkUnknownType(type: String, unknown: String, vararg expected: String) {
+        chkSymsErr("struct s { x: $type; }", "unknown_name:$unknown", "s:DEF_STRUCT", "x:MEM_STRUCT_ATTR", *expected)
     }
 
     @Test fun testUnknownEntity() {
         file("lib.rell", "module; namespace ns { entity data { name = 'Bob'; } }")
         file("module.rell", "import lib;")
         chkExpr("create lib.ns.data()", "lib:DEF_IMPORT_MODULE", "ns:DEF_NAMESPACE", "data:DEF_ENTITY")
-        chkUnknownEntity("lib.ns.c", "lib:DEF_IMPORT_MODULE", "ns:DEF_NAMESPACE", "c:UNKNOWN")
-        chkUnknownEntity("lib.b.c", "lib:DEF_IMPORT_MODULE", "b:UNKNOWN", "c:UNKNOWN")
-        chkUnknownEntity("a.b.c", "a:UNKNOWN", "b:UNKNOWN", "c:UNKNOWN")
+        chkUnknownEntity("lib.ns.c", "lib.ns.c", "lib:DEF_IMPORT_MODULE", "ns:DEF_NAMESPACE", "c:UNKNOWN")
+        chkUnknownEntity("lib.b.c", "lib.b", "lib:DEF_IMPORT_MODULE", "b:UNKNOWN", "c:UNKNOWN")
+        chkUnknownEntity("a.b.c", "a", "a:UNKNOWN", "b:UNKNOWN", "c:UNKNOWN")
     }
 
-    private fun chkUnknownEntity(type: String, vararg expected: String) {
-        chkExprErr("create $type()", "unknown_def:entity:$type", *expected)
+    @Test fun testUnknownMirrorStruct() {
+        chkExprErr("struct<foo>()", "unknown_name:foo", "foo:UNKNOWN")
+        chkExprErr("struct<foo.bar>()", "unknown_name:foo", "foo:UNKNOWN", "bar:UNKNOWN")
+    }
+
+    @Test fun testUnknownAnonAttr() {
+        chkSymsErr("function f(foo) {}", "unknown_name:foo", "f:DEF_FUNCTION_REGULAR", "foo:UNKNOWN")
+        chkSymsErr("function f(foo?) {}", "unknown_name:foo", "f:DEF_FUNCTION_REGULAR", "foo:UNKNOWN")
+        chkSymsErr("function f(foo.bar) {}", "unknown_name:foo", "f:DEF_FUNCTION_REGULAR", "foo:UNKNOWN", "bar:UNKNOWN")
+    }
+
+    private fun chkUnknownEntity(type: String, unknown: String, vararg expected: String) {
+        chkExprErr("create $type()", "unknown_name:$unknown", *expected)
     }
 }

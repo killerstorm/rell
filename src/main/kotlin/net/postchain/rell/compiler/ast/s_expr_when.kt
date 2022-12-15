@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -10,10 +10,12 @@ import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
-import net.postchain.rell.compiler.vexpr.*
+import net.postchain.rell.compiler.vexpr.V_ConstantValueEvalContext
+import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_WhenChooserDetails
+import net.postchain.rell.compiler.vexpr.V_WhenExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.Rt_BooleanValue
-import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.immListOf
@@ -144,7 +146,6 @@ class S_WhenConditionExpr(val exprs: List<S_Expr>): S_WhenCondition() {
 
     private fun compileExpr(ctx: C_ExprContext, keyType: R_Type?, expr: S_Expr): V_Expr {
         val valueType = if (keyType == null) null else C_Types.removeNullable(keyType)
-        val name = expr.asName()
 
         val cExpr = if (valueType is R_EnumType) {
             expr.compileWhenEnumOpt(ctx, valueType)
@@ -204,7 +205,7 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
 
         val resFacts = C_ExprVarFacts.of(postFacts = chooserDetails.keyPostFacts)
         val vResExpr = V_WhenExpr(ctx, startPos, chooserDetails, valueExprs, resType, resFacts)
-        return C_VExpr(vResExpr)
+        return C_ValueExpr(vResExpr)
     }
 
     private fun compileExprs(ctx: C_ExprContext, caseFacts: List<C_VarFacts>): Pair<R_Type, List<V_Expr>> {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.module
@@ -13,13 +13,15 @@ import net.postchain.rell.compiler.base.modifier.C_ModifierContext
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_Name
-import net.postchain.rell.model.R_QualifiedName
+import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
 object C_ModuleUtils {
     const val FILE_SUFFIX = ".rell"
     const val MODULE_FILE = "module$FILE_SUFFIX"
+
+    private val RELL_MODULE = R_ModuleName.of("rell")
 
     fun getModuleInfo(path: C_SourcePath, ast: S_RellFile): Pair<R_ModuleName?, Boolean> {
         val parts = path.parts
@@ -48,9 +50,11 @@ object C_ModuleUtils {
             return Pair(null, false)
         }
 
-        val moduleName = R_ModuleName(rNames)
+        val moduleName = R_ModuleName.of(rNames)
         return Pair(moduleName, directory)
     }
+
+    fun isAllowedModuleName(name: R_ModuleName) = !name.startsWith(RELL_MODULE)
 }
 
 class C_ModuleReaderContext(
@@ -335,8 +339,9 @@ private class C_ModuleDirTree(
                 readerCtx.msgCtx.error(e)
                 null
             } catch (e: Throwable) {
-                // The file may be provided also by IDE, so all kinds of errors shall be handled.
-                null
+                if (CommonUtils.IS_UNIT_TEST) throw e else null
+                // This code might be called from IDE, for which reason it's better to suppress an error.
+                // TODO Suppress the error only when called from IDE
             }
         }
 
@@ -372,16 +377,16 @@ class C_ModuleDefinitionContext private constructor(
     val msgCtx: C_MessageContext,
     private val importLoader: C_ImportModuleLoader,
     val moduleName: R_ModuleName,
-    val namespaceName: R_QualifiedName,
+    val namespacePath: C_RNamePath,
     val symCtx: C_SymbolContext
 ) {
     fun loadModule(name: R_ModuleName): Boolean {
         return importLoader.loadModule(name)
     }
 
-    fun namespace(name: R_QualifiedName): C_ModuleDefinitionContext {
-        val subNamespaceName = namespaceName.child(name)
-        return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, subNamespaceName, symCtx)
+    fun namespace(path: C_RNamePath): C_ModuleDefinitionContext {
+        val subNamespacePath = namespacePath.child(path.parts)
+        return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, subNamespacePath, symCtx)
     }
 
     companion object {
@@ -391,7 +396,7 @@ class C_ModuleDefinitionContext private constructor(
             moduleName: R_ModuleName,
             symCtx: C_SymbolContext
         ): C_ModuleDefinitionContext {
-            return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, R_QualifiedName.EMPTY, symCtx)
+            return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, C_RNamePath.EMPTY, symCtx)
         }
     }
 }
@@ -464,6 +469,11 @@ class C_ParsedRellFile(val path: C_SourcePath, private val ast: S_RellFile?) {
     }
 
     fun compile(ctx: C_ModuleSourceContext): C_MidModuleFile {
+        val pos = ast?.startPos
+        if (!C_ModuleUtils.isAllowedModuleName(ctx.moduleName) && pos != null) {
+            ctx.msgCtx.error(pos, "module:reserved_name:${ctx.moduleName}", "Defining a module called '${ctx.moduleName}' is not allowed")
+        }
+
         return ast?.compile(ctx, path) ?: C_MidModuleFile(path, immListOf(), null, C_NopSymbolContext)
     }
 

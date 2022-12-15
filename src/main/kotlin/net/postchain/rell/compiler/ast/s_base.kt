@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -14,6 +14,7 @@ import net.postchain.rell.compiler.base.module.C_ModuleSourceContext
 import net.postchain.rell.compiler.base.module.C_ModuleUtils
 import net.postchain.rell.compiler.base.namespace.C_NsAsm_ComponentAssembler
 import net.postchain.rell.compiler.base.namespace.C_UserNsProtoBuilder
+import net.postchain.rell.compiler.base.utils.C_RNamePath
 import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_MountName
@@ -88,7 +89,7 @@ class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition
             val modCtx = fileCtx.modCtx
             val nsBuilder = C_UserNsProtoBuilder(nsAssembler)
             val fileScopeBuilder = modCtx.scopeBuilder.nested(nsAssembler.futureNs())
-            val nsCtx = C_NamespaceContext(modCtx, fileCtx.symCtx, null, fileScopeBuilder)
+            val nsCtx = C_NamespaceContext(modCtx, fileCtx.symCtx, C_RNamePath.EMPTY, fileScopeBuilder)
             return C_MountContext(fileCtx, nsCtx, modCtx.extChain, nsBuilder, mountName)
         }
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -91,9 +91,10 @@ class AtExprCollectionAttrTest: BaseRellTest(false) {
 
     @Test fun testTupleWhere3() {
         def("function data() = [(123,'Bob',321,'Adidas'),(456,'Alice',654,'Reebok')];")
+        val type = "(integer,text,integer,text)"
 
-        chk("data() @* { 123 }", "ct_err:at_attr_type_ambig:0:integer:[0],[2]")
-        chk("data() @* { 'Bob' }", "ct_err:at_attr_type_ambig:0:text:[1],[3]")
+        chk("data() @* { 123 }", "ct_err:at_attr_type_ambig:0:integer:[$:$type.0,$:$type.2]")
+        chk("data() @* { 'Bob' }", "ct_err:at_attr_type_ambig:0:text:[$:$type.1,$:$type.3]")
         chk("data() @* { x'beef' }", "ct_err:at_where_type:0:byte_array")
         chk("data() @* { $[0] == 123 }", "[(123,Bob,321,Adidas)]")
         chk("data() @* { $[1] == 'Alice' }", "[(456,Alice,654,Reebok)]")
@@ -103,14 +104,15 @@ class AtExprCollectionAttrTest: BaseRellTest(false) {
 
     @Test fun testTupleWhere4() {
         def("function data() = [(i1=123,t1='Bob',i2=321,t2='Adidas'),(i1=456,t1='Alice',i2=654,t2='Reebok')];")
-        chkWhereAttrs4("(i1=123,t1=Bob,i2=321,t2=Adidas)", "(i1=456,t1=Alice,i2=654,t2=Reebok)", ".")
+        chkWhereAttrs4("(i1=123,t1=Bob,i2=321,t2=Adidas)", "(i1=456,t1=Alice,i2=654,t2=Reebok)", "(i1:integer,t1:text,i2:integer,t2:text).")
     }
 
     @Test fun testTupleWhere5() {
         def("function data() = [(i=123,t='Bob',321,'Adidas'),(i=456,t='Alice',654,'Reebok')];")
+        val type = "(i:integer,t:text,integer,text)"
 
-        chk("data() @* { 123 }", "ct_err:at_attr_type_ambig:0:integer:.i,[2]")
-        chk("data() @* { 'Alice' }", "ct_err:at_attr_type_ambig:0:text:.t,[3]")
+        chk("data() @* { 123 }", "ct_err:at_attr_type_ambig:0:integer:[$:$type.i,$:$type.2]")
+        chk("data() @* { 'Alice' }", "ct_err:at_attr_type_ambig:0:text:[$:$type.t,$:$type.3]")
         chk("data() @* { x'beef' }", "ct_err:at_where_type:0:byte_array")
 
         chk("data() @* { .i == 123 }", "[(i=123,t=Bob,321,Adidas)]")
@@ -129,8 +131,8 @@ class AtExprCollectionAttrTest: BaseRellTest(false) {
         chkEx("{ val i = 'Alice'; return data() @* { i }; }", "ct_err:at_where:var_noattrs:0:i:text")
         chkEx("{ val i = x'beef'; return data() @* { i }; }", "ct_err:at_where:var_noattrs:0:i:byte_array")
 
-        chkEx("{ val x = 123; return data() @* { x }; }", "ct_err:at_where:var_manyattrs_type:0:x:integer:.i,[2]")
-        chkEx("{ val x = 'Alice'; return data() @* { x }; }", "ct_err:at_where:var_manyattrs_type:0:x:text:.t,[3]")
+        chkEx("{ val x = 123; return data() @* { x }; }", "ct_err:at_where:var_manyattrs_type:0:x:integer:[$:$type.i,$:$type.2]")
+        chkEx("{ val x = 'Alice'; return data() @* { x }; }", "ct_err:at_where:var_manyattrs_type:0:x:text:[$:$type.t,$:$type.3]")
     }
 
     @Test fun testEnumWhatAttr() {
@@ -176,9 +178,9 @@ class AtExprCollectionAttrTest: BaseRellTest(false) {
     }
 
     @Test fun testVirtualTupleWhere2() {
-        initVirtualTuple("i1:integer,t1:text,i2:integer,t2:text", "[[0],[1],[2],[3]]",
-                listOf("[123,'Bob',321,'Adidas']", "[456,'Alice',654,'Reebok']"))
-        chkWhereAttrs4("virtual(i1=123,t1=Bob,i2=321,t2=Adidas)", "virtual(i1=456,t1=Alice,i2=654,t2=Reebok)", ".")
+        val fields = "i1:integer,t1:text,i2:integer,t2:text"
+        initVirtualTuple(fields, "[[0],[1],[2],[3]]", listOf("[123,'Bob',321,'Adidas']", "[456,'Alice',654,'Reebok']"))
+        chkWhereAttrs4("virtual(i1=123,t1=Bob,i2=321,t2=Adidas)", "virtual(i1=456,t1=Alice,i2=654,t2=Reebok)", "virtual<($fields)>.")
     }
 
     private fun initVirtualTuple(fields: String, paths: String, values: List<String>) {
@@ -275,8 +277,8 @@ class AtExprCollectionAttrTest: BaseRellTest(false) {
     }
 
     private fun chkWhereAttrs4(v1: String, v2: String, baseName: String) {
-        chk("data() @* { 123 }", "ct_err:at_attr_type_ambig:0:integer:${baseName}i1,${baseName}i2")
-        chk("data() @* { 'Alice' }", "ct_err:at_attr_type_ambig:0:text:${baseName}t1,${baseName}t2")
+        chk("data() @* { 123 }", "ct_err:at_attr_type_ambig:0:integer:[$:${baseName}i1,$:${baseName}i2]")
+        chk("data() @* { 'Alice' }", "ct_err:at_attr_type_ambig:0:text:[$:${baseName}t1,$:${baseName}t2]")
         chk("data() @* { x'beef' }", "ct_err:at_where_type:0:byte_array")
 
         chkEx("{ val i1 = 123; return data() @* { i1 }; }", "[$v1]")
@@ -290,10 +292,8 @@ class AtExprCollectionAttrTest: BaseRellTest(false) {
         chkEx("{ val i1 = 'Alice'; return data() @* { i1 }; }", "ct_err:at_where:var_noattrs:0:i1:text")
         chkEx("{ val i1 = x'beef'; return data() @* { i1 }; }", "ct_err:at_where:var_noattrs:0:i1:byte_array")
 
-        chkEx("{ val x = 123; return data() @* { x }; }",
-                "ct_err:at_where:var_manyattrs_type:0:x:integer:${baseName}i1,${baseName}i2")
-        chkEx("{ val x = 'Alice'; return data() @* { x }; }",
-                "ct_err:at_where:var_manyattrs_type:0:x:text:${baseName}t1,${baseName}t2")
+        chkEx("{ val x = 123; return data() @* { x }; }", "ct_err:at_where:var_manyattrs_type:0:x:integer:[$:${baseName}i1,$:${baseName}i2]")
+        chkEx("{ val x = 'Alice'; return data() @* { x }; }", "ct_err:at_where:var_manyattrs_type:0:x:text:[$:${baseName}t1,$:${baseName}t2]")
     }
 
     @Test fun testWhatAttrPathEntity() {
@@ -339,5 +339,17 @@ class AtExprCollectionAttrTest: BaseRellTest(false) {
         chk("get_data() @* {} ( .sref.i, .sref.t )", "[(123,Bob)]")
         chk("get_data() @* {} ( $.sref.i, $.sref.t )", "[(123,Bob)]")
         chk("(d:get_data()) @* {} ( d.sref.i, d.sref.t )", "[(123,Bob)]")
+    }
+
+    @Test fun testMemberFunction() {
+        def("function get_data() = ['Bob', 'Alice', 'Trudy'];")
+
+        chk("get_data() @* {} (.upper_case())", "[BOB, ALICE, TRUDY]")
+        chk("get_data() @* {} (.lower_case())", "[bob, alice, trudy]")
+        chk("get_data() @* {} (.size())", "[3, 5, 5]")
+        chk("get_data() @* {} (.sub(0, 1))", "[B, A, T]")
+
+        chk("get_data() @* {.upper_case() == 'BOB'}", "[Bob]")
+        chk("get_data() @* {.sub(0, 1) == 'B'}", "[Bob]")
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
@@ -64,27 +64,27 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
 
         chkArg("boolean", "0", "boolean[false]")
         chkArg("boolean", "1", "boolean[true]")
-        chkArg("boolean", "2", "gtv_err:type:boolean:INTEGER")
-        chkArg("boolean", """"Hello"""", "gtv_err:type:boolean:STRING")
+        chkArg("boolean", "2", "gtv_err:type:[boolean]:bad_value:2")
+        chkArg("boolean", """"Hello"""", "gtv_err:type:[boolean]:INTEGER:STRING")
 
         chkArg("integer", "123", "int[123]")
         chkArg("integer", "-123", "int[-123]")
-        chkArg("integer", """"Hello"""", "gtv_err:type:integer:STRING")
-        chkArg("integer", "null", "gtv_err:type:integer:NULL")
+        chkArg("integer", """"Hello"""", "gtv_err:type:[integer]:INTEGER:STRING")
+        chkArg("integer", "null", "gtv_err:type:[integer]:INTEGER:NULL")
 
         chkArg("text", """"Hello"""", "text[Hello]")
-        chkArg("text", "123", "gtv_err:type:string:INTEGER")
+        chkArg("text", "123", "gtv_err:type:[text]:STRING:INTEGER")
 
         chkArg("byte_array", "12EF", "byte_array[12ef]")
         chkArg("byte_array", "12ef", "byte_array[12ef]")
         chkArg("byte_array", "12eF", "byte_array[12ef]")
-        chkArg("byte_array", "12EG", "gtv_err:type:byte_array:STRING")
-        chkArg("byte_array", "12E", "gtv_err:type:byte_array:STRING")
-        chkArg("byte_array", """"Hello"""", "gtv_err:type:byte_array:STRING")
+        chkArg("byte_array", "12EG", "gtv_err:type:[byte_array]:bad_value:STRING")
+        chkArg("byte_array", "12E", "gtv_err:type:[byte_array]:bad_value:STRING")
+        chkArg("byte_array", """"Hello"""", "gtv_err:type:[byte_array]:bad_value:STRING")
 
         chkArg("json", """"{\"x\":123,\"y\":\"Hello\"}"""", """json[{"x":123,"y":"Hello"}]""")
-        chkArg("json", """{"x":123,"y":"Hello"}""", "gtv_err:type:json:DICT")
-        chkArg("json", """"{"""", "gtv_err:type:json:STRING")
+        chkArg("json", """{"x":123,"y":"Hello"}""", "gtv_err:type:[json]:STRING:DICT")
+        chkArg("json", """"{"""", "gtv_err:type:[json]:bad_value")
 
         chkArg("decimal", "123", "dec[123]")
         chkArg("decimal", "'123.456'", "dec[123.456]")
@@ -97,9 +97,9 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkOpArg("byte_array", gtvStr("12EF"), "byte_array[12ef]")
         chkOpArg("byte_array", gtvStr("12ef"), "byte_array[12ef]")
         chkOpArg("byte_array", gtvStr("12eF"), "byte_array[12ef]")
-        chkOpArg("byte_array", gtvStr("12EG"), "gtv_err:type:byte_array:STRING")
-        chkOpArg("byte_array", gtvStr("12E"), "gtv_err:type:byte_array:STRING")
-        chkOpArg("byte_array", gtvStr("Hello"), "gtv_err:type:byte_array:STRING")
+        chkOpArg("byte_array", gtvStr("12EG"), "gtv_err:type:[byte_array]:bad_value:STRING")
+        chkOpArg("byte_array", gtvStr("12E"), "gtv_err:type:[byte_array]:bad_value:STRING")
+        chkOpArg("byte_array", gtvStr("Hello"), "gtv_err:type:[byte_array]:bad_value:STRING")
     }
 
     @Test fun testArgTupleQuery() {
@@ -111,7 +111,7 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkQueryArg("(x:integer,y:text)", """{"y":"Hello"}""", "gtv_err:tuple_count:2:1")
         chkQueryArg("(x:integer,y:text)", """{"x":123,"y":"Hello","z":456}""", "gtv_err:tuple_count:2:3")
         chkQueryArg("(integer,text)", """[123,"Hello"]""", "(int[123],text[Hello])")
-        chkQueryArg("(integer,text)", """{"x":123,"y":"Hello"}""", "gtv_err:type:array:DICT")
+        chkQueryArg("(integer,text)", """{"x":123,"y":"Hello"}""", "gtv_err:type:[(integer,text)]:ARRAY:DICT")
         chkQueryArg("(x:integer,text)", """[123,"Hello"]""", "(x=int[123],text[Hello])")
         chkQueryArg("(integer,y:text)", """[123,"Hello"]""", "(int[123],y=text[Hello])")
     }
@@ -119,16 +119,16 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
     @Test fun testArgTupleOp() {
         tst.gtvResult = false
         chkOpArg("(x:integer,y:text)", """[123,"Hello"]""", "(x=int[123],y=text[Hello])")
-        chkOpArg("(x:integer,y:text)", """{"x":123,"y":"Hello"}""", "gtv_err:type:array:DICT")
-        chkOpArg("(x:integer,y:text)", """{"p":123,"q":"Hello"}""", "gtv_err:type:array:DICT")
+        chkOpArg("(x:integer,y:text)", """{"x":123,"y":"Hello"}""", "gtv_err:type:[(x:integer,y:text)]:ARRAY:DICT")
+        chkOpArg("(x:integer,y:text)", """{"p":123,"q":"Hello"}""", "gtv_err:type:[(x:integer,y:text)]:ARRAY:DICT")
         chkOpArg("(x:integer,y:text)", """[123]""", "gtv_err:tuple_count:2:1")
         chkOpArg("(x:integer,y:text)", """["Hello"]""", "gtv_err:tuple_count:2:1")
-        chkOpArg("(x:integer,y:text)", """{"x":123}""", "gtv_err:type:array:DICT")
-        chkOpArg("(x:integer,y:text)", """{"y":"Hello"}""", "gtv_err:type:array:DICT")
+        chkOpArg("(x:integer,y:text)", """{"x":123}""", "gtv_err:type:[(x:integer,y:text)]:ARRAY:DICT")
+        chkOpArg("(x:integer,y:text)", """{"y":"Hello"}""", "gtv_err:type:[(x:integer,y:text)]:ARRAY:DICT")
         chkOpArg("(x:integer,y:text)", """[123,"Hello",456]""", "gtv_err:tuple_count:2:3")
-        chkOpArg("(x:integer,y:text)", """{"x":123,"y":"Hello","z":456}""", "gtv_err:type:array:DICT")
+        chkOpArg("(x:integer,y:text)", """{"x":123,"y":"Hello","z":456}""", "gtv_err:type:[(x:integer,y:text)]:ARRAY:DICT")
         chkOpArg("(integer,text)", """[123,"Hello"]""", "(int[123],text[Hello])")
-        chkOpArg("(integer,text)", """{"x":123,"y":"Hello"}""", "gtv_err:type:array:DICT")
+        chkOpArg("(integer,text)", """{"x":123,"y":"Hello"}""", "gtv_err:type:[(integer,text)]:ARRAY:DICT")
         chkOpArg("(x:integer,text)", """[123,"Hello"]""", "(x=int[123],text[Hello])")
         chkOpArg("(integer,y:text)", """[123,"Hello"]""", "(int[123],y=text[Hello])")
     }
@@ -137,7 +137,7 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         tst.gtvResult = false
         chkArg("integer?", "123", "int[123]")
         chkArg("integer?", "null", "null")
-        chkArg("integer?", """"Hello"""", "gtv_err:type:integer:STRING")
+        chkArg("integer?", """"Hello"""", "gtv_err:type:[integer]:INTEGER:STRING")
     }
 
     @Test fun testArgCollection() {
@@ -145,22 +145,22 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
 
         chkArg("list<integer>", "[1,2,3]", "list<integer>[int[1],int[2],int[3]]")
         chkArg("list<integer>", "[]", "list<integer>[]")
-        chkArg("list<integer>", """["Hello"]""", "gtv_err:type:integer:STRING")
-        chkArg("list<integer>", "{}", "gtv_err:type:array:DICT")
+        chkArg("list<integer>", """["Hello"]""", "gtv_err:type:[integer]:INTEGER:STRING")
+        chkArg("list<integer>", "{}", "gtv_err:type:[list<integer>]:ARRAY:DICT")
 
         chkArg("set<integer>", "[1,2,3]", "set<integer>[int[1],int[2],int[3]]")
         chkArg("set<integer>", "[]", "set<integer>[]")
         chkArg("set<integer>", "[1,2,1]", "gtv_err:set_dup:int[1]")
-        chkArg("set<integer>", """["Hello"]""", "gtv_err:type:integer:STRING")
-        chkArg("set<integer>", "{}", "gtv_err:type:array:DICT")
+        chkArg("set<integer>", """["Hello"]""", "gtv_err:type:[integer]:INTEGER:STRING")
+        chkArg("set<integer>", "{}", "gtv_err:type:[set<integer>]:ARRAY:DICT")
 
         chkArg("map<text,integer>", """{"A":1,"B":2,"C":3}""",
                 "map<text,integer>[text[A]=int[1],text[B]=int[2],text[C]=int[3]]")
         chkArg("map<text,integer>", """{"A":1,"B":2,"A":1}""", "map<text,integer>[text[A]=int[1],text[B]=int[2]]")
         chkArg("map<text,integer>", """{"A":1,"B":2,"A":3}""", "map<text,integer>[text[A]=int[3],text[B]=int[2]]")
-        chkArg("map<text,integer>", """{"A":"B"}""", "gtv_err:type:integer:STRING")
+        chkArg("map<text,integer>", """{"A":"B"}""", "gtv_err:type:[integer]:INTEGER:STRING")
         chkArg("map<text,integer>", """{1:2}""", "map<text,integer>[text[1]=int[2]]")
-        chkArg("map<text,integer>", """{1:"A"}""", "gtv_err:type:integer:STRING")
+        chkArg("map<text,integer>", """{1:"A"}""", "gtv_err:type:[integer]:INTEGER:STRING")
         chkArg("map<integer,text>", """[[1,"A"]]""", "map<integer,text>[int[1]=text[A]]")
     }
 
@@ -177,14 +177,14 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         tst.gtvResult = false
 
         chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello"}}""", "foo[x=int[123],b=bar[p=boolean[true],q=text[Hello]]]")
-        chkQueryArg("foo", """{"x":123,"b":{"p":2,"q":"Hello"}}""", "gtv_err:type:boolean:INTEGER")
-        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":456}}""", "gtv_err:type:string:INTEGER")
+        chkQueryArg("foo", """{"x":123,"b":{"p":2,"q":"Hello"}}""", "gtv_err:type:[boolean]:bad_value:2:attr:[bar]:p")
+        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":456}}""", "gtv_err:type:[text]:STRING:INTEGER:attr:[bar]:q")
         chkQueryArg("foo", """{"b":{"p":1,"q":"Hello"}}""", "gtv_err:struct_size:foo:2:1")
-        chkQueryArg("foo", """{"x":123,"b":null}""", "gtv_err:type:array:NULL")
+        chkQueryArg("foo", """{"x":123,"b":null}""", "gtv_err:type:[bar]:ARRAY:NULL:attr:[foo]:b")
         chkQueryArg("foo", """{"x":123}""", "gtv_err:struct_size:foo:2:1")
-        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3")
+        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3:attr:[foo]:b")
 
-        chkQueryArg("qaz", """{"b":{"p":2,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3")
+        chkQueryArg("qaz", """{"b":{"p":2,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3:attr:[qaz]:b")
         chkQueryArg("qaz", """{"b":null}""", "qaz[b=null]")
         chkQueryArg("qaz", """{}""", "gtv_err:struct_size:qaz:1:0")
     }
@@ -203,15 +203,15 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         def("struct qaz { b: bar?; }")
 
         chkOpArg("foo", """[123,[1,"Hello"]]""", "foo[x=int[123],b=bar[p=boolean[true],q=text[Hello]]]")
-        chkOpArg("foo", """{"x":123,"b":{"p":1,"q":"Hello"}}""", "gtv_err:type:array:DICT")
-        chkOpArg("foo", """[123,[2,"Hello"]]""", "gtv_err:type:boolean:INTEGER")
-        chkOpArg("foo", """[123,[1,456]]""", "gtv_err:type:string:INTEGER")
+        chkOpArg("foo", """{"x":123,"b":{"p":1,"q":"Hello"}}""", "gtv_err:type:[foo]:ARRAY:DICT")
+        chkOpArg("foo", """[123,[2,"Hello"]]""", "gtv_err:type:[boolean]:bad_value:2:attr:[bar]:p")
+        chkOpArg("foo", """[123,[1,456]]""", "gtv_err:type:[text]:STRING:INTEGER:attr:[bar]:q")
         chkOpArg("foo", """[[1,"Hello"]]""", "gtv_err:struct_size:foo:2:1")
-        chkOpArg("foo", """[123,null]""", "gtv_err:type:array:NULL")
+        chkOpArg("foo", """[123,null]""", "gtv_err:type:[bar]:ARRAY:NULL:attr:[foo]:b")
         chkOpArg("foo", """[123]""", "gtv_err:struct_size:foo:2:1")
-        chkOpArg("foo", """[123,[1,"Hello",456]]""", "gtv_err:struct_size:bar:2:3")
+        chkOpArg("foo", """[123,[1,"Hello",456]]""", "gtv_err:struct_size:bar:2:3:attr:[foo]:b")
 
-        chkOpArg("qaz", """[[2,"Hello",456]]""", "gtv_err:struct_size:bar:2:3")
+        chkOpArg("qaz", """[[2,"Hello",456]]""", "gtv_err:struct_size:bar:2:3:attr:[qaz]:b")
         chkOpArg("qaz", """[null]""", "qaz[b=null]")
         chkOpArg("qaz", """[]""", "gtv_err:struct_size:qaz:1:0")
     }
@@ -230,16 +230,16 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkQueryArg("foo", "\"A\"", "\"A\"")
         chkQueryArg("foo", "\"B\"", "\"B\"")
         chkQueryArg("foo", "\"C\"", "\"C\"")
-        chkQueryArg("foo", "\"D\"", "gtv_err:type:enum[foo]:STRING")
+        chkQueryArg("foo", "\"D\"", "gtv_err:type:[foo]:enum:bad_value:D")
         chkQueryArg("foo", "0", "\"A\"")
-        chkQueryArg("foo", "\"0\"", "gtv_err:type:enum[foo]:STRING")
+        chkQueryArg("foo", "\"0\"", "gtv_err:type:[foo]:enum:bad_value:0")
 
         chkOpArg("foo", "0", "foo[A]")
         chkOpArg("foo", "1", "foo[B]")
         chkOpArg("foo", "2", "foo[C]")
-        chkOpArg("foo", "3", "gtv_err:type:enum[foo]:INTEGER")
-        chkOpArg("foo", "\"0\"", "gtv_err:type:integer:STRING")
-        chkOpArg("foo", "\"A\"", "gtv_err:type:integer:STRING")
+        chkOpArg("foo", "3", "gtv_err:type:[foo]:enum:bad_value:3")
+        chkOpArg("foo", "\"0\"", "gtv_err:type:[foo]:INTEGER:STRING")
+        chkOpArg("foo", "\"A\"", "gtv_err:type:[foo]:INTEGER:STRING")
     }
 
     private fun chkArg(type: String, arg: String, expected: String) {

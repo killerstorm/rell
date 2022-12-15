@@ -1,12 +1,11 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
 
 import net.postchain.common.exception.TransactionIncorrect
 import net.postchain.common.exception.UserMistake
-import net.postchain.rell.lib.LibGtvTest.Companion.chkFromGtv
 import net.postchain.rell.test.BaseRellTest
 import org.junit.Test
 
@@ -34,7 +33,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chk("rell.test.block([foo(123)])", "rell.test.block[rell.test.tx[op[foo(123)]]]")
         chk("rell.test.block([foo(123),foo(456)])", "rell.test.block[rell.test.tx[op[foo(123)],op[foo(456)]]]")
 
-        chk("rell.test.block(struct<foo>(123))", "ct_err:expr_call_argtypes:block:struct<foo>")
+        chk("rell.test.block(struct<foo>(123))", "ct_err:expr_call_argtypes:[rell.test.block]:struct<foo>")
     }
 
     @Test fun testBlockRun() {
@@ -42,7 +41,8 @@ class LibRellTestTxTest: BaseRellTest(false) {
         initTxChain()
         repl.chk("val b = rell.test.block().tx(foo(123));")
         repl.chk("b.run();", "OUT:123", "null")
-        repl.chk("b.run_must_fail();", "null")
+        repl.chk("b.run_must_fail();", "Failed to save tx to database")
+        repl.chk("b.run_must_fail('Failed to save tx to database');", "Failed to save tx to database")
     }
 
     @Test fun testBlockTx() {
@@ -52,7 +52,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chk("_type_of(rell.test.block().tx(foo(123)).tx(foo(456)))", "text[rell.test.block]")
 
         chk("rell.test.block()", "rell.test.block[]")
-        chk("rell.test.block().tx()", "ct_err:expr_call_argtypes:rell.test.block.tx:")
+        chk("rell.test.block().tx()", "ct_err:expr_call_argtypes:[rell.test.block.tx]:")
         chk("rell.test.block().tx(rell.test.tx(foo(123)))", "rell.test.block[rell.test.tx[op[foo(123)]]]")
         chk("rell.test.block().tx(rell.test.tx(foo(123)),rell.test.tx(foo(456)))",
                 "rell.test.block[rell.test.tx[op[foo(123)]],rell.test.tx[op[foo(456)]]]")
@@ -171,7 +171,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
     private fun chkSignCommon(exprType: String, expr: String) {
         chk("_type_of($expr.sign(rell.test.keypairs.bob))", "text[rell.test.tx]")
 
-        chk("$expr.sign()", "ct_err:expr_call_argtypes:$exprType.sign:")
+        chk("$expr.sign()", "ct_err:expr_call_argtypes:[$exprType.sign]:")
         chk("$expr.sign(rell.test.keypairs.bob)", "rell.test.tx[op[foo(123)],034f35]")
         chk("$expr.sign(rell.test.keypairs.bob,rell.test.keypairs.alice)", "rell.test.tx[op[foo(123)],034f35,02466d]")
         chk("$expr.sign(rell.test.keypairs.bob).sign(rell.test.keypairs.alice)", "rell.test.tx[op[foo(123)],034f35,02466d]")
@@ -194,8 +194,8 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chk("$expr.sign(rell.test.pubkeys.bob)", "rt_err:tx.sign:priv_key_size:32:33")
         chk("$expr.sign(x'')", "rt_err:tx.sign:priv_key_size:32:0")
         chk("$expr.sign(x'00')", "rt_err:tx.sign:priv_key_size:32:1")
-        chk("$expr.sign(123)", "ct_err:expr_call_argtypes:$exprType.sign:integer")
-        chk("$expr.sign('bob')", "ct_err:expr_call_argtypes:$exprType.sign:text")
+        chk("$expr.sign(123)", "ct_err:expr_call_argtypes:[$exprType.sign]:integer")
+        chk("$expr.sign('bob')", "ct_err:expr_call_argtypes:[$exprType.sign]:text")
         chk("$expr.sign(rell.test.keypair(priv=x'12', pub=x'34'))", "rt_err:keypair:wrong_byte_array_size:33:1")
     }
 
@@ -237,11 +237,12 @@ class LibRellTestTxTest: BaseRellTest(false) {
         initTxChain()
         repl.chk("val tx = rell.test.tx().op(foo(123));")
         repl.chk("tx.run();", "OUT:123", "null")
-        repl.chk("tx.run_must_fail();", "null")
+        repl.chk("tx.run_must_fail();", "Failed to save tx to database")
+        repl.chk("tx.run_must_fail('Failed to save tx to database');", "Failed to save tx to database")
     }
 
     @Test fun testOpConstructor() {
-        chk("rell.test.op()", "ct_err:expr_call_argtypes:op:")
+        chk("rell.test.op()", "ct_err:expr_call_argtypes:[rell.test.op]:")
         chk("rell.test.op('foo')", "op[foo()]")
         chk("rell.test.op('foo', (123).to_gtv())", "op[foo(123)]")
         chk("rell.test.op('foo', (123).to_gtv(), 'Hello'.to_gtv())", """op[foo(123,"Hello")]""")
@@ -251,8 +252,8 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chk("rell.test.op('foo', [(123).to_gtv()])", "op[foo(123)]")
         chk("rell.test.op('foo', [(123).to_gtv(), 'Hello'.to_gtv()])", """op[foo(123,"Hello")]""")
 
-        chk("rell.test.op('foo', 123)", "ct_err:expr_call_argtypes:op:text,integer")
-        chk("rell.test.op('foo', 'Hello')", "ct_err:expr_call_argtypes:op:text,text")
+        chk("rell.test.op('foo', 123)", "ct_err:expr_call_argtypes:[rell.test.op]:text,integer")
+        chk("rell.test.op('foo', 'Hello')", "ct_err:expr_call_argtypes:[rell.test.op]:text,text")
 
         chk("rell.test.op('', list<gtv>())", "rt_err:rell.test.op:bad_name:")
         chk("rell.test.op('123', list<gtv>())", "rt_err:rell.test.op:bad_name:123")
@@ -282,7 +283,8 @@ class LibRellTestTxTest: BaseRellTest(false) {
 
         repl.chk("val op = foo(123);")
         repl.chk("op.run();", "OUT:123", "null")
-        repl.chk("op.run_must_fail();", "null")
+        repl.chk("op.run_must_fail();", "Failed to save tx to database")
+        repl.chk("op.run_must_fail('Failed to save tx to database');", "Failed to save tx to database")
     }
 
     @Test fun testOpTypeCompatibility() {
@@ -359,7 +361,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         val expr = "data @? {} ( @sort_desc _=.rowid, _=.x, _=.signers ) limit 1"
         repl.chk(expr, "null")
         repl.chk("val kp = rell.test.keypair(priv = rell.test.privkeys.bob, pub = rell.test.pubkeys.alice);")
-        repl.chk("foo(100).sign(kp).run();", "RTE:fn:rell.test.tx.run:fail:${TransactionIncorrect::class.qualifiedName}")
+        repl.chk("foo(100).sign(kp).run();", "rt_err:fn:rell.test.tx.run:fail:${TransactionIncorrect::class.qualifiedName}")
         repl.chk(expr, "null")
     }
 
@@ -379,7 +381,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         file("module.rell", "operation foo(x: integer) { print(x); }")
         initTxChain()
 
-        val err = "RTE:fn:rell.test.tx.run:fail:${TransactionIncorrect::class.qualifiedName}"
+        val err = "rt_err:fn:rell.test.tx.run:fail:${TransactionIncorrect::class.qualifiedName}"
 
         repl.chk("rell.test.tx(foo(123)).run();", "OUT:123", "null")
         repl.chk("rell.test.tx(rell.test.op('nop')).run();", err)
@@ -404,21 +406,39 @@ class LibRellTestTxTest: BaseRellTest(false) {
         repl.chk("foo(123).run();", "OUT:123", "null")
         repl.chk("block @? {} ( @sort_desc .block_height ) limit 1", "0")
 
-        repl.chk("foo(-1).run();", "RTE:req:null")
+        repl.chk("foo(-1).run();", "req_err:null")
         repl.chk("block @? {} ( @sort_desc .block_height ) limit 1", "0")
 
-        repl.chk("foo(456).run_must_fail();", "OUT:456", "RTE:fn:rell.test.op.run_must_fail:nofail")
+        repl.chk("foo(456).run_must_fail();", "OUT:456", "rt_err:fn:rell.test.op.run_must_fail:nofail")
         repl.chk("block @? {} ( @sort_desc .block_height ) limit 1", "1")
 
-        repl.chk("foo(-1).run_must_fail();", "null")
+        repl.chk("foo(-1).run_must_fail();", "Requirement error")
         repl.chk("block @? {} ( @sort_desc .block_height ) limit 1", "1")
+    }
+
+    @Test fun testRunMustFailExpected() {
+        file("module.rell", "operation foo(x: integer) { require(x > 0, 'x is negative: ' + x); }")
+        initTxChain()
+        repl.chk("foo(123).run_must_fail('x is negative: -1');", "rt_err:fn:rell.test.op.run_must_fail:nofail")
+        repl.chk("foo(-1).run_must_fail('x is negative: -1');", "x is negative: -1")
+        repl.chk("foo(-1).run_must_fail('x is negative: -2');", "asrt_err:run_must_fail:mismatch:[x is negative: -2]:[x is negative: -1]")
+    }
+
+    @Test fun testRunMustFailResult() {
+        file("module.rell", "operation foo(x: integer) { require(x > 0, 'x is negative: ' + x); }")
+        initTxChain()
+        repl.outPlainValues = false
+        repl.chk("_type_of(foo(-1).run_must_fail());", "RES:text[rell.test.failure]")
+        repl.chk("_type_of(foo(-1).run_must_fail('x is negative: -1'));", "RES:text[rell.test.failure]")
+        repl.chk("foo(-1).run_must_fail();", "RES:rell.test.failure[x is negative: -1]")
+        repl.chk("foo(-1).run_must_fail('x is negative: -1');", "RES:rell.test.failure[x is negative: -1]")
     }
 
     @Test fun testDuplicateTx() {
         file("module.rell", "operation foo(x: integer) { print(x); }")
         initTxChain()
         repl.chk("foo(123).run();", "OUT:123", "null")
-        repl.chk("foo(123).run();", "RTE:fn:rell.test.op.run:fail:${UserMistake::class.qualifiedName}")
+        repl.chk("foo(123).run();", "rt_err:fn:rell.test.op.run:fail:${UserMistake::class.qualifiedName}")
         repl.chk("foo(456).run();", "OUT:456", "null")
         repl.chk("block @* {} ( .block_height )", "[0, 1]")
     }

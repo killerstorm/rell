@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.fn
@@ -8,13 +8,11 @@ import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_TypeAdapter
 import net.postchain.rell.compiler.base.core.C_TypeAdapter_Direct
 import net.postchain.rell.compiler.base.core.C_TypeHint
-import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_MemberLink
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
-import net.postchain.rell.compiler.base.namespace.C_DefProxy
-import net.postchain.rell.compiler.base.namespace.C_DefProxyDeprecation
 import net.postchain.rell.compiler.base.namespace.C_Deprecated
+import net.postchain.rell.compiler.base.namespace.C_NamespaceElement
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_GlobalConstantRestriction
@@ -199,15 +197,14 @@ class C_GlobalFuncCaseCtx(
     fun filePos() = linkPos.toFilePos()
 }
 
-class C_MemberFuncCaseCtx(val member: C_MemberLink, val memberName: R_Name): C_FuncCaseCtx(member.linkPos) {
-    private val qualifiedNameMsgLazy: LazyString = LazyString.of {
-        val baseType = C_Types.removeNullable(member.base.type)
-        "${baseType.strCode()}.$memberName"
-    }
-
+class C_MemberFuncCaseCtx(
+    val member: C_MemberLink,
+    private val memberName: R_Name,
+    private val fullName: LazyString,
+): C_FuncCaseCtx(member.linkPos) {
     override fun simpleNameMsg() = memberName.str
-    override fun qualifiedNameMsg() = qualifiedNameMsgLazy.value
-    override fun qualifiedNameMsgLazy() = qualifiedNameMsgLazy
+    override fun qualifiedNameMsg() = fullName.value
+    override fun qualifiedNameMsgLazy() = fullName
 }
 
 abstract class C_FuncCase<CtxT: C_FuncCaseCtx> {
@@ -260,11 +257,12 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
         }
 
         private fun deprecatedMessage(ctx: C_ExprContext, caseCtx: CtxT) {
-            C_DefProxy.deprecatedMessage(
+            C_NamespaceElement.deprecatedMessage(
                     ctx.msgCtx,
                     caseCtx.linkPos,
                     caseCtx.qualifiedNameMsg(),
-                    C_DefProxyDeprecation(C_DeclarationType.FUNCTION, deprecated)
+                    C_DeclarationType.FUNCTION,
+                    deprecated
             )
         }
     }
@@ -275,11 +273,12 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
         override fun matchesType(fnType: R_FunctionType) = target.matchesType(fnType)
 
         override fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): V_Expr {
-            C_DefProxy.deprecatedMessage(
+            C_NamespaceElement.deprecatedMessage(
                     ctx.msgCtx,
                     callPos,
                     fullName.value,
-                    C_DefProxyDeprecation(C_DeclarationType.FUNCTION, deprecated)
+                    C_DeclarationType.FUNCTION,
+                    deprecated
             )
             return target.compileCall(ctx, args)
         }
@@ -356,6 +355,6 @@ object C_FuncMatchUtils {
         if (args.any { it.isError() }) return
         val argsStrShort = args.joinToString(",") { it.strCode() }
         val argsStr = args.joinToString { it.strCode() }
-        ctx.msgCtx.error(pos, "expr_call_argtypes:$name:$argsStrShort", "Function '$name' undefined for arguments ($argsStr)")
+        ctx.msgCtx.error(pos, "expr_call_argtypes:[$name]:$argsStrShort", "Function '$name' undefined for arguments ($argsStr)")
     }
 }

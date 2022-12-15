@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
@@ -48,7 +48,7 @@ class V_BinaryExpr(
         val dbLeft = left.toDbExpr()
         val dbRight = right.toDbExpr()
         return if (op.dbOp == null) {
-            C_BinOp.errTypeMismatch(msgCtx, pos, op.code, left.type, right.type)
+            C_BinOp.errTypeMismatchDb(msgCtx, pos, op.code, dbLeft.type, dbRight.type)
             C_ExprUtils.errorDbExpr(op.resType)
         } else {
             Db_BinaryExpr(op.resType, op.dbOp, dbLeft, dbRight)

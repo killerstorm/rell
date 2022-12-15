@@ -1,17 +1,16 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.repl
 
 import com.google.common.base.Throwables
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_Message
 import net.postchain.rell.compiler.base.utils.C_Parser
 import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlManager
@@ -66,8 +65,7 @@ object ReplShell {
         val v = Rt_RellVersion.getInstance()
         if (v == null) return "Version unknown"
         val ver = v.properties[Rt_RellVersionProperty.RELL_VERSION] ?: "[unknown version]"
-        val time = v.properties[Rt_RellVersionProperty.RELL_BUILD_TIME] ?: "unknown time"
-        return "Rell $ver ($time)"
+        return "Rell $ver"
     }
 
     private fun createConsole(): ReplConsole {
@@ -109,9 +107,9 @@ private object CliReplOutputChannel: ReplOutputChannel {
         println(message)
     }
 
-    override fun printRuntimeError(e: Rt_BaseError, stack: List<R_StackPos>?) {
+    override fun printRuntimeError(e: Rt_Exception) {
         val msg = "Run-time error: ${e.message}"
-        val fullMsg = if (stack == null) msg else Rt_Utils.appendStackTrace(msg, stack)
+        val fullMsg = Rt_Utils.appendStackTrace(msg, e.info.stack)
         println(fullMsg.trim())
     }
 

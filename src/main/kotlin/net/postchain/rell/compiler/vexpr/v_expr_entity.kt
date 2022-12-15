@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
@@ -19,7 +19,17 @@ class V_EntityAttrExpr(
         private val attrRef: C_EntityAttrRef,
         private val resultType: R_Type
 ): V_Expr(exprCtx, memberLink.base.pos) {
-    private val path = toPath()
+    private val path: List<V_EntityAttrExpr> = let {
+        val path = mutableListOf<V_EntityAttrExpr>()
+        var expr: V_Expr = this
+        while (expr is V_EntityAttrExpr) {
+            path.add(expr)
+            expr = expr.memberLink.base
+        }
+        path.reverse()
+        path.toImmList()
+    }
+
     private val cLambda = createLambda(exprCtx, path.first().attrRef.rEntity)
 
     override fun exprInfo0() = V_ExprInfo.simple(resultType, memberLink.base)
@@ -39,21 +49,10 @@ class V_EntityAttrExpr(
         val atEntity = exprCtx.makeAtEntity(first.attrRef.rEntity, exprCtx.appCtx.nextAtExprId())
 
         val dbExpr = toDbExprPath(atEntity, path)
-        val whatValue = Db_AtWhatValue_DbExpr(dbExpr, path.last().attrRef.type())
+        val whatValue = Db_AtWhatValue_DbExpr(dbExpr, path.last().attrRef.type)
         val whatField = Db_AtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
 
         return createRExpr(first.memberLink.base, atEntity, whatField, first.memberLink.safe, resultType, cLambda)
-    }
-
-    private fun toPath(): List<V_EntityAttrExpr> {
-        val path = mutableListOf<V_EntityAttrExpr>()
-        var expr: V_Expr = this
-        while (expr is V_EntityAttrExpr) {
-            path.add(expr)
-            expr = expr.memberLink.base
-        }
-        path.reverse()
-        return path.toImmList()
     }
 
     private fun toDbExprPath(atEntity: R_DbAtEntity, path: List<V_EntityAttrExpr>): Db_Expr {
@@ -69,17 +68,20 @@ class V_EntityAttrExpr(
     override fun toDbExpr0(): Db_Expr {
         val dbBase = memberLink.base.toDbExpr()
         val dbBaseTable = asTableExpr(dbBase)
-        dbBaseTable ?: return C_ExprUtils.errorDbExpr(attrRef.type())
+        dbBaseTable ?: return C_ExprUtils.errorDbExpr(attrRef.type)
         return attrRef.createDbMemberExpr(exprCtx, dbBaseTable)
     }
 
     override fun destination(): C_Destination {
+        if (memberLink.base.info.dependsOnDbAtEntity) {
+            return super.destination()
+        }
         val attr = attrRef.attribute()
         if (attr == null || !attr.mutable) {
             throw C_Errors.errAttrNotMutable(memberLink.linkPos, attrRef.attrName.str)
         }
         exprCtx.checkDbUpdateAllowed(pos)
-        return C_EntityAttrDestination(memberLink.base, attrRef.rEntity, attr)
+        return C_Destination_EntityAttr(memberLink.base, attrRef.rEntity, attr)
     }
 
     private fun asTableExpr(dbExpr: Db_Expr): Db_TableExpr? {

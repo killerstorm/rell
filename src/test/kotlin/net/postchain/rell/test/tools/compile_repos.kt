@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test.tools
@@ -10,7 +10,9 @@ import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.toImmMultimapKey
 import org.apache.commons.lang3.StringUtils
 import java.io.File
 import kotlin.system.exitProcess
@@ -24,7 +26,9 @@ fun main(args: Array<String>) {
 private class VerDir(
         val repo: String,
         val dir: File,
-        val infoFile: File
+        val infoFile: File,
+        val gitVer: String,
+        val rellVer: R_LangVersion?,
 )
 
 private class RunInfo(
@@ -48,25 +52,42 @@ private class ReposCompiler {
                 if (!subFile.isDirectory) continue
                 val verDir = subFile
                 check(verDir.isDirectory) { verDir }
-                val verName = verDir.name
-                check(verName.matches(Regex("\\d{4}-\\d{2}-\\d{2}__[0-9a-f]{7}"))) { verDir }
-                verDirs.add(VerDir(repoDir.name, verDir, File(verDir, "info.txt")))
+                val (gitVer, rellVer) = parseVerDirName(verDir)
+                verDirs.add(VerDir(repoDir.name, verDir, File(verDir, "info.txt"), gitVer, rellVer))
             }
         }
 
         val noInfo = verDirs.filter { !it.infoFile.isFile }
         if (noInfo.isNotEmpty()) {
             println("No info.txt: ${noInfo.size}")
-            for (verDir in noInfo) println(verDir.dir)
+            for (verDir in noInfo.sortedBy { it.dir }) println(verDir.dir)
             exitProcess(1)
         }
 
-        for (verDir in verDirs) {
-            processVer(verDir)
+        val repoMap = verDirs.toImmMultimapKey { it.repo }
+        for (repo in repoMap.keySet().sorted()) {
+            val verMap = repoMap[repo].toImmMultimapKey { it.gitVer }
+            for (gitVer in verMap.keySet().sorted()) {
+                val vers = verMap[gitVer].sortedBy { it.rellVer ?: R_LangVersion.of("0.0.0") }.reversed()
+                val verDir = vers.firstOrNull { it.rellVer == null || RellVersions.VERSION >= it.rellVer }
+                if (verDir != null) {
+                    processVer(verDir)
+                }
+            }
         }
 
         println("---------------------------------------------------------------------------")
         println("Failed $errCount / $totCount")
+    }
+
+    private fun parseVerDirName(verDir: File): Pair<String, R_LangVersion?> {
+        val verName = verDir.name
+        check(verName.matches(Regex("\\d{4}-\\d{2}-\\d{2}__[0-9a-f]{7}(__[0-9]+[.][0-9]+[.][0-9]+)?"))) { verDir }
+        val parts = verName.split("__")
+        check(parts.size == 2 || parts.size == 3) { parts }
+        val gitVer = parts[0] + "__" + parts[1]
+        val rellVer = if (parts.size == 2) null else R_LangVersion.of(parts[2])
+        return gitVer to rellVer
     }
 
     private fun processVer(verDir: VerDir) {
@@ -106,10 +127,11 @@ private class ReposCompiler {
         }
 
         val resStr = if (err) "*** ERROR ***" else "ok"
+        println("$repoName - $verName - ${runInfo.srcPath} - [${runInfo.module}] ==> $resStr")
+
         for (msg in res.errors) {
             println("    $msg")
         }
-        println("$repoName - $verName - ${runInfo.srcPath} - [${runInfo.module}] ==> $resStr")
     }
 }
 

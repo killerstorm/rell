@@ -1,15 +1,26 @@
 image: maven:3.8.4-jdk-11
 
+.setup:
+  artifacts:
+    when: always
+    reports:
+      junit:
+        - "target/surefire-reports/TEST-*.xml"
+        - "target/failsafe-reports/TEST-*.xml"
+    expire_in: 1 week
+
 deploy:
+  extends: .setup
   stage: deploy
   only:
     - master
     - dev
     - /^v0..*/
   script:
-    - mvn $MAVEN_CLI_OPTS deploy
+    - mvn $MAVEN_CLI_OPTS source:jar deploy
 
 build:
+  extends: .setup
   stage: build
   except:
     - master

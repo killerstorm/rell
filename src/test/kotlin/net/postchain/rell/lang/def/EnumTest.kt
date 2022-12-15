@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -13,12 +13,12 @@ class EnumTest: BaseRellTest() {
         chk("foo.A", "foo[A]")
         chk("foo.B", "foo[B]")
         chk("foo.C", "foo[C]")
-        chk("foo.X", "ct_err:unknown_name:foo.X")
+        chk("foo.X", "ct_err:unknown_name:[foo]:X")
 
-        chk("foo", "ct_err:expr_novalue:enum")
-        chk("'' + foo", "ct_err:expr_novalue:enum")
+        chk("foo", "ct_err:expr_novalue:enum:[foo]")
+        chk("'' + foo", "ct_err:expr_novalue:enum:[foo]")
         chk("_type_of(foo.A)", "text[foo]")
-        chk("_type_of(foo)", "ct_err:expr_novalue:enum")
+        chk("_type_of(foo)", "ct_err:expr_novalue:enum:[foo]")
     }
 
     @Test fun testOperators() {
@@ -147,12 +147,12 @@ class EnumTest: BaseRellTest() {
         chk("foo.value('C')", "foo[C]")
         chk("foo.value('D')", "rt_err:enum_badname:foo:D")
 
-        chk("foo.value(true)", "ct_err:expr_call_argtypes:value:boolean")
-        chk("foo.value(null)", "ct_err:expr_call_argtypes:value:null")
-        chk("foo.value(foo.A)", "ct_err:expr_call_argtypes:value:foo")
+        chk("foo.value(true)", "ct_err:expr_call_argtypes:[foo.value]:boolean")
+        chk("foo.value(null)", "ct_err:expr_call_argtypes:[foo.value]:null")
+        chk("foo.value(foo.A)", "ct_err:expr_call_argtypes:[foo.value]:foo")
     }
 
-    @Test fun testMemberFunctions() {
+    @Test fun testMemberProperties() {
         def("enum foo { A, B, C }")
 
         chk("foo.A.name", "text[A]")
@@ -162,9 +162,14 @@ class EnumTest: BaseRellTest() {
         chk("foo.A.value", "int[0]")
         chk("foo.B.value", "int[1]")
         chk("foo.C.value", "int[2]")
+
+        chkEx("{ foo.A.name = 'X'; return 0; }", "ct_err:attr_not_mutable:name")
+        chkEx("{ foo.A.value = 123; return 0; }", "ct_err:attr_not_mutable:value")
+        chkEx("{ val v = foo.A; v.name = 'X'; return 0; }", "ct_err:attr_not_mutable:name")
+        chkEx("{ val v = foo.A; v.value = 123; return 0; }", "ct_err:attr_not_mutable:value")
     }
 
-    @Test fun testMemberFunctionsAt() {
+    @Test fun testMemberPropertiesAt() {
         def("enum foo { A, B, C }")
         def("entity user { name; foo; }")
         insert("c0.user", "name,foo", "1,'Bob',0")
@@ -203,5 +208,14 @@ class EnumTest: BaseRellTest() {
 
         chkEx("{ val f: foo? = nop(foo.A); return _type_of(f?.name); }", "text[text?]")
         chkEx("{ val f: foo? = nop(foo.A); return _type_of(f?.value); }", "text[integer?]")
+    }
+
+    @Test fun testValueFunctionConflict() {
+        def("enum foo { a, value }")
+        def("enum bar { b, values }")
+        chk("foo.value", "foo[value]")
+        chk("foo.value(0)", "foo[a]")
+        chk("bar.values", "bar[values]")
+        chk("bar.values()", "list<bar>[bar[b],bar[values]]")
     }
 }

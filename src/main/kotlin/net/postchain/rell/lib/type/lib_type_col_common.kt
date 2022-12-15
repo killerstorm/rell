@@ -4,13 +4,29 @@
 
 package net.postchain.rell.lib.type
 
-import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher
-import net.postchain.rell.compiler.base.fn.C_ArgTypeMatcher_CollectionSub
+import net.postchain.rell.compiler.ast.S_CallArgument
+import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_ForIterator
+import net.postchain.rell.compiler.base.core.C_NamespaceContext
+import net.postchain.rell.compiler.base.core.C_TypeHint
+import net.postchain.rell.compiler.base.core.C_Types
+import net.postchain.rell.compiler.base.def.C_GlobalFunction
+import net.postchain.rell.compiler.base.expr.C_CallTypeHints
+import net.postchain.rell.compiler.base.expr.C_CallTypeHints_None
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.compiler.base.fn.*
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.base.utils.C_LibUtils.depError
-import net.postchain.rell.compiler.base.utils.C_MemberFuncBuilder
-import net.postchain.rell.compiler.base.utils.C_SysFunction
+import net.postchain.rell.compiler.vexpr.V_CopyCollectionConstructorExpr
+import net.postchain.rell.compiler.vexpr.V_EmptyCollectionConstructorExpr
+import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.R_CollectionKind
 import net.postchain.rell.runtime.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.LazyPosString
+import net.postchain.rell.utils.LazyString
 import net.postchain.rell.lib.type.C_Lib_Type_Any as AnyFns
 
 private fun matcherColSub(elementType: R_Type): C_ArgTypeMatcher = C_ArgTypeMatcher_CollectionSub(elementType)
@@ -43,6 +59,128 @@ object C_Lib_Type_Collection {
         val comparator = elemType.comparator()
         if (comparator != null) {
             b.add("sorted", listType, listOf(), ColFns.Sorted(listType, comparator))
+        }
+    }
+
+    fun checkElementType(pos: S_Pos, declaredType: R_Type?, argumentType: R_Type, errCode: String, errMsg: String): R_Type {
+        if (declaredType == null) {
+            return argumentType
+        }
+
+        C_Errors.check(declaredType.isAssignableFrom(argumentType), pos) {
+            "$errCode:${declaredType.strCode()}:${argumentType.strCode()}" toCodeMsg
+                    "$errMsg: ${argumentType.strCode()} instead of ${declaredType.strCode()}"
+        }
+
+        return declaredType
+    }
+}
+
+abstract class C_CollectionKindAdapter(val rawTypeName: String) {
+    abstract fun elementTypeFromTypeHint(typeHint: C_TypeHint): R_Type?
+    abstract fun makeKind(rElementType: R_Type): R_CollectionKind
+
+    protected abstract fun checkElementType0(ctx: C_NamespaceContext, pos: S_Pos, elemTypePos: S_Pos, rElemType: R_Type)
+
+    fun checkElementType(ctx: C_NamespaceContext, pos: S_Pos, elemTypePos: S_Pos, rElemType: R_Type) {
+        val checkedType = C_Types.checkNotUnit(ctx.msgCtx, elemTypePos, rElemType, null) {
+            "$rawTypeName:elem" toCodeMsg "$rawTypeName element"
+        }
+        if (checkedType.isNotError()) {
+            checkElementType0(ctx, pos, elemTypePos, rElemType)
+        }
+    }
+}
+
+class C_CollectionConstructorFunction(
+    private val kindAdapter: C_CollectionKindAdapter,
+    private val rExplicitElementType: R_Type?,
+): C_GlobalFunction(IdeSymbolInfo.DEF_TYPE) {
+    private val colType = kindAdapter.rawTypeName
+
+    override fun compileCall(
+        ctx: C_ExprContext,
+        name: LazyPosString,
+        args: List<S_CallArgument>,
+        resTypeHint: C_TypeHint
+    ): V_Expr {
+        val target = C_FunctionCallTarget_CollectionConstructorFunction(ctx, name, resTypeHint)
+        val vExpr = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
+        return vExpr ?: C_ExprUtils.errorVExpr(ctx, name.pos)
+    }
+
+    private fun requireType(pos: S_Pos, rType: R_Type?): R_Type {
+        return C_Errors.checkNotNull(rType, pos) {
+            "expr_${colType}_notype" toCodeMsg "Element type not specified for '$colType'"
+        }
+    }
+
+    private inner class C_FunctionCallTarget_CollectionConstructorFunction(
+        private val ctx: C_ExprContext,
+        private val name: LazyPosString,
+        private val resTypeHint: C_TypeHint,
+    ): C_FunctionCallTarget() {
+        override fun retType() = null
+        override fun typeHints(): C_CallTypeHints = C_CallTypeHints_None
+        override fun hasParameter(name: R_Name) = false
+
+        override fun compileFull(args: C_FullCallArguments): V_Expr? {
+            val vArgs = args.compileSimpleArgs(LazyString.of(colType))
+            return if (vArgs.size == 0) {
+                compileNoArgs(ctx, resTypeHint, rExplicitElementType)
+            } else if (vArgs.size == 1) {
+                val vArg = vArgs[0]
+                compileOneArg(ctx, rExplicitElementType, vArg)
+            } else {
+                ctx.msgCtx.error(name.pos, "expr_${colType}_argcnt:${vArgs.size}",
+                    "Wrong number of arguments for '$colType': ${vArgs.size}")
+                null
+            }
+        }
+
+        private fun compileNoArgs(
+            ctx: C_ExprContext,
+            typeHint: C_TypeHint,
+            rType: R_Type?
+        ): V_Expr {
+            val elemType = rType ?: kindAdapter.elementTypeFromTypeHint(typeHint)
+            val rTypeReq = requireType(name.pos, elemType)
+            val kind = kindAdapter.makeKind(rTypeReq)
+            return V_EmptyCollectionConstructorExpr(ctx, name.pos, kind)
+        }
+
+        private fun compileOneArg(
+            ctx: C_ExprContext,
+            rType: R_Type?,
+            vArg: V_Expr
+        ): V_Expr {
+            val rArgType = vArg.type
+            val cIterator = C_ForIterator.compile(ctx, rArgType, false)
+
+            if (cIterator == null) {
+                throw C_Error.more(name.pos, "expr_${colType}_badtype:${rArgType.strCode()}",
+                    "Wrong argument type for '$colType': ${rArgType.strCode()}")
+            }
+
+            val rElementType = C_Lib_Type_Collection.checkElementType(
+                name.pos,
+                rType,
+                cIterator.itemType,
+                "expr_${colType}_typemiss",
+                "Element type mismatch for '$colType'"
+            )
+
+            if (rType == null) {
+                kindAdapter.checkElementType(ctx.nsCtx, name.pos, vArg.pos, cIterator.itemType)
+            }
+
+            val kind = kindAdapter.makeKind(rElementType)
+            return V_CopyCollectionConstructorExpr(ctx, name.pos, kind, vArg, cIterator)
+        }
+
+        override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr? {
+            args.errPartialNotSupported(colType)
+            return null
         }
     }
 }

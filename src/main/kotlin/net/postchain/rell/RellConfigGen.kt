@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell
@@ -14,6 +14,7 @@ import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.compiler.base.utils.C_SourcePath
+import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.ConfigConstants
@@ -77,7 +78,8 @@ class RellConfigGen(
         private val sourceDir: C_SourceDir,
         private val sourceVersion: R_LangVersion,
         private val modules: List<R_ModuleName>,
-        private val moduleFiles: List<C_SourcePath>
+        private val moduleFiles: List<C_SourcePath>,
+        private val app: R_App?,
 ) {
     fun makeConfig(): Gtv {
         val template = GtvFactory.gtv(mapOf())
@@ -107,27 +109,6 @@ class RellConfigGen(
         } catch (e: Exception) {
             throw RellCliErr("Failed to parse template XML: ${e.message}")
         }
-    }
-
-    fun getModuleSources(): RellModuleSources {
-        val files = mutableMapOf<String, String>()
-
-        try {
-            for (path in moduleFiles) {
-                val file = sourceDir.file(path)
-                if (file == null) throw RellCliErr("File not found: $path")
-                val text = file.readText()
-                files[path.str()] = text
-            }
-        } catch (e: C_Error) {
-            throw RellCliErr(e.message!!)
-        } catch (e: Exception) {
-            throw RellCliErr(e.message ?: "unknown")
-        }
-
-        val modules2 = modules.map { it.str() }
-
-        return RellModuleSources(modules2, files)
     }
 
     private fun injectRellFiles(template: GtvNode, files: Map<String, String>, modules: List<String>) {
@@ -186,6 +167,52 @@ class RellConfigGen(
         return RellCliErr("Found $type instead of ${expected} ($pathStr)")
     }
 
+    fun getModuleSources(): RellModuleSources {
+        val files = mutableMapOf<String, String>()
+
+        try {
+            for (path in moduleFiles) {
+                val file = sourceDir.file(path)
+                file ?: throw RellCliErr("File not found: $path")
+                val text = file.readText()
+                files[path.str()] = text
+            }
+        } catch (e: C_Error) {
+            throw RellCliErr(e.message!!)
+        } catch (e: Exception) {
+            throw RellCliErr(e.message ?: "unknown")
+        }
+
+        val modules2 = modules.map { it.str() }
+
+        return RellModuleSources(modules2, files)
+    }
+
+    fun checkModuleArgs(actualArgs: Map<R_ModuleName, Gtv>) {
+        app ?: return
+
+        val expectedArgs = app.moduleMap
+            .filterValues { it.moduleArgs != null }
+            .mapValues { it.value.moduleArgs!! }
+            .toImmMap()
+
+        val missingModules = expectedArgs.keys.filter { it !in actualArgs }.sorted().toImmList()
+        if (missingModules.isNotEmpty()) {
+            val modulesStr = missingModules.joinToString(", ") { it.displayStr() }
+            throw RellCliErr("Missing module_args for module(s): $modulesStr")
+        }
+
+        for (module in expectedArgs.keys.sorted()) {
+            val expected = expectedArgs.getValue(module)
+            val actual = actualArgs.getValue(module)
+            try {
+                PostchainUtils.moduleArgsGtvToRt(expected, actual)
+            } catch (e: Throwable) {
+                throw RellCliErr("Bad module_args for module '${module.str()}': ${e.message}")
+            }
+        }
+    }
+
     companion object {
         fun create(cliEnv: RellCliEnv, target: RellCliTarget): RellConfigGen {
             return create(cliEnv, target.sourceDir, target.modules)
@@ -195,7 +222,7 @@ class RellConfigGen(
             val modSel = C_CompilerModuleSelection(modules)
             val cRes = RellCliUtils.compile(cliEnv, sourceDir, modSel, true, C_CompilerOptions.DEFAULT)
             checkCompilationResult(cliEnv, cRes, modules)
-            return RellConfigGen(sourceDir, RellVersions.VERSION, modules, cRes.files)
+            return RellConfigGen(sourceDir, RellVersions.VERSION, modules, cRes.files, cRes.app)
         }
 
         private fun checkCompilationResult(cliEnv: RellCliEnv, cRes: C_CompilationResult, modules: List<R_ModuleName>) {

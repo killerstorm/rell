@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.expr
@@ -47,10 +47,10 @@ class IncrementTest: BaseRellTest(false) {
         chkOp("$init; print(--f.x);", "ct_err:expr_arg_unit")
         chkData("foo(1,123,456)")
 
-        chkOp("$init; f.y++;", "ct_err:update_attr_not_mutable:y")
-        chkOp("$init; f.y--;", "ct_err:update_attr_not_mutable:y")
-        chkOp("$init; ++f.y;", "ct_err:update_attr_not_mutable:y")
-        chkOp("$init; --f.y;", "ct_err:update_attr_not_mutable:y")
+        chkOp("$init; f.y++;", "ct_err:attr_not_mutable:y")
+        chkOp("$init; f.y--;", "ct_err:attr_not_mutable:y")
+        chkOp("$init; ++f.y;", "ct_err:attr_not_mutable:y")
+        chkOp("$init; --f.y;", "ct_err:attr_not_mutable:y")
 
         chkEx("{ $init; f.x++; return 0; }", "ct_err:no_db_update:query")
         chkEx("{ $init; f.x--; return 0; }", "ct_err:no_db_update:query")
@@ -79,10 +79,10 @@ class IncrementTest: BaseRellTest(false) {
         chkOp("print(++foo.x);", "ct_err:expr_arg_unit")
         chkOp("print(--foo.x);", "ct_err:expr_arg_unit")
 
-        chkOp("foo.y++;", "ct_err:update_attr_not_mutable:y")
-        chkOp("foo.y--;", "ct_err:update_attr_not_mutable:y")
-        chkOp("++foo.y;", "ct_err:update_attr_not_mutable:y")
-        chkOp("--foo.y;", "ct_err:update_attr_not_mutable:y")
+        chkOp("foo.y++;", "ct_err:attr_not_mutable:y")
+        chkOp("foo.y--;", "ct_err:attr_not_mutable:y")
+        chkOp("++foo.y;", "ct_err:attr_not_mutable:y")
+        chkOp("--foo.y;", "ct_err:attr_not_mutable:y")
 
         chkEx("{ foo.x++; return 0; }", "ct_err:no_db_update:query")
         chkEx("{ foo.x--; return 0; }", "ct_err:no_db_update:query")
@@ -103,10 +103,10 @@ class IncrementTest: BaseRellTest(false) {
         chkEx("{ val f = foo(); val y = ++f.x; return (f.x, y); }", "(int[124],int[124])")
         chkEx("{ val f = foo(); val y = --f.x; return (f.x, y); }", "(int[122],int[122])")
 
-        chkEx("{ val f = foo(); f.y++; return f; }", "ct_err:update_attr_not_mutable:y")
-        chkEx("{ val f = foo(); f.y--; return f; }", "ct_err:update_attr_not_mutable:y")
-        chkEx("{ val f = foo(); ++f.y; return f; }", "ct_err:update_attr_not_mutable:y")
-        chkEx("{ val f = foo(); --f.y; return f; }", "ct_err:update_attr_not_mutable:y")
+        chkEx("{ val f = foo(); f.y++; return f; }", "ct_err:attr_not_mutable:y")
+        chkEx("{ val f = foo(); f.y--; return f; }", "ct_err:attr_not_mutable:y")
+        chkEx("{ val f = foo(); ++f.y; return f; }", "ct_err:attr_not_mutable:y")
+        chkEx("{ val f = foo(); --f.y; return f; }", "ct_err:attr_not_mutable:y")
     }
 
     @Test fun testOperandList() {

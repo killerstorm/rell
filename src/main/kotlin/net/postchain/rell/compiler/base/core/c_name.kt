@@ -1,11 +1,12 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.core
 
 import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.utils.C_RNamePath
 import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_QualifiedName
@@ -40,6 +41,7 @@ class C_QualifiedName(parts: List<C_Name>) {
     fun add(name: C_Name) = C_QualifiedName(parts + name)
     fun parentPath() = parts.dropLast(1).toImmList()
     fun toRName() = R_QualifiedName(parts.map { it.rName })
+    fun toPath() = C_RNamePath.of(parts.map { it.rName })
 
     fun str() = parts.joinToString(".")
     override fun toString() = str()
@@ -49,7 +51,6 @@ sealed class C_NameHandle(val pos: S_Pos, val rName: R_Name) {
     val str = rName.str
     val name = C_Name.make(pos, rName)
 
-    abstract fun allowRedefinition()
     abstract fun setIdeInfo(info: IdeSymbolInfo)
 }
 
@@ -61,15 +62,13 @@ class C_QualifiedNameHandle(parts: List<C_NameHandle>) {
 
     val pos = this.parts.first().pos
     val last = this.parts.last()
+    val size: Int get() = this.parts.size
+    val first: C_NameHandle get() = this.parts.first()
     val qName = C_QualifiedName(this.parts.map { it.name })
 
     constructor(name: C_NameHandle): this(immListOf(name))
 
     fun parentParts(): List<C_NameHandle> = parts.subList(0, parts.size - 1)
-
-    fun allowRedefinition() {
-        parts.forEach { it.allowRedefinition() }
-    }
 
     fun setIdeInfo(infos: List<IdeSymbolInfo>) {
         checkEquals(infos.size, parts.size)
@@ -107,10 +106,6 @@ object C_NopSymbolContext: C_SymbolContext() {
     }
 
     private class C_NopNameHandle(pos: S_Pos, rName: R_Name): C_NameHandleAbstract(pos, rName) {
-        override fun allowRedefinition() {
-            // Do nothing.
-        }
-
         override fun setIdeInfo(info: IdeSymbolInfo) {
             // Do nothing.
         }
@@ -160,10 +155,9 @@ private class C_DefaultSymbolContext: C_SymbolContext() {
 
         private var mIdeInfo: IdeSymbolInfo? = null
         private var ideInfoStack: Throwable? = null
-        private var isRedefAllowed = false
 
         fun redefinition() {
-            if (!isRedefAllowed && CommonUtils.IS_UNIT_TEST) {
+            if (CommonUtils.IS_UNIT_TEST) {
                 throw RuntimeException("Name already compiled: $rName (Stack 2)", initStack)
             }
         }
@@ -173,13 +167,6 @@ private class C_DefaultSymbolContext: C_SymbolContext() {
                 throw IllegalStateException("No IDE info: $rName", initStack)
             }
             return mIdeInfo
-        }
-
-        //FIXME ideally must never be allowed, but at the moment cannot be achieved
-        override fun allowRedefinition() {
-            check(!isRedefAllowed)
-            check(mIdeInfo == null)
-            isRedefAllowed = true
         }
 
         override fun setIdeInfo(info: IdeSymbolInfo) {

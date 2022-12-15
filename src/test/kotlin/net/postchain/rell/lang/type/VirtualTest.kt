@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.type
@@ -335,8 +335,8 @@ class VirtualTest: BaseGtxTest(false) {
     @Test fun testStructAttrMutable() {
         def("struct rec { mutable i: integer; mutable t: text; }")
         var args = argToGtv("[123,'Hello']", "[[0],[1]]")
-        chkVirtualEx("virtual<rec>", "{ x.i = 456; return 0; }", args, "ct_err:update_attr_not_mutable:i")
-        chkVirtualEx("virtual<rec>", "{ x.t = 'Bye'; return 0; }", args, "ct_err:update_attr_not_mutable:t")
+        chkVirtualEx("virtual<rec>", "{ x.i = 456; return 0; }", args, "ct_err:attr_not_mutable:i")
+        chkVirtualEx("virtual<rec>", "{ x.t = 'Bye'; return 0; }", args, "ct_err:attr_not_mutable:t")
 
         chkVirtualEx("virtual<rec>", " = x.foo;", args, "ct_err:unknown_member:[virtual<rec>]:foo")
         chkVirtualEx("virtual<rec>", " = x.foo();", args, "ct_err:unknown_member:[virtual<rec>]:foo")
@@ -896,6 +896,11 @@ class VirtualTest: BaseGtxTest(false) {
         chkVirtualEx(type, "= _strict_str(x.empty());", args, "'boolean[false]'")
         chkVirtualEx(type, "= _strict_str(x.size());", args, "'int[2]'")
         chkVirtualEx(type, "= _strict_str(x.get('Hello'));", args, "'int[123]'")
+        chkVirtualEx(type, "= _strict_str(x.get('World'));", args, "rt_err:fn:map.get:novalue:text[World]")
+        chkVirtualEx(type, "= _strict_str(x.get_or_null('Hello'));", args, "'int[123]'")
+        chkVirtualEx(type, "= _strict_str(x.get_or_null('World'));", args, "'null'")
+        chkVirtualEx(type, "= _strict_str(x.get_or_default('Hello', null));", args, "'int[123]'")
+        chkVirtualEx(type, "= _strict_str(x.get_or_default('World', null));", args, "'null'")
         chkVirtualEx(type, "= _strict_str(x.contains('Hello'));", args, "'boolean[true]'")
         chkVirtualEx(type, "= _strict_str(x.keys());", args, "'set<text>[text[Bye],text[Hello]]'")
         chkVirtualEx(type, "= _strict_str(x.values());", args, "'list<integer>[int[456],int[123]]'")
@@ -1137,7 +1142,7 @@ class VirtualTest: BaseGtxTest(false) {
         def("struct rec { i: integer; t: text; }")
 
         chkVirtual("gtv", "_strict_str(virtual<rec>.from_gtv_pretty(x))", argToGtv("[123,'Hello']", "[[0],[1]]"),
-                "ct_err:unknown_name:virtual<rec>.from_gtv_pretty")
+                "ct_err:unknown_name:[virtual<rec>]:from_gtv_pretty")
 
         chkFromGtv("rec", "[123,'Hello']", "[[0],[1]]", "'virtual<rec>[i=int[123],t=text[Hello]]'")
         chkFromGtv("rec", "[123,'Hello']", "[[0]]", "'virtual<rec>[i=int[123],t=null]'")
@@ -1176,14 +1181,14 @@ class VirtualTest: BaseGtxTest(false) {
         val expr = "_strict_str(virtual<list<integer>>.from_gtv(x))"
         chkVirtual("gtv", expr, argToGtv("[123,456]"), "gtv_err:virtual:deserialize:java.lang.IllegalStateException")
         chkVirtual("gtv", expr, argToGtv("{'A':123}"), "gtv_err:virtual:type:GtvDictionary")
-        chkVirtual("gtv", expr, argToGtv("['A','B']", "[[0]]"), "gtv_err:type:integer:STRING")
+        chkVirtual("gtv", expr, argToGtv("['A','B']", "[[0]]"), "gtv_err:type:[integer]:INTEGER:STRING")
 
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("[123,456]"),
-                "gtv_err:virtual:deserialize:java.lang.IllegalStateException")
+                "gtv_err:virtual:deserialize:java.lang.IllegalStateException:param:x")
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("{'A':123}"),
-                "gtv_err:virtual:type:GtvDictionary")
+                "gtv_err:virtual:type:GtvDictionary:param:x")
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("['A','B']", "[[0]]"),
-                "gtv_err:type:integer:STRING")
+                "gtv_err:type:[integer]:INTEGER:STRING:param:x")
     }
 
     @Test fun testOperatorsErr() {

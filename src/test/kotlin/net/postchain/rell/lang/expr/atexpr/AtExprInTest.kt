@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -55,7 +55,7 @@ class AtExprInTest: BaseRellTest() {
     @Test fun testAttributeResolution() {
         initData()
         chk("(u:user) @* { u.job in ((w:work)@*{}(.job)) } (.name)", "[Bob, Alice, Trudy, John]")
-        chk("(u:user) @* { u.job in ((w:work)@*{}(.name)) } (.name)", "ct_err:at_expr:attr:belongs_to_outer:name:user")
+        chk("(u:user) @* { u.job in ((w:work)@*{}(.name)) } (.name)", "ct_err:at_expr:attr:belongs_to_outer:name:u:user")
         chk("(u:user) @* { u.job in ((w:work)@*{}(w.job)) } (.name)", "[Bob, Alice, Trudy, John]")
         chk("(u:user) @* { u.job in ((w:work)@*{}(u.name)) } (.name)", "[]")
     }
@@ -63,10 +63,10 @@ class AtExprInTest: BaseRellTest() {
     @Test fun testEntityResolution() {
         initData()
         chk("user @* { .job in (work@*{}(work.job)) } (.name)", "[Bob, Alice, Trudy, John]")
-        chk("user @* { .job in ((w:work)@*{}(work.job)) } (.name)", "ct_err:unknown_name:work.job")
+        chk("user @* { .job in ((w:work)@*{}(work.job)) } (.name)", "ct_err:unknown_name:[work]:job")
         chk("user @* { .job in ((w:work)@*{}(w.job)) } (.name)", "[Bob, Alice, Trudy, John]")
         chk("user @* { .job in (work@*{}($.job)) } (.name)", "[Bob, Alice, Trudy, John]")
-        chk("user @* { .job in ((w:work)@*{}(work.job)) } (.name)", "ct_err:unknown_name:work.job")
+        chk("user @* { .job in ((w:work)@*{}(work.job)) } (.name)", "ct_err:unknown_name:[work]:job")
         chk("(u:user) @* { .job in (work@*{}($.job)) } (.name)", "[Bob, Alice, Trudy, John]")
         chk("(u:user) @* { .job in ((w:work)@*{}($.job)) } (.name)", "ct_err:expr:placeholder:none")
         chk("(u:user) @* { .job in ((w:work)@*{}(u.job)) } (.name)", "[Bob, Alice, Trudy, John]")
@@ -122,8 +122,8 @@ class AtExprInTest: BaseRellTest() {
         chk("nums @* { .n in data @*{} ( .v ) } (.n)", "[3, 5, 7, 11, 17]")
         chk("nums @* { .n in data @*{} ( @group .v ) } (.n)", "[3, 5, 7, 11, 17]")
 
-        chk("nums @* { .n in data @*{} ( @min .v ) } (.n)", "ct_err:binop_operand_type:in:[integer]:[list<integer?>]")
-        chk("nums @* { .n in data @*{} ( @max .v ) } (.n)", "ct_err:binop_operand_type:in:[integer]:[list<integer?>]")
+        chk("nums @* { .n in data @*{} ( @min .v ) } (.n)", "ct_err:expr_nosql:integer?")
+        chk("nums @* { .n in data @*{} ( @max .v ) } (.n)", "ct_err:expr_nosql:integer?")
         chk("nums @* { .n in data @*{} ( @sum .v ) } (.n)", "[56]")
         chk("nums @* { .n in data @*{} ( @sum 1 ) } (.n)", "[6]")
 
@@ -162,10 +162,14 @@ class AtExprInTest: BaseRellTest() {
         chk("(u:user) @* {} ( .job in (w:work)@*{w.city == u.city}(w.job) )", "[false, true, false, true]")
     }
 
-    @Test fun testToStruct() {
+    @Test fun testComplexWhat() {
         initData()
+        def("function f(w: work) = w.job.upper_case();")
+        def("function g(w: work) = w.job.size();")
         chk("user @* { .job in work @*{}( work.to_struct() ) }", "ct_err:binop_operand_type:in:[text]:[list<struct<work>>]")
         chk("user @* { .job in work @*{}( work.to_struct().job ) }", "ct_err:expr_sqlnotallowed")
+        chk("user @* { .job in work @*{}( f(work) ) }", "ct_err:expr_sqlnotallowed")
+        chk("user @* { .job in work @*{}( g(work) ) }", "ct_err:binop_operand_type:in:[text]:[list<integer>]")
     }
 
     @Test fun testMixedCollectionAndDbAt() {

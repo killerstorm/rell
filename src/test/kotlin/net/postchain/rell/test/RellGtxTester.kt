@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -8,17 +8,20 @@ import net.postchain.base.BaseBlockEContext
 import net.postchain.base.BaseEContext
 import net.postchain.base.BaseTxEContext
 import net.postchain.base.TxEventSink
-import net.postchain.common.hexStringToByteArray
-import net.postchain.common.exception.UserMistake
-import net.postchain.core.*
 import net.postchain.common.BlockchainRid
+import net.postchain.common.exception.UserMistake
+import net.postchain.common.hexStringToByteArray
+import net.postchain.core.EContext
+import net.postchain.core.Transaction
+import net.postchain.core.Transactor
+import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvString
 import net.postchain.gtv.GtvType
-import net.postchain.gtx.data.ExtOpData
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXSchemaManager
+import net.postchain.gtx.data.ExtOpData
 import net.postchain.rell.model.R_App
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellPostchainModuleFactory
@@ -83,6 +86,11 @@ class RellGtxTester(
         return callQuery0(moduleCode, name, args)
     }
 
+    fun chkCallQuery(name: String, args: Map<String, Gtv>, expected: String) {
+        val actual = callQuery(name, args)
+        assertEquals(expected, actual)
+    }
+
     fun chkCallQuery(name: String, args: String, expected: String) {
         val gtvArgs = strToArgs(args)
         val actual = callQuery(name, gtvArgs)
@@ -144,7 +152,11 @@ class RellGtxTester(
                 val bcRid = PostchainUtils.hexToRid(blockchainRid)
                 val opData = ExtOpData(name, 0, args.toTypedArray(), bcRid, arrayOf(), arrayOf())
                 val transactor = module.makeTransactor(opData)
-                check(transactor.isCorrect())
+
+                val correct = eval.wrapRt {
+                    transactor.isCorrect()
+                }
+                check(correct)
 
                 val tx = TransactorTransaction(transactor)
                 val txCtx = BaseTxEContext(blkCtx, 0, tx)

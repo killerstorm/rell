@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -46,8 +46,8 @@ class AtExprCommonColStructTest: AtExprCommonColBaseTest() {
         chk("(o:get_outer()) @* {} ( (i:get_inner1()) @ { o.ref.foo_value } ( i.id.s ) )", "[I11]")
         chk("(o:get_outer()) @* {} ( (i:get_inner1()) @ { o.ref.bar_value } ( i.id.s ) )", "[I12]")
 
-        val err21 = "ct_err:at_where:var_manyattrs_type:0:value:value:i.foo_value,i.bar_value"
-        val err22 = "ct_err:at_attr_type_ambig:0:value:i.foo_value,i.bar_value"
+        val err21 = "ct_err:at_where:var_manyattrs_type:0:value:value:[i:inner2.foo_value,i:inner2.bar_value]"
+        val err22 = "ct_err:at_attr_type_ambig:0:value:[i:inner2.foo_value,i:inner2.bar_value]"
         chk("(o:get_outer()) @* {} ( (i:get_inner2()) @ { o.value } ( i.id.s ) )", err21)
         chk("(o:get_outer()) @* {} ( (i:get_inner2()) @ { o.foo_value } ( i.id.s ) )", "[I20]")
         chk("(o:get_outer()) @* {} ( (i:get_inner2()) @ { o.bar_value } ( i.id.s ) )", "[I21]")
@@ -55,7 +55,7 @@ class AtExprCommonColStructTest: AtExprCommonColBaseTest() {
         chk("(o:get_outer()) @* {} ( (i:get_inner2()) @ { o.ref.foo_value } ( i.id.s ) )", err22)
         chk("(o:get_outer()) @* {} ( (i:get_inner2()) @ { o.ref.bar_value } ( i.id.s ) )", err22)
 
-        val err3 = "ct_err:at_attr_type_ambig:0:value:i.value,i.foo_value,i.bar_value"
+        val err3 = "ct_err:at_attr_type_ambig:0:value:[i:inner3.value,i:inner3.foo_value,i:inner3.bar_value]"
         chk("(o:get_outer()) @* {} ( (i:get_inner3()) @ { o.value } ( i.id.s ) )", "[I30]")
         chk("(o:get_outer()) @* {} ( (i:get_inner3()) @ { o.foo_value } ( i.id.s ) )", "[I31]")
         chk("(o:get_outer()) @* {} ( (i:get_inner3()) @ { o.bar_value } ( i.id.s ) )", "[I32]")

@@ -1,35 +1,34 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
-import net.postchain.rell.compiler.base.core.C_TypeAdapter
-import net.postchain.rell.compiler.base.core.C_TypeAdapter_Direct
-import net.postchain.rell.compiler.base.core.C_TypeAdapter_IntegerToDecimal
-import net.postchain.rell.compiler.base.core.C_TypeAdapter_Nullable
+import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.def.C_GlobalFunction
+import net.postchain.rell.compiler.base.def.C_StructGlobalFunction
+import net.postchain.rell.compiler.base.expr.C_AtTypeImplicitAttr
+import net.postchain.rell.compiler.base.expr.C_AtTypeImplicitAttr_TypeMember
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember
 import net.postchain.rell.compiler.base.fn.C_FunctionCallParameter
 import net.postchain.rell.compiler.base.fn.C_FunctionCallParameters
-import net.postchain.rell.compiler.base.utils.C_GlobalFuncTable
+import net.postchain.rell.compiler.base.namespace.C_Namespace
 import net.postchain.rell.compiler.base.utils.C_LibUtils
-import net.postchain.rell.compiler.base.utils.C_MemberFuncTable
 import net.postchain.rell.lib.type.*
 import net.postchain.rell.module.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.LazyString
-import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.*
 import org.jooq.DataType
 import org.jooq.SQLDialect
 import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
 import org.jooq.util.postgres.PostgresDataType
 import org.postgresql.util.PGobject
-import org.spongycastle.util.Arrays
+import org.bouncycastle.util.Arrays
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.util.*
@@ -68,7 +67,7 @@ class R_TypeFlags(
     }
 }
 
-sealed class R_TypeSqlAdapter {
+sealed class R_TypeSqlAdapter(val sqlType: DataType<*>?) {
     abstract fun isSqlCompatible(): Boolean
     abstract fun toSqlValue(value: Rt_Value): Any
     abstract fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value)
@@ -76,7 +75,7 @@ sealed class R_TypeSqlAdapter {
     abstract fun metaName(sqlCtx: Rt_SqlContext): String
 }
 
-private class R_TypeSqlAdapter_None(private val type: R_Type): R_TypeSqlAdapter() {
+private class R_TypeSqlAdapter_None(private val type: R_Type): R_TypeSqlAdapter(null) {
     override fun isSqlCompatible(): Boolean = false
 
     override fun toSqlValue(value: Rt_Value): Any {
@@ -96,7 +95,7 @@ private class R_TypeSqlAdapter_None(private val type: R_Type): R_TypeSqlAdapter(
     }
 }
 
-private abstract class R_TypeSqlAdapter_Some: R_TypeSqlAdapter() {
+private abstract class R_TypeSqlAdapter_Some(sqlType: DataType<*>?): R_TypeSqlAdapter(sqlType) {
     override fun isSqlCompatible() = true
 
     protected fun checkSqlNull(suspect: Boolean, rs: ResultSet, type: R_Type, nullable: Boolean): Rt_Value? {
@@ -123,18 +122,55 @@ private abstract class R_TypeSqlAdapter_Some: R_TypeSqlAdapter() {
         }
     }
 
-    private fun errSqlNull(type: R_Type): Rt_Error {
-        return Rt_Error("sql_null:${type.strCode()}", "Got NULL from SQL where expected ${type.str()}")
+    private fun errSqlNull(type: R_Type): Rt_Exception {
+        return Rt_Exception.common("sql_null:${type.strCode()}", "SQL value is NULL for type ${type.str()}")
     }
 }
 
-private abstract class R_TypeSqlAdapter_Primitive(private val name: String): R_TypeSqlAdapter_Some() {
-    override final fun metaName(sqlCtx: Rt_SqlContext): String = "sys:$name"
+private abstract class R_TypeSqlAdapter_Primitive(
+    private val name: String,
+    sqlType: DataType<*>
+): R_TypeSqlAdapter_Some(sqlType) {
+    final override fun metaName(sqlCtx: Rt_SqlContext): String = "sys:$name"
 }
 
-abstract class R_Type(val name: String) {
-    val toTextFunction = "$name.to_text"
-    val toTextFunctionLazy = LazyString.of(toTextFunction)
+private class R_TypeAtImplicitAttrs(private val calculator: () -> List<C_AtTypeImplicitAttr>) {
+    private val byNameLazy: Map<R_Name, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.name } }
+    private val byTypeLazy: Map<R_Type, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.type } }
+    private val attrsLazy: List<C_AtTypeImplicitAttr> by lazy { calculator().toImmList() }
+
+    fun get(name: R_Name): List<C_AtTypeImplicitAttr> = byNameLazy[name] ?: immListOf()
+    fun get(type: R_Type): List<C_AtTypeImplicitAttr> = byTypeLazy[type] ?: immListOf()
+
+    private fun <K> getAtImplicitAttrs(keyGetter: (C_AtTypeImplicitAttr) -> K?): Map<K, List<C_AtTypeImplicitAttr>> {
+        return attrsLazy
+            .mapNotNull { keyGetter(it)?.let { key -> Pair<K, C_AtTypeImplicitAttr>(key, it) } }
+            .groupBy({it.first}, {it.second})
+            .mapValues { it.value.toImmList() }
+            .toImmMap()
+    }
+}
+
+private class R_TypeValueMembers(private val calculator: () -> List<C_TypeValueMember>) {
+    private val byNameLazy: Map<R_Name, List<C_TypeValueMember>> by lazy {
+        allLazy
+            .map { it.name to it }
+            .groupBy({it.first}, {it.second})
+            .mapValues { it.value.toImmList() }
+            .toImmMap()
+    }
+
+    private val allLazy: List<C_TypeValueMember> by lazy { calculator().toImmList() }
+
+    fun getAll() = allLazy
+    fun get(name: R_Name): List<C_TypeValueMember> = byNameLazy[name] ?: immListOf()
+}
+
+abstract class R_Type(
+    val name: String,
+    val defName: C_DefinitionName = C_DefinitionName(C_LibUtils.DEFAULT_MODULE_STR, name),
+) {
+    val toTextFunctionLazy = LazyString.of { "$name.to_text" }
 
     private val gtvConversion by lazy { createGtvConversion() }
     val sqlAdapter = createSqlAdapter()
@@ -196,23 +232,26 @@ abstract class R_Type(val name: String) {
 
     abstract fun toMetaGtv(): Gtv
 
-    private val staticFunctionsLazy: C_GlobalFuncTable by lazy {
-        getStaticFunctions0()
+    fun getConstructorFunction(): C_GlobalFunction? = constructorFunctionLazy
+    private val constructorFunctionLazy: C_GlobalFunction? by lazy { getConstructorFunction0() }
+    protected open fun getConstructorFunction0(): C_GlobalFunction? = null
+
+    fun getStaticNamespace(): C_Namespace = staticNamespaceLazy
+    private val staticNamespaceLazy: C_Namespace by lazy { getStaticNamespace0() }
+    protected open fun getStaticNamespace0(): C_Namespace {
+        val fns = C_LibUtils.typeGlobalFuncBuilder(this).build()
+        return C_LibUtils.makeNs(defName.toPath(), fns)
     }
 
-    fun getStaticFunctions(): C_GlobalFuncTable = staticFunctionsLazy
+    private val valueMembers = R_TypeValueMembers { getValueMembers0() }
+    fun getValueMembers(name: R_Name) = valueMembers.get(name)
+    protected open fun getValueMembers0(): List<C_TypeValueMember> = immListOf()
 
-    protected open fun getStaticFunctions0(): C_GlobalFuncTable {
-        return C_LibUtils.typeGlobalFuncBuilder(this).build()
-    }
-
-    private val memberFunctionsLazy: C_MemberFuncTable by lazy {
-        getMemberFunctions0()
-    }
-
-    fun getMemberFunctions(): C_MemberFuncTable = memberFunctionsLazy
-
-    protected open fun getMemberFunctions0(): C_MemberFuncTable = C_MemberFuncTable.EMPTY
+    private val atImplicitAttrs = R_TypeAtImplicitAttrs { getAtImplicitAttrs0() }
+    fun getAtImplicitAttrs(name: R_Name) = atImplicitAttrs.get(name)
+    fun getAtImplicitAttrs(type: R_Type) = atImplicitAttrs.get(type)
+    protected open fun getAtImplicitAttrs0(): List<C_AtTypeImplicitAttr> = valueMembers.getAll()
+        .mapNotNull { if (it.valueType == null) null else C_AtTypeImplicitAttr_TypeMember(it.name, it.valueType, it) }
 
     companion object {
         fun commonTypeOpt(a: R_Type, b: R_Type): R_Type? {
@@ -247,7 +286,7 @@ object R_CtErrorType: R_Type("<error>") {
     override fun calcCommonType(other: R_Type) = other
     override fun toMetaGtv(): Gtv = throw UnsupportedOperationException()
 
-    private object R_TypeSqlAdapter_CtError: R_TypeSqlAdapter_Some() {
+    private object R_TypeSqlAdapter_CtError: R_TypeSqlAdapter_Some(null) {
         override fun toSqlValue(value: Rt_Value) = throw Rt_Utils.errNotSupported("Error")
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = throw Rt_Utils.errNotSupported("Error")
         override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean) = throw Rt_Utils.errNotSupported("Error")
@@ -255,20 +294,24 @@ object R_CtErrorType: R_Type("<error>") {
     }
 }
 
-sealed class R_PrimitiveType(name: String, val sqlType: DataType<*>): R_Type(name) {
+abstract class R_BasicType(name: String, defName: C_DefinitionName): R_Type(name, defName) {
     protected abstract fun getLibType(): C_Lib_Type
 
     final override fun strCode(): String = name
     final override fun toMetaGtv() = name.toGtv()
-    final override fun getMemberFunctions0() = getLibType().memberFns
+    final override fun getConstructorFunction0() = getLibType().constructorFn
+    final override fun getStaticNamespace0() = getLibType().staticNs
+    final override fun getValueMembers0() = getLibType().valueMembers
 }
 
-object R_UnitType: R_PrimitiveType("unit", SQLDataType.OTHER) {
+sealed class R_PrimitiveType(name: String): R_BasicType(name, C_LibUtils.defName(name))
+
+object R_UnitType: R_PrimitiveType("unit") {
     override fun createGtvConversion() = GtvRtConversion_None
     override fun getLibType(): C_Lib_Type = C_Lib_Type_Unit
 }
 
-object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
+object R_BooleanType: R_PrimitiveType("boolean") {
     override fun defaultValue() = Rt_BooleanValue(false)
     override fun comparator() = Rt_Comparator.create { it.asBoolean() }
 
@@ -283,7 +326,7 @@ object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
 
     override fun getLibType(): C_Lib_Type = C_Lib_Type_Boolean
 
-    private object R_TypeSqlAdapter_Boolean: R_TypeSqlAdapter_Primitive("boolean") {
+    private object R_TypeSqlAdapter_Boolean: R_TypeSqlAdapter_Primitive("boolean", SQLDataType.BOOLEAN) {
         override fun toSqlValue(value: Rt_Value) = value.asBoolean()
 
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
@@ -297,7 +340,7 @@ object R_BooleanType: R_PrimitiveType("boolean", SQLDataType.BOOLEAN) {
     }
 }
 
-object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
+object R_TextType: R_PrimitiveType("text") {
     override fun defaultValue() = Rt_TextValue("")
     override fun comparator() = Rt_Comparator.create { it.asString() }
     override fun fromCli(s: String): Rt_Value = Rt_TextValue(s)
@@ -306,7 +349,7 @@ object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
 
     override fun getLibType(): C_Lib_Type = C_Lib_Type_Text
 
-    private object R_TypeSqlAdapter_Text: R_TypeSqlAdapter_Primitive("text") {
+    private object R_TypeSqlAdapter_Text: R_TypeSqlAdapter_Primitive("text", PostgresDataType.TEXT) {
         override fun toSqlValue(value: Rt_Value) = value.asString()
 
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
@@ -320,7 +363,7 @@ object R_TextType: R_PrimitiveType("text", PostgresDataType.TEXT) {
     }
 }
 
-object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
+object R_IntegerType: R_PrimitiveType("integer") {
     override fun defaultValue() = Rt_IntValue(0)
     override fun comparator() = Rt_Comparator.create { it.asInteger() }
     override fun fromCli(s: String): Rt_Value = Rt_IntValue(s.toLong())
@@ -330,7 +373,7 @@ object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
 
     override fun getLibType(): C_Lib_Type = C_Lib_Type_Integer
 
-    private object R_TypeSqlAdapter_Integer: R_TypeSqlAdapter_Primitive("integer") {
+    private object R_TypeSqlAdapter_Integer: R_TypeSqlAdapter_Primitive("integer", SQLDataType.BIGINT) {
         override fun toSqlValue(value: Rt_Value) = value.asInteger()
 
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
@@ -344,7 +387,7 @@ object R_IntegerType: R_PrimitiveType("integer", SQLDataType.BIGINT) {
     }
 }
 
-object R_DecimalType: R_PrimitiveType("decimal", Lib_DecimalMath.DECIMAL_SQL_TYPE) {
+object R_DecimalType: R_PrimitiveType("decimal") {
     override fun defaultValue() = Rt_DecimalValue.ZERO
     override fun comparator() = Rt_Comparator.create { it.asDecimal() }
     override fun fromCli(s: String): Rt_Value = Rt_DecimalValue.of(s)
@@ -362,7 +405,7 @@ object R_DecimalType: R_PrimitiveType("decimal", Lib_DecimalMath.DECIMAL_SQL_TYP
 
     override fun getLibType(): C_Lib_Type = C_Lib_Type_Decimal
 
-    private object R_TypeSqlAdapter_Decimal: R_TypeSqlAdapter_Primitive("decimal") {
+    private object R_TypeSqlAdapter_Decimal: R_TypeSqlAdapter_Primitive("decimal", Lib_DecimalMath.DECIMAL_SQL_TYPE) {
         override fun toSqlValue(value: Rt_Value) = value.asDecimal()
 
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
@@ -376,7 +419,7 @@ object R_DecimalType: R_PrimitiveType("decimal", Lib_DecimalMath.DECIMAL_SQL_TYP
     }
 }
 
-object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
+object R_ByteArrayType: R_PrimitiveType("byte_array") {
     override fun defaultValue() = Rt_ByteArrayValue(byteArrayOf())
     override fun comparator() = Rt_Comparator({ it.asByteArray() }, Comparator { x, y -> Arrays.compareUnsigned(x, y) })
     override fun fromCli(s: String): Rt_Value = Rt_ByteArrayValue(CommonUtils.hexToBytes(s))
@@ -386,7 +429,7 @@ object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
 
     override fun getLibType(): C_Lib_Type = C_Lib_Type_ByteArray
 
-    private object R_TypeSqlAdapter_ByteArray: R_TypeSqlAdapter_Primitive("byte_array") {
+    private object R_TypeSqlAdapter_ByteArray: R_TypeSqlAdapter_Primitive("byte_array", PostgresDataType.BYTEA) {
         override fun toSqlValue(value: Rt_Value) = value.asByteArray()
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setBytes(idx, value.asByteArray())
 
@@ -397,7 +440,7 @@ object R_ByteArrayType: R_PrimitiveType("byte_array", PostgresDataType.BYTEA) {
     }
 }
 
-object R_RowidType: R_PrimitiveType("rowid", SQLDataType.BIGINT) {
+object R_RowidType: R_PrimitiveType("rowid") {
     override fun defaultValue() = Rt_RowidValue(0)
     override fun comparator() = Rt_Comparator.create { it.asRowid() }
     override fun fromCli(s: String): Rt_Value = Rt_RowidValue(s.toLong())
@@ -407,7 +450,7 @@ object R_RowidType: R_PrimitiveType("rowid", SQLDataType.BIGINT) {
 
     override fun getLibType(): C_Lib_Type = C_Lib_Type_Rowid
 
-    private object R_TypeSqlAdapter_Rowid: R_TypeSqlAdapter_Primitive("rowid") {
+    private object R_TypeSqlAdapter_Rowid: R_TypeSqlAdapter_Primitive("rowid", SQLDataType.BIGINT) {
         override fun toSqlValue(value: Rt_Value) = value.asRowid()
 
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
@@ -421,23 +464,25 @@ object R_RowidType: R_PrimitiveType("rowid", SQLDataType.BIGINT) {
     }
 }
 
-object R_GUIDType: R_PrimitiveType("guid", PostgresDataType.BYTEA) {
+object R_GUIDType: R_PrimitiveType("guid") {
     //TODO support Gtv
     override fun createGtvConversion() = GtvRtConversion_None
     override fun getLibType(): C_Lib_Type = C_Lib_Type_Guid
+    //TODO sqlType = PostgresDataType.BYTEA
 }
 
 private val GTX_SIGNER_SQL_DATA_TYPE = DefaultDataType(null as SQLDialect?, ByteArray::class.java, "gtx_signer")
 
-object R_SignerType: R_PrimitiveType("signer", GTX_SIGNER_SQL_DATA_TYPE) {
+object R_SignerType: R_PrimitiveType("signer") {
     //TODO support Gtv
     override fun createGtvConversion() = GtvRtConversion_None
     override fun getLibType(): C_Lib_Type = C_Lib_Type_Signer
+    //TODO sqlType = GTX_SIGNER_SQL_DATA_TYPE
 }
 
 private val JSON_SQL_DATA_TYPE = DefaultDataType(null as SQLDialect?, String::class.java, "jsonb")
 
-object R_JsonType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
+object R_JsonType: R_PrimitiveType("json") {
     override fun comparator() = Rt_Comparator.create { it.asJsonString() }
     override fun fromCli(s: String): Rt_Value = Rt_JsonValue.parse(s)
 
@@ -448,7 +493,7 @@ object R_JsonType: R_PrimitiveType("json", JSON_SQL_DATA_TYPE) {
 
     override fun getLibType(): C_Lib_Type = C_Lib_Type_Json
 
-    private object R_TypeSqlAdapter_Json: R_TypeSqlAdapter_Primitive("json") {
+    private object R_TypeSqlAdapter_Json: R_TypeSqlAdapter_Primitive("json", JSON_SQL_DATA_TYPE) {
         override fun toSqlValue(value: Rt_Value): Any {
             val str = value.asJsonString()
             val obj = PGobject()
@@ -476,10 +521,10 @@ object R_NullType: R_Type("null") {
     override fun createGtvConversion() = GtvRtConversion_Null
     override fun strCode() = "null"
     override fun toMetaGtv() = "null".toGtv()
-    override fun getMemberFunctions0() = C_Lib_Type_Null.memberFns
+    override fun getValueMembers0() = C_Lib_Type_Null.valueMembers
 }
 
-class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName) {
+class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName, rEntity.cDefName) {
     override fun comparator() = Rt_Comparator.create { it.asObjectId() }
     override fun fromCli(s: String): Rt_Value = Rt_EntityValue(this, s.toLong())
     override fun strCode(): String = name
@@ -493,9 +538,9 @@ class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName
 
     override fun toMetaGtv() = rEntity.appLevelName.toGtv()
 
-    override fun getMemberFunctions0() = C_Lib_Type_Entity.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_Entity.getValueMembers(this)
 
-    private class R_TypeSqlAdapter_Entity(private val type: R_EntityType): R_TypeSqlAdapter_Some() {
+    private class R_TypeSqlAdapter_Entity(private val type: R_EntityType): R_TypeSqlAdapter_Some(SQLDataType.BIGINT) {
         override fun toSqlValue(value: Rt_Value) = value.asObjectId()
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setLong(idx, value.asObjectId())
 
@@ -513,7 +558,7 @@ class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName
     }
 }
 
-class R_ObjectType(val rObject: R_ObjectDefinition): R_Type(rObject.appLevelName) {
+class R_ObjectType(val rObject: R_ObjectDefinition): R_Type(rObject.appLevelName, rObject.cDefName) {
     override fun isDirectVirtualable() = false
     override fun isDirectPure() = false
     override fun equals(other: Any?): Boolean = other === this || (other is R_ObjectType && other.rObject == rObject)
@@ -521,7 +566,7 @@ class R_ObjectType(val rObject: R_ObjectDefinition): R_Type(rObject.appLevelName
     override fun createGtvConversion() = GtvRtConversion_None
     override fun strCode(): String = name
     override fun toMetaGtv() = rObject.appLevelName.toGtv()
-    override fun getMemberFunctions0() = C_Lib_Type_Object.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_Object.getMemberValues(this)
 }
 
 class R_StructType(val struct: R_Struct): R_Type(struct.name) {
@@ -536,10 +581,12 @@ class R_StructType(val struct: R_Struct): R_Type(struct.name) {
     override fun strCode(): String = name
     override fun toMetaGtv() = struct.typeMetaGtv
 
-    override fun getMemberFunctions0() = C_Lib_Type_Struct.getMemberFns(struct)
+    override fun getConstructorFunction0(): C_GlobalFunction = C_StructGlobalFunction(struct)
+    override fun getStaticNamespace0() = C_Lib_Type_Struct.getNamespace(struct)
+    override fun getValueMembers0() = C_Lib_Type_Struct.getValueMembers(struct)
 }
 
-class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName) {
+class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName, enum.cDefName) {
     override fun comparator() = Rt_Comparator.create { it.asEnum().value }
 
     override fun fromCli(s: String): Rt_Value {
@@ -556,10 +603,10 @@ class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName) {
     override fun strCode() = name
     override fun toMetaGtv() = enum.appLevelName.toGtv()
 
-    override fun getStaticFunctions0() = C_Lib_Type_Enum.getStaticFns(this)
-    override fun getMemberFunctions0() = C_Lib_Type_Enum.getMemberFns(this)
+    override fun getStaticNamespace0() = C_Lib_Type_Enum.getStaticNs(this)
+    override fun getValueMembers0() = C_Lib_Type_Enum.getValueMembers(this)
 
-    private class R_TypeSqlAdapter_Enum(private val type: R_EnumType): R_TypeSqlAdapter_Some() {
+    private class R_TypeSqlAdapter_Enum(private val type: R_EnumType): R_TypeSqlAdapter_Some(SQLDataType.INTEGER) {
         override fun toSqlValue(value: Rt_Value) = value.asEnum().value
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setInt(idx, value.asEnum().value)
 
@@ -637,7 +684,7 @@ class R_NullableType(val valueType: R_Type): R_Type(calcName(valueType)) {
         }
     }
 
-    private inner class R_TypeSqlAdapter_Nullable: R_TypeSqlAdapter_Some() {
+    private inner class R_TypeSqlAdapter_Nullable: R_TypeSqlAdapter_Some(null) {
         override fun isSqlCompatible() = false
         override fun metaName(sqlCtx: Rt_SqlContext) = throw Rt_Utils.errNotSupported("Nullable entity attributes are not supported")
 
@@ -676,7 +723,8 @@ class R_ListType(elementType: R_Type): R_CollectionType(elementType, "list") {
     override fun hashCode() = Objects.hash(elementType.hashCode(), 33)
     override fun createGtvConversion() = GtvRtConversion_List(this)
 
-    override fun getMemberFunctions0() = C_Lib_Type_List.getMemberFns(this)
+    override fun getConstructorFunction0() = C_Lib_Type_List.getConstructorFn(this)
+    override fun getValueMembers0() = C_Lib_Type_List.getValueMembers(this)
 
     override fun comparator(): Comparator<Rt_Value>? {
         val elemComparator = elementType.comparator()
@@ -692,7 +740,8 @@ class R_SetType(elementType: R_Type): R_CollectionType(elementType, "set") {
     override fun hashCode() = Objects.hash(elementType.hashCode(), 55)
     override fun createGtvConversion() = GtvRtConversion_Set(this)
 
-    override fun getMemberFunctions0() = C_Lib_Type_Set.getMemberFns(this)
+    override fun getConstructorFunction0() = C_Lib_Type_Set.getConstructorFn(this)
+    override fun getValueMembers0() = C_Lib_Type_Set.getValueMembers(this)
 }
 
 class R_MapKeyValueTypes(val key: R_Type, val value: R_Type)
@@ -729,7 +778,8 @@ class R_MapType(
 
     override fun createGtvConversion() = GtvRtConversion_Map(this)
 
-    override fun getMemberFunctions0() = C_Lib_Type_Map.getMemberFns(this)
+    override fun getConstructorFunction0() = C_Lib_Type_Map.getConstructorFn(this)
+    override fun getValueMembers0() = C_Lib_Type_Map.getValueMembers(this)
 
     override fun toMetaGtv() = mapOf(
             "type" to "map".toGtv(),
@@ -832,7 +882,8 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
             "fields" to fields.map { it.toMetaGtv() }.toGtv()
     ).toGtv()
 
-    override fun getMemberFunctions0() = C_Lib_Type_Tuple.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_Tuple.getValueMembers(this)
+    override fun getAtImplicitAttrs0() = C_Lib_Type_Tuple.getAtImplicitAttrs(this)
 
     companion object {
         private fun calcName(fields: List<R_TupleField>): String {
@@ -856,24 +907,20 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
     }
 }
 
-object R_RangeType: R_Type("range") {
+object R_RangeType: R_PrimitiveType("range") {
     override fun isDirectVirtualable() = false
     override fun isDirectPure() = true
     override fun isReference() = true
     override fun comparator() = Rt_Comparator.create { it.asRange() }
     override fun createGtvConversion() = GtvRtConversion_None
-    override fun strCode(): String = name
-    override fun toMetaGtv() = name.toGtv()
-    override fun getMemberFunctions0() = C_Lib_Type_Range.memberFns
+    override fun getLibType(): C_Lib_Type = C_Lib_Type_Range
 }
 
-object R_GtvType: R_Type("gtv") {
+object R_GtvType: R_PrimitiveType("gtv") {
     override fun isReference() = true
     override fun isDirectPure() = true
     override fun createGtvConversion() = GtvRtConversion_Gtv
-    override fun strCode() = name
-    override fun toMetaGtv() = name.toGtv()
-    override fun getMemberFunctions0() = C_Lib_Type_Gtv.memberFns
+    override fun getLibType(): C_Lib_Type = C_Lib_Type_Gtv
 }
 
 sealed class R_VirtualType(private val innerType: R_Type): R_Type("virtual<${innerType.name}>") {
@@ -897,7 +944,7 @@ sealed class R_VirtualCollectionType(innerType: R_Type): R_VirtualType(innerType
 class R_VirtualListType(val innerType: R_ListType): R_VirtualCollectionType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualList(this)
     override fun elementType() = innerType.elementType
-    override fun getMemberFunctions0() = C_Lib_Type_VirtualList.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_VirtualList.getValueMembers(this)
     override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualListType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
 }
@@ -905,30 +952,30 @@ class R_VirtualListType(val innerType: R_ListType): R_VirtualCollectionType(inne
 class R_VirtualSetType(val innerType: R_SetType): R_VirtualCollectionType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualSet(this)
     override fun elementType() = innerType.elementType
-    override fun getMemberFunctions0() = C_Lib_Type_VirtualSet.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_VirtualSet.getValueMembers(this)
     override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualSetType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
 }
 
 class R_VirtualMapType(val innerType: R_MapType): R_VirtualType(innerType) {
     override fun createGtvConversion() = GtvRtConversion_VirtualMap(this)
-    override fun getMemberFunctions0() = C_Lib_Type_VirtualMap.getMemberFns(this)
+    override fun getValueMembers0() = C_Lib_Type_VirtualMap.getValueMembers(this)
     override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualMapType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
 }
 
 class R_VirtualTupleType(val innerType: R_TupleType): R_VirtualType(innerType) {
-    override fun createGtvConversion() = GtvRtConversion_VirtualTuple(this)
-    override fun getMemberFunctions0() = C_Lib_Type_VirtualTuple.getMemberFns(this)
     override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualTupleType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
+    override fun createGtvConversion() = GtvRtConversion_VirtualTuple(this)
+    override fun getValueMembers0() = C_Lib_Type_VirtualTuple.getValueMembers(this)
 }
 
 class R_VirtualStructType(val innerType: R_StructType): R_VirtualType(innerType) {
-    override fun createGtvConversion() = GtvRtConversion_VirtualStruct(this)
-    override fun getMemberFunctions0() = C_Lib_Type_VirtualStruct.getMemberFns(this)
     override fun equals(other: Any?): Boolean = other === this || (other is R_VirtualStructType && innerType == other.innerType)
     override fun hashCode() = innerType.hashCode()
+    override fun createGtvConversion() = GtvRtConversion_VirtualStruct(this)
+    override fun getValueMembers0() = C_Lib_Type_VirtualStruct.getValueMembers(this)
 }
 
 class R_FunctionType(params: List<R_Type>, val result: R_Type): R_Type(calcName(params, result)) {

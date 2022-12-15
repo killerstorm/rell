@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.stmt
@@ -7,7 +7,10 @@ package net.postchain.rell.model.stmt
 import com.google.common.collect.Iterables
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
-import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.runtime.Rt_TupleValue
+import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.immListOf
 
 sealed class R_StatementResult
@@ -264,7 +267,7 @@ class R_ContinueStatement: R_Statement() {
 
 class R_StackTraceStatement(private val subStmt: R_Statement, private val filePos: R_FilePos): R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
-        return Rt_StackTraceError.trackStack(frame, filePos) {
+        return R_StackTraceExpr.trackStack(frame, filePos) {
             subStmt.execute(frame)
         }
     }

@@ -1,21 +1,30 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
 
 import mu.KotlinLogging
+import mu.withLoggingContext
+import net.postchain.PostchainNode
 import net.postchain.StorageBuilder
+import net.postchain.api.internal.BlockchainApi
 import net.postchain.api.rest.infra.RestApiConfig
+import net.postchain.base.gtv.GtvToBlockchainRidFactory
+import net.postchain.base.withReadWriteConnection
 import net.postchain.common.BlockchainRid
 import net.postchain.common.exception.UserMistake
 import net.postchain.config.app.AppConfig
-import net.postchain.devtools.PostchainTestNode
+import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
+import net.postchain.metrics.BLOCKCHAIN_RID_TAG
+import net.postchain.metrics.CHAIN_IID_TAG
+import net.postchain.metrics.NODE_PUBKEY_TAG
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.runtime.Rt_RegularSqlContext
 import net.postchain.rell.runtime.Rt_StaticBlockRunnerStrategy
@@ -43,7 +52,7 @@ private fun main0(args: RellRunConfigLaunchCliArgs) {
     val runConfigFile = RellCliUtils.checkFile(args.runConfigFile)
     val sourceDir = RellCliUtils.checkDir(args.sourceDir ?: ".").absoluteFile
     val sourceVer = RellCliUtils.checkVersion(args.sourceVersion)
-    val commonArgs = CommonArgs(runConfigFile, sourceDir, sourceVer)
+    val commonArgs = CommonArgs(runConfigFile, sourceDir, sourceVer, args.sqlLog)
 
     if (args.test) {
         val filter = args.testFilter
@@ -51,7 +60,10 @@ private fun main0(args: RellRunConfigLaunchCliArgs) {
         val matcher = TestMatcher.make(filter ?: "*")
         runTests(commonArgs, matcher, targetChains)
     } else {
-        runApp(commonArgs)
+        val env = RellPostchainModuleEnvironment(sqlLog = args.sqlLog)
+        RellPostchainModuleEnvironment.set(env) {
+            runApp(commonArgs)
+        }
     }
 }
 
@@ -83,22 +95,34 @@ private fun runApp(args: CommonArgs) {
 private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): AppConfig {
     val nodeAppConf = getNodeConfig(rellAppConf, rellAppConf.config.node)
 
-    val node = PostchainTestNode(nodeAppConf, rellAppConf.config.wipeDb)
+    val node = PostchainNode(nodeAppConf, rellAppConf.config.wipeDb)
 
     val chainsSorted = rellAppConf.config.chains.sortedBy { it.iid }
 
     for (chain in chainsSorted) {
         val genesisConfig = chain.configs.getValue(0).gtvConfig
-        val brid = node.addBlockchain(chain.iid, genesisConfig)
-        log.info { "Chain '${chain.name}' ID = ${chain.iid} RID = ${brid.toHex()}" }
+        val brid = GtvToBlockchainRidFactory.calculateBlockchainRid(genesisConfig, node.postchainContext.cryptoSystem)
+        withLoggingContext(
+            NODE_PUBKEY_TAG to nodeAppConf.pubKey,
+            CHAIN_IID_TAG to chain.iid.toString(),
+            BLOCKCHAIN_RID_TAG to brid.toHex()
+        ) {
+            withReadWriteConnection(node.postchainContext.storage, chain.iid) { eContext: EContext ->
+                BlockchainApi.initializeBlockchain(eContext, brid, override = true, genesisConfig)
+            }
+            log.info { "Chain '${chain.name}' ID = ${chain.iid} RID = ${brid.toHex()}" }
 
-        check(Arrays.equals(brid.data, chain.brid.toByteArray())) {
-            "Chain '${chain.name}' (${chain.iid}): calculated BRID = ${chain.brid.toHex()}, postchain BRID = ${brid.toHex()}"
-        }
+            check(Arrays.equals(brid.data, chain.brid.toByteArray())) {
+                "Chain '${chain.name}' (${chain.iid}): calculated BRID = ${chain.brid.toHex()}, postchain BRID = ${brid.toHex()}"
+            }
 
-        for ((height, config) in chain.configs) {
-            if (height != 0L) {
-                node.addConfiguration(chain.iid, height, config.gtvConfig)
+            for ((height, config) in chain.configs) {
+                if (height != 0L) {
+                    log.info("Adding configuration for chain: ${chain.iid}, height: $height")
+                    withReadWriteConnection(node.postchainContext.storage, chain.iid) { eContext: EContext ->
+                        BlockchainApi.addConfiguration(eContext, height, override = true, config.gtvConfig)
+                    }
+                }
             }
         }
     }
@@ -146,13 +170,13 @@ private fun runTests(args: CommonArgs, matcher: TestMatcher, targetChains: Colle
     val testRes = TestRunnerResults()
 
     StorageBuilder.buildStorage(nodeAppConf).use { storage ->
-        val sqlMgr = PostchainStorageSqlManager(storage, false)
+        val sqlMgr = PostchainStorageSqlManager(storage, args.sqlLog)
 
         for (tChain in tChains) {
             val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(tChain.rApp, Rt_ChainSqlMapping(tChain.chain.iid))
             val blockRunnerStrategy = Rt_StaticBlockRunnerStrategy(tChain.gtvConfig, keyPair)
 
-            val globalCtx = RellCliUtils.createGlobalContext(true, compilerOptions, true)
+            val globalCtx = RellCliUtils.createGlobalContext(compilerOptions, typeCheck = true, runXmlTest = true, sqlLog = args.sqlLog)
 
             val chainRid = BlockchainRid(tChain.chain.brid.toByteArray())
             val chainCtx = PostchainUtils.createChainContext(tChain.gtvConfig, tChain.rApp, chainRid)
@@ -193,23 +217,29 @@ private fun getNodeConfig(rellAppConf: RellPostAppCliConfig, rellAppNode: RellPo
 private class CommonArgs(
         val runConfigFile: File,
         val sourceDir: File,
-        val sourceVer: R_LangVersion
+        val sourceVer: R_LangVersion,
+        val sqlLog: Boolean,
 )
 
 @CommandLine.Command(name = "RellRunConfigLaunch", description = ["Launch a run.xml config"])
 private class RellRunConfigLaunchCliArgs: RellRunConfigCliArgs() {
     @CommandLine.Option(names = ["--test"], description = ["Run unit tests"])
-    var test: Boolean = false
+    var test = false
 
-    @CommandLine.Option(names = ["--test-filter"],
+    @CommandLine.Option(
+        names = ["--test-filter"],
         description = ["Filter test modules and functions (supports glob patterns, comma-separated)"]
     )
     var testFilter: String? = null
 
-    @CommandLine.Option(names = ["--test-chain"],
+    @CommandLine.Option(
+        names = ["--test-chain"],
         description = ["Execute tests only for specified chains (comma-separated list of chain names)"]
     )
     var testChain: String? = null
+
+    @CommandLine.Option(names = ["--sqllog"], description = ["Enable SQL logging"])
+    var sqlLog = false
 
     fun getTargetChains(): Set<String>? {
         val s = testChain

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -15,9 +15,9 @@ class LibTest: BaseRellTest(false) {
         chk("abs(a)", 0, "int[0]")
         chk("abs(a)", -123, "int[123]")
         chk("abs(a)", 123, "int[123]")
-        chk("abs('Hello')", "ct_err:expr_call_argtypes:abs:text")
-        chk("abs()", "ct_err:expr_call_argtypes:abs:")
-        chk("abs(1, 2)", "ct_err:expr_call_argtypes:abs:integer,integer")
+        chk("abs('Hello')", "ct_err:expr_call_argtypes:[abs]:text")
+        chk("abs()", "ct_err:expr_call_argtypes:[abs]:")
+        chk("abs(1, 2)", "ct_err:expr_call_argtypes:[abs]:integer,integer")
     }
 
     @Test fun testMinMax() {
@@ -203,10 +203,10 @@ class LibTest: BaseRellTest(false) {
         chk("$f(zmap(map<integer,text>()))", "boolean[${!exists}]")
         chk("$f(zmap(null))", "boolean[${!exists}]")
 
-        chk("$f(123)", "ct_err:expr_call_argtypes:$f:integer")
-        chk("$f(false)", "ct_err:expr_call_argtypes:$f:boolean")
-        chk("$f('Hello')", "ct_err:expr_call_argtypes:$f:text")
-        chk("$f(null)", "ct_err:expr_call_argtypes:$f:null")
+        chk("$f(123)", "ct_err:expr_call_argtypes:[$f]:integer")
+        chk("$f(false)", "ct_err:expr_call_argtypes:[$f]:boolean")
+        chk("$f('Hello')", "ct_err:expr_call_argtypes:[$f]:text")
+        chk("$f(null)", "ct_err:expr_call_argtypes:[$f]:null")
     }
 
     @Test fun testDeprecatedError() {
@@ -219,18 +219,19 @@ class LibTest: BaseRellTest(false) {
         chkCompile("struct rec { v: map<text,GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
         chkCompile("struct rec { v: map<text,list<GTXValue?>>?; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
 
-        chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
-        chkCompile("function f() { GTXValue.from_json(''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
+        chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:TYPE:GTXValue:gtv")
+        chkCompile("function f() { GTXValue.from_json(''); }", "ct_err:deprecated:TYPE:GTXValue:gtv")
     }
 
     @Test fun testDeprecatedDefaultMode() {
         chkCompile("function f(v: GTXValue){}", "ct_err:deprecated:TYPE:GTXValue:gtv")
         chkCompile("struct rec { v: list<GTXValue>; }", "ct_err:deprecated:TYPE:GTXValue:gtv")
-        chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:NAMESPACE:GTXValue:gtv")
+        chkCompile("function f() { GTXValue.from_bytes(x''); }", "ct_err:deprecated:TYPE:GTXValue:gtv")
 
         chkWarn()
         chkFn("= is_signer(x'1234');", "boolean[false]")
         chkWarn("deprecated:FUNCTION:is_signer:op_context.is_signer")
+
         chkFn("= op_context.is_signer(x'1234');", "boolean[false]")
         chkWarn()
     }
@@ -269,6 +270,7 @@ class LibTest: BaseRellTest(false) {
         chk("[1,2,3].removeAll([1,2])", "ct_err:deprecated:FUNCTION:list<integer>.removeAll:remove_all")
         chk("[1,2,3].addAll([4,5,6])", "ct_err:deprecated:FUNCTION:list<integer>.addAll:add_all")
         chk("[1,2,3].len()", "ct_err:deprecated:FUNCTION:list<integer>.len:size")
+        chk("[1,2,3]._set(0, 1)", "ct_err:deprecated:FUNCTION:list<integer>._set:set")
 
         chk("set([1,2,3]).containsAll([1,3])", "ct_err:deprecated:FUNCTION:set<integer>.containsAll:contains_all")
         chk("set([1,2,3]).removeAll([1,2])", "ct_err:deprecated:FUNCTION:set<integer>.removeAll:remove_all")
@@ -306,8 +308,8 @@ class LibTest: BaseRellTest(false) {
     }
 
     @Test fun testSysQueries() {
-        chk("rell.get_rell_version()", "ct_err:unknown_name:rell.get_rell_version")
-        chk("rell.get_app_structure()", "ct_err:unknown_name:rell.get_app_structure")
+        chk("rell.get_rell_version()", "ct_err:unknown_name:[rell]:get_rell_version")
+        chk("rell.get_app_structure()", "ct_err:unknown_name:[rell]:get_app_structure")
     }
 
     @Test fun testGtxOperationType() {

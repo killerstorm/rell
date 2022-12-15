@@ -8,6 +8,8 @@ import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
+import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_Name
 import org.apache.commons.lang3.StringUtils
 import java.util.*
 import java.util.function.Supplier
@@ -157,6 +159,18 @@ private class ValueLazyString(override val value: String): LazyString()
 private class FnLazyString(private val fn: () -> String): LazyString() {
     override val value by lazy {
         fn()
+    }
+}
+
+class LazyPosString(val pos: S_Pos, val lazyStr: LazyString) {
+    val str: String get() = lazyStr.value
+
+    override fun toString() = lazyStr.toString()
+
+    companion object {
+        fun of(pos: S_Pos, value: String) = LazyPosString(pos, LazyString.of(value))
+        fun of(pos: S_Pos, fn: () -> String) = LazyPosString(pos, LazyString.of(fn))
+        fun of(cName: C_Name) = of(cName.pos, cName.str)
     }
 }
 

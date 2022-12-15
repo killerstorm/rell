@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
 
 import com.google.common.io.Resources
+import net.postchain.common.toHex
 import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.crypto.secp256k1_sign
-import net.postchain.common.toHex
 import net.postchain.gtv.Gtv
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.utils.CommonUtils
@@ -29,6 +29,12 @@ class LibCryptoTest: BaseRellTest(false) {
         chk("verify_signature(x'DEADBEEF', x'$pubKey', x'$sign2')", "boolean[false]")
         chk("verify_signature(x'DEADBEFF', x'$pubKey', x'$sign1')", "boolean[false]")
         chk("verify_signature(x'DEADBEFF', x'$pubKey', x'$sign2')", "boolean[true]")
+
+        chk("verify_signature(x'DEADBEFF', x'$pubKey', x'${sign2.dropLast(2)}')", "boolean[false]")
+        chk("verify_signature(x'DEADBEFF', x'$pubKey', x'${sign2.dropLast(4)}')", "boolean[false]")
+        chk("verify_signature(x'DEADBEFF', x'$pubKey', x'${sign2.dropLast(6)}')", "boolean[false]")
+        chk("verify_signature(x'DEADBEFF', x'$pubKey', x'123456')", "boolean[false]")
+        chk("verify_signature(x'DEADBEFF', x'$pubKey', x'')", "boolean[false]")
     }
 
     @Test fun testKeccak256() {

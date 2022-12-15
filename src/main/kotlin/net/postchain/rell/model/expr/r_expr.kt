@@ -1,10 +1,11 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.expr
 
 import net.postchain.rell.compiler.base.utils.C_LateGetter
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.lib.type.C_Lib_Type_Decimal
 import net.postchain.rell.model.*
 import net.postchain.rell.model.stmt.R_ForIterator
@@ -67,7 +68,7 @@ class R_VarExpr(type: R_Type, val ptr: R_VarPtr, val name: String): R_Destinatio
         override fun get(): Rt_Value {
             val value = frame.getOpt(ptr)
             if (value == null) {
-                throw Rt_Error("expr_var_uninit:$name", "Variable '$name' has not been initialized")
+                throw Rt_Exception.common("expr_var_uninit:$name", "Variable '$name' has not been initialized")
             }
             return value
         }
@@ -137,7 +138,7 @@ class R_MapLiteralExpr(type: R_MapType, private val entries: List<Pair<R_Expr, R
             val key = keyExpr.evaluate(frame)
             val value = valueExpr.evaluate(frame)
             if (key in map) {
-                throw Rt_Error("expr_map_dupkey:${key.strCode()}", "Duplicate map key: ${key.str()}")
+                throw Rt_Exception.common("expr_map_dupkey:${key.strCode()}", "Duplicate map key: ${key.str()}")
             }
             map.put(key, value)
         }
@@ -214,7 +215,7 @@ class R_IteratorCopyMapConstructorExpr(
             val k = tuple.get(0)
             val v = tuple.get(1)
             val v0 = map.put(k, v)
-            Rt_Utils.check(v0 == null) { "map:new:iterator:dupkey:${k.strCode()}" to "Duplicate key: ${k.str()}" }
+            Rt_Utils.check(v0 == null) { "map:new:iterator:dupkey:${k.strCode()}" toCodeMsg "Duplicate key: ${k.str()}" }
         }
         return Rt_MapValue(type, map)
     }
@@ -272,7 +273,7 @@ class R_MapSubscriptExpr(type: R_Type, val base: R_Expr, val expr: R_Expr): R_De
         fun getValue(map: Map<Rt_Value, Rt_Value>, key: Rt_Value): Rt_Value {
             val value = map[key]
             if (value == null) {
-                throw Rt_Error("fn_map_get_novalue:${key.strCode()}", "Key not in map: ${key.str()}")
+                throw Rt_Exception.common("fn_map_get_novalue:${key.strCode()}", "Key not in map: ${key.str()}")
             }
             return value
         }
@@ -297,7 +298,7 @@ class R_TextSubscriptExpr(val base: R_Expr, val expr: R_Expr): R_Expr(R_TextType
         val index = indexValue.asInteger()
 
         if (index < 0 || index >= str.length) {
-            throw Rt_Error("expr_text_subscript_index:${str.length}:$index",
+            throw Rt_Exception.common("expr_text_subscript_index:${str.length}:$index",
                     "Index out of bounds: $index (length ${str.length})")
         }
 
@@ -315,7 +316,7 @@ class R_ByteArraySubscriptExpr(val base: R_Expr, val expr: R_Expr): R_Expr(R_Int
         val index = indexValue.asInteger()
 
         if (index < 0 || index >= array.size) {
-            throw Rt_Error("expr_bytearray_subscript_index:${array.size}:$index",
+            throw Rt_Exception.common("expr_bytearray_subscript_index:${array.size}:$index",
                     "Index out of bounds: $index (length ${array.size})")
         }
 
@@ -342,7 +343,7 @@ class R_NotNullExpr(type: R_Type, val expr: R_Expr): R_Expr(type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val v = expr.evaluate(frame)
         if (v == Rt_NullValue) {
-            throw Rt_Error("null_value", "Null value")
+            throw Rt_Exception.common("null_value", "Null value")
         }
         return v
     }
@@ -558,10 +559,10 @@ class R_ObjectAttrExpr(type: R_Type, val rObject: R_ObjectDefinition, val atBase
 
         if (count == 0) {
             val name = rObject.appLevelName
-            throw Rt_Error("obj_norec:$name", "No record for object '$name' in database")
+            throw Rt_Exception.common("obj_norec:$name", "No record for object '$name' in database")
         } else if (count > 1) {
             val name = rObject.appLevelName
-            throw Rt_Error("obj_multirec:$name:$count", "Multiple records for object '$name' in database: $count")
+            throw Rt_Exception.common("obj_multirec:$name:$count", "Multiple records for object '$name' in database: $count")
         }
 
         val record = records[0]
@@ -608,8 +609,22 @@ class R_ChainHeightExpr(val chain: R_ExternalChainRef): R_Expr(R_IntegerType) {
 
 class R_StackTraceExpr(private val subExpr: R_Expr, private val filePos: R_FilePos): R_Expr(subExpr.type) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        return Rt_StackTraceError.trackStack(frame, filePos) {
+        return trackStack(frame, filePos) {
             subExpr.evaluate(frame)
+        }
+    }
+
+    companion object {
+        fun <T> trackStack(frame: Rt_CallFrame, filePos: R_FilePos, code: () -> T): T {
+            try {
+                return code()
+            } catch (e: Rt_Exception) {
+                throw if (e.info.stack.isNotEmpty()) e else {
+                    val stack = frame.stackTrace(filePos)
+                    val info = Rt_ExceptionInfo(extraMessage = e.info.extraMessage, stack = stack)
+                    Rt_Exception(e.err, info, e)
+                }
+            }
         }
     }
 }

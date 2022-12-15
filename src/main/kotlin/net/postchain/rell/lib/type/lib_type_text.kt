@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -14,6 +14,7 @@ import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils.depError
 import net.postchain.rell.compiler.base.utils.C_MemberFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_SysFunction
+import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.Db_SysFunction
@@ -65,6 +66,8 @@ object C_Lib_Type_Text: C_Lib_Type("text", R_TextType) {
         b.add("last_index_of", R_IntegerType, listOf(R_TextType), TextFns.LastIndexOf_2)
         b.add("lastIndexOf", R_IntegerType, listOf(R_TextType, R_IntegerType), TextFns.LastIndexOf_3, depError("last_index_of"))
         b.add("last_index_of", R_IntegerType, listOf(R_TextType, R_IntegerType), TextFns.LastIndexOf_3)
+        b.add("repeat", R_TextType, listOf(R_IntegerType), TextFns.Repeat)
+        b.add("reversed", R_TextType, listOf(), TextFns.Reversed)
         b.add("sub", R_TextType, listOf(R_IntegerType), TextFns.Sub_2)
         b.add("sub", R_TextType, listOf(R_IntegerType, R_IntegerType), TextFns.Sub_3)
         b.add("to_bytes", R_ByteArrayType, listOf(), TextFns.ToBytes)
@@ -153,7 +156,7 @@ private object TextFns {
         val s2 = b.asString()
         val start = c.asInteger()
         if (start < 0 || start >= s1.length) {
-            throw Rt_Error(
+            throw Rt_Exception.common(
                 "fn:text.index_of:index:${s1.length}:$start",
                 "Index out of bounds: $start (length ${s1.length})"
             )
@@ -172,12 +175,25 @@ private object TextFns {
         val s2 = b.asString()
         val start = c.asInteger()
         if (start < 0 || start >= s1.length) {
-            throw Rt_Error(
+            throw Rt_Exception.common(
                 "fn:text.last_index_of:index:${s1.length}:$start",
                 "Index out of bounds: $start (length ${s1.length})"
             )
         }
         Rt_IntValue(s1.lastIndexOf(s2, start.toInt()).toLong())
+    }
+
+    val Repeat = C_SysFunction.simple2(
+        Db_SysFunction.template("text.repeat", 2, "${SqlConstants.FN_TEXT_REPEAT}(#0, (#1)::INT)"),
+        pure = true
+    ) { a, b ->
+        val s = a.asString()
+        val n = b.asInteger()
+        C_Lib_Type_List.rtCheckRepeatArgs(s.length, n, "text")
+        if (s.isEmpty() || n == 1L) a else {
+            val res = s.repeat(n.toInt())
+            Rt_TextValue(res)
+        }
     }
 
     val Replace = C_SysFunction.simple3(
@@ -188,6 +204,17 @@ private object TextFns {
         val s2 = b.asString()
         val s3 = c.asString()
         Rt_TextValue(s1.replace(s2, s3))
+    }
+
+    val Reversed = C_SysFunction.simple1(
+        Db_SysFunction.template("text.reversed", 1, "REVERSE(#0)"),
+        pure = true
+    ) { a ->
+        val s = a.asString()
+        if (s.length <= 1) a else {
+            val res = s.reversed()
+            Rt_TextValue(res)
+        }
     }
 
     private val SPLIT_TYPE = R_ListType(R_TextType)
@@ -220,7 +247,7 @@ private object TextFns {
         val res = try {
             Pattern.matches(pattern, s)
         } catch (e: PatternSyntaxException) {
-            throw Rt_Error("fn:text.matches:bad_regex", "Invalid regular expression: $pattern")
+            throw Rt_Exception.common("fn:text.matches:bad_regex", "Invalid regular expression: $pattern")
         }
         Rt_BooleanValue(res)
     }
@@ -262,9 +289,9 @@ private object TextFns {
         val s = a.asString()
         val index = b.asInteger()
         if (index < 0 || index >= s.length) {
-            throw Rt_Error(
+            throw Rt_Exception.common(
                 "fn:text.char_at:index:${s.length}:$index",
-                "Text index out of bounds: $index (length ${s.length})"
+                "Index out of bounds: $index (length ${s.length})"
             )
         }
         val r = s[index.toInt()]
@@ -293,16 +320,16 @@ private object TextFns {
     private fun calcSub(s: String, start: Long, end: Long): Rt_Value {
         val len = s.length
         if (start < 0 || start > len || end < start || end > len) {
-            throw Rt_Error(
+            throw Rt_Exception.common(
                 "fn:text.sub:range:$len:$start:$end",
-                "Invalid substring range: start = $start, end = $end (length $len)"
+                "Invalid range: start = $start, end = $end (length $len)"
             )
         }
         return Rt_TextValue(s.substring(start.toInt(), end.toInt()))
     }
 
     val Format = C_SysFunction.simple(pure = true) { args ->
-        Rt_Utils.check(args.isNotEmpty()) { "fn:text.format:no_args" to "No arguments" }
+        Rt_Utils.check(args.isNotEmpty()) { "fn:text.format:no_args" toCodeMsg "No arguments" }
         val s = args[0].asString()
         val anys = args.drop(1).map { it.asFormatArg() }.toTypedArray()
         val r = try {

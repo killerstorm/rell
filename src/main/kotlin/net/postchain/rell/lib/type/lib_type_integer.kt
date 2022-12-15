@@ -28,7 +28,7 @@ object C_Lib_Type_Integer: C_Lib_Type("integer", R_IntegerType) {
 
     override fun bindConstants() = immListOf(
         C_LibUtils.constValue("MIN_VALUE", Long.MIN_VALUE),
-        C_LibUtils.constValue("MAX_VALUE", Long.MAX_VALUE)
+        C_LibUtils.constValue("MAX_VALUE", Long.MAX_VALUE),
     )
 
     override fun bindStaticFunctions(b: C_GlobalFuncBuilder) {
@@ -84,7 +84,7 @@ private object IntFns {
         val v = a.asInteger()
         val r = b.asInteger()
         if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
-            throw Rt_Error("fn_int_str_radix:$r", "Invalid radix: $r")
+            throw Rt_Exception.common("fn_int_str_radix:$r", "Invalid radix: $r")
         }
         val s = v.toString(r.toInt())
         Rt_TextValue(s)
@@ -108,7 +108,7 @@ private object IntFns {
     val FromText_2 = C_SysFunction.simple2(pure = true) { a, b ->
         val r = b.asInteger()
         if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
-            throw Rt_Error("fn:integer.from_text:radix:$r", "Invalid radix: $r")
+            throw Rt_Exception.common("fn:integer.from_text:radix:$r", "Invalid radix: $r")
         }
         calcFromText(a, r.toInt())
     }
@@ -118,7 +118,7 @@ private object IntFns {
         val r = try {
             java.lang.Long.parseLong(s, radix)
         } catch (e: NumberFormatException) {
-            throw Rt_Error("fn:integer.from_text:$s", "Invalid number: '$s'")
+            throw Rt_Exception.common("fn:integer.from_text:$s", "Invalid number: '$s'")
         }
         return Rt_IntValue(r)
     }
@@ -128,7 +128,7 @@ private object IntFns {
         val r = try {
             java.lang.Long.parseUnsignedLong(s, 16)
         } catch (e: NumberFormatException) {
-            throw Rt_Error("fn:integer.from_hex:$s", "Invalid hex number: '$s'")
+            throw Rt_Exception.common("fn:integer.from_hex:$s", "Invalid hex number: '$s'")
         }
         Rt_IntValue(r)
     }

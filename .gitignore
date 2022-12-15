@@ -2,6 +2,7 @@
 *.iml
 .DS_Store
 META-INF
+/.run
 /target
 /.attach_pid*
 /logs

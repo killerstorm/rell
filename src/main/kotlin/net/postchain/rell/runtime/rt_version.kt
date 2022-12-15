@@ -14,7 +14,6 @@ import java.util.*
 
 enum class Rt_RellVersionProperty(val key: String) {
     RELL_BRANCH("rell.branch"),
-    RELL_BUILD_TIME("rell.build.time"),
     RELL_VERSION("rell.version"),
     RELL_COMMIT_ID("rell.commit.id"),
     RELL_COMMIT_ID_FULL("rell.commit.id.full"),
@@ -34,7 +33,6 @@ class Rt_RellVersion private constructor(
     companion object {
         private val PROPS = immMapOf(
                 "git.branch" to Rt_RellVersionProperty.RELL_BRANCH,
-                "git.build.time" to Rt_RellVersionProperty.RELL_BUILD_TIME,
                 "git.build.version" to Rt_RellVersionProperty.RELL_VERSION,
                 "git.commit.id.abbrev" to Rt_RellVersionProperty.RELL_COMMIT_ID,
                 "git.commit.id.full" to Rt_RellVersionProperty.RELL_COMMIT_ID_FULL,
@@ -83,7 +81,6 @@ class Rt_RellVersion private constructor(
             val parts = mapOf(
                     "rell" to "${props[Rt_RellVersionProperty.RELL_VERSION]}",
                     "postchain" to "${props[Rt_RellVersionProperty.POSTCHAIN_VERSION]}",
-                    "time" to "${props[Rt_RellVersionProperty.RELL_BUILD_TIME]}",
                     "branch" to "${props[Rt_RellVersionProperty.RELL_BRANCH]}",
                     "commit" to "${props[Rt_RellVersionProperty.RELL_COMMIT_ID]} (${props[Rt_RellVersionProperty.RELL_COMMIT_TIME]})",
                     "dirty" to "${props[Rt_RellVersionProperty.RELL_DIRTY]}"

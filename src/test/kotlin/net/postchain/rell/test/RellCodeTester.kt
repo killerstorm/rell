@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -9,8 +9,8 @@ import net.postchain.base.BaseEContext
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.common.BlockchainRid
-import net.postchain.common.data.ByteArrayKey
 import net.postchain.common.hexStringToByteArray
+import net.postchain.common.types.WrappedByteArray
 import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
@@ -409,7 +409,7 @@ class RellCodeTester(
             val module = app.moduleMap.getValue(modName)
             val struct = module.moduleArgs!!
             val gtv = GtvTestUtils.strToGtv(it.value)
-            val value = struct.type.gtvToRt(GtvToRtContext(pretty = true), gtv)
+            val value = struct.type.gtvToRt(GtvToRtContext.make(pretty = true), gtv)
             modName to value
         }.toMap().toImmMap()
     }
@@ -458,7 +458,7 @@ class RellCodeTester(
         val sqlMapping = createChainSqlMapping()
         val rtDeps = chainDependencies.mapValues { (_, v) -> Rt_ChainDependency(v.rid.data) }
 
-        val heightMap = chainDependencies.mapKeys { (_, v) -> ByteArrayKey(v.rid.data) }.mapValues { (_, v) -> v.height }
+        val heightMap = chainDependencies.mapKeys { (_, v) -> WrappedByteArray(v.rid.data) }.mapValues { (_, v) -> v.height }
         val heightProvider = TestChainHeightProvider(heightMap)
 
         return eval.wrapRt {
@@ -468,8 +468,8 @@ class RellCodeTester(
 
     private class TestChainDependency(val rid: BlockchainRid, val height: Long)
 
-    private class TestChainHeightProvider(private val map: Map<ByteArrayKey, Long>): Rt_ChainHeightProvider {
-        override fun getChainHeight(rid: ByteArrayKey, id: Long): Long? {
+    private class TestChainHeightProvider(private val map: Map<WrappedByteArray, Long>): Rt_ChainHeightProvider {
+        override fun getChainHeight(rid: WrappedByteArray, id: Long): Long? {
             val height = map[rid]
             return height
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.repl
@@ -37,7 +37,7 @@ class ReplStatementTest: BaseRellTest(false) {
     }
 
     @Test fun testVarRuntimeError() {
-        repl.chk("var x: integer = 123 / (1 - 1);", "RTE:expr:/:div0:123")
+        repl.chk("var x: integer = 123 / (1 - 1);", "rt_err:expr:/:div0:123")
         repl.chk("x", "CTE:<console>:unknown_name:x")
         repl.chk("x = 123;", "CTE:<console>:unknown_name:x")
         repl.chk("var x: integer = 456;")

@@ -1,11 +1,12 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.expr
 
 import net.postchain.rell.compiler.ast.C_BinOp_EqNe
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_MessageContext
 import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.fn.C_FuncCaseCtx
 import net.postchain.rell.compiler.base.utils.C_Error
@@ -17,9 +18,11 @@ import net.postchain.rell.model.R_SysFunction
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_ExprStatement
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_CommonError
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.LazyString
 
 object C_ExprUtils {
@@ -27,15 +30,17 @@ object C_ExprUtils {
     val ERROR_DB_EXPR = errorDbExpr()
     val ERROR_STATEMENT = R_ExprStatement(ERROR_R_EXPR)
 
-    fun toDbExpr(errPos: S_Pos, rExpr: R_Expr): Db_Expr {
+    fun toDbExpr(msgCtx: C_MessageContext, errPos: S_Pos, rExpr: R_Expr): Db_Expr {
         val type = rExpr.type
-        if (!type.sqlAdapter.isSqlCompatible()) {
-            throw C_Errors.errExprNoDb(errPos, type)
+        return if (!type.sqlAdapter.isSqlCompatible()) {
+            C_Errors.errExprNoDb(msgCtx, errPos, type)
+            errorDbExpr()
+        } else {
+            Db_InterpretedExpr(rExpr)
         }
-        return Db_InterpretedExpr(rExpr)
     }
 
-    fun makeDbBinaryExpr(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, left: Db_Expr, right: Db_Expr): Db_Expr {
+    private fun makeDbBinaryExpr(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, left: Db_Expr, right: Db_Expr): Db_Expr {
         return if (left is Db_InterpretedExpr && right is Db_InterpretedExpr) {
             val rExpr = R_BinaryExpr(type, rOp, left.expr, right.expr)
             Db_InterpretedExpr(rExpr)
@@ -57,9 +62,8 @@ object C_ExprUtils {
         return V_BinaryExpr(ctx, pos, vOp, left, right, C_ExprVarFacts.EMPTY)
     }
 
-    fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, qualifiedName: C_QualifiedName): R_Expr {
-        val nameLazy = LazyString.of { qualifiedName.str() }
-        return createSysCallRExpr(type, fn, args, qualifiedName.pos, nameLazy)
+    fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, nameMsg: LazyPosString): R_Expr {
+        return createSysCallRExpr(type, fn, args, nameMsg.pos, nameMsg.lazyStr)
     }
 
     fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, caseCtx: C_FuncCaseCtx): R_Expr {
@@ -113,7 +117,7 @@ object C_ExprUtils {
 
     fun errorExpr(ctx: C_ExprContext, pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): C_Expr {
         val value = errorVExpr(ctx, pos, type, msg)
-        return C_VExpr(value)
+        return C_ValueExpr(value)
     }
 
     fun errorMember(ctx: C_ExprContext, pos: S_Pos): C_ExprMember {
@@ -124,30 +128,14 @@ object C_ExprUtils {
         try {
             val v = code()
             return v
-        } catch (e: Rt_Error) {
-            throw C_Error.stop(pos, "eval_fail:${e.code}", e.message ?: "Evaluation failed")
+        } catch (e: Rt_Exception) {
+            val msg = e.fullMessage()
+            when (e.err) {
+                is Rt_CommonError -> throw C_Error.stop(pos, "eval_fail:${e.err.code}", msg)
+                else -> throw C_Error.stop(pos, "eval_fail:${e.err.javaClass.simpleName}", msg)
+            }
         } catch (e: Throwable) {
             throw C_Error.stop(pos, "eval_fail:${e.javaClass.canonicalName}", "Evaluation failed")
-        }
-    }
-
-    fun valueFunctionExpr(valueExpr: C_Expr?, fnExpr: C_Expr?, hint: C_ExprHint): C_Expr? {
-        val valueCallable = valueExpr?.isCallable() ?: false
-        return valueFunctionExpr0(valueExpr, fnExpr, valueCallable, hint)
-    }
-
-    fun valueFunctionExprMember(valueMember: C_ExprMember?, fnMember: C_ExprMember?, hint: C_ExprHint): C_ExprMember? {
-        val valueCallable = valueMember?.expr?.isCallable() ?: false
-        return valueFunctionExpr0(valueMember, fnMember, valueCallable, hint)
-    }
-
-    fun <T> valueFunctionExpr0(value: T?, fn: T?, valueCallable: Boolean, hint: C_ExprHint): T? {
-        return if (value != null && (valueCallable || fn == null)) {
-            value
-        } else if (value != null && fn != null) {
-            if (hint.callable) fn else value
-        } else {
-            fn
         }
     }
 }

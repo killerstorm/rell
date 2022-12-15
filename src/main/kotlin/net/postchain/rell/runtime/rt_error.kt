@@ -1,90 +1,74 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime
 
-import net.postchain.rell.model.R_FilePos
 import net.postchain.rell.model.R_StackPos
+import net.postchain.rell.utils.immListOf
+import net.postchain.rell.utils.toImmList
 
-sealed class Rt_BaseError: RuntimeException {
-    constructor(msg: String, cause: Throwable? = null): super(msg, cause)
-    abstract fun updateMessage(msg: String): Rt_BaseError
-}
+class Rt_ExceptionInfo(stack: List<R_StackPos>, val extraMessage: String? = null) {
+    val stack = stack.toImmList()
 
-class Rt_Error: Rt_BaseError {
-    val code: String
-    val msg: String
-
-    constructor(code: String, msg: String): super(msg) {
-        this.code = code
-        this.msg = msg
+    fun fullMessage(err: Rt_Error): String {
+        var res = err.message()
+        if (extraMessage != null) {
+            res = "$extraMessage: $res"
+        }
+        return res
     }
-
-    constructor(code: String, msg: String, cause: Throwable): super(msg, cause) {
-        this.code = code
-        this.msg = msg
-    }
-
-    override fun updateMessage(msg: String) = Rt_Error(code, msg, this)
-}
-
-class Rt_RequireError: Rt_BaseError {
-    val userMsg: String?
-
-    constructor(userMsg: String?): this(userMsg, userMsg ?: "Requirement error", null)
-
-    private constructor(userMsg: String?, message: String, cause: Throwable?): super(message, cause) {
-        this.userMsg = userMsg
-    }
-
-    override fun updateMessage(msg: String) = Rt_RequireError(userMsg, msg, this)
-}
-
-class Rt_ValueTypeError: Rt_BaseError {
-    val expected: Rt_ValueType
-    val actual: Rt_ValueType
-
-    constructor(expected: Rt_ValueType, actual: Rt_ValueType)
-            : this(expected, actual, "Value type mismatch: expected $expected, but was $actual", null)
-
-    private constructor(expected: Rt_ValueType, actual: Rt_ValueType, message: String, cause: Throwable?): super(message, cause) {
-        this.expected = expected
-        this.actual = actual
-    }
-
-    override fun updateMessage(msg: String) = Rt_ValueTypeError(expected, actual, msg, this)
-}
-
-class Rt_GtvError: Rt_BaseError {
-    val code: String
-
-    constructor(code: String, msg: String): this(code, msg, null)
-
-    private constructor(code: String, msg: String, cause: Throwable?): super(msg, cause) {
-        this.code = code
-    }
-
-    override fun updateMessage(msg: String) = Rt_GtvError(code, msg, this)
-}
-
-class Rt_StackTraceError private constructor(
-        message: String,
-        val realCause: Throwable,
-        val stack: List<R_StackPos>
-): Rt_BaseError(message, realCause) {
-    override fun updateMessage(msg: String) = Rt_StackTraceError(msg, realCause, stack)
 
     companion object {
-        fun <T> trackStack(frame: Rt_CallFrame, filePos: R_FilePos, code: () -> T): T {
-            try {
-                return code()
-            } catch (e: Rt_StackTraceError) {
-                throw e
-            } catch (e: Rt_BaseError) {
-                val stack = frame.stackTrace(filePos)
-                throw Rt_StackTraceError(e.message ?: "", e, stack)
-            }
-        }
+        val NONE = Rt_ExceptionInfo(stack = immListOf())
+    }
+}
+
+class Rt_Exception(
+    val err: Rt_Error,
+    val info: Rt_ExceptionInfo = Rt_ExceptionInfo.NONE,
+    cause: Throwable? = null,
+): RuntimeException(info.fullMessage(err), cause) {
+    fun fullMessage() = info.fullMessage(err)
+
+    companion object {
+        fun common(code: String, msg: String) = Rt_Exception(Rt_CommonError(code, msg))
+    }
+}
+
+abstract class Rt_Error {
+    abstract fun code(): String
+    abstract fun message(): String
+}
+
+class Rt_CommonError(val code: String, private val msg: String): Rt_Error() {
+    override fun code() = "rt_err:$code"
+    override fun message() = msg
+}
+
+class Rt_RequireError(val userMsg: String?): Rt_Error() {
+    override fun code() = "req_err:" + if (userMsg != null) "[$userMsg]" else "null"
+    override fun message() = userMsg ?: "Requirement error"
+
+    companion object {
+        fun exception(userMsg: String?) = Rt_Exception(Rt_RequireError(userMsg))
+    }
+}
+
+class Rt_ValueTypeError(val expected: Rt_ValueType, val actual: Rt_ValueType): Rt_Error() {
+    override fun code() = "rtv_err:$expected:$actual"
+    override fun message() = "Value type mismatch: $actual instead of $expected"
+
+    companion object {
+        fun exception(expected: Rt_ValueType, actual: Rt_ValueType) = Rt_Exception(Rt_ValueTypeError(expected, actual))
+    }
+}
+
+class Rt_GtvError(val code: String, val msg: String): Rt_Error() {
+    override fun code() = "gtv_err:$code"
+    override fun message() = msg
+
+    companion object {
+        fun exception(code: String, msg: String) = Rt_Exception(Rt_GtvError(code, msg))
     }
 }

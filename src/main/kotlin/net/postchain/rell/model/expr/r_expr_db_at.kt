@@ -179,8 +179,8 @@ class Db_AtWhatValue_ToStruct(private val rStruct: R_Struct, exprs: List<Db_Expr
             val attrs = rStruct.attributesList
 
             if (dbValues.size != attrs.size) {
-                throw Rt_Error("to_struct:values_size:${attrs.size}:${dbValues.size}",
-                        "Received wrong number of values: ${dbValues.size} instead of ${attrs.size}")
+                throw Rt_Exception.common("to_struct:values_size:${attrs.size}:${dbValues.size}",
+                        "Wrong number of values: ${dbValues.size} instead of ${attrs.size}")
             }
 
             val attrValues = dbValues.toMutableList()

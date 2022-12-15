@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -94,25 +94,21 @@ class AtExprExistsTest: BaseRellTest() {
     @Test fun testOuterReferencing() {
         initDataUserGroupMembership()
 
-        chk("user @* { exists( membership @* { .user.name == user.name, .group.name == 'admin' } ) } ( user.name )",
-                "[Bob, Trudy]")
+        chk("user @* { exists( membership @* { .user.name == user.name, .group.name == 'admin' } ) } ( user.name )", "[Bob, Trudy]")
 
         chk("user @* { exists( membership @* { .user.name == .name, .group.name == 'admin' } ) } ( .name )",
-                "ct_err:at_expr:attr:belongs_to_outer:name:user")
+                "ct_err:at_expr:attr:belongs_to_outer:name:user:user")
 
         chk("user @* { exists( membership @* { .user == user, .group.name == 'admin' } ) } ( .name )", "[Bob, Trudy]")
 
         chk("(u: user) @* { exists( (m: membership) @* { .user.name == .name, .group.name == 'admin' } ) } ( .name )",
-                "ct_err:at_expr:attr:belongs_to_outer:name:user")
+                "ct_err:at_expr:attr:belongs_to_outer:name:u:user")
 
         chk("(u: user) @* { exists( (m: membership) @* { m.user.name == .name, m.group.name == 'admin' } ) } ( .name )",
-                "ct_err:at_expr:attr:belongs_to_outer:name:user")
+                "ct_err:at_expr:attr:belongs_to_outer:name:u:user")
 
-        chk("(u: user) @* { exists( (m: membership) @* { m.user.name == u.name, m.group.name == 'admin' } ) } ( .name )",
-                "[Bob, Trudy]")
-
-        chk("(u: user) @* { exists( (m: membership) @* { m.user == u, m.group.name == 'admin' } ) } ( .name )",
-                "[Bob, Trudy]")
+        chk("(u: user) @* { exists( (m: membership) @* { m.user.name == u.name, m.group.name == 'admin' } ) } ( .name )", "[Bob, Trudy]")
+        chk("(u: user) @* { exists( (m: membership) @* { m.user == u, m.group.name == 'admin' } ) } ( .name )", "[Bob, Trudy]")
 
         chk("user @* { exists( group @* { .name == 'admin' } ) } ( .name )", "[Bob, Alice, Trudy, John]")
         chk("user @* { exists( group @* { group.name == 'admin' } ) } ( .name )", "[Bob, Alice, Trudy, John]")
@@ -147,7 +143,7 @@ class AtExprExistsTest: BaseRellTest() {
         chk("user @* { exists( membership @* { .user == $, .group.name == 'tester' } ) } ( .name )",
                 "ct_err:binop_operand_type:==:[user]:[membership]")
         chk("(u: user) @* { exists( membership @* { .user == user, .group.name == 'tester' } ) } ( .name )",
-                "ct_err:expr_novalue:type")
+                "ct_err:expr_novalue:type:[user]")
         chk("(u: user) @* { exists( membership @* { .user == $, .group.name == 'tester' } ) } ( .name )",
                 "ct_err:binop_operand_type:==:[user]:[membership]")
         chk("user @* { exists( (m: membership) @* { .user == user, .group.name == 'admin' } ) } ( .name )", "[Bob, Trudy]")
@@ -233,9 +229,12 @@ class AtExprExistsTest: BaseRellTest() {
                 "[user[100], user[101]]")
     }
 
-    @Test fun testWhatPartInNestedExprToStruct() {
+    @Test fun testWhatPartInNestedExprComplex() {
         initDataUserCompany()
-        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ( c.to_struct() ) ) }", "[user[100], user[101]]")
+        def("function f(c: company) = c.name.upper_case();")
+        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ( c.to_struct() ) ) }", "ct_err:expr_sqlnotallowed")
+        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ( c.to_struct().name ) ) }", "ct_err:expr_sqlnotallowed")
+        chk("(u: user) @* { exists( (c: company) @* { c.city == u.city } ( f(c) ) ) }", "ct_err:expr_sqlnotallowed")
     }
 
     @Test fun testRtExprWithinNestedAt() {
@@ -267,9 +266,9 @@ class AtExprExistsTest: BaseRellTest() {
         chkCardinality("@? { c.city != 'London' }", "rt_err:at:wrong_count:3")
         chkCardinality("@? { c.city == 'Berlin' }", "[]")
 
-        chkCardinality("@  { c.city == 'London' }", "ct_err:expr_call_argtypes:exists:company")
-        chkCardinality("@  { c.city != 'London' }", "ct_err:expr_call_argtypes:exists:company")
-        chkCardinality("@  { c.city == 'Berlin' }", "ct_err:expr_call_argtypes:exists:company")
+        chkCardinality("@  { c.city == 'London' }", "ct_err:expr_call_argtypes:[exists]:company")
+        chkCardinality("@  { c.city != 'London' }", "ct_err:expr_call_argtypes:[exists]:company")
+        chkCardinality("@  { c.city == 'Berlin' }", "ct_err:expr_call_argtypes:[exists]:company")
     }
 
     private fun chkCardinality(expr: String, expected: String) {
@@ -303,7 +302,7 @@ class AtExprExistsTest: BaseRellTest() {
         chk("(bar_user: user) @* { exists( data1 @* { bar_user } ) } ( .name )", "[Bob, Alice]")
 
         chk("user @* { exists( data2 @* { user } ) } ( .name )",
-                "ct_err:at_where:var_manyattrs_type:0:user:user:data2.foo_user,data2.bar_user")
+                "ct_err:at_where:var_manyattrs_type:0:user:user:[data2:data2.foo_user,data2:data2.bar_user]")
         chk("(foo_user: user) @* { exists( data2 @* { foo_user } ) } ( .name )", "[Bob]")
         chk("(bar_user: user) @* { exists( data2 @* { bar_user } ) } ( .name )", "[Alice]")
 
@@ -312,7 +311,7 @@ class AtExprExistsTest: BaseRellTest() {
         chk("(bar_user: user) @* { exists( data3 @* { bar_user } ) } ( .name )", "[Trudy]")
 
         chk("data1 @* {exists( user @* { user } )}", "ct_err:at_where:type:0:[boolean]:[user]")
-        chk("data1 @* {exists( user @* { .user == user } )}", "ct_err:at_expr:attr:belongs_to_outer:user:data1")
+        chk("data1 @* {exists( user @* { .user == user } )}", "ct_err:at_expr:attr:belongs_to_outer:user:data1:data1")
         chk("data1 @* {exists( user @* { data1.user == user } )}", "[data1[200], data1[201]]")
         chk("data1 @* {exists( (foo_user: user) @* { foo_user } )}", "ct_err:at_where:type:0:[boolean]:[user]")
         chk("data1 @* {exists( (foo_user: user) @* { data1.user == foo_user } )}", "[data1[200], data1[201]]")

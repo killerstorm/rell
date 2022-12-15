@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -8,7 +8,7 @@ import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.model.R_IntegerType
 import net.postchain.rell.model.R_RangeType
-import net.postchain.rell.runtime.Rt_Error
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.runtime.Rt_RangeValue
 import net.postchain.rell.runtime.Rt_Value
 
@@ -23,8 +23,8 @@ object C_Lib_Type_Range: C_Lib_Type("range", R_RangeType, defaultMemberFns = fal
 private object RangeFns {
     private fun calcRange(start: Long, end: Long, step: Long): Rt_Value {
         if (step == 0L || (step > 0 && start > end) || (step < 0 && start < end)) {
-            throw Rt_Error("fn_range_args:$start:$end:$step",
-                "Invalid arguments for range: start = $start, end = $end, step = $step")
+            throw Rt_Exception.common("fn_range_args:$start:$end:$step",
+                "Invalid range: start = $start, end = $end, step = $step")
         }
         return Rt_RangeValue(start, end, step)
     }

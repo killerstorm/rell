@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -40,7 +40,7 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer.from_text('123 ')", "rt_err:fn:integer.from_text:123 ")
         chk("integer.from_text('0123')", "int[123]")
         chk("integer.from_text('0x123')", "rt_err:fn:integer.from_text:0x123")
-        chk("integer.from_text(123)", "ct_err:expr_call_argtypes:from_text:integer")
+        chk("integer.from_text(123)", "ct_err:expr_call_argtypes:[integer.from_text]:integer")
         chk("integer.from_text('aaa')", "rt_err:fn:integer.from_text:aaa")
         chk("integer.from_text('123', 0)", "rt_err:fn:integer.from_text:radix:0")
         chk("integer.from_text('123', 1)", "rt_err:fn:integer.from_text:radix:1")
@@ -102,8 +102,8 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer.from_hex('8000000000000000')", "int[-9223372036854775808]")
         chk("integer.from_hex('-1')", "rt_err:fn:integer.from_hex:-1")
         chk("integer.from_hex('10000000000000000')", "rt_err:fn:integer.from_hex:10000000000000000")
-        chk("integer.from_hex()", "ct_err:expr_call_argtypes:from_hex:")
-        chk("integer.from_hex(123)", "ct_err:expr_call_argtypes:from_hex:integer")
+        chk("integer.from_hex()", "ct_err:expr_call_argtypes:[integer.from_hex]:")
+        chk("integer.from_hex(123)", "ct_err:expr_call_argtypes:[integer.from_hex]:integer")
         chk("integer.from_hex('')", "rt_err:fn:integer.from_hex:")
         chk("integer.from_hex('ghi')", "rt_err:fn:integer.from_hex:ghi")
     }

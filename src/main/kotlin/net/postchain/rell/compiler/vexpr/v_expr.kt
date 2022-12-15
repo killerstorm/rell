@@ -1,15 +1,12 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
 
 import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.base.core.C_Name
-import net.postchain.rell.compiler.base.core.C_TypeHint
-import net.postchain.rell.compiler.base.core.C_Types
-import net.postchain.rell.compiler.base.core.C_VarUid
+import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.fn.C_FunctionCallInfo
 import net.postchain.rell.compiler.base.fn.C_FunctionCallTarget_FunctionType
@@ -22,7 +19,6 @@ import net.postchain.rell.model.expr.R_BlockCheckExpr
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.model.expr.R_StackTraceExpr
 import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.immSetOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmSet
@@ -132,7 +128,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
             return toDbExpr0()
         }
         val rExpr = toRExpr()
-        return C_ExprUtils.toDbExpr(pos, rExpr)
+        return C_ExprUtils.toDbExpr(exprCtx.msgCtx, pos, rExpr)
     }
 
     fun toDbExprWhat(): C_DbAtWhatValue {
@@ -156,23 +152,43 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         throw C_Errors.errBadDestination(pos)
     }
 
-    open fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
-        val memberRef = C_MemberRef(this, memberName, safe)
-
+    fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
         val baseType = type
         val effectiveBaseType = C_Types.removeNullable(baseType)
 
-        val valueMember = C_MemberResolver.valueForType(ctx, effectiveBaseType, memberRef)
-        val fnMember = C_MemberResolver.functionForType(effectiveBaseType, memberRef)
-
-        val res = C_ExprUtils.valueFunctionExprMember(valueMember, fnMember, exprHint)
-        if (res == null) {
+        val members = effectiveBaseType.getValueMembers(memberName.rName)
+        if (members.isEmpty()) {
             C_Errors.errUnknownMember(ctx.msgCtx, effectiveBaseType, memberName)
-            return C_ExprMember(C_ExprUtils.errorExpr(ctx, memberName.pos), IdeSymbolInfo.UNKNOWN)
+            return C_ExprUtils.errorMember(ctx, memberName.pos)
         }
 
-        C_MemberResolver.checkNullAccess(ctx.msgCtx, baseType, memberName, safe)
-        return res
+        checkNullAccess(ctx.msgCtx, baseType, memberName, safe)
+
+        var filteredMembers = members.filter { if (exprHint.callable) it.isCallable() else it.valueType != null }
+        if (filteredMembers.isEmpty()) {
+            filteredMembers = members
+        }
+
+        if (filteredMembers.size > 1) {
+            val kinds = filteredMembers.map { it.kindMsg() }
+            val listCode = kinds.joinToString(",")
+            val listMsg = kinds.joinToString()
+            msgCtx.error(memberName.pos, "name:ambig:$memberName:[$listCode]", "Name '$memberName' is ambiguous: $listMsg")
+        }
+
+        val memberRef = C_MemberRef(this, memberName, safe)
+        val memberLink = memberRef.toLink()
+
+        val member = filteredMembers[0]
+        return member.compile(ctx, memberLink)
+    }
+
+    private fun checkNullAccess(msgCtx: C_MessageContext, type: R_Type, name: C_Name, safe: Boolean) {
+        if (!safe && type is R_NullableType) {
+            val nameStr = name.str
+            val msg = "Cannot access member '$nameStr' of nullable type ${type.str()}"
+            msgCtx.error(name.pos, "expr_mem_null:$nameStr", msg)
+        }
     }
 
     open fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.repl
@@ -8,8 +8,7 @@ import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.utils.C_Message
 import net.postchain.rell.model.R_CollectionType
 import net.postchain.rell.model.R_MapType
-import net.postchain.rell.model.R_StackPos
-import net.postchain.rell.runtime.Rt_BaseError
+import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.runtime.Rt_UnitValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.PostchainUtils
@@ -17,7 +16,7 @@ import net.postchain.rell.utils.PostchainUtils
 interface ReplOutputChannel {
     fun printCompilerError(code: String, msg: String)
     fun printCompilerMessage(message: C_Message)
-    fun printRuntimeError(e: Rt_BaseError, stack: List<R_StackPos>?)
+    fun printRuntimeError(e: Rt_Exception)
     fun printPlatformRuntimeError(e: Throwable)
     fun setValueFormat(format: ReplValueFormat)
     fun printValue(value: Rt_Value)

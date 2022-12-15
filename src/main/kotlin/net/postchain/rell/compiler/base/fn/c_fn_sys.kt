@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.fn
@@ -8,24 +8,21 @@ import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_CallArgumentValue_Expr
 import net.postchain.rell.compiler.ast.S_CallArgumentValue_Wildcard
 import net.postchain.rell.compiler.ast.S_Expr
-import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.expr.C_CallTypeHints
 import net.postchain.rell.compiler.base.expr.C_CallTypeHints_None
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
-import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.utils.C_SysFunction
-import net.postchain.rell.compiler.base.utils.C_SysFunctionCtx
-import net.postchain.rell.compiler.base.utils.C_Utils
+import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.vexpr.*
-import net.postchain.rell.model.R_BooleanType
-import net.postchain.rell.model.R_FunctionType
-import net.postchain.rell.model.R_Name
-import net.postchain.rell.model.R_Type
+import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.Db_SysFunction
+import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.LazyString
+import net.postchain.rell.utils.checkEquals
 
 abstract class C_FormalParamsFuncBody<CtxT: C_FuncCaseCtx>(val resType: R_Type) {
     abstract fun effectiveResType(caseCtx: CtxT, type: R_Type): R_Type
@@ -125,13 +122,13 @@ class C_RegularSysGlobalFunction(
 ): C_GlobalFunction(ideInfo) {
     private val fullNameLazy = LazyString.of(fullName)
 
-    override fun compileCall(ctx: C_ExprContext, name: C_Name, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
         val target = C_FunctionCallTarget_SysGlobalFunction(ctx, name)
         val vExpr = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
         return vExpr ?: C_ExprUtils.errorVExpr(ctx, name.pos)
     }
 
-    private fun matchCase(ctx: C_ExprContext, name: C_Name, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
+    private fun matchCase(ctx: C_ExprContext, name: LazyPosString, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
         for (case in cases) {
             val res = case.match(ctx, args)
             if (res != null) {
@@ -146,15 +143,14 @@ class C_RegularSysGlobalFunction(
 
     private inner class C_FunctionCallTarget_SysGlobalFunction(
             val ctx: C_ExprContext,
-            val name: C_Name
+            val name: LazyPosString
     ): C_FunctionCallTarget() {
         override fun retType() = null
         override fun typeHints() = C_SysFunctionParamHints(cases)
         override fun hasParameter(name: R_Name) = false
 
         override fun compileFull(args: C_FullCallArguments): V_Expr? {
-            val vArgs = args.compileSimpleArgs(name.rName)
-            vArgs ?: return null
+            val vArgs = args.compileSimpleArgs(name.lazyStr)
             val match = matchCase(ctx, name, vArgs)
             match ?: return null
             val caseCtx = C_GlobalFuncCaseCtx(name.pos, simpleName, fullNameLazy)
@@ -204,11 +200,11 @@ class C_RegularSysGlobalFunction(
 
 abstract class C_SpecialSysGlobalFunction(ideInfo: IdeSymbolInfo): C_GlobalFunction(ideInfo) {
     protected open fun paramCount(): Int? = null
-    protected abstract fun compileCall0(ctx: C_ExprContext, name: C_Name, args: List<S_Expr>): V_Expr
+    protected abstract fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr
 
     final override fun compileCall(
             ctx: C_ExprContext,
-            name: C_Name,
+            name: LazyPosString,
             args: List<S_CallArgument>,
             resTypeHint: C_TypeHint
     ): V_Expr {
@@ -304,7 +300,18 @@ abstract class C_SpecialSysMemberFunction: C_SysMemberFunction() {
 }
 
 class C_SysMemberProperty(
-        val type: R_Type,
-        val fn: C_SysFunction,
-        val pure: Boolean
-)
+    val type: R_Type,
+    val pure: Boolean,
+    val fn: C_SysFunctionBody,
+) {
+    companion object {
+        fun simple(type: R_Type, dbFn: Db_SysFunction? = null, pure: Boolean = false, rCode: (Rt_Value) -> Rt_Value): C_SysMemberProperty {
+            val rFn = R_SysFunction { ctx, args ->
+                checkEquals(args.size, 1)
+                rCode(args[0])
+            }
+            val fn = C_SysFunctionBody(rFn, dbFn)
+            return C_SysMemberProperty(type, pure, fn)
+        }
+    }
+}

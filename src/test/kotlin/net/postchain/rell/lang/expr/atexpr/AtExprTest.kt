@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
@@ -60,11 +60,11 @@ class AtExprTest: BaseRellTest() {
         """
 
         chkEx("{ $base val name = 'Bob'; return (foo_owner, bar_owner) @* { name }; }",
-                "ct_err:at_where:var_manyattrs_nametype:0:name:text:foo_owner.name,bar_owner.name")
+                "ct_err:at_where:var_manyattrs_nametype:0:name:text:[foo_owner:foo_owner.name,bar_owner:bar_owner.name]")
         chkEx("{ $base val garbage = foo1; return (foo_owner, bar_owner) @* { garbage }; }",
-                "ct_err:at_where:var_manyattrs_type:0:garbage:foo:foo_owner.stuff,foo_owner.foo,bar_owner.foo")
+                "ct_err:at_where:var_manyattrs_type:0:garbage:foo:[foo_owner:foo_owner.stuff,foo_owner:foo_owner.foo,bar_owner:bar_owner.foo]")
         chkEx("{ $base val garbage = bar1; return (foo_owner, bar_owner) @* { garbage }; }",
-                "ct_err:at_where:var_manyattrs_type:0:garbage:bar:foo_owner.bar,bar_owner.stuff,bar_owner.bar")
+                "ct_err:at_where:var_manyattrs_type:0:garbage:bar:[foo_owner:foo_owner.bar,bar_owner:bar_owner.stuff,bar_owner:bar_owner.bar]")
 
         chkEx("{ $base val stuff = foo1; return (foo_owner, bar_owner) @* { stuff }; }",
                 "list<(foo_owner:foo_owner,bar_owner:bar_owner)>[(foo_owner[4],bar_owner[6]),(foo_owner[4],bar_owner[7])]")
@@ -100,7 +100,7 @@ class AtExprTest: BaseRellTest() {
     @Test fun testNameResolutionEntityVsAlias() {
         chk("(user) @ { user.firstName == 'Bill' }", "user[40]")
         chk("(u: user) @ { u.firstName == 'Bill' }", "user[40]")
-        chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:user.firstName")
+        chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:[user]:firstName")
     }
 
     @Test fun testNameResolutionEntityVsLocal() {
@@ -118,12 +118,12 @@ class AtExprTest: BaseRellTest() {
         insert("c0.company", "name", "2,'Xerox'")
         insert("c0.company", "name", "3,'Bell'")
 
-        chk("(user, company) @ { .name == 'Bob' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
-        chk("(user, company) @ { .name == 'Xerox' }", "ct_err:at_attr_name_ambig:name:user.name,company.name")
-        chk("(u: user, c: company) @ { .name == 'Xerox' }", "ct_err:at_attr_name_ambig:name:u.name,c.name")
+        chk("(user, company) @ { .name == 'Bob' }", "ct_err:at_attr_name_ambig:name:[user:user:name,company:company:name]")
+        chk("(user, company) @ { .name == 'Xerox' }", "ct_err:at_attr_name_ambig:name:[user:user:name,company:company:name]")
+        chk("(u: user, c: company) @ { .name == 'Xerox' }", "ct_err:at_attr_name_ambig:name:[u:user:name,c:company:name]")
         chk("(user, company) @ { user.name == 'Bob', company.name == 'Xerox' }", "(user=user[0],company=company[2])")
-        chk("(u1: user, u2: user) @ { .name == 'Bob' }", "ct_err:at_attr_name_ambig:name:u1.name,u2.name")
-        chk("(c1: company, c2: company) @ { .name == 'Bob' }", "ct_err:at_attr_name_ambig:name:c1.name,c2.name")
+        chk("(u1: user, u2: user) @ { .name == 'Bob' }", "ct_err:at_attr_name_ambig:name:[u1:user:name,u2:user:name]")
+        chk("(c1: company, c2: company) @ { .name == 'Bob' }", "ct_err:at_attr_name_ambig:name:[c1:company:name,c2:company:name]")
     }
 
     @Test fun testAttributeAmbiguityType() {
@@ -152,17 +152,20 @@ class AtExprTest: BaseRellTest() {
         chkEx("{ $base return single @ { tgt2 }; }", "single[1]")
 
         // Ambiguity between attributes of the same entity.
-        chkEx("{ $base return double @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_type:0:tgt1:target:double.t1,double.t2")
-        chkEx("{ $base return double @ { .t1 == tgt1, tgt2 }; }", "ct_err:at_where:var_manyattrs_type:1:tgt2:target:double.t1,double.t2")
+        chkEx("{ $base return double @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_type:0:tgt1:target:[double:double.t1,double:double.t2]")
+        chkEx("{ $base return double @ { .t1 == tgt1, tgt2 }; }",
+            "ct_err:at_where:var_manyattrs_type:1:tgt2:target:[double:double.t1,double:double.t2]")
         chkEx("{ $base return double @ { .t1 == tgt1, .t2 == tgt2 }; }", "double[0]")
         chkEx("{ $base return double @ { .t1 == tgt3, .t2 == tgt1 }; }", "double[2]")
 
         // Ambiguity between attributes of different entities.
-        chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_type:0:tgt1:target:s1.t,s2.t")
-        chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }",
-                "ct_err:[at_where:var_manyattrs_type:0:tgt1:target:s1.t,s2.t][at_where:var_manyattrs_type:1:tgt2:target:s1.t,s2.t]")
+        chkEx("{ $base return (s1: single, s2: single) @ { tgt1 }; }", "ct_err:at_where:var_manyattrs_type:0:tgt1:target:[s1:single.t,s2:single.t]")
+        chkEx("{ $base return (s1: single, s2: single) @ { tgt1, tgt2 }; }", """ct_err:
+            [at_where:var_manyattrs_type:0:tgt1:target:[s1:single.t,s2:single.t]]
+            [at_where:var_manyattrs_type:1:tgt2:target:[s1:single.t,s2:single.t]]
+        """)
         chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, tgt2 }; }",
-                "ct_err:at_where:var_manyattrs_type:1:tgt2:target:s1.t,s2.t")
+                "ct_err:at_where:var_manyattrs_type:1:tgt2:target:[s1:single.t,s2:single.t]")
         chkEx("{ $base return (s1: single, s2: single) @ { s1.t == tgt1, s2.t == tgt2 }; }", "(s1=single[0],s2=single[1])")
     }
 
@@ -252,7 +255,7 @@ class AtExprTest: BaseRellTest() {
         chk("user @ { .firstName == 'Bill' } ( .lastName )", "text[Gates]")
         chk("(u: user) @ { .firstName == 'Bill' } ( u.lastName )", "text[Gates]")
         chk("(u1: user, u2: user) @ { u1.firstName == 'Bill', u2.firstName == 'Mark' } ( .lastName )",
-                "ct_err:at_attr_name_ambig:lastName:u1.lastName,u2.lastName")
+                "ct_err:at_attr_name_ambig:lastName:[u1:user:lastName,u2:user:lastName]")
 
         chk("(u1: user, u2: user) @ { u1.firstName == 'Bill', u2.firstName == 'Mark' } ( _=u1.lastName, _=u2.lastName )",
                 "(text[Gates],text[Zuckerberg])")
