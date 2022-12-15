@@ -1,7 +1,10 @@
-RELEASE NOTES 0.10.11 (2022-??-??)
+RELEASE NOTES 0.11.0 (2022-12-15)
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-1. Language: "list", "set", "map" keywords removed
+1. Upgrade to Postchain 3.7.0
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Language: "list", "set", "map" keywords removed
 
 Words "list", "set" and "map" are now regular names, not keywords. Not a significant change, but a step towards
 supporting arbitrary generic library types in the future.
@@ -11,13 +14,13 @@ Practical implication: names "list", "set", "map" can be used in code (for varia
 Method ._set() of type list<T> was deprecated (with warning) and a new method .set() added to be used instead.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-2. Library: new method "sort" instead of the old "_sort" one
+3. Library: new method "sort" instead of the old "_sort" one
 
 As keyword "sort" was removed in 0.10.10 (and word "sort" became a regular name), a new method .sort() was added to
 replace the old method ._sort() of list<T>. The old method was deprecated (with warning).
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-3. Library: new functions: "repeat", "reverse", "reversed"
+4. Library: new functions: "repeat", "reverse", "reversed"
 
 list<T>.repeat(n: integer): list<T>
 
@@ -51,7 +54,7 @@ byte_array.reversed(): byte_array
   than 2^31.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-4. Library: new functions of type "map": get_or_null(), get_or_default(), remove_or_null()
+5. Library: new functions of type "map": get_or_null(), get_or_default(), remove_or_null()
 
 map<K, V>.get_or_null(key: K): V?
 
@@ -69,7 +72,7 @@ map<K, V>.remove_or_null(key: K): V?
     Removes the specified key from the map. Returns null if the key is not in the map.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-5. Library: conversion between "rowid" and "integer"
+6. Library: conversion between "rowid" and "integer"
 
 rowid(integer): rowid
 
@@ -80,7 +83,7 @@ rowid.to_integer(): integer
     Returns the integer value of the rowid.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-6. Library: op_context.exists
+7. Library: op_context.exists
 
 op_context.exists: boolean
 
@@ -88,7 +91,7 @@ op_context.exists: boolean
     properties of "op_context", this property is always available, but returns "false" if there is no operation.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-7. Library: function assert_fails() for unit tests
+8. Library: function assert_fails() for unit tests
 
 assert_fails(f: () -> unit): rell.test.failure
 assert_fails(expected: text, f: () -> unit): rell.test.failure
@@ -122,7 +125,7 @@ Use the returned value if non-exact error message matching is needed:
     assert_true(f.message.starts_with("x is negative: "));
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-8. Library: function .run_must_fail() with error message check
+9. Library: function .run_must_fail() with error message check
 
 The function run_must_fail() in types rell.test.block, rell.test.tx and rell.test.op changed to return a failure object
 and check error message:
@@ -134,7 +137,7 @@ run_must_fail(expected: text): rell.test.failure
     When "expected" is specified, the call fails if the actual error message differs from the expected one.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-9. Library: constant rell.test.BLOCKCHAIN_SIGNER_KEYPAIR
+10. Library: constant rell.test.BLOCKCHAIN_SIGNER_KEYPAIR
 
 The keypair used to sign blockchain blocks in unit tests:
 
@@ -144,19 +147,30 @@ val BLOCKCHAIN_SIGNER_KEYPAIR: rell.test.keypair = rell.test.keypair(
 );
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-10. Tools: multirun.sh --sqllog
+11. Tools: multirun.sh --sqllog
 
 New argument of multirun.sh:
 
     --sqllog     Enable SQL logging
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-11. Tools: singletest.sh removed
+12. Tools: singletest.sh removed
 
 Old utility used to run XML Postchain tests, obsolete now.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-12. Bug fixes
+13. Tools: module_args validation in multigen.sh and multirun.sh
 
-- False "Wrong operand types..." compilation error on expression: T in list<T?>.
-- Conversion from gtv big integer value to decimal.
+Actual values of module_args specified in run.xml are now checked at compile-time in multigen.sh and multirun.sh to
+make sure that:
+
+(1) Module args for all active modules that define module_args structure are spcified in run.xml.
+(2) Types of values match types of attributes.
+
+In the past, those checks were performed at run-time.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+14. Bug fixes
+
+(1) False "Wrong operand types..." compilation error on expression: T in list<T?>.
+(2) Conversion from gtv big integer value to decimal.
