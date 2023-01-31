@@ -1419,7 +1419,7 @@ class VirtualTest: BaseGtxTest(false) {
 
             val calculator = GtvMerkleHashCalculator(PostchainUtils.cryptoSystem)
             val merkleProofTree = gtv.generateProof(gtvPaths, calculator)
-            val proofGtv = merkleProofTree.serializeToGtv()
+            val proofGtv = merkleProofTree.toGtv()
             return proofGtv
         }
     }
