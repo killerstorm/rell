@@ -4,13 +4,12 @@
 
 package net.postchain.rell.misc
 
-import net.postchain.StorageBuilder
-import net.postchain.config.node.NodeConfigurationProviderFactory
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.devtools.utils.configuration.activeChainIds
 import net.postchain.gtv.Gtv
 import net.postchain.rell.utils.PostchainUtils
+import net.postchain.concurrent.util.get
 import java.io.File
 
 fun main(args: Array<String>) {

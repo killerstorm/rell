@@ -12,6 +12,7 @@ import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.gtx.GtxBuilder
+import net.postchain.concurrent.util.get
 import org.junit.After
 import org.junit.Test
 import kotlin.test.assertEquals
