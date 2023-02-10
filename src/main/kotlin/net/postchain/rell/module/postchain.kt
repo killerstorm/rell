@@ -318,7 +318,7 @@ private class RellPostchainModule(
         gtvArgs is GtvDictionary
         val params = rQuery.params()
 
-        val argMap = gtvArgs.asDict().filterKeys { it != "type" }
+        val argMap = gtvArgs.asDict()
         val actArgNames = argMap.keys
         val expArgNames = params.map { it.name.str }.toSet()
         if (actArgNames != expArgNames) {

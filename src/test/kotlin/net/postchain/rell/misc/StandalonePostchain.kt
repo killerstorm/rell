@@ -10,19 +10,18 @@ import net.postchain.devtools.utils.configuration.activeChainIds
 import net.postchain.gtv.Gtv
 import net.postchain.rell.utils.PostchainUtils
 import net.postchain.concurrent.util.get
+import net.postchain.gtv.GtvFactory.gtv
 import java.io.File
 
 fun main(args: Array<String>) {
     val configFile = args[0]
     val queryName = args[1]
 
-    val requestJson = """{ type : "$queryName" }"""
-
     val access = PostchainAccess()
     try {
         val node = access.createNode(configFile)
         val blockQueries = node.getBlockchainInstance().blockchainEngine.getBlockQueries()
-        val result = blockQueries.query(requestJson).get()
+        val result = blockQueries.query(queryName, gtv(mapOf())).get()
         println(result)
     } finally {
         access.tearDown()
