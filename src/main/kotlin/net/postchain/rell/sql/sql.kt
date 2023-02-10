@@ -61,7 +61,8 @@ object SqlConstants {
     val SYSTEM_APP_TABLES = immSetOf(
             BLOCKCHAINS_TABLE,
             "meta",
-            "peerinfos"
+            "peerinfos",
+            "containers"
     )
 }
 
