@@ -13,90 +13,79 @@ import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 
 abstract class R_FunctionCallTarget {
-    abstract fun evaluateTarget(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_FunctionCallTarget?
+    abstract fun call(callCtx: Rt_CallContext, baseValue: Rt_Value?, values: List<Rt_Value>): Rt_Value
+
+    open fun createFunctionValue(resType: R_Type, mapping: R_PartialCallMapping, baseValue: Rt_Value?, args: List<Rt_Value>): Rt_Value {
+        return Rt_FunctionValue(resType, mapping, this, baseValue, args)
+    }
+
+    abstract fun str(): String
+    open fun str(baseValue: Rt_Value?) = str()
+    open fun strCode(baseValue: Rt_Value?) = str()
+
+    final override fun toString(): String {
+        CommonUtils.failIfUnitTest()
+        return str()
+    }
 }
 
 class R_FunctionCallTarget_RegularUserFunction(
         private val fn: R_RoutineDefinition
 ): R_FunctionCallTarget() {
-    override fun evaluateTarget(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_FunctionCallTarget {
-        checkEquals(values.size, 0)
-        return Rt_FunctionCallTarget_RegularUserFunction()
+    override fun call(callCtx: Rt_CallContext, baseValue: Rt_Value?, values: List<Rt_Value>): Rt_Value {
+        checkEquals(baseValue, null)
+        val res = fn.call(callCtx, values)
+        return res
     }
 
-    private inner class Rt_FunctionCallTarget_RegularUserFunction: Rt_FunctionCallTarget() {
-        override fun call(callCtx: Rt_CallContext, values: List<Rt_Value>): Rt_Value {
-            val res = fn.call(callCtx, values)
-            return res
-        }
-
-        override fun str() = fn.appLevelName
-        override fun strCode() = fn.appLevelName
-    }
+    override fun str() = fn.appLevelName
 }
 
 class R_FunctionCallTarget_AbstractUserFunction(
         private val baseFn: R_FunctionDefinition,
         private val overrideGetter: C_LateGetter<R_FunctionBase>
 ): R_FunctionCallTarget() {
-    override fun evaluateTarget(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_FunctionCallTarget {
-        checkEquals(values.size, 0)
-        return Rt_FunctionCallTarget_AbstractUserFunction()
+    override fun call(callCtx: Rt_CallContext, baseValue: Rt_Value?, values: List<Rt_Value>): Rt_Value {
+        checkEquals(baseValue, null)
+        val overrideBaseFn = overrideGetter.get()
+        val res = overrideBaseFn.call(callCtx, values)
+        return res
     }
 
-    private inner class Rt_FunctionCallTarget_AbstractUserFunction: Rt_FunctionCallTarget() {
-        override fun call(callCtx: Rt_CallContext, values: List<Rt_Value>): Rt_Value {
-            val overrideBaseFn = overrideGetter.get()
-            val res = overrideBaseFn.call(callCtx, values)
-            return res
-        }
-
-        override fun str() = baseFn.appLevelName
-        override fun strCode() = baseFn.appLevelName
-    }
+    override fun str() = baseFn.appLevelName
 }
 
 class R_FunctionCallTarget_Operation(
         private val op: R_OperationDefinition
 ): R_FunctionCallTarget() {
-    override fun evaluateTarget(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_FunctionCallTarget {
-        checkEquals(values.size, 0)
-        return Rt_FunctionCallTarget_Operation()
+    override fun call(callCtx: Rt_CallContext, baseValue: Rt_Value?, values: List<Rt_Value>): Rt_Value {
+        checkEquals(baseValue, null)
+        val gtvArgs = values.map { it.type().rtToGtv(it, false) }
+        return Rt_TestOpValue(op.mountName, gtvArgs)
     }
 
-    private inner class Rt_FunctionCallTarget_Operation: Rt_FunctionCallTarget() {
-        override fun call(callCtx: Rt_CallContext, values: List<Rt_Value>): Rt_Value {
-            val gtvArgs = values.map { it.type().rtToGtv(it, false) }
-            return Rt_TestOpValue(op.mountName, gtvArgs)
-        }
-
-        override fun str() = op.appLevelName
-        override fun strCode() = op.appLevelName
-    }
+    override fun str() = op.appLevelName
 }
 
-class R_FunctionCallTarget_FunctionValue(
-        private val safe: Boolean
-): R_FunctionCallTarget() {
-    override fun evaluateTarget(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_FunctionCallTarget? {
-        checkEquals(values.size, 1)
-        val fnValue0 = values[0]
-        if (safe && fnValue0 == Rt_NullValue) return null
-        val fnValue = fnValue0.asFunction()
-        return Rt_FunctionCallTarget_FunctionValue(fnValue)
+object R_FunctionCallTarget_FunctionValue: R_FunctionCallTarget() {
+    override fun call(callCtx: Rt_CallContext, baseValue: Rt_Value?, values: List<Rt_Value>): Rt_Value {
+        val fnValue = getFnValue(baseValue)
+        return fnValue.call(callCtx, values)
     }
 
-    private inner class Rt_FunctionCallTarget_FunctionValue(val fnValue: Rt_FunctionValue): Rt_FunctionCallTarget() {
-        override fun call(callCtx: Rt_CallContext, values: List<Rt_Value>): Rt_Value {
-            return fnValue.call(callCtx, values)
-        }
+    override fun createFunctionValue(resType: R_Type, mapping: R_PartialCallMapping, baseValue: Rt_Value?, args: List<Rt_Value>): Rt_Value {
+        val fnValue = getFnValue(baseValue)
+        return fnValue.combine(resType, mapping, args)
+    }
 
-        override fun str() = fnValue.toString()
-        override fun strCode() = fnValue.strCode()
+    override fun str() = "function_value"
+    override fun str(baseValue: Rt_Value?) = getFnValue(baseValue).toString()
+    override fun strCode(baseValue: Rt_Value?) = getFnValue(baseValue).strCode()
 
-        override fun createFunctionValue(resType: R_Type, mapping: R_PartialCallMapping, args: List<Rt_Value>): Rt_Value {
-            return fnValue.combine(resType, mapping, args)
-        }
+    private fun getFnValue(baseValue: Rt_Value?): Rt_FunctionValue {
+        checkNotNull(baseValue)
+        check(baseValue != Rt_NullValue)
+        return baseValue.asFunction()
     }
 }
 
@@ -104,54 +93,23 @@ class R_FunctionCallTarget_SysGlobalFunction(
         private val fn: R_SysFunction,
         private val fullName: LazyString
 ): R_FunctionCallTarget() {
-    override fun evaluateTarget(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_FunctionCallTarget {
-        checkEquals(values.size, 0)
-        return Rt_FunctionCallTarget_SysGlobalFunction()
+    override fun call(callCtx: Rt_CallContext, baseValue: Rt_Value?, values: List<Rt_Value>): Rt_Value {
+        checkEquals(baseValue, null)
+        return R_SysFunctionUtils.call(callCtx, fn, fullName, values)
     }
 
-    private inner class Rt_FunctionCallTarget_SysGlobalFunction: Rt_FunctionCallTarget() {
-        override fun call(callCtx: Rt_CallContext, values: List<Rt_Value>): Rt_Value {
-            return R_SysFunctionUtils.call(callCtx, fn, fullName, values)
-        }
-
-        override fun str() = fullName.value
-        override fun strCode() = fullName.value
-    }
+    override fun str() = fullName.value
 }
 
 class R_FunctionCallTarget_SysMemberFunction(
-        private val safe: Boolean,
         private val fn: R_SysFunction,
         private val fullName: LazyString
 ): R_FunctionCallTarget() {
-    override fun evaluateTarget(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_FunctionCallTarget? {
-        checkEquals(values.size, 1)
-        val rtBase = values[0]
-        return if (safe && rtBase == Rt_NullValue) null else Rt_FunctionCallTarget_SysMemberFunction(rtBase)
+    override fun call(callCtx: Rt_CallContext, baseValue: Rt_Value?, values: List<Rt_Value>): Rt_Value {
+        checkNotNull(baseValue)
+        val values2 = listOf(baseValue) + values
+        return R_SysFunctionUtils.call(callCtx, fn, fullName, values2)
     }
 
-    private inner class Rt_FunctionCallTarget_SysMemberFunction(val rtBase: Rt_Value): Rt_FunctionCallTarget() {
-        override fun call(callCtx: Rt_CallContext, values: List<Rt_Value>): Rt_Value {
-            val values2 = listOf(rtBase) + values
-            return R_SysFunctionUtils.call(callCtx, fn, fullName, values2)
-        }
-
-        override fun str() = fullName.value
-        override fun strCode() = fullName.value
-    }
-}
-
-abstract class Rt_FunctionCallTarget {
-    abstract fun call(callCtx: Rt_CallContext, values: List<Rt_Value>): Rt_Value
-    abstract fun str(): String
-    abstract fun strCode(): String
-
-    final override fun toString(): String {
-        CommonUtils.failIfUnitTest()
-        return str()
-    }
-
-    open fun createFunctionValue(resType: R_Type, mapping: R_PartialCallMapping, args: List<Rt_Value>): Rt_Value {
-        return Rt_FunctionValue(resType, mapping, this, args)
-    }
+    override fun str() = fullName.value
 }

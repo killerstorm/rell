@@ -40,7 +40,7 @@ object C_ExprUtils {
         }
     }
 
-    private fun makeDbBinaryExpr(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, left: Db_Expr, right: Db_Expr): Db_Expr {
+    fun makeDbBinaryExpr(type: R_Type, rOp: R_BinaryOp, dbOp: Db_BinaryOp, left: Db_Expr, right: Db_Expr): Db_Expr {
         return if (left is Db_InterpretedExpr && right is Db_InterpretedExpr) {
             val rExpr = R_BinaryExpr(type, rOp, left.expr, right.expr)
             Db_InterpretedExpr(rExpr)
@@ -73,7 +73,8 @@ object C_ExprUtils {
     fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos, nameMsg: LazyString): R_Expr {
         val rCallTarget: R_FunctionCallTarget = R_FunctionCallTarget_SysGlobalFunction(fn, nameMsg)
         val filePos = pos.toFilePos()
-        val rCallExpr: R_Expr = R_FullFunctionCallExpr(type, rCallTarget, filePos, listOf(), args, args.indices.toList())
+        val rCall: R_FunctionCall = R_FullFunctionCall(type, rCallTarget, filePos, args, args.indices.toList())
+        val rCallExpr: R_Expr = R_FunctionCallExpr(type, null, rCall, false)
         return R_StackTraceExpr(rCallExpr, filePos)
     }
 
@@ -99,7 +100,8 @@ object C_ExprUtils {
         val nameMsgLazy = LazyString.of(nameMsg)
         val desc = V_SysFunctionTargetDescriptor(type, fn, null, nameMsgLazy, pure = pure, synth = true)
         val vCallTarget: V_FunctionCallTarget = V_FunctionCallTarget_SysGlobalFunction(desc)
-        return V_FullFunctionCallExpr(exprCtx, pos, pos, type, vCallTarget, V_FunctionCallArgs.EMPTY)
+        val vCall = V_CommonFunctionCall_Full(pos, pos, type, vCallTarget, V_FunctionCallArgs.EMPTY)
+        return V_FunctionCallExpr(exprCtx, pos, null, vCall, false)
     }
 
     fun errorRExpr(type: R_Type = R_CtErrorType, msg: String = "Compilation error"): R_Expr {
@@ -118,6 +120,19 @@ object C_ExprUtils {
     fun errorExpr(ctx: C_ExprContext, pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): C_Expr {
         val value = errorVExpr(ctx, pos, type, msg)
         return C_ValueExpr(value)
+    }
+
+    fun errorVGlobalCall(ctx: C_ExprContext, pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): V_GlobalFunctionCall {
+        val vExpr = errorVExpr(ctx, pos, type, msg)
+        return V_GlobalFunctionCall(vExpr)
+    }
+
+    fun errorVMemberCall(ctx: C_ExprContext, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): V_MemberFunctionCall {
+        return V_MemberFunctionCall_Error(ctx, type, msg)
+    }
+
+    fun errorVMember(pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): V_TypeValueMember {
+        return V_TypeValueMember_Error(type, pos, msg)
     }
 
     fun errorMember(ctx: C_ExprContext, pos: S_Pos): C_ExprMember {

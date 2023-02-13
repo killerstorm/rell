@@ -51,15 +51,17 @@ object R_SysFunctionUtils {
     private fun extraMessage(name: String) = "System function '$name'"
 }
 
-class R_FullFunctionCallExpr(
-        type: R_Type,
-        private val target: R_FunctionCallTarget,
-        private val callPos: R_FilePos,
-        targetExprs: List<R_Expr>,
-        args: List<R_Expr>,
-        mapping: List<Int>
-): R_Expr(type) {
-    private val targetExprs = targetExprs.toImmList()
+abstract class R_FunctionCall(val returnType: R_Type) {
+    abstract fun evaluate(frame: Rt_CallFrame, baseValue: Rt_Value?): Rt_Value
+}
+
+class R_FullFunctionCall(
+    returnType: R_Type,
+    private val target: R_FunctionCallTarget,
+    private val callPos: R_FilePos,
+    args: List<R_Expr>,
+    mapping: List<Int>,
+): R_FunctionCall(returnType) {
     private val args = args.toImmList()
     private val mapping = mapping.toImmList()
 
@@ -67,14 +69,11 @@ class R_FullFunctionCallExpr(
         checkEquals(this.mapping.sorted(), this.args.indices.toList())
     }
 
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val targetValues = targetExprs.map { it.evaluate(frame) }
-        val rtTarget = target.evaluateTarget(frame, targetValues)
-        rtTarget ?: return Rt_NullValue
+    override fun evaluate(frame: Rt_CallFrame, baseValue: Rt_Value?): Rt_Value {
         val values = args.map { it.evaluate(frame) }
         val values2 = mapping.map { values[it] }
         val callCtx = frame.callCtx(callPos)
-        val res = rtTarget.call(callCtx, values2)
+        val res = target.call(callCtx, baseValue, values2)
         return res
     }
 }
@@ -93,25 +92,36 @@ class R_PartialCallMapping(val exprCount: Int, val wildCount: Int, args: List<R_
     }
 }
 
-class R_PartialFunctionCallExpr(
-        type: R_Type,
-        private val target: R_FunctionCallTarget,
-        private val mapping: R_PartialCallMapping,
-        targetExprs: List<R_Expr>,
-        args: List<R_Expr>
-): R_Expr(type) {
-    private val targetExprs = targetExprs.toImmList()
+class R_PartialFunctionCall(
+    returnType: R_Type,
+    private val target: R_FunctionCallTarget,
+    private val mapping: R_PartialCallMapping,
+    args: List<R_Expr>,
+): R_FunctionCall(returnType) {
     private val args = args.toImmList()
 
     init {
         checkEquals(this.args.size, mapping.exprCount)
     }
 
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val targetValues = targetExprs.map { it.evaluate(frame) }
-        val rtTarget = target.evaluateTarget(frame, targetValues)
-        rtTarget ?: return Rt_NullValue
+    override fun evaluate(frame: Rt_CallFrame, baseValue: Rt_Value?): Rt_Value {
         val values = args.map { it.evaluate(frame) }
-        return rtTarget.createFunctionValue(type, mapping, values)
+        return target.createFunctionValue(returnType, mapping, baseValue, values)
+    }
+}
+
+class R_FunctionCallExpr(
+    type: R_Type,
+    private val base: R_Expr?,
+    private val call: R_FunctionCall,
+    private val safe: Boolean,
+): R_Expr(type) {
+    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
+        val baseValue = base?.evaluate(frame)
+        return if (safe && baseValue == Rt_NullValue) {
+            Rt_NullValue
+        } else {
+            call.evaluate(frame, baseValue)
+        }
     }
 }

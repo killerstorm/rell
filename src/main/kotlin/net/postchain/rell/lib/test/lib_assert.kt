@@ -356,7 +356,7 @@ private object C_Lib_Type_Failure: C_Lib_Type(FAILURE_SNAME, R_TestFailureType, 
     override fun bindMemberValues(b: MutableList<C_TypeValueMember>) {
         val name = R_Name.of("message")
         val attr: C_MemberAttr = C_MemberAttr_SysProperty(name, PropMessage)
-        b.add(C_TypeValueMember_BasicAttr(name, attr, IdeSymbolInfo.MEM_STRUCT_ATTR))
+        b.add(C_TypeValueMember_BasicAttr(attr, IdeSymbolInfo.MEM_STRUCT_ATTR))
     }
 
     private val PropMessage = C_SysMemberProperty.simple(R_TextType, pure = true) { a ->

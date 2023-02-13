@@ -685,4 +685,59 @@ class ExpressionTest: BaseRellTest(false) {
         chk("a.b.c?.x", "ct_err:expr_novalue:namespace:[a.b.c]")
         chk("a?.b?.c?.x", "ct_err:expr_novalue:namespace:[a]")
     }
+
+    @Test fun testMemberFunctionAsValue() {
+        chk("'a'.size", "ct_err:expr_novalue:function:[size]")
+    }
+
+    @Test fun testImplicitTargetAttrLocalVar() {
+        def("struct s { foo: integer; bar: integer; }")
+        chkEx("{ val foo = 123; return s(foo, bar = 456); }", "s[foo=int[123],bar=int[456]]")
+    }
+
+    @Test fun testImplicitTargetAttrAtEntity() {
+        tstCtx.useSql = true
+        def("entity data { v: integer; }")
+        def("struct s { foo: data; bar: data; }")
+        insert("c0.data", "v", "10,123", "11,456", "12,789")
+        chk("(foo:data) @ {123} ( s(foo, bar = data@{789}) )", "s[foo=data[10],bar=data[12]]")
+        chk("(bar:data) @ {123} ( s(foo = data@{789}, bar) )", "s[foo=data[12],bar=data[10]]")
+    }
+
+    @Test fun testImplicitTargetAttrAtItemAttrDbAt() {
+        tstCtx.useSql = true
+        def("entity data { foo: integer; bar: integer; }")
+        def("struct s { foo: integer; bar: integer; }")
+        insert("c0.data", "foo,bar", "10,123,456")
+        chk("data @ {} ( s(.foo, .bar) )", "s[foo=int[123],bar=int[456]]")
+        chk("data @ {} ( s($.foo, $.bar) )", "s[foo=int[123],bar=int[456]]")
+        chk("data @ {} ( s(data.foo, data.bar) )", "s[foo=int[123],bar=int[456]]")
+        chk("(x:data) @ {} ( s(x.foo, x.bar) )", "s[foo=int[123],bar=int[456]]")
+    }
+
+    @Test fun testImplicitTargetAttrAtItemAttrColAt() {
+        def("struct s { foo: integer; bar: integer; }")
+        def("function data() = [(foo = 123, bar = 456)];")
+        chk("data() @ {} ( s(.foo, .bar) )", "s[foo=int[123],bar=int[456]]")
+        chk("data() @ {} ( s($.foo, $.bar) )", "s[foo=int[123],bar=int[456]]")
+        chk("(x:data()) @ {} ( s(x.foo, x.bar) )", "s[foo=int[123],bar=int[456]]")
+        chkEx("{ val t = s(foo = 123, bar = 456); return s(t.foo, t.bar); }", "ct_err:attr_implic_multi:0:foo,bar")
+        chkEx("{ val t = s(foo = 123, bar = 456); return s(t.foo, bar = 789); }", "ct_err:attr_implic_multi:0:foo,bar")
+    }
+
+    @Test fun testImplicitTargetAttrGlobalConstant() {
+        def("val foo = 123;")
+        def("namespace ns { val bar = 456; }")
+        def("struct s { foo: integer; bar: integer; }")
+        chk("s(foo, ns.bar)", "s[foo=int[123],bar=int[456]]")
+        chk("s(foo = 789, ns.bar)", "s[foo=int[789],bar=int[456]]")
+        chk("s(foo, bar = 789)", "s[foo=int[123],bar=int[789]]")
+    }
+
+    @Test fun testImplicitTargetAttrSmartNullable() {
+        def("struct s { foo: integer; bar: integer; }")
+        chkEx("{ val foo = _nullable_int(123); return s(foo, bar = 456); }", "ct_err:attr_bad_type:0:foo:integer:integer?")
+        chkEx("{ val foo = _nullable_int(123); return if (foo == null) null else s(foo, bar = 456); }", "s[foo=int[123],bar=int[456]]")
+        chkEx("{ val bar = _nullable_int(456); return if (bar == null) null else s(foo = 123, bar); }", "s[foo=int[123],bar=int[456]]")
+    }
 }

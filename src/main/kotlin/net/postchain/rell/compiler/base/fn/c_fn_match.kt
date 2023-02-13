@@ -9,14 +9,11 @@ import net.postchain.rell.compiler.base.core.C_TypeAdapter
 import net.postchain.rell.compiler.base.core.C_TypeAdapter_Direct
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.expr.C_MemberLink
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.compiler.base.namespace.C_NamespaceElement
 import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_GlobalConstantRestriction
-import net.postchain.rell.compiler.vexpr.V_SysBasicGlobalCaseCallExpr
+import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.Db_Expr
 import net.postchain.rell.model.expr.R_Expr
@@ -198,60 +195,60 @@ class C_GlobalFuncCaseCtx(
 }
 
 class C_MemberFuncCaseCtx(
-    val member: C_MemberLink,
+    linkPos: S_Pos,
     private val memberName: R_Name,
     private val fullName: LazyString,
-): C_FuncCaseCtx(member.linkPos) {
+): C_FuncCaseCtx(linkPos) {
     override fun simpleNameMsg() = memberName.str
     override fun qualifiedNameMsg() = fullName.value
     override fun qualifiedNameMsgLazy() = fullName
 }
 
-abstract class C_FuncCase<CtxT: C_FuncCaseCtx> {
+abstract class C_FuncCase<CtxT: C_FuncCaseCtx, ExprT> {
     abstract fun getParamTypeHint(index: Int): C_TypeHint
-    abstract fun match(ctx: C_ExprContext, args: List<V_Expr>): C_FuncCaseMatch<CtxT>?
+    abstract fun match(ctx: C_ExprContext, args: List<V_Expr>): C_FuncCaseMatch<CtxT, ExprT>?
 
-    open fun getPartialCallTarget(caseCtx: CtxT): C_PartialCallTarget? = null
+    open fun getPartialCallTarget(caseCtx: CtxT): C_PartialCallTarget<ExprT>? = null
 }
 
-typealias C_MemberFuncCase = C_FuncCase<C_MemberFuncCaseCtx>
-typealias C_MemberFuncCaseMatch = C_FuncCaseMatch<C_MemberFuncCaseCtx>
+typealias C_MemberFuncCase = C_FuncCase<C_MemberFuncCaseCtx, V_MemberFunctionCall>
+typealias C_MemberFuncCaseMatch = C_FuncCaseMatch<C_MemberFuncCaseCtx, V_MemberFunctionCall>
 
-typealias C_GlobalFuncCase = C_FuncCase<C_GlobalFuncCaseCtx>
-typealias C_GlobalFuncCaseMatch = C_FuncCaseMatch<C_GlobalFuncCaseCtx>
+typealias C_GlobalFuncCase = C_FuncCase<C_GlobalFuncCaseCtx, V_GlobalFunctionCall>
+typealias C_GlobalFuncCaseMatch = C_FuncCaseMatch<C_GlobalFuncCaseCtx, V_GlobalFunctionCall>
 
-abstract class C_SpecialFuncCase<CtxT: C_FuncCaseCtx>: C_FuncCase<CtxT>() {
+abstract class C_SpecialFuncCase<CtxT: C_FuncCaseCtx, ExprT>: C_FuncCase<CtxT, ExprT>() {
     override fun getParamTypeHint(index: Int) = C_TypeHint.NONE
 }
 
-typealias C_GlobalSpecialFuncCase = C_SpecialFuncCase<C_GlobalFuncCaseCtx>
-typealias C_MemberSpecialFuncCase = C_SpecialFuncCase<C_MemberFuncCaseCtx>
+typealias C_GlobalSpecialFuncCase = C_SpecialFuncCase<C_GlobalFuncCaseCtx, V_GlobalFunctionCall>
+typealias C_MemberSpecialFuncCase = C_SpecialFuncCase<C_MemberFuncCaseCtx, V_MemberFunctionCall>
 
-abstract class C_FuncCaseMatch<CtxT: C_FuncCaseCtx>(val resType: R_Type) {
-    abstract fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): V_Expr
+abstract class C_FuncCaseMatch<CtxT: C_FuncCaseCtx, ExprT>(val resType: R_Type) {
+    abstract fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): ExprT
 }
 
-class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
-        private val case: C_FuncCase<CtxT>,
+class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx, ExprT>(
+        private val case: C_FuncCase<CtxT, ExprT>,
         private val deprecated: C_Deprecated
-): C_FuncCase<CtxT>() {
+): C_FuncCase<CtxT, ExprT>() {
     override fun getParamTypeHint(index: Int) = case.getParamTypeHint(index)
 
-    override fun getPartialCallTarget(caseCtx: CtxT): C_PartialCallTarget? {
+    override fun getPartialCallTarget(caseCtx: CtxT): C_PartialCallTarget<ExprT>? {
         val target = case.getPartialCallTarget(caseCtx)
         return if (target == null) null else C_PartialCallTarget_Deprecated(target)
     }
 
-    override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_FuncCaseMatch<CtxT>? {
+    override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_FuncCaseMatch<CtxT, ExprT>? {
         val match = case.match(ctx, args)
-        return if (match == null) match else C_DeprecatedFuncCaseMatch(match, deprecated)
+        return if (match == null) null else C_DeprecatedFuncCaseMatch(match, deprecated)
     }
 
-    private class C_DeprecatedFuncCaseMatch<CtxT: C_FuncCaseCtx>(
-            private val match: C_FuncCaseMatch<CtxT>,
+    private class C_DeprecatedFuncCaseMatch<CtxT: C_FuncCaseCtx, ExprT>(
+            private val match: C_FuncCaseMatch<CtxT, ExprT>,
             private val deprecated: C_Deprecated
-    ): C_FuncCaseMatch<CtxT>(match.resType) {
-        override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): V_Expr {
+    ): C_FuncCaseMatch<CtxT, ExprT>(match.resType) {
+        override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): ExprT {
             deprecatedMessage(ctx, caseCtx)
             return match.compileCall(ctx, caseCtx)
         }
@@ -267,12 +264,12 @@ class C_DeprecatedFuncCase<CtxT: C_FuncCaseCtx>(
         }
     }
 
-    private inner class C_PartialCallTarget_Deprecated(
-            private val target: C_PartialCallTarget
-    ): C_PartialCallTarget(target.callPos, target.fullName, target.params) {
+    private inner class C_PartialCallTarget_Deprecated<ExprT>(
+            private val target: C_PartialCallTarget<ExprT>
+    ): C_PartialCallTarget<ExprT>(target.callPos, target.fullName, target.params) {
         override fun matchesType(fnType: R_FunctionType) = target.matchesType(fnType)
 
-        override fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): V_Expr {
+        override fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): ExprT {
             C_NamespaceElement.deprecatedMessage(
                     ctx.msgCtx,
                     callPos,
@@ -299,8 +296,9 @@ abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, args: List<V_Expr>): 
         throw C_Errors.errFunctionNoSql(caseCtx.linkPos, caseCtx.qualifiedNameMsg())
     }
 
-    final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_Expr {
-        return V_SysBasicGlobalCaseCallExpr(ctx, caseCtx, this)
+    final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_GlobalFunctionCall {
+        val vExpr = V_SysBasicGlobalCaseCallExpr(ctx, caseCtx, this)
+        return V_GlobalFunctionCall(vExpr)
     }
 
     fun compileCallR(caseCtx: C_GlobalFuncCaseCtx): R_Expr {
@@ -314,20 +312,20 @@ abstract class C_BasicGlobalFuncCaseMatch(resType: R_Type, args: List<V_Expr>): 
     }
 }
 
-class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx>(
+class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx, ExprT>(
         private val matcher: C_ArgsTypesMatcher,
-        private val body: C_FormalParamsFuncBody<CtxT>
-): C_FuncCase<CtxT>() {
+        private val body: C_FormalParamsFuncBody<CtxT, ExprT>
+): C_FuncCase<CtxT, ExprT>() {
     override fun getParamTypeHint(index: Int) = matcher.getTypeHint(index)
 
-    override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_FuncCaseMatch<CtxT>? {
+    override fun match(ctx: C_ExprContext, args: List<V_Expr>): C_FuncCaseMatch<CtxT, ExprT>? {
         val argTypes = args.map { it.type }
         val paramsMatch = matcher.match(argTypes)
         paramsMatch ?: return null
         return C_FormalParamsFuncCaseMatch(body, args, paramsMatch)
     }
 
-    override fun getPartialCallTarget(caseCtx: CtxT): C_PartialCallTarget? {
+    override fun getPartialCallTarget(caseCtx: CtxT): C_PartialCallTarget<ExprT>? {
         val params = matcher.getFixedParameters()
         return if (params == null) null else {
             C_PartialCallTarget_SysFunction(caseCtx, params, body)
@@ -335,18 +333,18 @@ class C_FormalParamsFuncCase<CtxT: C_FuncCaseCtx>(
     }
 }
 
-class C_FormalParamsFuncCaseMatch<CtxT: C_FuncCaseCtx>(
-        private val body: C_FormalParamsFuncBody<CtxT>,
+class C_FormalParamsFuncCaseMatch<CtxT: C_FuncCaseCtx, ExprT>(
+        private val body: C_FormalParamsFuncBody<CtxT, ExprT>,
         private val args: List<V_Expr>,
         private val paramsMatch: C_ArgsTypesMatch = C_ArgsTypesMatch(args.map { C_TypeAdapter_Direct })
-): C_FuncCaseMatch<CtxT>(body.resType) {
+): C_FuncCaseMatch<CtxT, ExprT>(body.resType) {
     init {
         checkEquals(paramsMatch.size, args.size)
     }
 
-    override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): V_Expr {
+    override fun compileCall(ctx: C_ExprContext, caseCtx: CtxT): ExprT {
         val effArgs = paramsMatch.effectiveArgs(ctx, args)
-        return body.compileCall(ctx, caseCtx, effArgs)
+        return body.compileCallFull(ctx, caseCtx, effArgs)
     }
 }
 

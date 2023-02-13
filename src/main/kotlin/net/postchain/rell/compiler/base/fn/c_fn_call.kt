@@ -5,7 +5,6 @@
 package net.postchain.rell.compiler.base.fn
 
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.expr.C_CallTypeHints
 import net.postchain.rell.compiler.base.expr.C_ExprContext
@@ -22,40 +21,53 @@ import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
-abstract class C_FunctionCallTarget {
+abstract class C_FunctionCallTargetInfo {
     abstract fun retType(): R_Type?
     abstract fun typeHints(): C_CallTypeHints
     abstract fun hasParameter(name: R_Name): Boolean
-    abstract fun compileFull(args: C_FullCallArguments): V_Expr?
-    abstract fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr?
+}
+
+abstract class C_FunctionCallTarget: C_FunctionCallTargetInfo() {
+    abstract fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall?
+    abstract fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_GlobalFunctionCall?
 }
 
 abstract class C_FunctionCallTarget_Regular(
         private val ctx: C_ExprContext,
         private val callInfo: C_FunctionCallInfo,
-        private val retType: R_Type?
+        private val retType: R_Type?,
 ): C_FunctionCallTarget() {
+    protected open fun vBase(): V_Expr? = null
+    protected open fun safe() = false
     protected abstract fun createVTarget(): V_FunctionCallTarget
 
     final override fun retType() = retType
     final override fun typeHints() = callInfo.params.typeHints
     final override fun hasParameter(name: R_Name) = name in callInfo.params.set
 
-    final override fun compileFull(args: C_FullCallArguments): V_Expr? {
+    final override fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall? {
         retType ?: return null
+        val vBase = vBase()
         val vTarget = createVTarget()
         val vCallArgs = args.compileComplexArgs(callInfo)
         vCallArgs ?: return null
-        return V_FullFunctionCallExpr(ctx, callInfo.callPos, callInfo.callPos, retType, vTarget, vCallArgs)
+        val safe = safe()
+        val vCall = V_CommonFunctionCall_Full(callInfo.callPos, callInfo.callPos, retType, vTarget, vCallArgs)
+        val vExpr = V_FunctionCallExpr(ctx, callInfo.callPos, vBase, vCall, safe)
+        return V_GlobalFunctionCall(vExpr)
     }
 
-    final override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr? {
+    final override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_GlobalFunctionCall? {
+        val vBase = vBase()
         val effArgs = args.compileEffectiveArgs(callInfo)
         effArgs ?: return null
         val fnType = R_FunctionType(effArgs.wildArgs, retType ?: R_CtErrorType)
-        val target = createVTarget()
+        val vTarget = createVTarget()
         val mapping = effArgs.toRMapping()
-        return V_PartialFunctionCallExpr(ctx, callInfo.callPos, fnType, target, effArgs.exprArgs, mapping)
+        val safe = safe()
+        val vCall = V_CommonFunctionCall_Partial(callInfo.callPos, fnType, vTarget, effArgs.exprArgs, mapping)
+        val vExpr = V_FunctionCallExpr(ctx, callInfo.callPos, vBase, vCall, safe)
+        return V_GlobalFunctionCall(vExpr)
     }
 }
 
@@ -66,12 +78,14 @@ class C_FunctionCallTarget_FunctionType(
         fnType: R_FunctionType,
         private val safe: Boolean
 ): C_FunctionCallTarget_Regular(ctx, callInfo, C_Utils.effectiveMemberType(fnType.result, safe)) {
-    override fun createVTarget(): V_FunctionCallTarget = V_FunctionCallTarget_FunctionValue(fnExpr, safe)
+    override fun vBase() = fnExpr
+    override fun safe() = safe
+    override fun createVTarget(): V_FunctionCallTarget = V_FunctionCallTarget_FunctionValue
 }
 
-abstract class C_PartialCallTarget(val callPos: S_Pos, val fullName: LazyString, val params: C_FunctionCallParameters) {
+abstract class C_PartialCallTarget<ExprT>(val callPos: S_Pos, val fullName: LazyString, val params: C_FunctionCallParameters) {
     abstract fun matchesType(fnType: R_FunctionType): Boolean
-    abstract fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): V_Expr
+    abstract fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): ExprT
 }
 
 class C_FunctionCallInfo(

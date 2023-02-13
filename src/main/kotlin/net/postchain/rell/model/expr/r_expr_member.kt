@@ -7,19 +7,25 @@ package net.postchain.rell.model.expr
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.R_Attribute
 import net.postchain.rell.model.R_LambdaBlock
+import net.postchain.rell.model.R_NullType
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.utils.checkEquals
 
-class R_MemberExpr(val base: R_Expr, val safe: Boolean, val calculator: R_MemberCalculator)
-: R_Expr(C_Utils.effectiveMemberType(calculator.type, safe))
-{
+class R_MemberExpr(
+    private val base: R_Expr,
+    private val calculator: R_MemberCalculator,
+    private val safe: Boolean,
+): R_Expr(C_Utils.effectiveMemberType(calculator.type, safe)) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val baseValue = base.evaluate(frame)
         if (safe && baseValue == Rt_NullValue) {
             return Rt_NullValue
         }
-        check(baseValue != Rt_NullValue)
+        if (base.type != R_NullType) {
+            check(baseValue != Rt_NullValue)
+        }
         check(baseValue != Rt_UnitValue)
         val value = calculator.calculate(frame, baseValue)
         return value
@@ -28,6 +34,12 @@ class R_MemberExpr(val base: R_Expr, val safe: Boolean, val calculator: R_Member
 
 abstract class R_MemberCalculator(val type: R_Type) {
     abstract fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value
+}
+
+class R_MemberCalculator_Error(type: R_Type, private val msg: String): R_MemberCalculator(type) {
+    override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
+        throw RellInterpreterCrashException(msg)
+    }
 }
 
 class R_MemberCalculator_TupleAttr(type: R_Type, val attrIndex: Int): R_MemberCalculator(type) {

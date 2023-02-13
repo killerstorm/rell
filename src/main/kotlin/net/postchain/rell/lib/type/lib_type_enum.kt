@@ -58,7 +58,7 @@ object C_Lib_Type_Enum {
         val fns = C_LibUtils.typeMemFuncBuilder(type).build()
         val attrMembers = PROPERTIES.entries.map {
             val attr: C_MemberAttr = C_MemberAttr_SysProperty(it.key, it.value)
-            C_TypeValueMember_BasicAttr(it.key, attr, IdeSymbolInfo.MEM_STRUCT_ATTR)
+            C_TypeValueMember_BasicAttr(attr, IdeSymbolInfo.MEM_STRUCT_ATTR)
         }
         return C_LibUtils.makeValueMembers(type, fns, attrMembers)
     }

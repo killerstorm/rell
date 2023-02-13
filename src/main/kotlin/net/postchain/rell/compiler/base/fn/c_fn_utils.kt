@@ -11,6 +11,7 @@ import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.LazyPosString
 
@@ -79,9 +80,9 @@ object C_FunctionUtils {
             callTarget: C_FunctionCallTarget,
             args: List<S_CallArgument>,
             resTypeHint: C_TypeHint
-    ): V_Expr {
+    ): V_GlobalFunctionCall {
         val res = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, callTarget)
-        return res ?: C_ExprUtils.errorVExpr(ctx, callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
+        return res ?: C_ExprUtils.errorVGlobalCall(ctx, callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
     }
 
     fun compileReturnType(ctx: C_ExprContext, name: LazyPosString, header: C_FunctionHeader): R_Type? {

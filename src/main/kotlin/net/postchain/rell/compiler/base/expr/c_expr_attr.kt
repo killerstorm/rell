@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.expr
@@ -35,7 +35,7 @@ class C_CreateAttributes(
     val implicitAttrs = implicitAttrs.toImmList()
 }
 
-class C_AttrArgument(val index: Int, val name: C_Name?, val vExpr: V_Expr, val exprImplicitName: R_Name?)
+class C_AttrArgument(val index: Int, val name: C_Name?, val vExpr: V_Expr)
 
 class C_AttrMatch(val attr: R_Attribute, val vExpr: V_Expr)
 
@@ -275,7 +275,8 @@ object C_AttributeResolver {
         val exprPos = arg.vExpr.pos
         val exprType = arg.vExpr.type
 
-        val byName = if (arg.exprImplicitName == null) null else attributes[arg.exprImplicitName]
+        val implicitName = arg.vExpr.implicitTargetAttrName()
+        val byName = if (implicitName == null) null else attributes[implicitName]
 
         if (byName != null) {
             val adapter = byName.type.getTypeAdapter(exprType)

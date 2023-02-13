@@ -42,7 +42,7 @@ class C_GlobalConstantDefinition(
         val header = headerGetter.get()
         val lazyName = LazyPosString.of(name.pos, name.str)
         val type = C_FunctionUtils.compileReturnType(exprCtx, lazyName, header) ?: R_CtErrorType
-        val vExpr = V_GlobalConstantExpr(exprCtx, name.pos, type, varUid, rDef.constId, header)
+        val vExpr = V_GlobalConstantExpr(exprCtx, name.pos, name.rName, type, varUid, rDef.constId, header)
         return C_LocalVarRef.smartNullable(exprCtx, vExpr, type, varUid, rDef.simpleName, SMART_KIND)
     }
 

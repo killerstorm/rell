@@ -19,10 +19,7 @@ import net.postchain.rell.compiler.base.fn.*
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.base.utils.C_LibUtils.depError
-import net.postchain.rell.compiler.vexpr.V_EmptyMapConstructorExpr
-import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_IteratorCopyMapConstructorExpr
-import net.postchain.rell.compiler.vexpr.V_MapCopyMapConstructorExpr
+import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_TypeAdapter
 import net.postchain.rell.runtime.*
@@ -145,10 +142,10 @@ private class C_MapConstructorFunction(
         name: LazyPosString,
         args: List<S_CallArgument>,
         resTypeHint: C_TypeHint
-    ): V_Expr {
+    ): V_GlobalFunctionCall {
         val target = C_FunctionCallTarget_MapConstructorFunction(ctx, name, resTypeHint)
-        val vExpr = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
-        return vExpr ?: C_ExprUtils.errorVExpr(ctx, name.pos)
+        val vCall = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
+        return vCall ?: C_ExprUtils.errorVGlobalCall(ctx, name.pos)
     }
 
     private inner class C_FunctionCallTarget_MapConstructorFunction(
@@ -160,7 +157,7 @@ private class C_MapConstructorFunction(
         override fun typeHints(): C_CallTypeHints = C_CallTypeHints_None
         override fun hasParameter(name: R_Name) = false
 
-        override fun compileFull(args: C_FullCallArguments): V_Expr {
+        override fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall {
             val vArgs = args.compileSimpleArgs(LazyString.of(C_Lib_Type_Map.TYPE_NAME))
 
             val rKeyValueTypes = rExplicitKeyValueTypes
@@ -172,18 +169,19 @@ private class C_MapConstructorFunction(
                 compileOneArg(ctx, rKeyValueTypes, vArg)
             } else {
                 ctx.msgCtx.error(name.pos, "expr_map_argcnt:${vArgs.size}", "Wrong number of arguments for map<>: ${vArgs.size}")
-                C_ExprUtils.errorVExpr(ctx, name.pos)
+                C_ExprUtils.errorVGlobalCall(ctx, name.pos)
             }
         }
 
-        private fun compileNoArgs(ctx: C_ExprContext, rKeyValueType: R_MapKeyValueTypes?): V_Expr {
+        private fun compileNoArgs(ctx: C_ExprContext, rKeyValueType: R_MapKeyValueTypes?): V_GlobalFunctionCall {
             val hintKeyValueTypes = resTypeHint.getMapKeyValueTypes()
             val rKeyValueTypes = requireTypes(rKeyValueType ?: hintKeyValueTypes)
             val rMapType = R_MapType(rKeyValueTypes)
-            return V_EmptyMapConstructorExpr(ctx, name.pos, rMapType)
+            val vExpr = V_EmptyMapConstructorExpr(ctx, name.pos, rMapType)
+            return V_GlobalFunctionCall(vExpr)
         }
 
-        private fun compileOneArg(ctx: C_ExprContext, rKeyValueTypes: R_MapKeyValueTypes?, vArg: V_Expr): V_Expr {
+        private fun compileOneArg(ctx: C_ExprContext, rKeyValueTypes: R_MapKeyValueTypes?, vArg: V_Expr): V_GlobalFunctionCall {
             val rArgType = vArg.type
             if (rArgType is R_MapType) {
                 return compileOneArgMap(ctx, rKeyValueTypes, vArg, rArgType)
@@ -191,15 +189,15 @@ private class C_MapConstructorFunction(
 
             val cIterator = C_ForIterator.compile(ctx, rArgType, false)
             if (cIterator != null) {
-                val vExpr = compileOneArgIterator(ctx, rKeyValueTypes, vArg, cIterator)
-                if (vExpr != null) {
-                    return vExpr
+                val vCall = compileOneArgIterator(ctx, rKeyValueTypes, vArg, cIterator)
+                if (vCall != null) {
+                    return vCall
                 }
             }
 
             ctx.msgCtx.error(name.pos, "expr_map_badtype:${rArgType.strCode()}",
                 "Wrong argument type for map<>: ${rArgType.str()}")
-            return C_ExprUtils.errorVExpr(ctx, name.pos)
+            return C_ExprUtils.errorVGlobalCall(ctx, name.pos)
         }
 
         private fun compileOneArgMap(
@@ -207,10 +205,11 @@ private class C_MapConstructorFunction(
             rKeyValueTypes: R_MapKeyValueTypes?,
             vArg: V_Expr,
             rMapType: R_MapType
-        ): V_Expr {
+        ): V_GlobalFunctionCall {
             val resTypes = checkKeyValueTypes(name.pos, rKeyValueTypes, rMapType.keyValueTypes)
             val rResMapType = R_MapType(resTypes)
-            return V_MapCopyMapConstructorExpr(ctx, name.pos, rResMapType, vArg)
+            val vExpr = V_MapCopyMapConstructorExpr(ctx, name.pos, rResMapType, vArg)
+            return V_GlobalFunctionCall(vExpr)
         }
 
         private fun compileOneArgIterator(
@@ -218,7 +217,7 @@ private class C_MapConstructorFunction(
             rKeyValueTypes: R_MapKeyValueTypes?,
             vArg: V_Expr,
             cIterator: C_ForIterator
-        ): V_Expr? {
+        ): V_GlobalFunctionCall? {
             val itemType = cIterator.itemType
             if (itemType !is R_TupleType || itemType.fields.size != 2) {
                 return null
@@ -228,7 +227,8 @@ private class C_MapConstructorFunction(
             val resTypes = checkKeyValueTypes(name.pos, rKeyValueTypes, actualTypes)
 
             val rResMapType = R_MapType(resTypes)
-            return V_IteratorCopyMapConstructorExpr(ctx, name.pos, rResMapType, vArg, cIterator)
+            val vExpr = V_IteratorCopyMapConstructorExpr(ctx, name.pos, rResMapType, vArg, cIterator)
+            return V_GlobalFunctionCall(vExpr)
         }
 
         private fun requireTypes(rKeyValueTypes: R_MapKeyValueTypes?): R_MapKeyValueTypes {
@@ -257,7 +257,7 @@ private class C_MapConstructorFunction(
             return R_MapKeyValueTypes(rKeyType, rValueType)
         }
 
-        override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr? {
+        override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_GlobalFunctionCall? {
             args.errPartialNotSupported(C_Lib_Type_Map.TYPE_NAME)
             return null
         }

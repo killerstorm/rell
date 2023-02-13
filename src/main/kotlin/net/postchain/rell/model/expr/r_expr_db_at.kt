@@ -37,7 +37,7 @@ class Rt_AtWhatItem_Evaluator(
     private val values = values.toImmList()
 
     private val resultLazy: Rt_Value by lazy {
-        evaluator.evaluate(frame, values)
+        evaluator.evaluate(frame, this.values)
     }
 
     override fun value() = resultLazy

@@ -5,21 +5,17 @@
 package net.postchain.rell.compiler.vexpr
 
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.base.expr.C_DbAtWhatValue
-import net.postchain.rell.compiler.base.expr.C_DbAtWhatValue_Complex
-import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.expr.C_MemberLink
+import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.fn.C_BasicGlobalFuncCaseMatch
 import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseCtx
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.compiler.base.utils.C_SpecialGlobalFuncCaseMatch
+import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
-import net.postchain.rell.runtime.Rt_CallContext
-import net.postchain.rell.runtime.Rt_CallFrame
-import net.postchain.rell.runtime.Rt_NullValue
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
@@ -80,122 +76,145 @@ class V_FunctionCallArgs(
     }
 }
 
-sealed class V_FunctionCallExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        protected val resType: R_Type,
-        protected val target: V_FunctionCallTarget,
-        args: List<V_Expr>
+class V_FunctionCallExpr(
+    exprCtx: C_ExprContext,
+    pos: S_Pos,
+    private val base: V_Expr?,
+    private val call: V_CommonFunctionCall,
+    private val safe: Boolean,
 ): V_Expr(exprCtx, pos) {
-    private val args = args.toImmList()
-    private val allExprs = (target.vExprs() + args).toImmList()
+    private val allExprs = (listOfNotNull(base) + call.args).toImmList()
+    private val actualType = C_Utils.effectiveMemberType(call.returnType, safe)
 
-    final override fun exprInfo0() = V_ExprInfo.simple(
-            resType,
-            allExprs,
-            canBeDbExpr = target.canBeDb()
+    override fun exprInfo0() = V_ExprInfo.simple(
+        actualType,
+        allExprs,
+        canBeDbExpr = call.canBeDbExpr()
     )
 
-    protected abstract fun toRExpr0(
-            rTarget: R_FunctionCallTarget,
-            rTargetExprs: List<R_Expr>,
-            rArgExprs: List<R_Expr>
-    ): R_Expr
+    override fun globalConstantRestriction() = call.globalConstantRestriction()
 
-    protected abstract fun callTarget(
-            callCtx: Rt_CallContext,
-            rtTarget: Rt_FunctionCallTarget,
-            argValues: List<Rt_Value>
-    ): Rt_Value
-
-    final override fun toRExpr0(): R_Expr {
-        val targetExprs = target.vExprs()
-        val rTargetExprs = targetExprs.map { it.toRExpr() }
-        val rTarget = target.toRTarget()
-        val rArgExprs = args.map { it.toRExpr() }
-        return toRExpr0(rTarget, rTargetExprs, rArgExprs)
+    override fun toRExpr0(): R_Expr {
+        val rBase = base?.toRExpr()
+        val rCall = call.rCall()
+        return R_FunctionCallExpr(actualType, rBase, rCall, safe)
     }
 
-    final override fun toDbExprWhat0(): C_DbAtWhatValue {
-        val targetExprs = target.vExprs()
+    override fun toDbExpr0(): Db_Expr {
+        val dbBase = base?.toDbExpr()
+        return call.dbExpr(dbBase)
+    }
+
+    override fun toDbExprWhat0(): C_DbAtWhatValue {
+        return call.dbExprWhat(base, safe)
+    }
+}
+
+sealed class V_CommonFunctionCall(
+    protected val pos: S_Pos,
+    val returnType: R_Type,
+    protected val target: V_FunctionCallTarget,
+    args: List<V_Expr>,
+) {
+    val args = args.toImmList()
+
+    abstract fun globalConstantRestriction(): V_GlobalConstantRestriction?
+
+    fun canBeDbExpr() = target.canBeDb()
+
+    protected abstract fun rCall0(rTarget: R_FunctionCallTarget, rArgExprs: List<R_Expr>): R_FunctionCall
+
+    protected abstract fun callTarget(
+        callCtx: Rt_CallContext,
+        rTarget: R_FunctionCallTarget,
+        baseValue: Rt_Value?,
+        argValues: List<Rt_Value>
+    ): Rt_Value
+
+    fun rCall(): R_FunctionCall {
         val rTarget = target.toRTarget()
+        val rArgExprs = args.map { it.toRExpr() }
+        return rCall0(rTarget, rArgExprs)
+    }
+
+    open fun dbExpr(dbBase: Db_Expr?): Db_Expr = throw C_Errors.errExprDbNotAllowed(pos)
+
+    fun dbExprWhat(base: V_Expr?, safe: Boolean): C_DbAtWhatValue {
+        val rTarget = target.toRTarget()
+        val baseCount = if (base == null) 0 else 1
 
         val evaluator = object: Db_ComplexAtWhatEvaluator() {
             override fun evaluate(frame: Rt_CallFrame, values: List<Rt_AtWhatItem>): Rt_Value {
-                val targetValues = values.subList(0, targetExprs.size).map { it.value() }
-                val rtTarget = rTarget.evaluateTarget(frame, targetValues)
-                rtTarget ?: return Rt_NullValue
-                val argValues = values.subList(targetExprs.size, values.size).map { it.value() }
+                val baseValue = if (baseCount == 0) null else values[0].value()
+                if (safe && baseValue == Rt_NullValue) {
+                    return Rt_NullValue
+                }
+                val argValues = values.subList(baseCount, values.size).map { it.value() }
                 val callCtx = frame.callCtx()
-                return callTarget(callCtx, rtTarget, argValues)
+                return callTarget(callCtx, rTarget, baseValue, argValues)
             }
         }
 
+        val allExprs = listOfNotNull(base) + args
         return C_DbAtWhatValue_Complex(allExprs, evaluator)
     }
 }
 
-class V_FullFunctionCallExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        callPos: S_Pos,
-        resType: R_Type,
-        target: V_FunctionCallTarget,
-        private val callArgs: V_FunctionCallArgs
-): V_FunctionCallExpr(exprCtx, pos, resType, target, callArgs.exprs) {
+class V_CommonFunctionCall_Full(
+    pos: S_Pos,
+    callPos: S_Pos,
+    returnType: R_Type,
+    target: V_FunctionCallTarget,
+    private val callArgs: V_FunctionCallArgs
+): V_CommonFunctionCall(pos, returnType, target, callArgs.exprs) {
     private val callFilePos = callPos.toFilePos()
 
     override fun globalConstantRestriction() = target.globalConstantRestriction()
 
-    override fun callTarget(callCtx: Rt_CallContext, rtTarget: Rt_FunctionCallTarget, argValues: List<Rt_Value>): Rt_Value {
+    override fun callTarget(callCtx: Rt_CallContext, rTarget: R_FunctionCallTarget, baseValue: Rt_Value?, argValues: List<Rt_Value>): Rt_Value {
         val values2 = callArgs.mapping.map { argValues[it] }
         val subCallCtx = callCtx.subContext(callFilePos)
-        return rtTarget.call(subCallCtx, values2)
+        return rTarget.call(subCallCtx, baseValue, values2)
     }
 
-    override fun toRExpr0(rTarget: R_FunctionCallTarget, rTargetExprs: List<R_Expr>, rArgExprs: List<R_Expr>): R_Expr {
-        return R_FullFunctionCallExpr(resType, rTarget, callFilePos, rTargetExprs, rArgExprs, callArgs.mapping)
+    override fun rCall0(rTarget: R_FunctionCallTarget, rArgExprs: List<R_Expr>): R_FunctionCall {
+        return R_FullFunctionCall(returnType, rTarget, callFilePos, rArgExprs, callArgs.mapping)
     }
 
-    override fun toDbExpr0(): Db_Expr {
+    override fun dbExpr(dbBase: Db_Expr?): Db_Expr {
         val dbArgs = callArgs.exprs.map { it.toDbExpr() }
-        return target.toDbExpr(pos, dbArgs)
+        return target.toDbExpr(pos, dbBase, dbArgs)
     }
 }
 
-class V_PartialFunctionCallExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        resType: R_Type,
-        target: V_FunctionCallTarget,
-        args: List<V_Expr>,
-        private val mapping: R_PartialCallMapping
-): V_FunctionCallExpr(exprCtx, pos, resType, target, args) {
+class V_CommonFunctionCall_Partial(
+    pos: S_Pos,
+    returnType: R_Type,
+    target: V_FunctionCallTarget,
+    args: List<V_Expr>,
+    private val mapping: R_PartialCallMapping
+): V_CommonFunctionCall(pos, returnType, target, args) {
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("partial_call", null)
 
-    override fun toRExpr0(rTarget: R_FunctionCallTarget, rTargetExprs: List<R_Expr>, rArgExprs: List<R_Expr>): R_Expr {
-        return R_PartialFunctionCallExpr(resType, rTarget, mapping, rTargetExprs, rArgExprs)
+    override fun rCall0(rTarget: R_FunctionCallTarget, rArgExprs: List<R_Expr>): R_FunctionCall {
+        return R_PartialFunctionCall(returnType, rTarget, mapping, rArgExprs)
     }
 
-    override fun callTarget(callCtx: Rt_CallContext, rtTarget: Rt_FunctionCallTarget, argValues: List<Rt_Value>): Rt_Value {
-        return rtTarget.createFunctionValue(resType, mapping, argValues)
+    override fun callTarget(callCtx: Rt_CallContext, rTarget: R_FunctionCallTarget, baseValue: Rt_Value?, argValues: List<Rt_Value>): Rt_Value {
+        return rTarget.createFunctionValue(returnType, mapping, baseValue, argValues)
     }
 }
 
 sealed class V_FunctionCallTarget {
-    abstract fun vExprs(): List<V_Expr>
     abstract fun toRTarget(): R_FunctionCallTarget
-
-    open fun toDbExpr(pos: S_Pos, dbArgs: List<Db_Expr>): Db_Expr = throw C_Errors.errExprDbNotAllowed(pos)
-
     open fun canBeDb() = false
+    open fun toDbExpr(pos: S_Pos, dbBase: Db_Expr?, dbArgs: List<Db_Expr>): Db_Expr = throw C_Errors.errExprDbNotAllowed(pos)
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
 }
 
 class V_FunctionCallTarget_RegularUserFunction(
         private val fn: R_RoutineDefinition
 ): V_FunctionCallTarget() {
-    override fun vExprs() = immListOf<V_Expr>()
     override fun toRTarget(): R_FunctionCallTarget = R_FunctionCallTarget_RegularUserFunction(fn)
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("fn:${fn.appLevelName}", "user function call")
 }
@@ -204,8 +223,6 @@ class V_FunctionCallTarget_AbstractUserFunction(
         private val baseFn: R_FunctionDefinition,
         private val overrideGetter: C_LateGetter<R_FunctionBase>
 ): V_FunctionCallTarget() {
-    override fun vExprs() = immListOf<V_Expr>()
-
     override fun toRTarget(): R_FunctionCallTarget {
         return R_FunctionCallTarget_AbstractUserFunction(baseFn, overrideGetter)
     }
@@ -217,8 +234,6 @@ class V_FunctionCallTarget_ExtendableUserFunction(
         private val baseFn: R_FunctionDefinition,
         private val descriptor: R_ExtendableFunctionDescriptor
 ): V_FunctionCallTarget() {
-    override fun vExprs() = immListOf<V_Expr>()
-
     override fun toRTarget(): R_FunctionCallTarget {
         return R_FunctionCallTarget_ExtendableUserFunction(baseFn, descriptor)
     }
@@ -229,19 +244,13 @@ class V_FunctionCallTarget_ExtendableUserFunction(
 class V_FunctionCallTarget_Operation(
         private val op: R_OperationDefinition
 ): V_FunctionCallTarget() {
-    override fun vExprs() = immListOf<V_Expr>()
     override fun toRTarget(): R_FunctionCallTarget = R_FunctionCallTarget_Operation(op)
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("op:${op.appLevelName}", "operation call")
 }
 
-class V_FunctionCallTarget_FunctionValue(
-        private val fnExpr: V_Expr,
-        private val safe: Boolean
-): V_FunctionCallTarget() {
-    override fun vExprs() = immListOf(fnExpr)
-
+object V_FunctionCallTarget_FunctionValue: V_FunctionCallTarget() {
     override fun toRTarget(): R_FunctionCallTarget {
-        return R_FunctionCallTarget_FunctionValue(safe)
+        return R_FunctionCallTarget_FunctionValue
     }
 
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("fn_value_call", "user function call")
@@ -274,10 +283,10 @@ abstract class V_FunctionCallTarget_SysFunction(
 class V_FunctionCallTarget_SysGlobalFunction(
         desc: V_SysFunctionTargetDescriptor
 ): V_FunctionCallTarget_SysFunction(desc) {
-    override fun vExprs() = immListOf<V_Expr>()
     override fun toRTarget(): R_FunctionCallTarget = R_FunctionCallTarget_SysGlobalFunction(desc.rFn, desc.fullName)
 
-    override fun toDbExpr(pos: S_Pos, dbArgs: List<Db_Expr>): Db_Expr {
+    override fun toDbExpr(pos: S_Pos, dbBase: Db_Expr?, dbArgs: List<Db_Expr>): Db_Expr {
+        checkEquals(dbBase, null)
         if (desc.dbFn == null) {
             throw C_Errors.errFunctionNoSql(pos, desc.fullName.value)
         }
@@ -285,23 +294,55 @@ class V_FunctionCallTarget_SysGlobalFunction(
     }
 }
 
-class V_FunctionCallTarget_SysMemberFunction(
-        desc: V_SysFunctionTargetDescriptor,
-        private val member: C_MemberLink
-): V_FunctionCallTarget_SysFunction(desc) {
-    override fun vExprs() = immListOf(member.base)
+class V_GlobalFunctionCall(private val expr: V_Expr) {
+    fun vExpr() = expr
+}
 
-    override fun toRTarget(): R_FunctionCallTarget {
-        return R_FunctionCallTarget_SysMemberFunction(member.safe, desc.rFn, desc.fullName)
+abstract class V_MemberFunctionCall(protected val exprCtx: C_ExprContext) {
+    abstract fun vExprs(): List<V_Expr>
+    open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
+
+    abstract fun returnType(): R_Type
+    abstract fun calculator(): R_MemberCalculator
+
+    open fun canBeDbExpr(): Boolean = false
+    open fun dbExpr(base: Db_Expr): Db_Expr? = null
+    open fun dbExprWhat(base: V_Expr, safe: Boolean): C_DbAtWhatValue? = null
+}
+
+class V_MemberFunctionCall_CommonCall(
+    exprCtx: C_ExprContext,
+    private val call: V_CommonFunctionCall,
+    private val returnType: R_Type,
+): V_MemberFunctionCall(exprCtx) {
+    override fun vExprs() = call.args
+    override fun globalConstantRestriction() = call.globalConstantRestriction()
+    override fun returnType() = returnType
+
+    override fun calculator(): R_MemberCalculator {
+        val rCall = call.rCall()
+        return R_MemberCalculator_CommonCall(returnType, rCall)
     }
 
-    override fun toDbExpr(pos: S_Pos, dbArgs: List<Db_Expr>): Db_Expr {
-        if (desc.dbFn == null) {
-            throw C_Errors.errFunctionNoSql(pos, desc.fullName.value)
+    override fun canBeDbExpr(): Boolean = call.canBeDbExpr()
+    override fun dbExpr(base: Db_Expr) = call.dbExpr(base)
+    override fun dbExprWhat(base: V_Expr, safe: Boolean) = call.dbExprWhat(base, safe)
+
+    private class R_MemberCalculator_CommonCall(type: R_Type, private val call: R_FunctionCall): R_MemberCalculator(type) {
+        override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
+            return call.evaluate(frame, baseValue)
         }
-
-        val dbBase = member.base.toDbExpr()
-        val dbFullArgs = listOf(dbBase) + dbArgs
-        return Db_CallExpr(desc.resType, desc.dbFn, dbFullArgs)
     }
+}
+
+class V_MemberFunctionCall_Error(
+    exprCtx: C_ExprContext,
+    private val returnType: R_Type,
+    private val msg: String,
+): V_MemberFunctionCall(exprCtx) {
+    override fun vExprs() = immListOf<V_Expr>()
+    override fun returnType() = returnType
+    override fun calculator(): R_MemberCalculator = R_MemberCalculator_Error(returnType, msg)
+    override fun canBeDbExpr() = true
+    override fun dbExpr(base: Db_Expr) = C_ExprUtils.errorDbExpr(returnType, msg)
 }

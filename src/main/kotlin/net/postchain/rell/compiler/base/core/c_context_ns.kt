@@ -126,7 +126,7 @@ sealed class C_GlobalNameRes(
     fun isValid() = elem != null
     fun isCallable() = elem?.member?.isCallable() ?: false
 
-    fun compile(ctx: C_ExprContext, implicitAttrMatchName: R_Name): C_Expr {
+    fun compile(ctx: C_ExprContext): C_Expr {
         access()
         val member = elem?.member
         if (member == null) {
@@ -134,7 +134,7 @@ sealed class C_GlobalNameRes(
             C_Errors.errUnknownName(msgCtx, qName.pos, nameStr, nameStr)
             return C_ExprUtils.errorExpr(ctx, qName.pos)
         }
-        return member.toExpr(ctx, qName, implicitAttrMatchName = implicitAttrMatchName)
+        return member.toExpr(ctx, qName)
     }
 
     fun getType(): C_TypeDef? {

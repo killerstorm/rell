@@ -13,7 +13,7 @@ import net.postchain.rell.compiler.base.module.C_ModuleDefsBuilder
 import net.postchain.rell.compiler.base.module.C_ModuleKey
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_ObjectExpr
+import net.postchain.rell.lib.type.V_ObjectExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
@@ -86,17 +86,17 @@ sealed class C_NamespaceMember(base: C_NamespaceMemberBase) {
         }
     }
 
-    abstract fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr
+    abstract fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName): C_Expr
 }
 
 private class C_NamespaceMember_Property(base: C_NamespaceMemberBase, private val prop: C_NamespaceProperty): C_NamespaceMember(base) {
     override fun declarationType() = C_DeclarationType.PROPERTY
     override fun hasTag(tag: C_NamespaceMemberTag) = tag == C_NamespaceMemberTag.VALUE
 
-    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName): C_Expr {
         val propCtx = C_NamespacePropertyContext(ctx)
         val vExpr = prop.toExpr(propCtx, qName)
-        return C_ValueExpr(vExpr, implicitAttrMatchName = implicitAttrMatchName)
+        return C_ValueExpr(vExpr)
     }
 }
 
@@ -112,7 +112,7 @@ sealed class C_NamespaceMember_Namespace(
 
     final override fun getNamespaceOpt() = ns
 
-    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName): C_Expr {
         return C_NamespaceExpr(qName, ns, defName)
     }
 
@@ -135,7 +135,7 @@ sealed class C_NamespaceMember_Namespace(
             val elem = entry.element(tags)
 
             val qFullName = qName.add(memberName)
-            return elem.toExprMember(ctx, qFullName, implicitAttrMatchName = null)
+            return elem.toExprMember(ctx, qFullName)
         }
 
         override fun errKindName() = "namespace" to defName.appLevelName
@@ -159,7 +159,7 @@ private class C_NamespaceMember_Type(base: C_NamespaceMemberBase, private val ty
     }
 
     override fun getTypeOpt() = type
-    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?) = type.toExpr(qName.pos)
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName) = type.toExpr(qName.pos)
 }
 
 private sealed class C_NamespaceMember_Entity(
@@ -176,7 +176,7 @@ private sealed class C_NamespaceMember_Entity(
 
     final override fun getTypeOpt() = typeDef
     final override fun getEntityOpt() = entity
-    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?) = typeDef.toExpr(qName.pos)
+    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName) = typeDef.toExpr(qName.pos)
 }
 
 private class C_NamespaceMember_SysEntity(base: C_NamespaceMemberBase, entity: R_EntityDefinition): C_NamespaceMember_Entity(base, entity)
@@ -205,7 +205,7 @@ private class C_NamespaceMember_Object(
 
     override fun getObjectOpt() = obj
 
-    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName): C_Expr {
         val vExpr: V_Expr = V_ObjectExpr(ctx, qName, obj)
         return C_ValueExpr(vExpr)
     }
@@ -227,7 +227,7 @@ private sealed class C_NamespaceMember_Struct(
     }
 
     final override fun getTypeOpt() = typeDef
-    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?) = typeDef.toExpr(qName.pos)
+    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName) = typeDef.toExpr(qName.pos)
 }
 
 private class C_NamespaceMember_SysStruct(
@@ -257,7 +257,7 @@ private class C_NamespaceMember_Enum(
     }
 
     override fun getTypeOpt() = typeDef
-    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?) = typeDef.toExpr(qName.pos)
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName) = typeDef.toExpr(qName.pos)
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {
         b.enums.add(e.moduleLevelName, e)
@@ -269,7 +269,7 @@ private class C_FunctionExpr(private val name: LazyPosString, private val fn: C_
     override fun isCallable() = true
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
-        val vExpr = fn.compileCall(ctx, name, args, resTypeHint)
+        val vExpr = fn.compileCall(ctx, name, args, resTypeHint).vExpr()
         return C_ValueExpr(vExpr)
     }
 
@@ -284,7 +284,7 @@ private sealed class C_NamespaceMember_Function(
     final override fun hasTag(tag: C_NamespaceMemberTag) = tag == C_NamespaceMemberTag.CALLABLE
     final override fun getFunctionOpt() = fn
 
-    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+    final override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName): C_Expr {
         val lazyName = LazyPosString.of(qName.last.pos) { defName.appLevelName }
         return C_FunctionExpr(lazyName, fn)
     }
@@ -311,7 +311,7 @@ private class C_NamespaceMember_Operation(
 
     override fun getOperationOpt() = cOp.rOp
 
-    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName): C_Expr {
         val lazyName = LazyPosString.of(qName.last.pos) { defName.appLevelName }
         return C_FunctionExpr(lazyName, cOp)
     }
@@ -329,7 +329,7 @@ private class C_NamespaceMember_Query(
     override fun declarationType() = C_DeclarationType.QUERY
     override fun hasTag(tag: C_NamespaceMemberTag) = tag == C_NamespaceMemberTag.CALLABLE
 
-    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName): C_Expr {
         val lazyName = LazyPosString.of(qName.last.pos) { defName.appLevelName }
         return C_FunctionExpr(lazyName, cQuery)
     }
@@ -347,9 +347,9 @@ private class C_NamespaceMember_GlobalConstant(
     override fun declarationType() = C_DeclarationType.CONSTANT
     override fun hasTag(tag: C_NamespaceMemberTag) = tag == C_NamespaceMemberTag.VALUE
 
-    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_Expr {
+    override fun toExpr(ctx: C_ExprContext, qName: C_QualifiedName): C_Expr {
         val vExpr = cDef.compileRead(ctx, qName.last)
-        return C_ValueExpr(vExpr, implicitAttrMatchName = implicitAttrMatchName)
+        return C_ValueExpr(vExpr)
     }
 
     override fun addToDefs(b: C_ModuleDefsBuilder) {

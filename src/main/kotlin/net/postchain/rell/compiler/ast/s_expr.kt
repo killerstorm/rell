@@ -285,7 +285,7 @@ class S_ParenthesesExpr(startPos: S_Pos, val expr: S_Expr): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
         val cExpr = expr.compile(ctx, hint)
         val vExpr = cExpr.value()
-        return C_ValueExpr(vExpr, cExpr.implicitMatchName())
+        return C_ValueExpr(vExpr)
     }
 
     override fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_AtContext) = expr.compileNestedAt(ctx, parentAtCtx)
@@ -565,8 +565,7 @@ class S_CallArgumentValue_Expr(val expr: S_Expr): S_CallArgumentValue() {
         val exprHint = C_ExprHint(typeHint)
         val cExpr = expr.compile(ctx, exprHint)
         val vExpr = cExpr.value()
-        val implicitName = cExpr.implicitMatchName()
-        return C_CallArgumentValue_Expr(expr.startPos, vExpr, implicitName)
+        return C_CallArgumentValue_Expr(expr.startPos, vExpr)
     }
 }
 

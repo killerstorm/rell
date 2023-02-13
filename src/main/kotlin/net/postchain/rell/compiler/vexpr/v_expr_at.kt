@@ -32,7 +32,7 @@ class V_AtEntityExpr(
     )
 
     override fun isAtExprItem() = true
-    override fun implicitAtWhereAttrName() = cAtEntity.alias
+    override fun implicitTargetAttrName() = cAtEntity.alias
 
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
 

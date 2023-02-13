@@ -6,3 +6,8 @@ import ^.ext; // Linking the extension.
 query is_good_value(x: integer) {
     return not lib.is_bad_value(x);
 }
+
+function say() {
+    print('app print');
+    log('app log');
+}

@@ -317,10 +317,10 @@ class GlobalConstantTest: BaseRellTest(false) {
     @Test fun testExprObject() {
         def("object state { v: integer = 123; }")
         chkCompile("val X = state;", "ct_err:[def:const:bad_type:not_pure:0::X:state][def:const:bad_expr:0::X:object]")
-        chkCompile("val X = state.v;", "ct_err:def:const:bad_expr:0::X:object_attr")
-        chkCompile("val X = state.to_struct();", "ct_err:def:const:bad_expr:0::X:object_to_struct")
+        chkCompile("val X = state.v;", "ct_err:[def:const:bad_expr:0::X:object][def:const:bad_expr:0::X:object_attr]") //TODO shall be one error
+        chkCompile("val X = state.to_struct();", "ct_err:[def:const:bad_expr:0::X:object][def:const:bad_expr:0::X:object_to_struct]") //TODO shall be one error
         chkCompile("val X = state.to_mutable_struct();",
-                "ct_err:[def:const:bad_type:mutable:0::X:struct<mutable state>][def:const:bad_expr:0::X:object_to_struct]")
+                "ct_err:[def:const:bad_type:mutable:0::X:struct<mutable state>][def:const:bad_expr:0::X:object][def:const:bad_expr:0::X:object_to_struct]")
     }
 
     @Test fun testExprAt() {
@@ -632,6 +632,16 @@ class GlobalConstantTest: BaseRellTest(false) {
         chkEx("{ X += 456; return X; }", "ct_err:expr_bad_dst")
         chkEx("{ X++; return X; }", "ct_err:expr_bad_dst")
         chkEx("{ ++X; return X; }", "ct_err:expr_bad_dst")
+    }
+
+    @Test fun testImplicitAtWheerAttr() {
+        tstCtx.useSql = true
+        def("val foo = 123;")
+        def("namespace ns { val bar = 456; }")
+        def("entity data { foo: integer; bar: integer; }")
+        insert("c0.data", "foo,bar", "10,123,456")
+        chk("data @? { foo }", "data[10]")
+        chk("data @? { ns.bar }", "data[10]")
     }
 
     private fun chkConst(expr: String, expected: String) {

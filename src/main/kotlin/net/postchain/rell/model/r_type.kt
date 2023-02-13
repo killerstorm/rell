@@ -10,7 +10,6 @@ import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.def.C_StructGlobalFunction
 import net.postchain.rell.compiler.base.expr.C_AtTypeImplicitAttr
-import net.postchain.rell.compiler.base.expr.C_AtTypeImplicitAttr_TypeMember
 import net.postchain.rell.compiler.base.expr.C_TypeValueMember
 import net.postchain.rell.compiler.base.fn.C_FunctionCallParameter
 import net.postchain.rell.compiler.base.fn.C_FunctionCallParameters
@@ -22,13 +21,13 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.*
+import org.bouncycastle.util.Arrays
 import org.jooq.DataType
 import org.jooq.SQLDialect
 import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
 import org.jooq.util.postgres.PostgresDataType
 import org.postgresql.util.PGobject
-import org.bouncycastle.util.Arrays
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.util.*
@@ -135,7 +134,7 @@ private abstract class R_TypeSqlAdapter_Primitive(
 }
 
 private class R_TypeAtImplicitAttrs(private val calculator: () -> List<C_AtTypeImplicitAttr>) {
-    private val byNameLazy: Map<R_Name, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.name } }
+    private val byNameLazy: Map<R_Name, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.member.name } }
     private val byTypeLazy: Map<R_Type, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.type } }
     private val attrsLazy: List<C_AtTypeImplicitAttr> by lazy { calculator().toImmList() }
 
@@ -154,7 +153,7 @@ private class R_TypeAtImplicitAttrs(private val calculator: () -> List<C_AtTypeI
 private class R_TypeValueMembers(private val calculator: () -> List<C_TypeValueMember>) {
     private val byNameLazy: Map<R_Name, List<C_TypeValueMember>> by lazy {
         allLazy
-            .map { it.name to it }
+            .mapNotNull { if (it.name == null) null else (it.name to it) }
             .groupBy({it.first}, {it.second})
             .mapValues { it.value.toImmList() }
             .toImmMap()
@@ -251,7 +250,7 @@ abstract class R_Type(
     fun getAtImplicitAttrs(name: R_Name) = atImplicitAttrs.get(name)
     fun getAtImplicitAttrs(type: R_Type) = atImplicitAttrs.get(type)
     protected open fun getAtImplicitAttrs0(): List<C_AtTypeImplicitAttr> = valueMembers.getAll()
-        .mapNotNull { if (it.valueType == null) null else C_AtTypeImplicitAttr_TypeMember(it.name, it.valueType, it) }
+        .mapNotNull { if (it.valueType == null) null else C_AtTypeImplicitAttr(it, it.valueType) }
 
     companion object {
         fun commonTypeOpt(a: R_Type, b: R_Type): R_Type? {
@@ -521,7 +520,6 @@ object R_NullType: R_Type("null") {
     override fun createGtvConversion() = GtvRtConversion_Null
     override fun strCode() = "null"
     override fun toMetaGtv() = "null".toGtv()
-    override fun getValueMembers0() = C_Lib_Type_Null.valueMembers
 }
 
 class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName, rEntity.cDefName) {

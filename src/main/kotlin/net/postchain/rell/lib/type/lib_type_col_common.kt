@@ -21,6 +21,7 @@ import net.postchain.rell.compiler.base.utils.C_LibUtils.depError
 import net.postchain.rell.compiler.vexpr.V_CopyCollectionConstructorExpr
 import net.postchain.rell.compiler.vexpr.V_EmptyCollectionConstructorExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_CollectionKind
 import net.postchain.rell.runtime.*
@@ -103,10 +104,10 @@ class C_CollectionConstructorFunction(
         name: LazyPosString,
         args: List<S_CallArgument>,
         resTypeHint: C_TypeHint
-    ): V_Expr {
+    ): V_GlobalFunctionCall {
         val target = C_FunctionCallTarget_CollectionConstructorFunction(ctx, name, resTypeHint)
-        val vExpr = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
-        return vExpr ?: C_ExprUtils.errorVExpr(ctx, name.pos)
+        val vCall = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
+        return vCall ?: C_ExprUtils.errorVGlobalCall(ctx, name.pos)
     }
 
     private fun requireType(pos: S_Pos, rType: R_Type?): R_Type {
@@ -124,7 +125,7 @@ class C_CollectionConstructorFunction(
         override fun typeHints(): C_CallTypeHints = C_CallTypeHints_None
         override fun hasParameter(name: R_Name) = false
 
-        override fun compileFull(args: C_FullCallArguments): V_Expr? {
+        override fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall? {
             val vArgs = args.compileSimpleArgs(LazyString.of(colType))
             return if (vArgs.size == 0) {
                 compileNoArgs(ctx, resTypeHint, rExplicitElementType)
@@ -142,18 +143,19 @@ class C_CollectionConstructorFunction(
             ctx: C_ExprContext,
             typeHint: C_TypeHint,
             rType: R_Type?
-        ): V_Expr {
+        ): V_GlobalFunctionCall {
             val elemType = rType ?: kindAdapter.elementTypeFromTypeHint(typeHint)
             val rTypeReq = requireType(name.pos, elemType)
             val kind = kindAdapter.makeKind(rTypeReq)
-            return V_EmptyCollectionConstructorExpr(ctx, name.pos, kind)
+            val vExpr = V_EmptyCollectionConstructorExpr(ctx, name.pos, kind)
+            return V_GlobalFunctionCall(vExpr)
         }
 
         private fun compileOneArg(
             ctx: C_ExprContext,
             rType: R_Type?,
             vArg: V_Expr
-        ): V_Expr {
+        ): V_GlobalFunctionCall {
             val rArgType = vArg.type
             val cIterator = C_ForIterator.compile(ctx, rArgType, false)
 
@@ -175,10 +177,11 @@ class C_CollectionConstructorFunction(
             }
 
             val kind = kindAdapter.makeKind(rElementType)
-            return V_CopyCollectionConstructorExpr(ctx, name.pos, kind, vArg, cIterator)
+            val vExpr = V_CopyCollectionConstructorExpr(ctx, name.pos, kind, vArg, cIterator)
+            return V_GlobalFunctionCall(vExpr)
         }
 
-        override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr? {
+        override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_GlobalFunctionCall? {
             args.errPartialNotSupported(colType)
             return null
         }

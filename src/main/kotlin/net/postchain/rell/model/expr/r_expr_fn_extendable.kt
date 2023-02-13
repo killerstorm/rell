@@ -150,29 +150,23 @@ class R_FunctionCallTarget_ExtendableUserFunction(
         private val baseFn: R_FunctionDefinition,
         private val descriptor: R_ExtendableFunctionDescriptor
 ): R_FunctionCallTarget() {
-    override fun evaluateTarget(frame: Rt_CallFrame, values: List<Rt_Value>): Rt_FunctionCallTarget {
-        checkEquals(values.size, 0)
-        return Rt_FunctionCallTarget_ExtendableUserFunction()
-    }
+    override fun call(callCtx: Rt_CallContext, baseValue: Rt_Value?, values: List<Rt_Value>): Rt_Value {
+        checkEquals(baseValue, null)
 
-    private inner class Rt_FunctionCallTarget_ExtendableUserFunction: Rt_FunctionCallTarget() {
-        override fun call(callCtx: Rt_CallContext, values: List<Rt_Value>): Rt_Value {
-            val extensions = callCtx.appCtx.app.functionExtensions.getExtensions(descriptor.uid)
+        val extensions = callCtx.appCtx.app.functionExtensions.getExtensions(descriptor.uid)
 
-            val rtCombiner = descriptor.combiner.createRtCombiner()
+        val rtCombiner = descriptor.combiner.createRtCombiner()
 
-            for (ext in extensions) {
-                val value = ext.fnBase.call(callCtx, values)
-                if (rtCombiner.addExtensionResult(value)) {
-                    break
-                }
+        for (ext in extensions) {
+            val value = ext.fnBase.call(callCtx, values)
+            if (rtCombiner.addExtensionResult(value)) {
+                break
             }
-
-            val res = rtCombiner.getCombinedResult()
-            return res
         }
 
-        override fun str() = baseFn.appLevelName
-        override fun strCode() = baseFn.appLevelName
+        val res = rtCombiner.getCombinedResult()
+        return res
     }
+
+    override fun str() = baseFn.appLevelName
 }

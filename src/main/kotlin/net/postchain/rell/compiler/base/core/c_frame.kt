@@ -474,8 +474,9 @@ class C_OwnerBlockContext(
 
 class C_LambdaBlock(
         val rLambda: R_LambdaBlock,
+        private val exprCtx: C_ExprContext,
         private val localVar: C_LocalVar,
-        val blockUid: R_FrameBlockUid
+        private val blockUid: R_FrameBlockUid
 ) {
     fun compileVarRExpr(blockUid: R_FrameBlockUid = this.blockUid): R_Expr {
         val varRef = localVar.toRef(blockUid)
@@ -487,6 +488,11 @@ class C_LambdaBlock(
         return Db_InterpretedExpr(rVarExpr)
     }
 
+    fun compileVarExpr(pos: S_Pos, blockUid: R_FrameBlockUid = this.blockUid): V_Expr {
+        val varRef = localVar.toRef(blockUid)
+        return V_LocalVarExpr(exprCtx, pos, varRef)
+    }
+
     companion object {
         fun builder(ctx: C_ExprContext, varType: R_Type) = C_LambdaBlockBuilder(ctx, varType)
     }
@@ -495,12 +501,13 @@ class C_LambdaBlock(
 class C_LambdaBlockBuilder(ctx: C_ExprContext, private val varType: R_Type) {
     val innerBlkCtx = ctx.blkCtx.createSubContext("<lambda>")
     val innerExprCtx = ctx.update(blkCtx = innerBlkCtx)
-    val localVar = innerBlkCtx.newLocalVar("<lambda>", null, varType, false, null)
+
+    private val localVar = innerBlkCtx.newLocalVar("<lambda>", null, varType, false, null)
 
     fun build(): C_LambdaBlock {
         val cBlock = innerBlkCtx.buildBlock()
         val varRef = localVar.toRef(innerBlkCtx.blockUid)
         val rLambda = R_LambdaBlock(cBlock.rBlock, varRef.ptr, varType)
-        return C_LambdaBlock(rLambda, localVar, innerBlkCtx.blockUid)
+        return C_LambdaBlock(rLambda, innerExprCtx, localVar, innerBlkCtx.blockUid)
     }
 }

@@ -538,40 +538,6 @@ class R_StructExpr(private val struct: R_Struct, private val attrs: List<R_Creat
     }
 }
 
-class R_ObjectExpr(val objType: R_ObjectType): R_Expr(objType) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        return Rt_ObjectValue(objType)
-    }
-}
-
-class R_ObjectAttrExpr(type: R_Type, val rObject: R_ObjectDefinition, val atBase: Db_AtExprBase): R_Expr(type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        var records = atBase.execute(frame, Rt_AtExprExtras.NULL)
-
-        if (records.isEmpty()) {
-            val forced = frame.defCtx.appCtx.forceObjectInit(rObject)
-            if (forced) {
-                records = atBase.execute(frame, Rt_AtExprExtras.NULL)
-            }
-        }
-
-        val count = records.size
-
-        if (count == 0) {
-            val name = rObject.appLevelName
-            throw Rt_Exception.common("obj_norec:$name", "No record for object '$name' in database")
-        } else if (count > 1) {
-            val name = rObject.appLevelName
-            throw Rt_Exception.common("obj_multirec:$name:$count", "Multiple records for object '$name' in database: $count")
-        }
-
-        val record = records[0]
-        checkEquals(record.size, 1)
-        val value = record[0]
-        return value
-    }
-}
-
 class R_AssignExpr(
         type: R_Type,
         val op: R_BinaryOp,

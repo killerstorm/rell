@@ -76,9 +76,9 @@ class C_NamespaceElement(
         }
     }
 
-    fun toExprMember(ctx: C_ExprContext, qName: C_QualifiedName, implicitAttrMatchName: R_Name?): C_ExprMember {
+    fun toExprMember(ctx: C_ExprContext, qName: C_QualifiedName): C_ExprMember {
         access(ctx.msgCtx) { qName }
-        val expr = member.toExpr(ctx, qName, implicitAttrMatchName)
+        val expr = member.toExpr(ctx, qName)
         return C_ExprMember(expr, member.ideInfo)
     }
 

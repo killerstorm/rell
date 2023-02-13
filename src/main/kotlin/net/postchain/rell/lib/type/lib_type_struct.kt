@@ -26,7 +26,7 @@ object C_Lib_Type_Struct {
         val fns = getMemberFns(struct)
         val attrMembers = struct.attributesList.map {
             val mem = C_MemberAttr_RegularStructAttr(it)
-            C_TypeValueMember_BasicAttr(it.rName, mem, it.ideInfo)
+            C_TypeValueMember_BasicAttr(mem, it.ideInfo)
         }
         return C_LibUtils.makeValueMembers(struct.type, fns, attrMembers)
     }
@@ -114,7 +114,7 @@ object C_Lib_Type_VirtualStruct {
         val attrMembers = type.innerType.struct.attributesList.map { attr ->
             val virtualType = S_VirtualType.virtualMemberType(attr.type)
             val mem = C_MemberAttr_VirtualStructAttr(virtualType, attr)
-            C_TypeValueMember_BasicAttr(attr.rName, mem, attr.ideInfo)
+            C_TypeValueMember_BasicAttr(mem, attr.ideInfo)
         }
 
         return C_LibUtils.makeValueMembers(type, fns, attrMembers)

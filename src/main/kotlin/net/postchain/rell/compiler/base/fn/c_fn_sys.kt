@@ -4,52 +4,57 @@
 
 package net.postchain.rell.compiler.base.fn
 
-import net.postchain.rell.compiler.ast.S_CallArgument
-import net.postchain.rell.compiler.ast.S_CallArgumentValue_Expr
-import net.postchain.rell.compiler.ast.S_CallArgumentValue_Wildcard
-import net.postchain.rell.compiler.ast.S_Expr
+import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.compiler.base.expr.C_CallTypeHints
-import net.postchain.rell.compiler.base.expr.C_CallTypeHints_None
-import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
-import net.postchain.rell.model.expr.Db_SysFunction
+import net.postchain.rell.model.expr.*
+import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 
-abstract class C_FormalParamsFuncBody<CtxT: C_FuncCaseCtx>(val resType: R_Type) {
-    abstract fun effectiveResType(caseCtx: CtxT, type: R_Type): R_Type
-
-    abstract fun makeCallTarget(ctx: C_ExprContext, caseCtx: CtxT): V_FunctionCallTarget
-
-    fun compileCall(ctx: C_ExprContext, caseCtx: CtxT, args: List<V_Expr>): V_Expr {
-        val pos = caseCtx.linkPos
-        val effResType = effectiveResType(caseCtx, resType)
-
-        val callTarget = makeCallTarget(ctx, caseCtx)
-        val callArgs = V_FunctionCallArgs.positional(args)
-
-        return V_FullFunctionCallExpr(ctx, pos, pos, effResType, callTarget, callArgs)
-    }
+abstract class C_FormalParamsFuncBody<CtxT: C_FuncCaseCtx, ExprT>(val resType: R_Type) {
+    abstract fun compileCallFull(ctx: C_ExprContext, caseCtx: CtxT, args: List<V_Expr>): ExprT
+    abstract fun compileCallPartial(ctx: C_ExprContext, caseCtx: CtxT, args: C_EffectivePartialArguments, callPos: S_Pos): ExprT
 }
 
-typealias C_GlobalFormalParamsFuncBody = C_FormalParamsFuncBody<C_GlobalFuncCaseCtx>
-typealias C_MemberFormalParamsFuncBody = C_FormalParamsFuncBody<C_MemberFuncCaseCtx>
+typealias C_GlobalFormalParamsFuncBody = C_FormalParamsFuncBody<C_GlobalFuncCaseCtx, V_GlobalFunctionCall>
+typealias C_MemberFormalParamsFuncBody = C_FormalParamsFuncBody<C_MemberFuncCaseCtx, V_MemberFunctionCall>
 
 class C_SysGlobalFormalParamsFuncBody(
         resType: R_Type,
         private val cFn: C_SysFunction
 ): C_GlobalFormalParamsFuncBody(resType) {
-    override fun effectiveResType(caseCtx: C_GlobalFuncCaseCtx, type: R_Type) = type
+    override fun compileCallFull(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx, args: List<V_Expr>): V_GlobalFunctionCall {
+        val pos = caseCtx.linkPos
+        val callTarget = makeCallTarget(ctx, caseCtx)
+        val callArgs = V_FunctionCallArgs.positional(args)
+        val vCall: V_CommonFunctionCall = V_CommonFunctionCall_Full(pos, pos, resType, callTarget, callArgs)
+        val vExpr: V_Expr = V_FunctionCallExpr(ctx, pos, null, vCall, false)
+        return V_GlobalFunctionCall(vExpr)
+    }
 
-    override fun makeCallTarget(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_FunctionCallTarget {
+    override fun compileCallPartial(
+        ctx: C_ExprContext,
+        caseCtx: C_GlobalFuncCaseCtx,
+        args: C_EffectivePartialArguments,
+        callPos: S_Pos,
+    ): V_GlobalFunctionCall {
+        val callTarget = makeCallTarget(ctx, caseCtx)
+        val fnType = R_FunctionType(args.wildArgs, resType)
+        val mapping = args.toRMapping()
+        val vCall: V_CommonFunctionCall = V_CommonFunctionCall_Partial(callPos, fnType, callTarget, args.exprArgs, mapping)
+        val vExpr: V_Expr = V_FunctionCallExpr(ctx, callPos, null, vCall, false)
+        return V_GlobalFunctionCall(vExpr)
+    }
+
+    private fun makeCallTarget(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_FunctionCallTarget {
         val fullName = caseCtx.qualifiedNameMsgLazy()
         val body = cFn.compileCall(C_SysFunctionCtx(ctx, caseCtx.linkPos))
         val desc = V_SysFunctionTargetDescriptor(resType, body.rFn, body.dbFn, fullName, cFn.pure)
@@ -61,37 +66,69 @@ class C_SysMemberFormalParamsFuncBody(
         resType: R_Type,
         private val cFn: C_SysFunction,
 ): C_MemberFormalParamsFuncBody(resType) {
-    override fun effectiveResType(caseCtx: C_MemberFuncCaseCtx, type: R_Type): R_Type {
-        return C_Utils.effectiveMemberType(type, caseCtx.member.safe)
+    override fun compileCallFull(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx, args: List<V_Expr>): V_MemberFunctionCall {
+        val pos = caseCtx.linkPos
+        val callTarget = makeCallTarget(ctx, caseCtx)
+        val callArgs = V_FunctionCallArgs.positional(args)
+        val vCall = V_CommonFunctionCall_Full(pos, pos, resType, callTarget, callArgs)
+        return V_MemberFunctionCall_CommonCall(ctx, vCall, resType)
     }
 
-    override fun makeCallTarget(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx): V_FunctionCallTarget {
+    override fun compileCallPartial(
+        ctx: C_ExprContext,
+        caseCtx: C_MemberFuncCaseCtx,
+        args: C_EffectivePartialArguments,
+        callPos: S_Pos,
+    ): V_MemberFunctionCall {
+        val callTarget = makeCallTarget(ctx, caseCtx)
+        val fnType = R_FunctionType(args.wildArgs, resType)
+        val mapping = args.toRMapping()
+        val vCall = V_CommonFunctionCall_Partial(callPos, fnType, callTarget, args.exprArgs, mapping)
+        return V_MemberFunctionCall_CommonCall(ctx, vCall, fnType)
+    }
+
+    private fun makeCallTarget(ctx: C_ExprContext, caseCtx: C_MemberFuncCaseCtx): V_FunctionCallTarget {
         val fullName = caseCtx.qualifiedNameMsgLazy()
         val body = cFn.compileCall(C_SysFunctionCtx(ctx, caseCtx.linkPos))
         val desc = V_SysFunctionTargetDescriptor(resType, body.rFn, body.dbFn, fullName, cFn.pure)
-        return V_FunctionCallTarget_SysMemberFunction(desc, caseCtx.member)
+        return V_FunctionCallTarget_SysMemberFunction(desc)
+    }
+
+    private class V_FunctionCallTarget_SysMemberFunction(
+        desc: V_SysFunctionTargetDescriptor,
+    ): V_FunctionCallTarget_SysFunction(desc) {
+        override fun toRTarget(): R_FunctionCallTarget {
+            return R_FunctionCallTarget_SysMemberFunction(desc.rFn, desc.fullName)
+        }
+
+        override fun toDbExpr(pos: S_Pos, dbBase: Db_Expr?, dbArgs: List<Db_Expr>): Db_Expr {
+            checkNotNull(dbBase)
+
+            if (desc.dbFn == null) {
+                throw C_Errors.errFunctionNoSql(pos, desc.fullName.value)
+            }
+
+            val dbFullArgs = listOf(dbBase) + dbArgs
+            return Db_CallExpr(desc.resType, desc.dbFn, dbFullArgs)
+        }
     }
 }
 
-class C_PartialCallTarget_SysFunction<CtxT: C_FuncCaseCtx>(
+class C_PartialCallTarget_SysFunction<CtxT: C_FuncCaseCtx, ExprT>(
         private val caseCtx: CtxT,
         params: C_FunctionCallParameters,
-        private val body: C_FormalParamsFuncBody<CtxT>
-): C_PartialCallTarget(caseCtx.linkPos, caseCtx.qualifiedNameMsgLazy(), params) {
+        private val body: C_FormalParamsFuncBody<CtxT, ExprT>,
+): C_PartialCallTarget<ExprT>(caseCtx.linkPos, caseCtx.qualifiedNameMsgLazy(), params) {
     override fun matchesType(fnType: R_FunctionType): Boolean {
         return fnType.matchesParameters(params.list) && fnType.result == body.resType
     }
 
-    override fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): V_Expr {
-        val callTarget = body.makeCallTarget(ctx, caseCtx)
-        val fnType = R_FunctionType(args.wildArgs, body.resType)
-        val effType = body.effectiveResType(caseCtx, fnType)
-        val mapping = args.toRMapping()
-        return V_PartialFunctionCallExpr(ctx, callPos, effType, callTarget, args.exprArgs, mapping)
+    override fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): ExprT {
+        return body.compileCallPartial(ctx, caseCtx, args, callPos)
     }
 }
 
-private class C_SysFunctionParamHints(private val cases: List<C_FuncCase<*>>): C_CallTypeHints {
+private class C_SysFunctionParamHints(private val cases: List<C_FuncCase<*, *>>): C_CallTypeHints {
     override fun getTypeHint(index: Int?, name: R_Name?): C_TypeHint {
         return if (index == null) C_TypeHint.NONE else C_TypeHint_SysFunction(index)
     }
@@ -122,10 +159,15 @@ class C_RegularSysGlobalFunction(
 ): C_GlobalFunction(ideInfo) {
     private val fullNameLazy = LazyString.of(fullName)
 
-    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+    override fun compileCall(
+        ctx: C_ExprContext,
+        name: LazyPosString,
+        args: List<S_CallArgument>,
+        resTypeHint: C_TypeHint,
+    ): V_GlobalFunctionCall {
         val target = C_FunctionCallTarget_SysGlobalFunction(ctx, name)
-        val vExpr = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
-        return vExpr ?: C_ExprUtils.errorVExpr(ctx, name.pos)
+        val vCall = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
+        return vCall ?: C_ExprUtils.errorVGlobalCall(ctx, name.pos)
     }
 
     private fun matchCase(ctx: C_ExprContext, name: LazyPosString, args: List<V_Expr>): C_GlobalFuncCaseMatch? {
@@ -149,7 +191,7 @@ class C_RegularSysGlobalFunction(
         override fun typeHints() = C_SysFunctionParamHints(cases)
         override fun hasParameter(name: R_Name) = false
 
-        override fun compileFull(args: C_FullCallArguments): V_Expr? {
+        override fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall? {
             val vArgs = args.compileSimpleArgs(name.lazyStr)
             val match = matchCase(ctx, name, vArgs)
             match ?: return null
@@ -157,20 +199,20 @@ class C_RegularSysGlobalFunction(
             return match.compileCall(ctx, caseCtx)
         }
 
-        override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr? {
+        override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_GlobalFunctionCall? {
             val caseCtx = C_GlobalFuncCaseCtx(name.pos, simpleName, fullNameLazy)
             return compileCallPartialCommon(ctx, caseCtx, cases, args, resTypeHint)
         }
     }
 
     companion object {
-        fun <CtxT: C_FuncCaseCtx> compileCallPartialCommon(
+        fun <CtxT: C_FuncCaseCtx, ExprT> compileCallPartialCommon(
                 ctx: C_ExprContext,
                 caseCtx: CtxT,
-                cases: List<C_FuncCase<CtxT>>,
+                cases: List<C_FuncCase<CtxT, ExprT>>,
                 args: C_PartialCallArguments,
                 resTypeHint: R_FunctionType?
-        ): V_Expr? {
+        ): ExprT? {
             val fullName = caseCtx.qualifiedNameMsgLazy()
 
             var caseTargets = cases.mapNotNull { it.getPartialCallTarget(caseCtx) }
@@ -200,14 +242,14 @@ class C_RegularSysGlobalFunction(
 
 abstract class C_SpecialSysGlobalFunction(ideInfo: IdeSymbolInfo): C_GlobalFunction(ideInfo) {
     protected open fun paramCount(): Int? = null
-    protected abstract fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr
+    protected abstract fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_GlobalFunctionCall
 
     final override fun compileCall(
             ctx: C_ExprContext,
             name: LazyPosString,
             args: List<S_CallArgument>,
             resTypeHint: C_TypeHint
-    ): V_Expr {
+    ): V_GlobalFunctionCall {
         val errPartial = ctx.msgCtx.firstErrorReporter()
 
         val argExprsZ = args.map {
@@ -221,13 +263,13 @@ abstract class C_SpecialSysGlobalFunction(ideInfo: IdeSymbolInfo): C_GlobalFunct
         }
 
         val argExprs = argExprsZ.filterNotNull()
-        if (argExprs.size != argExprsZ.size) return C_ExprUtils.errorVExpr(ctx, name.pos)
+        if (argExprs.size != argExprsZ.size) return C_ExprUtils.errorVGlobalCall(ctx, name.pos)
 
         val argName = args.mapNotNull { it.name }.firstOrNull()
         if (argName != null) {
             C_Errors.errSysFunctionNamedArg(ctx.msgCtx, name.str, argName)
             argExprs.forEach { it.compileSafe(ctx) }
-            return C_ExprUtils.errorVExpr(ctx, name.pos)
+            return C_ExprUtils.errorVGlobalCall(ctx, name.pos)
         }
 
         val paramCount = paramCount()
@@ -236,7 +278,7 @@ abstract class C_SpecialSysGlobalFunction(ideInfo: IdeSymbolInfo): C_GlobalFunct
             ctx.msgCtx.error(name.pos, "fn:sys:wrong_arg_count:$paramCount:$argCount",
                     "Wrong number of arguments for function '$name': $argCount instead of $paramCount")
             argExprs.forEach { it.compileSafe(ctx) }
-            return C_ExprUtils.errorVExpr(ctx, name.pos, R_BooleanType)
+            return C_ExprUtils.errorVGlobalCall(ctx, name.pos, R_BooleanType)
         }
 
         return compileCall0(ctx, name, argExprs)
@@ -246,14 +288,14 @@ abstract class C_SpecialSysGlobalFunction(ideInfo: IdeSymbolInfo): C_GlobalFunct
 sealed class C_SysMemberFunction(val ideInfo: IdeSymbolInfo = IdeSymbolInfo.DEF_FUNCTION_SYSTEM) {
     abstract fun getParamsHints(): C_CallTypeHints
 
-    abstract fun compileCallFull(ctx: C_ExprContext, callCtx: C_MemberFuncCaseCtx, args: List<V_Expr>): V_Expr
+    abstract fun compileCallFull(ctx: C_ExprContext, callCtx: C_MemberFuncCaseCtx, args: List<V_Expr>): V_MemberFunctionCall
 
     abstract fun compileCallPartial(
             ctx: C_ExprContext,
             caseCtx: C_MemberFuncCaseCtx,
             args: C_PartialCallArguments,
             resTypeHint: R_FunctionType?
-    ): V_Expr?
+    ): V_MemberFunctionCall?
 }
 
 class C_CasesSysMemberFunction(
@@ -261,9 +303,9 @@ class C_CasesSysMemberFunction(
 ): C_SysMemberFunction() {
     override fun getParamsHints(): C_CallTypeHints = C_SysFunctionParamHints(cases)
 
-    override fun compileCallFull(ctx: C_ExprContext, callCtx: C_MemberFuncCaseCtx, args: List<V_Expr>): V_Expr {
+    override fun compileCallFull(ctx: C_ExprContext, callCtx: C_MemberFuncCaseCtx, args: List<V_Expr>): V_MemberFunctionCall {
         val match = matchCase(ctx, callCtx, args)
-        match ?: return C_ExprUtils.errorVExpr(ctx, callCtx.member.base.pos)
+        match ?: return C_ExprUtils.errorVMemberCall(ctx)
         return match.compileCall(ctx, callCtx)
     }
 
@@ -281,7 +323,7 @@ class C_CasesSysMemberFunction(
 
         val qName = callCtx.qualifiedNameMsg()
         val argTypes = args.map { it.type }
-        C_FuncMatchUtils.errNoMatch(ctx, callCtx.member.linkPos, qName, argTypes)
+        C_FuncMatchUtils.errNoMatch(ctx, callCtx.linkPos, qName, argTypes)
         return null
     }
 
@@ -290,7 +332,7 @@ class C_CasesSysMemberFunction(
             caseCtx: C_MemberFuncCaseCtx,
             args: C_PartialCallArguments,
             resTypeHint: R_FunctionType?
-    ): V_Expr? {
+    ): V_MemberFunctionCall? {
         return C_RegularSysGlobalFunction.compileCallPartialCommon(ctx, caseCtx, cases, args, resTypeHint)
     }
 }

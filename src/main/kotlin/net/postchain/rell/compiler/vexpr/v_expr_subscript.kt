@@ -133,6 +133,6 @@ class V_TupleSubscriptExpr(
     override fun toRExpr0(): R_Expr {
         val rBase = baseExpr.toRExpr()
         val calculator = kind.compile(resType, index)
-        return R_MemberExpr(rBase, false, calculator)
+        return R_MemberExpr(rBase, calculator, false)
     }
 }

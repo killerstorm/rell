@@ -5,3 +5,8 @@ import ^.lib;
 @extend(lib.is_bad_value) function(x: integer): boolean {
     return x < 0;
 }
+
+@extend(lib.say_something) function() {
+    print('app print');
+    log('app log');
+}

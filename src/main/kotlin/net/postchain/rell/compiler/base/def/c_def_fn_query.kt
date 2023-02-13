@@ -17,6 +17,7 @@ import net.postchain.rell.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.utils.C_LateInit
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.R_QueryBody
 import net.postchain.rell.model.R_QueryDefinition
 import net.postchain.rell.model.R_Type
@@ -43,7 +44,12 @@ class C_QueryGlobalFunction(val rQuery: R_QueryDefinition, ideInfo: IdeSymbolInf
         headerLate.set(header)
     }
 
-    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+    override fun compileCall(
+        ctx: C_ExprContext,
+        name: LazyPosString,
+        args: List<S_CallArgument>,
+        resTypeHint: C_TypeHint,
+    ): V_GlobalFunctionCall {
         val header = headerLate.get()
         val retType = C_FunctionUtils.compileReturnType(ctx, name, header)
         val callInfo = C_FunctionCallInfo.forDirectFunction(name, header.params)

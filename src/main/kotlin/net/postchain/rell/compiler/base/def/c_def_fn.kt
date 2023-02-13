@@ -17,6 +17,7 @@ import net.postchain.rell.compiler.base.utils.C_LateInit
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget
 import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget_RegularUserFunction
+import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
@@ -28,7 +29,12 @@ abstract class C_GlobalFunction(val ideInfo: IdeSymbolInfo) {
     open fun getAbstractDescriptor(): C_AbstractFunctionDescriptor? = null
     open fun getExtendableDescriptor(): C_ExtendableFunctionDescriptor? = null
 
-    abstract fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr
+    abstract fun compileCall(
+        ctx: C_ExprContext,
+        name: LazyPosString,
+        args: List<S_CallArgument>,
+        resTypeHint: C_TypeHint,
+    ): V_GlobalFunctionCall
 }
 
 abstract class C_FunctionHeader(val explicitType: R_Type?, val body: C_FunctionBody?) {
@@ -71,7 +77,12 @@ abstract class C_UserGlobalFunction(
             retType: R_Type?
     ): C_FunctionCallTarget
 
-    final override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+    final override fun compileCall(
+        ctx: C_ExprContext,
+        name: LazyPosString,
+        args: List<S_CallArgument>,
+        resTypeHint: C_TypeHint,
+    ): V_GlobalFunctionCall {
         val header = headerLate.get()
         val retType = C_FunctionUtils.compileReturnType(ctx, name, header)
         val callInfo = C_FunctionCallInfo.forDirectFunction(name, header.params)
@@ -166,7 +177,7 @@ class C_FunctionCallTarget_RegularUserFunction(
         ctx: C_ExprContext,
         callInfo: C_FunctionCallInfo,
         retType: R_Type?,
-        private val rFunction: R_RoutineDefinition
+        private val rFunction: R_RoutineDefinition,
 ): C_FunctionCallTarget_Regular(ctx, callInfo, retType) {
     override fun createVTarget(): V_FunctionCallTarget = V_FunctionCallTarget_RegularUserFunction(rFunction)
 }

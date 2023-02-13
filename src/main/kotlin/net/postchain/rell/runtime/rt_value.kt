@@ -12,9 +12,9 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
 import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.R_FunctionCallTarget
 import net.postchain.rell.model.expr.R_PartialArgMapping
 import net.postchain.rell.model.expr.R_PartialCallMapping
-import net.postchain.rell.model.expr.Rt_FunctionCallTarget
 import net.postchain.rell.runtime.utils.Rt_ValueRecursionDetector
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
@@ -852,7 +852,8 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
 class Rt_FunctionValue(
         private val type: R_Type,
         private val mapping: R_PartialCallMapping,
-        private val target: Rt_FunctionCallTarget,
+        private val target: R_FunctionCallTarget,
+        private val baseValue: Rt_Value?,
         exprValues: List<Rt_Value>
 ): Rt_Value() {
     private val exprValues = let {
@@ -868,16 +869,16 @@ class Rt_FunctionValue(
     override fun strCode(showTupleFieldNames: Boolean): String {
         return STR_RECURSION_DETECTOR.calculate(this) {
             val argsStr = mapping.args.joinToString(",") { if (it.wild) "*" else exprValues[it.index].strCode() }
-            "fn[${target.strCode()}($argsStr)]"
+            "fn[${target.strCode(baseValue)}($argsStr)]"
         } ?: "fn[...]"
     }
 
-    override fun str() = "${target.str()}(*)"
+    override fun str() = "${target.str(baseValue)}(*)"
 
     fun call(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         checkEquals(args.size, mapping.wildCount)
         val combinedArgs = mapping.args.map { if (it.wild) args[it.index] else exprValues[it.index] }
-        return target.call(callCtx, combinedArgs)
+        return target.call(callCtx, baseValue, combinedArgs)
     }
 
     fun combine(newType: R_Type, newMapping: R_PartialCallMapping, newArgs: List<Rt_Value>): Rt_Value {
@@ -896,7 +897,7 @@ class Rt_FunctionValue(
         }
 
         val resMapping = R_PartialCallMapping(resExprValues.size, newMapping.wildCount, resArgMappings)
-        return Rt_FunctionValue(newType, resMapping, target, resExprValues)
+        return Rt_FunctionValue(newType, resMapping, target, baseValue, resExprValues)
     }
 
     companion object {

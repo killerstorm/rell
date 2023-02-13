@@ -15,6 +15,7 @@ import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
+import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
 class C_UpdateTarget(val rTarget: R_UpdateTarget, val cFrom: C_AtFrom_Entities)
@@ -127,7 +128,7 @@ class S_UpdateTarget_Expr(private val expr: S_Expr): S_UpdateTarget() {
 
         val whereRight = cLambda.compileVarDbExpr(cFrom.innerExprCtx().blkCtx.blockUid)
         val where = C_ExprUtils.makeDbBinaryExprEq(whereLeft, whereRight)
-        val rTarget = R_UpdateTarget_Expr_One(rAtEntity, where, tCtx.rExpr, cLambda.rLambda)
+        val rTarget = R_UpdateTarget_Expr_One(rAtEntity, immListOf(), where, tCtx.rExpr, cLambda.rLambda)
 
         return C_UpdateTarget(rTarget, cFrom)
     }
@@ -213,9 +214,7 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
 
             val cExpr = w.expr.compileSafe(ctx)
             val vExpr = cExpr.value()
-            val exprName = cExpr.implicitMatchName()
-
-            C_AttrArgument(i, nameHand?.name, vExpr, exprName)
+            C_AttrArgument(i, nameHand?.name, vExpr)
         }
 
         subValues.addAll(args.map { it.vExpr })

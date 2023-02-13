@@ -380,6 +380,9 @@ class LibGtvTest: BaseRellTest(false) {
         chk("null.to_gtv()", "gtv[null]")
         chk("null.to_gtv_prety()", "ct_err:unknown_member:[null]:to_gtv_prety")
         chk("integer.from_gtv(null.to_gtv())", "gtv_err:type:[integer]:INTEGER:NULL")
+        chk("null?.to_gtv()", "ct_err:[expr_safemem_type:[null]][unknown_member:[null]:to_gtv]")
+        chk("(null).to_gtv()", "ct_err:unknown_member:[null]:to_gtv")
+        chk("[null][0].to_gtv()", "ct_err:unknown_member:[null]:to_gtv")
     }
 
     @Test fun testJsonNumberTruncation() {

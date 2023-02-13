@@ -4,18 +4,15 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.compiler.base.core.C_BlockEntryResolution
-import net.postchain.rell.compiler.base.core.C_GlobalNameRes
-import net.postchain.rell.compiler.base.core.C_NameHandle
-import net.postchain.rell.compiler.base.core.C_QualifiedNameHandle
+import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.namespace.C_NamespaceMemberTag
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
+import net.postchain.rell.lib.type.C_Lib_Type_Null
 import net.postchain.rell.model.R_EnumType
 import net.postchain.rell.model.R_Name
-import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
@@ -71,7 +68,7 @@ class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
         val loc = ctx.blkCtx.lookupEntry(nameHand.rName)
         loc ?: return null
         val vExpr = loc.compile(ctx, nameHand.pos)
-        val cExpr = C_ValueExpr(vExpr, implicitAttrMatchName = nameHand.rName)
+        val cExpr = C_ValueExpr(vExpr)
         return NameRes_Local(nameHand, loc, cExpr)
     }
 
@@ -79,7 +76,7 @@ class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
         val qNameHand = C_QualifiedNameHandle(nameHand)
         val tag = if (hint.callable) C_NamespaceMemberTag.CALLABLE else C_NamespaceMemberTag.VALUE
         val nameRes = ctx.nsCtx.resolveName(qNameHand, tag.list)
-        return if (nameRes.isValid()) NameRes_Global(ctx, nameHand.rName, nameRes) else null
+        return if (nameRes.isValid()) NameRes_Global(ctx, nameRes) else null
     }
 
     override fun compileFromItem(ctx: C_ExprContext): C_AtFromItem {
@@ -130,11 +127,10 @@ class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
 
     private class NameRes_Global(
         private val ctx: C_ExprContext,
-        private val rName: R_Name,
         private val nameRes: C_GlobalNameRes,
     ): NameRes() {
         override fun isCallable() = nameRes.isCallable()
-        override fun compile(): C_Expr = nameRes.compile(ctx, implicitAttrMatchName = rName)
+        override fun compile(): C_Expr = nameRes.compile(ctx)
     }
 }
 
@@ -182,34 +178,39 @@ class S_AttrExpr(pos: S_Pos, private val name: S_Name): S_Expr(pos) {
 
 class S_MemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos) {
     override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
-        val cBase = base.compileSafe(ctx)
         val nameHand = name.compile(ctx)
-        val member = cBase.member(ctx, nameHand.name, hint)
+
+        var member = compileNullMember(ctx, nameHand.name)
+
+        if (member == null) {
+            val cBase = base.compileSafe(ctx)
+            member = cBase.member(ctx, nameHand.name, hint)
+        }
+
         nameHand.setIdeInfo(member.ideInfo)
         return member.expr
+    }
+
+    private fun compileNullMember(ctx: C_ExprContext, cName: C_Name): C_ExprMember? {
+        if (base !is S_NullLiteralExpr) return null
+
+        val members = C_Lib_Type_Null.valueMembers.filter { it.name == cName.rName }
+        if (members.size != 1) return null
+        val member = members[0]
+
+        val vBase = base.compileSafe(ctx, C_ExprHint.DEFAULT).value()
+        val link = C_MemberLink(vBase, cName.pos, false)
+        return member.compile(ctx, link)
     }
 }
 
 class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos) {
     override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
         val cBase = base.compile(ctx)
-
-        val baseValueOriginal = cBase.value()
-        val baseValueNullable = baseValueOriginal.asNullable()
-
-        val baseType = baseValueNullable.type
-        if (baseType !is R_NullableType && baseType.isNotError()) {
-            val typeStr = baseType.strCode()
-            ctx.msgCtx.error(name.pos, "expr_safemem_type:[$typeStr]", "Wrong type for operator '?.': $typeStr")
-        }
-
-        val safe = baseValueOriginal.type is R_NullableType
-        val actualBaseValue = if (safe) baseValueNullable else baseValueOriginal
-
+        val vBase = cBase.value()
         val nameHand = name.compile(ctx)
-        val member = actualBaseValue.member(ctx, nameHand.name, safe, hint)
+        val member = vBase.member(ctx, nameHand.name, true, hint)
         nameHand.setIdeInfo(member.ideInfo)
-
         return member.expr
     }
 }

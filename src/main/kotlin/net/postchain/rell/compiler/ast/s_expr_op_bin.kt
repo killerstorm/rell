@@ -341,11 +341,6 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
             }
         }
 
-        fun adaptOperands(left: V_Expr, right: V_Expr): Pair<V_Expr, V_Expr>? {
-            val res = adaptOperands(listOf(left, right))
-            return if (res == null) null else Pair(res[0], res[1])
-        }
-
         fun createVOp(eq: Boolean, type: R_Type): V_BinaryOp {
             val rOp: R_BinaryOp = if (eq) R_BinaryOp_Eq else R_BinaryOp_Ne
             val dbOp: Db_BinaryOp = if (eq) Db_BinaryOp_Eq else Db_BinaryOp_Ne
@@ -456,7 +451,8 @@ object C_BinOp_Plus: C_BinOp_Common() {
         val vCallTarget: V_FunctionCallTarget = V_FunctionCallTarget_SysGlobalFunction(desc)
 
         val vCallArgs = V_FunctionCallArgs.positional(immListOf(vExpr))
-        return V_FullFunctionCallExpr(ctx, vExpr.pos, vExpr.pos, resType, vCallTarget, vCallArgs)
+        val vCall = V_CommonFunctionCall_Full(vExpr.pos, vExpr.pos, resType, vCallTarget, vCallArgs)
+        return V_FunctionCallExpr(ctx, vExpr.pos, null, vCall, false)
     }
 
     private fun getDbToStringFunction(type: R_Type): Db_SysFunction? {

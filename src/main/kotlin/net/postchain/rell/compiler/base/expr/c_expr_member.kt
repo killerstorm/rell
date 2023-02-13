@@ -8,101 +8,164 @@ import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
+import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.fn.*
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_ExprInfo
+import net.postchain.rell.compiler.vexpr.V_MemberFunctionCall
+import net.postchain.rell.compiler.vexpr.V_TypeValueMember
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
-import net.postchain.rell.utils.LazyString
-import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
-class C_MemberRef(val base: V_Expr, val name: C_Name, val safe: Boolean) {
-    fun toLink() = C_MemberLink(base, safe, name.pos)
-}
+class C_MemberLink(val base: V_Expr, val linkPos: S_Pos, val safe: Boolean)
 
-class C_MemberLink(val base: V_Expr, val safe: Boolean, val linkPos: S_Pos)
-
-abstract class C_TypeValueMember(val name: R_Name, val valueType: R_Type?) {
-    fun nameMsg(): C_CodeMsg = name.str toCodeMsg name.str
+abstract class C_TypeValueMember(
+    val name: R_Name?,
+    val valueType: R_Type?,
+) {
     abstract fun kindMsg(): String
+    abstract fun nameMsg(): C_CodeMsg
+
+    protected abstract fun ideInfo(): IdeSymbolInfo
     open fun isCallable(): Boolean = valueType is R_FunctionType
-    abstract fun compile(ctx: C_ExprContext, link: C_MemberLink): C_ExprMember
+
+    open fun value(ctx: C_ExprContext, linkPos: S_Pos): V_TypeValueMember = throw C_NoValueExpr.errNoValue(linkPos, kindMsg(), nameMsg().msg)
+    open fun call(ctx: C_ExprContext, linkPos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_TypeValueMember? = null
+
+    fun compile(ctx: C_ExprContext, link: C_MemberLink): C_ExprMember {
+        val ideInfo = ideInfo()
+        val expr: C_Expr = C_ValueMemberExpr(ctx, link, this)
+        return C_ExprMember(expr, ideInfo)
+    }
+
+    companion object {
+        fun getTypeMember(ctx: C_ExprContext, baseType: R_Type, memberName: C_Name, hint: C_ExprHint): C_TypeValueMember? {
+            val effectiveBaseType = C_Types.removeNullable(baseType)
+
+            val members = effectiveBaseType.getValueMembers(memberName.rName)
+            if (members.isEmpty()) {
+                C_Errors.errUnknownMember(ctx.msgCtx, effectiveBaseType, memberName)
+                return null
+            }
+
+            var filteredMembers = members.filter { if (hint.callable) it.isCallable() else it.valueType != null }
+            if (filteredMembers.isEmpty()) {
+                filteredMembers = members
+            }
+
+            if (filteredMembers.size > 1) {
+                val kinds = filteredMembers.map { it.kindMsg() }
+                val listCode = kinds.joinToString(",")
+                val listMsg = kinds.joinToString()
+                ctx.msgCtx.error(memberName.pos, "name:ambig:$memberName:[$listCode]", "Name '$memberName' is ambiguous: $listMsg")
+            }
+
+            return filteredMembers[0]
+        }
+    }
 }
 
 class C_TypeValueMember_BasicAttr(
-    name: R_Name,
     private val attr: C_MemberAttr,
     private val ideInfo: IdeSymbolInfo,
-): C_TypeValueMember(name, attr.type) {
+): C_TypeValueMember(attr.attrName(), attr.type) {
     override fun kindMsg() = "attribute"
+    override fun nameMsg() = attr.nameMsg()
+    override fun ideInfo() = ideInfo
 
-    override fun compile(ctx: C_ExprContext, link: C_MemberLink): C_ExprMember {
-        val fieldType = attr.type
-        val effectiveType = C_Utils.effectiveMemberType(fieldType, link.safe)
-        val vExpr: V_Expr = V_MemberAttrExpr(ctx, link, attr, effectiveType)
-        val cExpr = C_ValueExpr(vExpr)
-        return C_ExprMember(cExpr, ideInfo)
+    override fun value(ctx: C_ExprContext, linkPos: S_Pos): V_TypeValueMember {
+        return V_TypeValueMember_BasicAttr(attr, linkPos, ideInfo)
+    }
+
+    private class V_TypeValueMember_BasicAttr(
+        private val attr: C_MemberAttr,
+        private val memberPos: S_Pos,
+        private val ideInfo: IdeSymbolInfo,
+    ): V_TypeValueMember(attr.type) {
+        override fun implicitAttrName() = attr.attrName()
+        override fun ideInfo() = ideInfo
+        override fun vExprs() = immListOf<V_Expr>()
+        override fun calculator() = attr.calculator()
+
+        override fun destination(base: V_Expr): C_Destination {
+            val rBase = base.toRExpr()
+            val rDstExpr = attr.destination(memberPos, rBase)
+            return C_Destination_Simple(rDstExpr)
+        }
+
+        override fun canBeDbExpr() = attr.canBeDbExpr()
+        override fun dbExpr(base: Db_Expr) = attr.dbExpr(base)
     }
 }
 
 class C_TypeValueMember_Function(
-    name: R_Name,
+    private val realName: R_Name,
     private val baseType: R_Type,
     private val fn: C_SysMemberFunction
-): C_TypeValueMember(name, null) {
-    override fun isCallable() = true
+): C_TypeValueMember(realName, null) {
     override fun kindMsg() = "function"
+    override fun nameMsg() = realName.str toCodeMsg realName.str
+    override fun isCallable() = true
+    override fun ideInfo() = fn.ideInfo
 
-    override fun compile(ctx: C_ExprContext, link: C_MemberLink): C_ExprMember {
-        val fullName = C_Utils.getFullNameLazy(baseType, name)
-        val expr: C_Expr = C_MemberFunctionExpr(link, fn, name, fullName)
-        return C_ExprMember(expr, fn.ideInfo)
+    override fun call(ctx: C_ExprContext, linkPos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_TypeValueMember {
+        val callTargetInfo = C_FunctionCallTargetInfo_MemberFunction(fn)
+        val callArgs = C_FunctionCallArgsUtils.compileCallArgs(ctx, args, callTargetInfo)
+        val fullName = C_Utils.getFullNameLazy(baseType, realName)
+
+        val vCall = when (callArgs) {
+            null -> null
+            is C_FullCallArguments -> {
+                val vArgs = callArgs.compileSimpleArgs(fullName)
+                val callCtx = C_MemberFuncCaseCtx(linkPos, realName, fullName)
+                fn.compileCallFull(ctx, callCtx, vArgs)
+            }
+            is C_PartialCallArguments -> {
+                val callCtx = C_MemberFuncCaseCtx(linkPos, realName, fullName)
+                val fnType = resTypeHint.getFunctionType()
+                fn.compileCallPartial(ctx, callCtx, callArgs, fnType)
+            }
+        }
+
+        vCall ?: return C_ExprUtils.errorVMember(linkPos)
+
+        val retType = vCall.returnType()
+        return V_TypeValueMember_FunctionCall(retType, vCall, linkPos, fn.ideInfo)
     }
 
-    private class C_MemberFunctionExpr(
-        private val memberLink: C_MemberLink,
-        private val fn: C_SysMemberFunction,
-        private val fnName: R_Name,
-        private val fullName: LazyString,
-    ): C_NoValueExpr() {
-        override fun startPos() = memberLink.base.pos
-        override fun isCallable() = true
+    private class V_TypeValueMember_FunctionCall(
+        type: R_Type,
+        private val call: V_MemberFunctionCall,
+        private val memberPos: S_Pos,
+        private val ideInfo: IdeSymbolInfo,
+    ): V_TypeValueMember(type) {
+        override fun implicitAttrName() = null
+        override fun ideInfo() = ideInfo
+        override fun vExprs() = call.vExprs()
+        override fun globalConstantRestriction() = call.globalConstantRestriction()
+        override fun safeCallable() = false
 
-        override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
-            val callTarget = C_FunctionCallTarget_MemberFunction(ctx)
-            val vExpr = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, callTarget)
-            vExpr ?: return C_ExprUtils.errorExpr(ctx, pos)
-            return C_ValueExpr(vExpr)
-        }
+        override fun calculator() = call.calculator()
+        override fun destination(base: V_Expr) = throw C_Errors.errBadDestination(memberPos)
 
-        override fun errKindName() = "member_function" to fullName.value
+        override fun canBeDbExpr() = call.canBeDbExpr()
+        override fun dbExpr(base: Db_Expr) = call.dbExpr(base)
+        override fun dbExprWhat(base: V_Expr, safe: Boolean) = call.dbExprWhat(base, safe)
+    }
 
-        private inner class C_FunctionCallTarget_MemberFunction(val ctx: C_ExprContext): C_FunctionCallTarget() {
-            override fun retType() = null
-            override fun typeHints() = fn.getParamsHints()
-            override fun hasParameter(name: R_Name) = false
-
-            override fun compileFull(args: C_FullCallArguments): V_Expr? {
-                val vArgs = args.compileSimpleArgs(fullName)
-                val callCtx = C_MemberFuncCaseCtx(memberLink, fnName, fullName)
-                return fn.compileCallFull(ctx, callCtx, vArgs)
-            }
-
-            override fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_Expr? {
-                val callCtx = C_MemberFuncCaseCtx(memberLink, fnName, fullName)
-                return fn.compileCallPartial(ctx, callCtx, args, resTypeHint)
-            }
-        }
+    private class C_FunctionCallTargetInfo_MemberFunction(val fn: C_SysMemberFunction): C_FunctionCallTargetInfo() {
+        override fun retType() = null
+        override fun typeHints() = fn.getParamsHints()
+        override fun hasParameter(name: R_Name) = false
     }
 }
 
@@ -111,7 +174,7 @@ abstract class C_MemberAttr(val type: R_Type) {
     abstract fun nameMsg(): C_CodeMsg
     abstract fun calculator(): R_MemberCalculator
     abstract fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr
-    open fun hasDbExpr(): Boolean = false
+    open fun canBeDbExpr(): Boolean = false
     open fun dbExpr(base: Db_Expr): Db_Expr? = null
 }
 
@@ -153,7 +216,7 @@ class C_MemberAttr_SysProperty(
         throw C_Errors.errAttrNotMutable(pos, name.str)
     }
 
-    override fun hasDbExpr() = prop.fn.dbFn != null
+    override fun canBeDbExpr() = prop.fn.dbFn != null
 
     override fun dbExpr(base: Db_Expr): Db_Expr? {
         val dbFn = prop.fn.dbFn
@@ -166,66 +229,6 @@ class C_MemberAttr_SysProperty(
             val args = immListOf(baseValue)
             val callCtx = frame.callCtx()
             return prop.fn.rFn.call(callCtx, args)
-        }
-    }
-}
-
-class V_MemberAttrExpr(
-        exprCtx: C_ExprContext,
-        private val memberLink: C_MemberLink,
-        private val memberAttr: C_MemberAttr,
-        private val resType: R_Type
-): V_Expr(exprCtx, memberLink.base.pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(resType, memberLink.base, canBeDbExpr = memberAttr.hasDbExpr())
-
-    override fun implicitAtWhereAttrName(): R_Name? {
-        val isAt = memberLink.base.isAtExprItem()
-        return if (isAt) memberAttr.attrName() else null
-    }
-
-    override fun implicitAtWhatAttrName(): R_Name? {
-        val isAt = memberLink.base.isAtExprItem()
-        return if (isAt) memberAttr.attrName() else null
-    }
-
-    override fun toRExpr0(): R_Expr {
-        val rBase = memberLink.base.toRExpr()
-        val calculator = memberAttr.calculator()
-        return R_MemberExpr(rBase, memberLink.safe, calculator)
-    }
-
-    override fun toDbExpr0(): Db_Expr {
-        val dbBase = memberLink.base.toDbExpr()
-        val dbExpr = memberAttr.dbExpr(dbBase)
-        return if (dbExpr != null) dbExpr else {
-            val rExpr = toRExpr()
-            C_ExprUtils.toDbExpr(exprCtx.msgCtx, memberLink.linkPos, rExpr)
-        }
-    }
-
-    override fun toDbExprWhat0(): C_DbAtWhatValue {
-        val calculator = memberAttr.calculator()
-        val evaluator = object: Db_ComplexAtWhatEvaluator() {
-            override fun evaluate(frame: Rt_CallFrame, values: List<Rt_AtWhatItem>): Rt_Value {
-                checkEquals(values.size, 1)
-                val baseValue = values[0].value()
-                return calculator.calculate(frame, baseValue)
-            }
-        }
-        return C_DbAtWhatValue_Complex(immListOf(memberLink.base), evaluator)
-    }
-
-    override fun destination(): C_Destination {
-        val rBase = memberLink.base.toRExpr()
-        val rDstExpr = memberAttr.destination(memberLink.linkPos, rBase)
-        return C_Destination_Simple(rDstExpr)
-    }
-
-    override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
-        if (memberLink.safe && memberAttr.type !is R_NullableType && resType == R_NullableType(memberAttr.type)) {
-            return callCommon(ctx, pos, args, resTypeHint, memberAttr.type, true)
-        } else {
-            return super.call(ctx, pos, args, resTypeHint)
         }
     }
 }
