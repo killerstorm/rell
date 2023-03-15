@@ -134,7 +134,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     }
 
     fun toDbExprWhat(): C_DbAtWhatValue {
-        return if (info.canBeDbExpr && type.sqlAdapter.isSqlCompatible()) {
+        return if ((info.canBeDbExpr && type.sqlAdapter.isSqlCompatible()) || !exprCtx.globalCtx.compilerOptions.complexWhatEnabled) {
             toDbExprWhatDirect()
         } else {
             toDbExprWhat0()

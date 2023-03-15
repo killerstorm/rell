@@ -19,6 +19,7 @@ import net.postchain.rell.utils.immListOf
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.HashSetValuedHashMap
 import java.math.BigDecimal
+import java.math.BigInteger
 
 const val GTV_QUERY_PRETTY = true
 const val GTV_OPERATION_PRETTY = false
@@ -138,6 +139,16 @@ object GtvRtConversion_Integer: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvInteger(rt.asInteger())
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_IntValue(GtvRtUtils.gtvToInteger(ctx, gtv, R_IntegerType))
+}
+
+object GtvRtConversion_BigInteger: GtvRtConversion() {
+    override fun directCompatibility() = R_GtvCompatibility(true, true)
+    override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvFactory.gtv(rt.asBigInteger())
+
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
+        val v = GtvRtUtils.gtvToBigInteger(ctx, gtv, R_BigIntegerType)
+        return Rt_BigIntegerValue.of(v)
+    }
 }
 
 object GtvRtConversion_Decimal: GtvRtConversion() {
@@ -676,7 +687,7 @@ class GtvRtConversion_VirtualTuple(val type: R_VirtualTupleType): GtvRtConversio
     }
 }
 
-object GtvRtUtils {
+private object GtvRtUtils {
     fun gtvToInteger(ctx: GtvToRtContext, gtv: Gtv, rellType: R_Type): Long {
         if (gtv.type == GtvType.BIGINTEGER) {
             val v = gtv.asBigInteger()
@@ -690,6 +701,22 @@ object GtvRtUtils {
             return gtv.asInteger()
         } catch (e: UserMistake) {
             throw errGtvType(ctx, rellType, gtv, GtvType.INTEGER, e)
+        }
+    }
+
+    fun gtvToBigInteger(ctx: GtvToRtContext, gtv: Gtv, rellType: R_Type): BigInteger {
+        return when {
+            gtv.type == GtvType.BIGINTEGER -> try {
+                gtv.asBigInteger()
+            } catch (e: UserMistake) {
+                throw errGtvType(ctx, rellType, gtv, GtvType.BIGINTEGER, e)
+            }
+            ctx.pretty && gtv.type == GtvType.INTEGER -> try {
+                gtv.asInteger().toBigInteger()
+            } catch (e: UserMistake) {
+                throw errGtvType(ctx, rellType, gtv, GtvType.BIGINTEGER, e)
+            }
+            else -> throw errGtvType(ctx, rellType, gtv, GtvType.BIGINTEGER, null)
         }
     }
 
@@ -772,12 +799,15 @@ object GtvRtUtils {
     }
 
     private fun errGtvType(ctx: GtvToRtContext, rellType: R_Type, actualGtv: Gtv, expectedGtvType: GtvType, e: UserMistake): Rt_Exception {
+        return errGtvType(ctx, rellType, actualGtv, expectedGtvType, e.message)
+    }
+
+    private fun errGtvType(ctx: GtvToRtContext, rellType: R_Type, actualGtv: Gtv, expectedGtvType: GtvType, errMsg: String?): Rt_Exception {
         val code = "$expectedGtvType:${actualGtv.type}"
-        val emsg = e.message
         val msg = when {
             actualGtv.type != expectedGtvType -> "expected $expectedGtvType, actual ${actualGtv.type}"
-            !emsg.isNullOrBlank() -> emsg
-            else -> e.javaClass.simpleName
+            !errMsg.isNullOrBlank() -> errMsg
+            else -> actualGtv.type.name
         }
         return errGtvType(ctx, rellType, code, msg)
     }

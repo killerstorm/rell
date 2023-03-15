@@ -16,7 +16,7 @@ import net.postchain.rell.compiler.base.def.C_AttrUtils
 import net.postchain.rell.compiler.base.def.C_SysAttribute
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.module.C_ModuleKey
-import net.postchain.rell.compiler.parser.RellTokenizerError
+import net.postchain.rell.compiler.parser.RellTokenizerException
 import net.postchain.rell.compiler.parser.RellTokenizerState
 import net.postchain.rell.compiler.parser.S_Grammar
 import net.postchain.rell.compiler.vexpr.V_Expr
@@ -386,8 +386,8 @@ object C_Parser {
                 parser.parseToEnd(tokenSeq)
             }
             return C_SuccessParserResult(ast)
-        } catch (e: RellTokenizerError) {
-            val error = C_Error.other(e.pos, e.code, e.msg)
+        } catch (e: RellTokenizerException) {
+            val error = e.toCError()
             return C_ErrorParserResult(error, e.eof)
         } catch (e: ParseException) {
             val pos = S_BasicPos(filePath, state.lastRow, state.lastCol)

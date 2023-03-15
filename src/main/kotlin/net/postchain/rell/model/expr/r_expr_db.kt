@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.expr
@@ -13,8 +13,10 @@ import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.CommonUtils
 
-sealed class Db_BinaryOp(val code: String, val sql: String) {
+sealed class Db_BinaryOp(val code: String) {
     open fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value? = null
+
+    abstract fun toSql(ctx: SqlGenContext, bld: SqlBuilder, left: RedDb_Expr, right: RedDb_Expr)
 
     open fun toRedExpr(frame: Rt_CallFrame, type: R_Type, redLeft: RedDb_Expr, right: Db_Expr): RedDb_Expr {
         val redRight = right.toRedExpr(frame)
@@ -33,33 +35,58 @@ sealed class Db_BinaryOp(val code: String, val sql: String) {
     }
 }
 
-object Db_BinaryOp_Eq: Db_BinaryOp("==", "=") {
+sealed class Db_BinaryOp_Basic(code: String, private val sql: String): Db_BinaryOp(code) {
+    final override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, left: RedDb_Expr, right: RedDb_Expr) {
+        left.toSql(ctx, bld, true)
+        bld.append(" ")
+        bld.append(sql)
+        bld.append(" ")
+        right.toSql(ctx, bld, true)
+    }
+}
+
+object Db_BinaryOp_Eq: Db_BinaryOp_Basic("==", "=") {
     override fun evaluate(left: Rt_Value, right: Rt_Value) = Rt_BooleanValue(left == right)
 }
 
-object Db_BinaryOp_Ne: Db_BinaryOp("!=", "<>") {
+object Db_BinaryOp_Ne: Db_BinaryOp_Basic("!=", "<>") {
     override fun evaluate(left: Rt_Value, right: Rt_Value) = Rt_BooleanValue(left != right)
 }
 
-object Db_BinaryOp_Lt: Db_BinaryOp("<", "<")
-object Db_BinaryOp_Gt: Db_BinaryOp(">", ">")
-object Db_BinaryOp_Le: Db_BinaryOp("<=", "<=")
-object Db_BinaryOp_Ge: Db_BinaryOp(">=", ">=")
-object Db_BinaryOp_Add_Integer: Db_BinaryOp("+", "+")
-object Db_BinaryOp_Add_Decimal: Db_BinaryOp("+", "+")
-object Db_BinaryOp_Sub_Integer: Db_BinaryOp("-", "-")
-object Db_BinaryOp_Sub_Decimal: Db_BinaryOp("-", "-")
-object Db_BinaryOp_Mul_Integer: Db_BinaryOp("*", "*")
-object Db_BinaryOp_Mul_Decimal: Db_BinaryOp("*", "*")
-object Db_BinaryOp_Div_Integer: Db_BinaryOp("/", "/")
-object Db_BinaryOp_Div_Decimal: Db_BinaryOp("/", "/")
-object Db_BinaryOp_Mod_Integer: Db_BinaryOp("%", "%")
-object Db_BinaryOp_Mod_Decimal: Db_BinaryOp("%", "%")
-object Db_BinaryOp_Concat: Db_BinaryOp("+", "||")
-object Db_BinaryOp_In: Db_BinaryOp("in", "IN")
-object Db_BinaryOp_NotIn: Db_BinaryOp("not_in", "NOT IN")
+object Db_BinaryOp_Lt: Db_BinaryOp_Basic("<", "<")
+object Db_BinaryOp_Gt: Db_BinaryOp_Basic(">", ">")
+object Db_BinaryOp_Le: Db_BinaryOp_Basic("<=", "<=")
+object Db_BinaryOp_Ge: Db_BinaryOp_Basic(">=", ">=")
+object Db_BinaryOp_Add_Integer: Db_BinaryOp_Basic("+", "+")
+object Db_BinaryOp_Add_BigInteger: Db_BinaryOp_Basic("+", "+")
+object Db_BinaryOp_Add_Decimal: Db_BinaryOp_Basic("+", "+")
+object Db_BinaryOp_Sub_Integer: Db_BinaryOp_Basic("-", "-")
+object Db_BinaryOp_Sub_BigInteger: Db_BinaryOp_Basic("-", "-")
+object Db_BinaryOp_Sub_Decimal: Db_BinaryOp_Basic("-", "-")
+object Db_BinaryOp_Mul_Integer: Db_BinaryOp_Basic("*", "*")
+object Db_BinaryOp_Mul_BigInteger: Db_BinaryOp_Basic("*", "*")
+object Db_BinaryOp_Mul_Decimal: Db_BinaryOp_Basic("*", "*")
+object Db_BinaryOp_Div_Integer: Db_BinaryOp_Basic("/", "/")
 
-sealed class Db_BinaryOp_AndOr(code: String, sql: String, private val shortCircuitValue: Boolean): Db_BinaryOp(code, sql) {
+object Db_BinaryOp_Div_BigInteger: Db_BinaryOp("/") {
+    override fun toSql(ctx: SqlGenContext, bld: SqlBuilder, left: RedDb_Expr, right: RedDb_Expr) {
+        bld.append("DIV(")
+        left.toSql(ctx, bld, false)
+        bld.append(", ")
+        right.toSql(ctx, bld, false)
+        bld.append(")")
+    }
+}
+
+object Db_BinaryOp_Div_Decimal: Db_BinaryOp_Basic("/", "/")
+object Db_BinaryOp_Mod_Integer: Db_BinaryOp_Basic("%", "%")
+object Db_BinaryOp_Mod_BigInteger: Db_BinaryOp_Basic("%", "%")
+object Db_BinaryOp_Mod_Decimal: Db_BinaryOp_Basic("%", "%")
+object Db_BinaryOp_Concat: Db_BinaryOp_Basic("+", "||")
+object Db_BinaryOp_In: Db_BinaryOp_Basic("in", "IN")
+object Db_BinaryOp_NotIn: Db_BinaryOp_Basic("not_in", "NOT IN")
+
+sealed class Db_BinaryOp_AndOr(code: String, sql: String, private val shortCircuitValue: Boolean): Db_BinaryOp_Basic(code, sql) {
     final override fun toRedExpr(frame: Rt_CallFrame, type: R_Type, redLeft: RedDb_Expr, right: Db_Expr): RedDb_Expr {
         val leftValue = redLeft.constantValue()
         if (leftValue != null) {
@@ -84,6 +111,7 @@ object Db_BinaryOp_Or: Db_BinaryOp_AndOr("or", "OR", true)
 
 sealed class Db_UnaryOp(val code: String, val sql: String)
 object Db_UnaryOp_Minus_Integer: Db_UnaryOp("-", "-")
+object Db_UnaryOp_Minus_BigInteger: Db_UnaryOp("-", "-")
 object Db_UnaryOp_Minus_Decimal: Db_UnaryOp("-", "-")
 object Db_UnaryOp_Not: Db_UnaryOp("not", "NOT")
 
@@ -131,11 +159,7 @@ class Db_BinaryExpr(type: R_Type, val op: Db_BinaryOp, val left: Db_Expr, val ri
 
 private class RedDb_BinaryExpr(val op: Db_BinaryOp, val left: RedDb_Expr, val right: RedDb_Expr): RedDb_Expr() {
     override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
-        left.toSql(ctx, bld, true)
-        bld.append(" ")
-        bld.append(op.sql)
-        bld.append(" ")
-        right.toSql(ctx, bld, true)
+        op.toSql(ctx, bld, left, right)
     }
 }
 

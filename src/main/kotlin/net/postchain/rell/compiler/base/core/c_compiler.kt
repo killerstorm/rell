@@ -162,7 +162,8 @@ class C_CompilerOptions(
         val testLib: Boolean,
         val hiddenLib: Boolean,
         val allowDbModificationsInObjectExprs: Boolean,
-        val symbolInfoFile: C_SourcePath?
+        val symbolInfoFile: C_SourcePath?,
+        val complexWhatEnabled: Boolean,
 ) {
     fun toPojoMap(): Map<String, Any> {
         val map = mutableMapOf(
@@ -172,7 +173,8 @@ class C_CompilerOptions(
                 "atAttrShadowing" to atAttrShadowing.name,
                 "testLib" to testLib,
                 "hiddenLib" to hiddenLib,
-                "allowDbModificationsInObjectExprs" to allowDbModificationsInObjectExprs
+                "allowDbModificationsInObjectExprs" to allowDbModificationsInObjectExprs,
+                "complexWhatEnabled" to complexWhatEnabled,
         )
         if (symbolInfoFile != null) map["symbolInfoFile"] = symbolInfoFile.str()
         if (compatibility != null) map["compatibility"] = compatibility.str()
@@ -190,7 +192,8 @@ class C_CompilerOptions(
                 testLib = false,
                 hiddenLib = false,
                 allowDbModificationsInObjectExprs = true,
-                symbolInfoFile = null
+                symbolInfoFile = null,
+                complexWhatEnabled = true,
         )
 
         @JvmStatic fun builder() = Builder()
@@ -210,7 +213,8 @@ class C_CompilerOptions(
                     hiddenLib = getBoolOpt(map, "hiddenLib", DEFAULT.hiddenLib),
                     allowDbModificationsInObjectExprs =
                             getBoolOpt(map, "allowDbModificationsInObjectExprs", DEFAULT.allowDbModificationsInObjectExprs),
-                    symbolInfoFile = (map["symbolInfoFile"] as String?)?.let { C_SourcePath.parse(it) }
+                    symbolInfoFile = (map["symbolInfoFile"] as String?)?.let { C_SourcePath.parse(it) },
+                    complexWhatEnabled = getBoolOpt(map, "complexWhatEnabled", DEFAULT.complexWhatEnabled),
             )
         }
 
@@ -232,6 +236,7 @@ class C_CompilerOptions(
         private var hiddenLib = proto.hiddenLib
         private var allowDbModificationsInObjectExprs = proto.allowDbModificationsInObjectExprs
         private var symbolInfoFile = proto.symbolInfoFile
+        private var complexWhatEnabled = proto.complexWhatEnabled
 
         @Suppress("UNUSED") fun compatibility(v: R_LangVersion): Builder {
             compatibility = v
@@ -278,6 +283,11 @@ class C_CompilerOptions(
             return this
         }
 
+        @Suppress("UNUSED") fun complexWhatEnabled(v: Boolean): Builder {
+            complexWhatEnabled = v
+            return this
+        }
+
         fun build() = C_CompilerOptions(
                 compatibility = compatibility,
                 gtv = gtv,
@@ -288,7 +298,8 @@ class C_CompilerOptions(
                 testLib = testLib,
                 hiddenLib = hiddenLib,
                 allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
-                symbolInfoFile = symbolInfoFile
+                symbolInfoFile = symbolInfoFile,
+                complexWhatEnabled = complexWhatEnabled,
         )
     }
 }

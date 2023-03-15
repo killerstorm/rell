@@ -11,6 +11,7 @@ import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_TypeAdapterExpr
+import net.postchain.rell.lib.type.C_Lib_Type_BigInteger
 import net.postchain.rell.lib.type.C_Lib_Type_Decimal
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
@@ -80,6 +81,22 @@ object C_TypeAdapter_Direct: C_TypeAdapter() {
     override fun toRAdapter(): R_TypeAdapter = R_TypeAdapter_Direct
 }
 
+object C_TypeAdapter_IntegerToBigInteger: C_TypeAdapter() {
+    override fun adaptExpr(ctx: C_ExprContext, expr: V_Expr): V_Expr {
+        return V_TypeAdapterExpr(ctx, R_BigIntegerType, expr, this)
+    }
+
+    override fun adaptExprR(expr: R_Expr): R_Expr {
+        return R_TypeAdapterExpr(R_BigIntegerType, expr, toRAdapter())
+    }
+
+    override fun adaptExprDb(expr: Db_Expr): Db_Expr {
+        return Db_CallExpr(R_BigIntegerType, C_Lib_Type_BigInteger.FromInteger_Db, listOf(expr))
+    }
+
+    override fun toRAdapter(): R_TypeAdapter = R_TypeAdapter_IntegerToBigInteger
+}
+
 object C_TypeAdapter_IntegerToDecimal: C_TypeAdapter() {
     override fun adaptExpr(ctx: C_ExprContext, expr: V_Expr): V_Expr {
         return V_TypeAdapterExpr(ctx, R_DecimalType, expr, this)
@@ -94,6 +111,22 @@ object C_TypeAdapter_IntegerToDecimal: C_TypeAdapter() {
     }
 
     override fun toRAdapter(): R_TypeAdapter = R_TypeAdapter_IntegerToDecimal
+}
+
+object C_TypeAdapter_BigIntegerToDecimal: C_TypeAdapter() {
+    override fun adaptExpr(ctx: C_ExprContext, expr: V_Expr): V_Expr {
+        return V_TypeAdapterExpr(ctx, R_DecimalType, expr, this)
+    }
+
+    override fun adaptExprR(expr: R_Expr): R_Expr {
+        return R_TypeAdapterExpr(R_DecimalType, expr, toRAdapter())
+    }
+
+    override fun adaptExprDb(expr: Db_Expr): Db_Expr {
+        return Db_CallExpr(R_DecimalType, C_Lib_Type_Decimal.FromBigInteger_Db, listOf(expr))
+    }
+
+    override fun toRAdapter(): R_TypeAdapter = R_TypeAdapter_BigIntegerToDecimal
 }
 
 class C_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapter: C_TypeAdapter): C_TypeAdapter() {

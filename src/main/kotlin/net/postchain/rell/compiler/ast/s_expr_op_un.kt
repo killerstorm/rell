@@ -10,6 +10,7 @@ import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
+import net.postchain.rell.runtime.Rt_BigIntegerValue
 import net.postchain.rell.runtime.Rt_DecimalValue
 
 sealed class S_UnaryOp(val code: String) {
@@ -26,7 +27,7 @@ sealed class S_UnaryOp(val code: String) {
 object S_UnaryOp_Plus: S_UnaryOp("+") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
         val type = expr.type
-        if (type != R_IntegerType && type != R_DecimalType) {
+        if (!C_BinOp_Common.isNumericType(type)) {
             errTypeMismatch(ctx, opPos, type)
         }
 
@@ -43,6 +44,7 @@ object S_UnaryOp_Minus: S_UnaryOp("-") {
 
         val vOp = when (type) {
             R_IntegerType -> V_UnaryOp_Minus(type, R_UnaryOp_Minus_Integer, Db_UnaryOp_Minus_Integer)
+            R_BigIntegerType -> V_UnaryOp_Minus(type, R_UnaryOp_Minus_BigInteger, Db_UnaryOp_Minus_BigInteger)
             R_DecimalType -> V_UnaryOp_Minus(type, R_UnaryOp_Minus_Decimal, Db_UnaryOp_Minus_Decimal)
             else -> {
                 errTypeMismatch(ctx, opPos, type)
@@ -80,6 +82,8 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
 
         val ops = if (R_IntegerType.isAssignableFrom(dstType)) {
             Pair(INTEGER_INCREMENT, INTEGER_DECREMENT)
+        } else if (R_BigIntegerType.isAssignableFrom(dstType)) {
+            Pair(BIG_INTEGER_INCREMENT, BIG_INTEGER_DECREMENT)
         } else if (R_DecimalType.isAssignableFrom(dstType)) {
             Pair(DECIMAL_INCREMENT, DECIMAL_DECREMENT)
         } else {
@@ -98,10 +102,13 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
 
     companion object {
         private val INTEGER_ONE = R_ConstantValueExpr.makeInt(1)
+        private val BIG_INTEGER_ONE = R_ConstantValueExpr(Rt_BigIntegerValue.of(1))
         private val DECIMAL_ONE = R_ConstantValueExpr(Rt_DecimalValue.of(1))
 
         private val INTEGER_INCREMENT = C_IncDecOp("++", R_BinaryOp_Add_Integer, Db_BinaryOp_Add_Integer, INTEGER_ONE)
         private val INTEGER_DECREMENT = C_IncDecOp("--", R_BinaryOp_Sub_Integer, Db_BinaryOp_Sub_Integer, INTEGER_ONE)
+        private val BIG_INTEGER_INCREMENT = C_IncDecOp("++", R_BinaryOp_Add_BigInteger, Db_BinaryOp_Add_BigInteger, BIG_INTEGER_ONE)
+        private val BIG_INTEGER_DECREMENT = C_IncDecOp("--", R_BinaryOp_Sub_BigInteger, Db_BinaryOp_Sub_BigInteger, BIG_INTEGER_ONE)
         private val DECIMAL_INCREMENT = C_IncDecOp("++", R_BinaryOp_Add_Decimal, Db_BinaryOp_Add_Decimal, DECIMAL_ONE)
         private val DECIMAL_DECREMENT = C_IncDecOp("--", R_BinaryOp_Sub_Decimal, Db_BinaryOp_Sub_Decimal, DECIMAL_ONE)
     }

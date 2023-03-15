@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -11,6 +11,7 @@ import net.postchain.rell.compiler.base.utils.C_LibUtils.depError
 import net.postchain.rell.compiler.base.utils.C_MemberFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.lib.C_Lib_Math
+import net.postchain.rell.model.R_BigIntegerType
 import net.postchain.rell.model.R_DecimalType
 import net.postchain.rell.model.R_IntegerType
 import net.postchain.rell.model.R_TextType
@@ -18,6 +19,7 @@ import net.postchain.rell.model.expr.Db_SysFunction
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.immListOf
 import java.math.BigDecimal
+import java.math.BigInteger
 
 object C_Lib_Type_Integer: C_Lib_Type("integer", R_IntegerType) {
     override fun bindConstructors(b: C_GlobalFuncBuilder) {
@@ -41,12 +43,15 @@ object C_Lib_Type_Integer: C_Lib_Type("integer", R_IntegerType) {
     override fun bindMemberFunctions(b: C_MemberFuncBuilder) {
         b.add("abs", R_IntegerType, listOf(), C_Lib_Math.Abs_Integer)
         b.add("min", R_IntegerType, listOf(R_IntegerType), C_Lib_Math.Min_Integer)
+        b.add("min", R_BigIntegerType, listOf(R_BigIntegerType), IntFns.Min_BigInteger)
         b.add("min", R_DecimalType, listOf(R_DecimalType), IntFns.Min_Decimal)
         b.add("max", R_IntegerType, listOf(R_IntegerType), C_Lib_Math.Max_Integer)
+        b.add("max", R_BigIntegerType, listOf(R_BigIntegerType), IntFns.Max_BigInteger)
         b.add("max", R_DecimalType, listOf(R_DecimalType), IntFns.Max_Decimal)
         b.add("str", R_TextType, listOf(), IntFns.ToText_1)
         b.add("str", R_TextType, listOf(R_IntegerType), IntFns.ToText_2)
         b.add("hex", R_TextType, listOf(), IntFns.ToHex, depError("to_hex"))
+        b.add("to_big_integer", R_BigIntegerType, listOf(), C_Lib_Type_BigInteger.FromInteger)
         b.add("to_decimal", R_DecimalType, listOf(), C_Lib_Type_Decimal.FromInteger)
         b.add("to_text", R_TextType, listOf(), IntFns.ToText_1)
         b.add("to_text", R_TextType, listOf(R_IntegerType), IntFns.ToText_2)
@@ -61,6 +66,20 @@ object C_Lib_Type_Integer: C_Lib_Type("integer", R_IntegerType) {
 }
 
 private object IntFns {
+    val Min_BigInteger = C_SysFunction.simple2(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
+        val v1 = a.asInteger()
+        val v2 = b.asBigInteger()
+        val r = BigInteger.valueOf(v1).min(v2)
+        Rt_BigIntegerValue.of(r)
+    }
+
+    val Max_BigInteger = C_SysFunction.simple2(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
+        val v1 = a.asInteger()
+        val v2 = b.asBigInteger()
+        val r = BigInteger.valueOf(v1).max(v2)
+        Rt_BigIntegerValue.of(r)
+    }
+
     val Min_Decimal = C_SysFunction.simple2(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
         val v1 = a.asInteger()
         val v2 = b.asDecimal()

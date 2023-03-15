@@ -20,10 +20,7 @@ import net.postchain.rell.lib.type.C_Lib_Type_Virtual
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.Db_SysFunction
 import net.postchain.rell.model.expr.R_Expr
-import net.postchain.rell.runtime.Rt_CallContext
-import net.postchain.rell.runtime.Rt_DecimalValue
-import net.postchain.rell.runtime.Rt_IntValue
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
@@ -31,6 +28,7 @@ import net.postchain.rell.utils.*
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap
 import java.math.BigDecimal
+import java.math.BigInteger
 
 object C_LibUtils {
     val DEFAULT_MODULE = R_ModuleName.EMPTY
@@ -125,10 +123,11 @@ object C_LibUtils {
         b.add(name, resType, listOf(), resFn, deprecated = deprecated)
     }
 
-    fun constValue(name: String, value: Long) = constValue(name, Rt_IntValue(value))
-    fun constValue(name: String, value: BigDecimal) = constValue(name, Rt_DecimalValue.of(value))
+    fun constValue(name: String, value: Long) = constValue0(name, Rt_IntValue(value))
+    fun constValue(name: String, value: BigInteger) = constValue0(name, Rt_BigIntegerValue.of(value))
+    fun constValue(name: String, value: BigDecimal) = constValue0(name, Rt_DecimalValue.of(value))
 
-    private fun constValue(name: String, value: Rt_Value): Pair<String, C_NamespaceProperty> {
+    private fun constValue0(name: String, value: Rt_Value): Pair<String, C_NamespaceProperty> {
         val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
         return Pair(name, C_NamespaceProperty_RtValue(ideInfo, value))
     }

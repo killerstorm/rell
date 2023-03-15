@@ -10,6 +10,7 @@ import com.google.common.math.LongMath
 import mu.KLogging
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
+import net.postchain.rell.lib.type.Lib_BigIntegerMath
 import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_FunctionCallTarget
@@ -21,6 +22,7 @@ import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.util.*
 import java.util.regex.Pattern
 
@@ -37,6 +39,7 @@ enum class Rt_CoreValueTypes {
     UNIT,
     BOOLEAN,
     INTEGER,
+    BIG_INTEGER,
     DECIMAL,
     TEXT,
     BYTE_ARRAY,
@@ -88,6 +91,7 @@ abstract class Rt_Value {
 
     open fun asBoolean(): Boolean = throw errType(Rt_CoreValueTypes.BOOLEAN)
     open fun asInteger(): Long = throw errType(Rt_CoreValueTypes.INTEGER)
+    open fun asBigInteger(): BigInteger = throw errType(Rt_CoreValueTypes.BIG_INTEGER)
     open fun asDecimal(): BigDecimal = throw errType(Rt_CoreValueTypes.DECIMAL)
     open fun asRowid(): Long = throw errType(Rt_CoreValueTypes.ROWID)
     open fun asString(): String = throw errType(Rt_CoreValueTypes.TEXT)
@@ -177,6 +181,63 @@ class Rt_IntValue(val value: Long): Rt_Value() {
     override fun str() = "" + value
     override fun equals(other: Any?) = other is Rt_IntValue && value == other.value
     override fun hashCode() = java.lang.Long.hashCode(value)
+}
+
+class Rt_BigIntegerValue private constructor(private val value: BigInteger): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.BIG_INTEGER.type()
+
+    override fun type() = R_BigIntegerType
+    override fun asBigInteger() = value
+    override fun asFormatArg() = value
+    override fun strCode(showTupleFieldNames: Boolean) = "bigint[${str()}]"
+    override fun str() = value.toString()
+    override fun equals(other: Any?) = other === this || (other is Rt_BigIntegerValue && value == other.value)
+    override fun hashCode() = value.hashCode()
+
+    companion object : KLogging() {
+        val ZERO = Rt_BigIntegerValue(BigInteger.ZERO)
+
+        fun of(v: BigInteger): Rt_Value {
+            if (v.signum() == 0) {
+                return ZERO
+            }
+
+            val res = ofTry(v)
+            return res ?: throw errOverflow("bigint:overflow", "Big integer value out of range")
+        }
+
+        fun ofTry(v: BigInteger): Rt_Value? {
+            return if (v < Lib_BigIntegerMath.MIN_VALUE || v > Lib_BigIntegerMath.MAX_VALUE) null else Rt_BigIntegerValue(v)
+        }
+
+        fun of(v: BigDecimal): Rt_Value {
+            val bigInt = try {
+                v.toBigIntegerExact()
+            } catch (e: ArithmeticException) {
+                throw Rt_Exception.common("bigint:nonint:$v", "Value is not an integer: '$v'")
+            }
+            return of(bigInt)
+        }
+
+        fun of(s: String): Rt_Value {
+            val v = try {
+                BigInteger(s)
+            } catch (e: NumberFormatException) {
+                throw Rt_Exception.common("bigint:invalid:$s", "Invalid big integer value: '$s'")
+            }
+            return of(v)
+        }
+
+        fun of(v: Long): Rt_Value {
+            val bi = BigInteger.valueOf(v)
+            return of(bi)
+        }
+
+        fun errOverflow(code: String, msg: String): Rt_Exception {
+            val p = Lib_BigIntegerMath.PRECISION
+            return Rt_Exception.common(code, "$msg (allowed range is -10^$p..10^$p, exclusive)")
+        }
+    }
 }
 
 class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {

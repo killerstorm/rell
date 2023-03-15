@@ -631,27 +631,46 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     @Test fun testSysFunctions() {
         chkFunctions()
         chkInit("")
+
         chkFunctions(
-                "c0.make_rowid",
-                "rell_bytea_substr1",
-                "rell_bytea_substr2",
-                "rell_text_getchar",
-                "rell_text_repeat",
-                "rell_text_substr1",
-                "rell_text_substr2"
+            "c0.make_rowid",
+            "rell_biginteger_from_text",
+            "rell_bytea_substr1",
+            "rell_bytea_substr2",
+            "rell_decimal_from_text",
+            "rell_decimal_to_text",
+            "rell_text_getchar",
+            "rell_text_repeat",
+            "rell_text_substr1",
+            "rell_text_substr2"
         )
 
         execSql("DROP FUNCTION rell_bytea_substr2; DROP FUNCTION rell_text_substr1;")
-        chkFunctions("c0.make_rowid", "rell_bytea_substr1", "rell_text_getchar", "rell_text_repeat", "rell_text_substr2")
-        chkInit("")
+
         chkFunctions(
-                "c0.make_rowid",
-                "rell_bytea_substr1",
-                "rell_bytea_substr2",
-                "rell_text_getchar",
-                "rell_text_repeat",
-                "rell_text_substr1",
-                "rell_text_substr2"
+            "c0.make_rowid",
+            "rell_biginteger_from_text",
+            "rell_bytea_substr1",
+            "rell_decimal_from_text",
+            "rell_decimal_to_text",
+            "rell_text_getchar",
+            "rell_text_repeat",
+            "rell_text_substr2"
+        )
+
+        chkInit("")
+
+        chkFunctions(
+            "c0.make_rowid",
+            "rell_biginteger_from_text",
+            "rell_bytea_substr1",
+            "rell_bytea_substr2",
+            "rell_decimal_from_text",
+            "rell_decimal_to_text",
+            "rell_text_getchar",
+            "rell_text_repeat",
+            "rell_text_substr1",
+            "rell_text_substr2"
         )
     }
 

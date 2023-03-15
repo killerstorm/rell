@@ -25,8 +25,11 @@ object SqlConstants {
     const val ROWID_GEN = "rowid_gen"
     const val MAKE_ROWID = "make_rowid"
 
+    const val FN_BIGINTEGER_FROM_TEXT = "rell_biginteger_from_text"
     const val FN_BYTEA_SUBSTR1 = "rell_bytea_substr1"
     const val FN_BYTEA_SUBSTR2 = "rell_bytea_substr2"
+    const val FN_DECIMAL_FROM_TEXT = "rell_decimal_from_text"
+    const val FN_DECIMAL_TO_TEXT = "rell_decimal_to_text"
     const val FN_TEXT_REPEAT = "rell_text_repeat"
     const val FN_TEXT_SUBSTR1 = "rell_text_substr1"
     const val FN_TEXT_SUBSTR2 = "rell_text_substr2"

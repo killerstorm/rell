@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.grammar
@@ -39,7 +39,9 @@ private fun generateTerminals() {
             terminal ${tokenizer.tkDecimal.name}: DECNUM? '.' DECNUM EXPONENT? | DECNUM EXPONENT ;
 
             terminal HEXDIG: '0'..'9'|'A'..'F'|'a'..'f';
-            terminal ${tokenizer.tkInteger.name}: DECNUM | '0' 'x' HEXDIG+;
+            terminal COMMON_INT: DECNUM | '0' 'x' HEXDIG+;
+            terminal ${tokenizer.tkBigInteger.name}: COMMON_INT 'L';
+            terminal ${tokenizer.tkInteger.name}: COMMON_INT;
 
             terminal ${tokenizer.tkByteArray.name}: 'x' (('\'' (HEXDIG HEXDIG)* '\'') | ('"' (HEXDIG HEXDIG)* '"'));
 

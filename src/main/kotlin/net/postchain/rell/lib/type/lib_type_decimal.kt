@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -10,13 +10,12 @@ import net.postchain.rell.compiler.base.utils.C_LibUtils.depError
 import net.postchain.rell.compiler.base.utils.C_MemberFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.lib.C_Lib_Math
-import net.postchain.rell.model.R_BooleanType
-import net.postchain.rell.model.R_DecimalType
-import net.postchain.rell.model.R_IntegerType
-import net.postchain.rell.model.R_TextType
+import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.Db_SysFunction
 import net.postchain.rell.runtime.*
+import net.postchain.rell.sql.SqlConstants
 import net.postchain.rell.utils.immListOf
+import org.jooq.DataType
 import org.jooq.impl.SQLDataType
 import java.math.BigDecimal
 import java.math.BigInteger
@@ -27,11 +26,14 @@ object C_Lib_Type_Decimal: C_Lib_Type("decimal", R_DecimalType) {
     val ToInteger = DecFns.ToInteger
     val FromInteger = DecFns.FromInteger
     val FromInteger_Db = DecFns.FromInteger_Db
+    val FromBigInteger = DecFns.FromBigInteger
+    val FromBigInteger_Db = DecFns.FromBigInteger_Db
     val ToText_Db: Db_SysFunction = DecFns.ToText_1_Db
 
     override fun bindConstructors(b: C_GlobalFuncBuilder) {
         b.add(typeName.str, type, listOf(R_TextType), DecFns.FromText)
         b.add(typeName.str, type, listOf(R_IntegerType), DecFns.FromInteger)
+        b.add(typeName.str, type, listOf(R_BigIntegerType), DecFns.FromBigInteger)
     }
 
     override fun bindConstants() = immListOf(
@@ -58,6 +60,7 @@ object C_Lib_Type_Decimal: C_Lib_Type("decimal", R_DecimalType) {
         b.add("signum", R_IntegerType, listOf(), DecFns.Sign, depError("sign"))
         b.add("sign", R_IntegerType, listOf(), DecFns.Sign)
         //b.add("sqrt", R_DecimalType, listOf(), R_SysFn_Decimal.Sqrt)
+        b.add("to_big_integer", R_BigIntegerType, listOf(), DecFns.ToBigInteger)
         b.add("to_integer", R_IntegerType, listOf(), DecFns.ToInteger)
         b.add("to_text", R_TextType, listOf(), DecFns.ToText_1)
         b.add("to_text", R_TextType, listOf(R_BooleanType), DecFns.ToText_2)
@@ -71,12 +74,12 @@ object Lib_DecimalMath {
     const val DECIMAL_FRAC_DIGITS = 20
     const val DECIMAL_SQL_TYPE_STR = "NUMERIC"
 
-    val DECIMAL_SQL_TYPE = SQLDataType.DECIMAL
+    val DECIMAL_SQL_TYPE: DataType<*> = SQLDataType.DECIMAL
 
-    const val DECIMAL_PRECISION = DECIMAL_INT_DIGITS + DECIMAL_FRAC_DIGITS
+    private const val DECIMAL_PRECISION = DECIMAL_INT_DIGITS + DECIMAL_FRAC_DIGITS
 
-    val DECIMAL_MIN_VALUE = BigDecimal.ONE.divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
-    val DECIMAL_MAX_VALUE = BigDecimal.TEN.pow(DECIMAL_PRECISION).subtract(BigDecimal.ONE)
+    val DECIMAL_MIN_VALUE: BigDecimal = BigDecimal.ONE.divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
+    val DECIMAL_MAX_VALUE: BigDecimal = BigDecimal.TEN.pow(DECIMAL_PRECISION).subtract(BigDecimal.ONE)
         .divide(BigDecimal.TEN.pow(DECIMAL_FRAC_DIGITS))
     private val UPPER_LIMIT = BigDecimal.TEN.pow(DECIMAL_INT_DIGITS)
     private val LOWER_LIMIT = -UPPER_LIMIT
@@ -302,6 +305,12 @@ private object DecFns {
         Rt_IntValue(r.toLong())
     }
 
+    val ToBigInteger = C_SysFunction.simple1(Db_SysFunction.template("decimal.to_big_integer", 1, "TRUNC(#0)"), pure = true) { a ->
+        val v = a.asDecimal()
+        val bi = v.toBigInteger()
+        Rt_BigIntegerValue.of(bi)
+    }
+
     private val BIG_INT_MIN = BigInteger.valueOf(Long.MIN_VALUE)
     private val BIG_INT_MAX = BigInteger.valueOf(Long.MAX_VALUE)
 
@@ -318,9 +327,7 @@ private object DecFns {
 
     // Using regexp to remove trailing zeros.
     // Clever regexp: can handle special cases like "0.0", "0.000000", etc.
-    val ToText_1_Db = Db_SysFunction.template("decimal.to_text", 1,
-        "REGEXP_REPLACE((#0)::TEXT, '(([.][0-9]*[1-9])(0+)\$)|([.]0+\$)', '\\2')"
-    )
+    val ToText_1_Db = Db_SysFunction.simple("decimal.to_text", SqlConstants.FN_DECIMAL_TO_TEXT)
 
     val ToText_1 = C_SysFunction.simple1(ToText_1_Db, pure = true) { a ->
         val v = a.asDecimal()
@@ -350,8 +357,16 @@ private object DecFns {
         calcFromInteger(a)
     }
 
+    val FromBigInteger_Db = Db_SysFunction.template("decimal(big_integer)", 1, "#0")
+
+    val FromBigInteger = C_SysFunction.simple1(FromBigInteger_Db, pure = true) { a ->
+        val bigInt = a.asBigInteger()
+        val bigDec = bigInt.toBigDecimal()
+        Rt_DecimalValue.of(bigDec)
+    }
+
     val FromText = C_SysFunction.simple1(
-        Db_SysFunction.cast("decimal(text)", Lib_DecimalMath.DECIMAL_SQL_TYPE_STR),
+        Db_SysFunction.simple("decimal(text)", SqlConstants.FN_DECIMAL_FROM_TEXT),
         pure = true
     ) { a ->
         val s = a.asString()

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -77,8 +77,8 @@ data class S_PosValue<T>(val pos: S_Pos, val value: T) {
 
 data class S_NameOptValue<T>(val name: S_Name?, val value: T)
 
-class S_Name(val pos: S_Pos, private val str: String): S_Node() {
-    private val rName = R_Name.of(str)
+class S_Name(val pos: S_Pos, private val rName: R_Name): S_Node() {
+    private val str = rName.str
 
     fun compile(ctx: C_SymbolContext): C_NameHandle {
         return ctx.addName(this, rName)

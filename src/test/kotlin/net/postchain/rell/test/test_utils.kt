@@ -34,10 +34,11 @@ import org.apache.commons.configuration2.io.ClasspathLocationStrategy
 import org.postgresql.util.PGobject
 import java.io.File
 import java.io.FileOutputStream
+import java.math.BigDecimal
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
-import java.util.Properties
+import java.util.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -182,6 +183,8 @@ object SqlTestUtils {
             } else if (value is Int || value is Long) {
                 "" + value
             } else if (value is Boolean) {
+                "" + value
+            } else if (value is BigDecimal) {
                 "" + value
             } else if (value == null) {
                 "NULL"

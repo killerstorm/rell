@@ -1,9 +1,10 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
 
+import net.postchain.rell.lang.type.BigIntegerTest
 import net.postchain.rell.lang.type.DecimalTest
 import net.postchain.rell.test.RellCodeTester
 import org.junit.Test
@@ -344,6 +345,15 @@ abstract class AtExprGroupBaseTest: AtExprBaseTest() {
         chkTypeSum("integer", "-1 -9223372036854775807-1", impRtErr("expr:+:overflow:-1:-9223372036854775808"))
         chkTypeSum("integer", "-9223372036854775807-1 1 -1", "int[-9223372036854775808]")
         chkTypeSum("integer", "1 -9223372036854775807-1 -1", "int[-9223372036854775808]")
+    }
+
+    @Test open fun testSumOverflowBigInteger() {
+        val v = BigIntegerTest.BigIntVals()
+        chkTypeSum("big_integer", "big_integer('${v.lim1}')", "bigint[${v.lim1}]")
+        chkTypeSum("big_integer", "big_integer('${v.lim1}') 1L", impRtErr("expr:+:overflow"))
+        chkTypeSum("big_integer", "1L big_integer('${v.lim1}')", impRtErr("expr:+:overflow"))
+        chkTypeSum("big_integer", "big_integer('${v.lim1}') -1L 1L", "bigint[${v.lim1}]")
+        chkTypeSum("big_integer", "-1L big_integer('${v.lim1}') 1L", "bigint[${v.lim1}]")
     }
 
     @Test open fun testSumOverflowDecimal() {

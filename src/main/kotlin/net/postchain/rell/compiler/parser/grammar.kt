@@ -112,6 +112,7 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val WHILE by relltok("while")
 
     private val NUMBER by relltok(RellTokenizer.INTEGER) // Must be exactly INT for Eclipse coloring, but then Xtext assumes it's a decimal Integer
+    private val BIG_INTEGER by relltok(RellTokenizer.BIG_INTEGER)
     private val DECIMAL by relltok(RellTokenizer.DECIMAL)
     private val BYTES by relltok(RellTokenizer.BYTEARRAY)
     private val STRING by relltok(RellTokenizer.STRING) // Must be exactly STRING for Eclipse coloring
@@ -119,7 +120,7 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     override val tokenizer: RellTokenizer by lazy { RellTokenizer(rellTokens) }
 
-    private val name by (ID) map { RellTokenizer.decodeName(it.pos, it.text) }
+    private val name by (ID) map { S_Name(it.pos, RellTokenizer.decodeName(it.pos, it.text)) }
 
     private val qualifiedName by separatedTerms(name, DOT, false) map { S_QualifiedName(it) }
 
@@ -325,7 +326,9 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val intExpr by NUMBER map { S_IntegerLiteralExpr(it.pos, RellTokenizer.decodeInteger(it.pos, it.text)) }
 
-    private val decimalExpr by DECIMAL map { S_DecimalLiteralExpr(it.pos, RellTokenizer.decodeDecimal(it.pos, it.text)) }
+    private val bigIntExpr by BIG_INTEGER map { S_CommonLiteralExpr(it.pos, RellTokenizer.decodeBigInteger(it.pos, it.text)) }
+
+    private val decimalExpr by DECIMAL map { S_CommonLiteralExpr(it.pos, RellTokenizer.decodeDecimal(it.pos, it.text)) }
 
     private val stringExpr = STRING map { S_StringLiteralExpr(it.pos, RellTokenizer.decodeString(it.pos, it.text)) }
 
@@ -337,7 +340,7 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val nullLiteralExpr by NULL map { S_NullLiteralExpr(it.pos) }
 
-    private val literalExpr by ( intExpr or decimalExpr or stringExpr or bytesExpr or booleanLiteralExpr or nullLiteralExpr)
+    private val literalExpr by intExpr or bigIntExpr or decimalExpr or stringExpr or bytesExpr or booleanLiteralExpr or nullLiteralExpr
 
     private val tupleExprFieldNameEqExpr by ( name * ASSIGN * expressionRef ) map {
         ( name, pos, expr ) -> S_TupleExprField_NameEqExpr(name, pos.pos, expr)

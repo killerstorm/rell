@@ -18,6 +18,7 @@ object C_Lib_Types {
         C_Lib_Type_Unit,
         C_Lib_Type_Boolean,
         C_Lib_Type_Integer,
+        C_Lib_Type_BigInteger,
         C_Lib_Type_Decimal,
         C_Lib_Type_Text,
         C_Lib_Type_ByteArray,

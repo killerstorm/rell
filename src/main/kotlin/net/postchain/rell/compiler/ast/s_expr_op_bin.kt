@@ -4,7 +4,9 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_Statement
+import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_Utils
@@ -17,6 +19,7 @@ import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_UpdateStatementWhat
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
+import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import java.util.*
 
@@ -85,7 +88,14 @@ enum class S_AssignOpCode(val op: S_AssignOp) {
 
 sealed class S_AssignOp {
     abstract fun compile(ctx: C_ExprContext, pos: S_Pos, dstValue: V_Expr, srcValue: V_Expr): C_Statement
-    abstract fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attribute, srcValue: V_Expr): R_UpdateStatementWhat?
+
+    abstract fun compileDbUpdate(
+        ctx: C_ExprContext,
+        pos: S_Pos,
+        entity: R_DbAtEntity,
+        attr: R_Attribute,
+        srcValue: V_Expr,
+    ): R_UpdateStatementWhat?
 
     protected open fun compileVarFacts(
             dstValue: V_Expr,
@@ -125,7 +135,13 @@ object S_AssignOp_Eq: S_AssignOp() {
         return varFacts
     }
 
-    override fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attribute, srcValue: V_Expr): R_UpdateStatementWhat {
+    override fun compileDbUpdate(
+        ctx: C_ExprContext,
+        pos: S_Pos,
+        entity: R_DbAtEntity,
+        attr: R_Attribute,
+        srcValue: V_Expr,
+    ): R_UpdateStatementWhat {
         val expr = srcValue.toDbExpr()
         val adapter = attr.type.getTypeAdapter(expr.type)
         val expr2 = if (adapter == null) {
@@ -137,7 +153,7 @@ object S_AssignOp_Eq: S_AssignOp() {
         } else {
             adapter.adaptExprDb(expr)
         }
-        return R_UpdateStatementWhat(attr, expr2, null)
+        return R_UpdateStatementWhat(attr, expr2)
     }
 }
 
@@ -158,7 +174,13 @@ class S_AssignOp_Op(val code: String, val op: C_BinOp_Common): S_AssignOp() {
         return C_Statement(rStmt, false, varFacts)
     }
 
-    override fun compileDbUpdate(ctx: C_ExprContext, pos: S_Pos, attr: R_Attribute, srcValue: V_Expr): R_UpdateStatementWhat {
+    override fun compileDbUpdate(
+        ctx: C_ExprContext,
+        pos: S_Pos,
+        entity: R_DbAtEntity,
+        attr: R_Attribute,
+        srcValue: V_Expr,
+    ): R_UpdateStatementWhat {
         val srcValue2 = op.adaptRight(ctx, attr.type, srcValue)
         val dbSrcExpr = srcValue2.toDbExpr()
         val srcType = dbSrcExpr.type
@@ -168,7 +190,7 @@ class S_AssignOp_Op(val code: String, val op: C_BinOp_Common): S_AssignOp() {
             C_BinOp.errTypeMismatch(ctx.msgCtx, pos, code, attr.type, srcType)
         }
 
-        return R_UpdateStatementWhat(attr, dbSrcExpr, binOp.dbOp)
+        return S_UpdateWhat.makeRWhat(entity, attr, dbSrcExpr, binOp.dbOp)
     }
 
     private fun compileBinOp(ctx: C_ExprContext, pos: S_Pos, left: R_Type, right: R_Type): V_BinaryOp {
@@ -244,11 +266,18 @@ sealed class C_BinOp_Common: C_BinOp() {
 
     open fun adaptRight(ctx: C_ExprContext, leftType: R_Type, right: V_Expr): V_Expr {
         val rightType = right.type
-        return if (leftType == R_DecimalType && rightType == R_IntegerType) {
-            promoteNumeric(ctx, right)
-        } else {
-            right
+        if (rightType == leftType) {
+            return right
         }
+
+        if (isNumericType(leftType) && isNumericType(rightType)) {
+            val resExpr = promoteNumericExpr(ctx, right, leftType)
+            if (resExpr != null) {
+                return resExpr
+            }
+        }
+
+        return right
     }
 
     companion object {
@@ -258,21 +287,33 @@ sealed class C_BinOp_Common: C_BinOp() {
         }
 
         fun promoteNumeric(ctx: C_ExprContext, values: List<V_Expr>): List<V_Expr> {
-            val hasOther = values.any { it.type != R_IntegerType && it.type != R_DecimalType }
-            val hasInteger = values.any { it.type == R_IntegerType }
-            val hasDecimal = values.any { it.type == R_DecimalType }
+            val resType = values.fold(values.firstOrNull()?.type) { type, value ->
+                if (type == null) null else commonNumericType(type, value.type)
+            }
 
-            return if (hasInteger && hasDecimal && !hasOther) {
-                values.map { promoteNumeric(ctx, it) }
-            } else {
-                values
+            resType ?: return values
+
+            val resValues = values.mapNotNull { promoteNumericExpr(ctx, it, resType) }
+            return if (resValues.size == values.size) resValues.toImmList() else values
+        }
+
+        private fun promoteNumericExpr(ctx: C_ExprContext, value: V_Expr, resType: R_Type): V_Expr? {
+            val adapter = resType.getTypeAdapter(value.type)
+            return adapter?.adaptExpr(ctx, value)
+        }
+
+        private fun commonNumericType(type1: R_Type, type2: R_Type): R_Type? {
+            return when {
+                !isNumericType(type1) || !isNumericType(type2) -> null
+                type1 == type2 -> type1
+                type1 == R_DecimalType || type2 == R_DecimalType -> R_DecimalType
+                type1 == R_BigIntegerType || type2 == R_BigIntegerType -> R_BigIntegerType
+                else -> null // Must not happen
             }
         }
 
-        private fun promoteNumeric(ctx: C_ExprContext, value: V_Expr): V_Expr {
-            val type = value.type
-            val adapter = if (type != R_IntegerType) C_TypeAdapter_Direct else C_TypeAdapter_IntegerToDecimal
-            return adapter.adaptExpr(ctx, value)
+        fun isNumericType(type: R_Type): Boolean {
+            return type == R_IntegerType || type == R_BigIntegerType || type == R_DecimalType
         }
     }
 }
@@ -351,6 +392,7 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
         private fun dbOpSupported(type: R_Type): Boolean {
             return type == R_BooleanType
                     || type == R_IntegerType
+                    || type == R_BigIntegerType
                     || type == R_DecimalType
                     || type == R_TextType
                     || type == R_ByteArrayType
@@ -384,7 +426,7 @@ object C_BinOp_EqRef: C_BinOp_EqNeRef(true)
 object C_BinOp_NeRef: C_BinOp_EqNeRef(false)
 
 sealed class C_BinOp_Cmp(val cmpOp: R_CmpOp, val dbOp: Db_BinaryOp): C_BinOp_Common() {
-    override final fun compileOp(left: R_Type, right: R_Type): V_BinaryOp? {
+    final override fun compileOp(left: R_Type, right: R_Type): V_BinaryOp? {
         if (left != right) {
             return null
         }
@@ -411,6 +453,7 @@ object C_BinOp_Plus: C_BinOp_Common() {
 
         return when (left) {
             R_IntegerType -> V_BinaryOp.of(R_IntegerType, R_BinaryOp_Add_Integer, Db_BinaryOp_Add_Integer)
+            R_BigIntegerType -> V_BinaryOp.of(R_BigIntegerType, R_BinaryOp_Add_BigInteger, Db_BinaryOp_Add_BigInteger)
             R_DecimalType -> V_BinaryOp.of(R_DecimalType, R_BinaryOp_Add_Decimal, Db_BinaryOp_Add_Decimal)
             R_TextType -> V_BinaryOp.of(R_TextType, R_BinaryOp_Concat_Text, Db_BinaryOp_Concat)
             R_ByteArrayType -> V_BinaryOp.of(R_ByteArrayType, R_BinaryOp_Concat_ByteArray, Db_BinaryOp_Concat)
@@ -457,7 +500,7 @@ object C_BinOp_Plus: C_BinOp_Common() {
 
     private fun getDbToStringFunction(type: R_Type): Db_SysFunction? {
         return when (type) {
-            R_BooleanType, R_IntegerType, R_RowidType, R_JsonType -> C_Lib_Type_Any.ToText_Db
+            R_BooleanType, R_IntegerType, R_BigIntegerType, R_RowidType, R_JsonType -> C_Lib_Type_Any.ToText_Db
             R_DecimalType -> C_Lib_Type_Decimal.ToText_Db
             is R_EntityType -> C_Lib_Type_Any.ToText_Db
             else -> null
@@ -466,10 +509,12 @@ object C_BinOp_Plus: C_BinOp_Common() {
 }
 
 sealed class C_BinOp_Arith(
-        val rOpInt: R_BinaryOp,
-        val dbOpInt: Db_BinaryOp,
-        val rOpDec: R_BinaryOp,
-        val dbOpDec: Db_BinaryOp
+    private val rOpInt: R_BinaryOp,
+    private val dbOpInt: Db_BinaryOp,
+    private val rOpBigInt: R_BinaryOp,
+    private val dbOpBigInt: Db_BinaryOp,
+    private val rOpDec: R_BinaryOp,
+    private val dbOpDec: Db_BinaryOp,
 ): C_BinOp_Common() {
     override fun compileOp(left: R_Type, right: R_Type): V_BinaryOp? {
         if (left != right) {
@@ -478,16 +523,48 @@ sealed class C_BinOp_Arith(
 
         return when (left) {
             R_IntegerType -> V_BinaryOp.of(R_IntegerType, rOpInt, dbOpInt)
+            R_BigIntegerType -> V_BinaryOp.of(R_BigIntegerType, rOpBigInt, dbOpBigInt)
             R_DecimalType -> V_BinaryOp.of(R_DecimalType, rOpDec, dbOpDec)
             else -> null
         }
     }
 }
 
-object C_BinOp_Minus: C_BinOp_Arith(R_BinaryOp_Sub_Integer, Db_BinaryOp_Sub_Integer, R_BinaryOp_Sub_Decimal, Db_BinaryOp_Sub_Decimal)
-object C_BinOp_Mul: C_BinOp_Arith(R_BinaryOp_Mul_Integer, Db_BinaryOp_Mul_Integer, R_BinaryOp_Mul_Decimal, Db_BinaryOp_Mul_Decimal)
-object C_BinOp_Div: C_BinOp_Arith(R_BinaryOp_Div_Integer, Db_BinaryOp_Div_Integer, R_BinaryOp_Div_Decimal, Db_BinaryOp_Div_Decimal)
-object C_BinOp_Mod: C_BinOp_Arith(R_BinaryOp_Mod_Integer, Db_BinaryOp_Mod_Integer, R_BinaryOp_Mod_Decimal, Db_BinaryOp_Mod_Decimal)
+object C_BinOp_Minus: C_BinOp_Arith(
+    R_BinaryOp_Sub_Integer,
+    Db_BinaryOp_Sub_Integer,
+    R_BinaryOp_Sub_BigInteger,
+    Db_BinaryOp_Sub_BigInteger,
+    R_BinaryOp_Sub_Decimal,
+    Db_BinaryOp_Sub_Decimal,
+)
+
+object C_BinOp_Mul: C_BinOp_Arith(
+    R_BinaryOp_Mul_Integer,
+    Db_BinaryOp_Mul_Integer,
+    R_BinaryOp_Mul_BigInteger,
+    Db_BinaryOp_Mul_BigInteger,
+    R_BinaryOp_Mul_Decimal,
+    Db_BinaryOp_Mul_Decimal,
+)
+
+object C_BinOp_Div: C_BinOp_Arith(
+    R_BinaryOp_Div_Integer,
+    Db_BinaryOp_Div_Integer,
+    R_BinaryOp_Div_BigInteger,
+    Db_BinaryOp_Div_BigInteger,
+    R_BinaryOp_Div_Decimal,
+    Db_BinaryOp_Div_Decimal,
+)
+
+object C_BinOp_Mod: C_BinOp_Arith(
+    R_BinaryOp_Mod_Integer,
+    Db_BinaryOp_Mod_Integer,
+    R_BinaryOp_Mod_BigInteger,
+    Db_BinaryOp_Mod_BigInteger,
+    R_BinaryOp_Mod_Decimal,
+    Db_BinaryOp_Mod_Decimal,
+)
 
 sealed class C_BinOp_Logic(val rOp: R_BinaryOp, val dbOp: Db_BinaryOp): C_BinOp_Common() {
     override fun compileOp(left: R_Type, right: R_Type): V_BinaryOp? {

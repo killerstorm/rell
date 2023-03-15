@@ -130,7 +130,7 @@ class R_UpdateTarget_Object(private val entity: R_DbAtEntity): R_UpdateTarget() 
     }
 }
 
-class R_UpdateStatementWhat(val attr: R_Attribute, val expr: Db_Expr, val op: Db_BinaryOp?)
+class R_UpdateStatementWhat(val attr: R_Attribute, val expr: Db_Expr)
 
 sealed class R_BaseUpdateStatement(val target: R_UpdateTarget, val fromBlock: R_FrameBlock): R_Statement() {
     protected abstract fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql
@@ -287,18 +287,11 @@ class R_UpdateStatement(
 
     private fun translateWhat(ctx: SqlGenContext, redWhat: List<RedDb_Expr>): ParameterizedSql {
         val b = SqlBuilder()
-        val alias = ctx.getEntityAlias(target.entity())
 
         b.append(redWhat.withIndex(), ", ") { (i, redExpr) ->
             val whatExpr = what[i]
             b.appendName(whatExpr.attr.sqlMapping)
             b.append(" = ")
-            if (whatExpr.op != null) {
-                b.appendColumn(alias, whatExpr.attr.sqlMapping)
-                b.append(" ")
-                b.append(whatExpr.op.sql)
-                b.append(" ")
-            }
             redExpr.toSql(ctx, b, false)
         }
 

@@ -16,6 +16,7 @@ import net.postchain.rell.compiler.vexpr.V_DbAtWhatField
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
+import net.postchain.rell.runtime.Rt_BigIntegerValue
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.tools.api.IdeSymbolInfo
@@ -166,6 +167,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     private fun compileSummarizationSum(pos: C_AtSummarizationPos, type: R_Type): C_AtSummarization? {
         return when (type) {
             R_IntegerType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_Integer, Rt_IntValue(0))
+            R_BigIntegerType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_BigInteger, Rt_BigIntegerValue.ZERO)
             R_DecimalType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_Decimal, Rt_DecimalValue.ZERO)
             else -> null
         }

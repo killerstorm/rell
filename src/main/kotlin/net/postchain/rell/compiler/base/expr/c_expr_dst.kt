@@ -6,6 +6,7 @@ package net.postchain.rell.compiler.base.expr
 
 import net.postchain.rell.compiler.ast.C_BinOp
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_UpdateWhat
 import net.postchain.rell.compiler.base.core.C_LambdaBlock
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.lib.type.C_Lib_Type_Entity
@@ -86,7 +87,7 @@ class C_Destination_EntityAttr(
         val rBaseVarExpr = baseVar.toRef(lambdaBlkCtx.blockUid).toRExpr()
         val rTarget = R_UpdateTarget_Expr_One(atEntity, extraAtEntities, where, rBaseVarExpr, cLambda.rLambda)
         val dbSrcVarExpr = srcVar.toRef(rFromBlock.uid).toDbExpr()
-        val rWhat = R_UpdateStatementWhat(attr, dbSrcVarExpr, op?.dbOp)
+        val rWhat = S_UpdateWhat.makeRWhat(atEntity, attr, dbSrcVarExpr, op?.dbOp)
         val rUpdateStmt = R_UpdateStatement(rTarget, rFromBlock, listOf(rWhat))
 
         val rBaseExpr = base.toRExpr()
@@ -166,7 +167,7 @@ class C_Destination_ObjectAttr(
         val rAtEntity = ctx.makeAtEntity(rObject.rEntity, ctx.appCtx.nextAtExprId())
         val rTarget = R_UpdateTarget_Object(rAtEntity)
         val dbSrcVarExpr = srcVar.toRef(rFromBlock.uid).toDbExpr()
-        val rWhat = R_UpdateStatementWhat(attr, dbSrcVarExpr, op?.dbOp)
+        val rWhat = S_UpdateWhat.makeRWhat(rAtEntity, attr, dbSrcVarExpr, op?.dbOp)
         val rUpdateStmt = R_UpdateStatement(rTarget, rFromBlock, listOf(rWhat))
 
         val lambdaArgs = listOf(

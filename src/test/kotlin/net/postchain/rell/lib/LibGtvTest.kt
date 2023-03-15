@@ -4,11 +4,46 @@
 
 package net.postchain.rell.lib
 
+import net.postchain.common.toHex
+import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.utils.PostchainUtils
 import org.junit.Test
+import java.math.BigInteger
+import kotlin.test.assertEquals
 
 class LibGtvTest: BaseRellTest(false) {
+    @Test fun testToFromGtvBigInteger() {
+        chkToGtv("(0L).to_gtv()", gtv(BigInteger.valueOf(0)))
+        chkToGtv("(123L).to_gtv()", gtv(BigInteger.valueOf(123)))
+        chkToGtv("(-456L).to_gtv()", gtv(BigInteger.valueOf(-456)))
+        chkToGtv("(79228162514264337593543950335L).to_gtv()", gtv(BigInteger("79228162514264337593543950335")))
+
+        chkToGtv("(0L).to_gtv_pretty()", gtv(BigInteger.valueOf(0)))
+        chkToGtv("(123L).to_gtv_pretty()", gtv(BigInteger.valueOf(123)))
+        chkToGtv("(-456L).to_gtv_pretty()", gtv(BigInteger.valueOf(-456)))
+
+        chkFromGtv(gtv(BigInteger.valueOf(0)), "big_integer.from_gtv(g)", "bigint[0]")
+        chkFromGtv(gtv(BigInteger.valueOf(123)), "big_integer.from_gtv(g)", "bigint[123]")
+        chkFromGtv(gtv(BigInteger.valueOf(-456)), "big_integer.from_gtv(g)", "bigint[-456]")
+        chkFromGtv(gtv(123), "big_integer.from_gtv(g)", "gtv_err:type:[big_integer]:BIGINTEGER:INTEGER")
+        chkFromGtv(gtv("123"), "big_integer.from_gtv(g)", "gtv_err:type:[big_integer]:BIGINTEGER:STRING")
+
+        chkFromGtv(gtv(BigInteger.valueOf(123)), "big_integer.from_gtv_pretty(g)", "bigint[123]")
+        chkFromGtv(gtv(BigInteger.valueOf(-456)), "big_integer.from_gtv_pretty(g)", "bigint[-456]")
+        chkFromGtv(gtv(123), "big_integer.from_gtv_pretty(g)", "bigint[123]")
+        chkFromGtv(gtv("123"), "big_integer.from_gtv_pretty(g)", "gtv_err:type:[big_integer]:BIGINTEGER:STRING")
+
+        chkFromGtv("'Hello'", "big_integer.from_gtv(g)", "gtv_err:type:[big_integer]:BIGINTEGER:STRING")
+        chkFromGtv("'Hello'", "big_integer.from_gtv_pretty(g)", "gtv_err:type:[big_integer]:BIGINTEGER:STRING")
+        chkFromGtv("[]", "big_integer.from_gtv(g)", "gtv_err:type:[big_integer]:BIGINTEGER:ARRAY")
+        chkFromGtv("[]", "big_integer.from_gtv_pretty(g)", "gtv_err:type:[big_integer]:BIGINTEGER:ARRAY")
+        chkFromGtv("[123]", "big_integer.from_gtv(g)", "gtv_err:type:[big_integer]:BIGINTEGER:ARRAY")
+        chkFromGtv("[123]", "big_integer.from_gtv_pretty(g)", "gtv_err:type:[big_integer]:BIGINTEGER:ARRAY")
+    }
+
     @Test fun testToFromGtvBoolean() {
         chk("false.to_gtv()", "gtv[0]")
         chk("true.to_gtv()", "gtv[1]")
@@ -29,11 +64,13 @@ class LibGtvTest: BaseRellTest(false) {
         chk("(0).to_gtv()", "gtv[0]")
         chk("(123).to_gtv()", "gtv[123]")
         chk("(-456).to_gtv()", "gtv[-456]")
+        chk("(9223372036854775807).to_gtv()", "gtv[9223372036854775807]")
         chk("(0).to_gtv_pretty()", "gtv[0]")
 
         chkFromGtv("0", "integer.from_gtv(g)", "int[0]")
         chkFromGtv("123", "integer.from_gtv(g)", "int[123]")
         chkFromGtv("-456", "integer.from_gtv(g)", "int[-456]")
+        chkFromGtv("9223372036854775807", "integer.from_gtv(g)", "int[9223372036854775807]")
         chkFromGtv("123", "integer.from_gtv_pretty(g)", "int[123]")
         chkFromGtv("-456", "integer.from_gtv_pretty(g)", "int[-456]")
 
@@ -402,6 +439,18 @@ class LibGtvTest: BaseRellTest(false) {
     }
 
     private fun chkFromGtv(gtv: String, expr: String, expected: String) = chkFromGtv(tst, gtv, expr, expected)
+
+    private fun chkFromGtv(gtv: Gtv, expr: String, expected: String) {
+        val bytes = PostchainUtils.gtvToBytes(gtv)
+        val hex = bytes.toHex()
+        val code = """{ val g = gtv.from_bytes(x'$hex'); return $expr; }"""
+        tst.chkEx(code, expected)
+    }
+
+    private fun chkToGtv(expr: String, expected: Gtv) {
+        val actual = tst.callQueryGtv("query q() = $expr;", "q", listOf())
+        assertEquals(expected, actual)
+    }
 
     companion object {
         fun chkFromGtv(tst: RellCodeTester, gtv: String, expr: String, expected: String) {

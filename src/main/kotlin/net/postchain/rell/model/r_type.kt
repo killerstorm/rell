@@ -28,6 +28,7 @@ import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
 import org.jooq.util.postgres.PostgresDataType
 import org.postgresql.util.PGobject
+import java.math.BigDecimal
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.util.*
@@ -386,6 +387,38 @@ object R_IntegerType: R_PrimitiveType("integer") {
     }
 }
 
+object R_BigIntegerType: R_PrimitiveType("big_integer") {
+    override fun defaultValue() = Rt_BigIntegerValue.ZERO
+    override fun comparator() = Rt_Comparator.create { it.asBigInteger() }
+    override fun fromCli(s: String): Rt_Value = Rt_BigIntegerValue.of(s)
+
+    override fun createGtvConversion() = GtvRtConversion_BigInteger
+    override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_BigInteger
+
+    override fun getTypeAdapter(sourceType: R_Type): C_TypeAdapter? {
+        return when (sourceType) {
+            R_IntegerType -> C_TypeAdapter_IntegerToBigInteger
+            else -> super.getTypeAdapter(sourceType)
+        }
+    }
+
+    override fun getLibType(): C_Lib_Type = C_Lib_Type_BigInteger
+
+    private object R_TypeSqlAdapter_BigInteger: R_TypeSqlAdapter_Primitive("big_integer", Lib_BigIntegerMath.SQL_TYPE) {
+        override fun toSqlValue(value: Rt_Value) = value.asBigInteger()
+
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            val v = value.asBigInteger()
+            stmt.setBigDecimal(idx, BigDecimal(v))
+        }
+
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
+            val v = rs.getBigDecimal(idx)
+            return checkSqlNull(v, R_BigIntegerType, nullable) ?: Rt_BigIntegerValue.of(v)
+        }
+    }
+}
+
 object R_DecimalType: R_PrimitiveType("decimal") {
     override fun defaultValue() = Rt_DecimalValue.ZERO
     override fun comparator() = Rt_Comparator.create { it.asDecimal() }
@@ -395,10 +428,10 @@ object R_DecimalType: R_PrimitiveType("decimal") {
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Decimal
 
     override fun getTypeAdapter(sourceType: R_Type): C_TypeAdapter? {
-        return if (sourceType == R_IntegerType) {
-            C_TypeAdapter_IntegerToDecimal
-        } else {
-            super.getTypeAdapter(sourceType)
+        return when (sourceType) {
+            R_IntegerType -> C_TypeAdapter_IntegerToDecimal
+            R_BigIntegerType -> C_TypeAdapter_BigIntegerToDecimal
+            else -> super.getTypeAdapter(sourceType)
         }
     }
 
