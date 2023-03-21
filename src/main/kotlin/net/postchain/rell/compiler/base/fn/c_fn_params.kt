@@ -24,7 +24,7 @@ class C_FormalParameter(
         private val index: Int,
         private val defaultValue: C_ParameterDefaultValue?
 ) {
-    fun toCallParameter() = C_FunctionCallParameter(name.rName, type, index, defaultValue)
+    fun toCallParameter() = C_FunctionCallParameter(name.rName, type, index, ideInfo, defaultValue)
 
     fun createVarParam(ptr: R_VarPtr): R_VarParam {
         return R_VarParam(name.rName, type, ptr)
@@ -32,7 +32,9 @@ class C_FormalParameter(
 
     fun createMirrorAttr(mutable: Boolean): R_Attribute {
         val keyIndexKind: R_KeyIndexKind? = null
-        val ideInfo = C_AttrUtils.getIdeSymbolInfo(false, mutable, keyIndexKind)
+
+        val mirIdeKind = C_AttrUtils.getIdeSymbolKind(false, mutable, keyIndexKind)
+        val mirIdeInfo = ideInfo.update(kind = mirIdeKind, defId = null)
 
         return R_Attribute(
                 index,
@@ -40,7 +42,7 @@ class C_FormalParameter(
                 type,
                 mutable = mutable,
                 keyIndexKind = keyIndexKind,
-                ideInfo = ideInfo,
+                ideInfo = mirIdeInfo,
                 exprGetter = defaultValue?.rGetter
         )
     }

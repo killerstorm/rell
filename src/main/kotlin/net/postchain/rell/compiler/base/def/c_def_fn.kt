@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -8,23 +8,20 @@ import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_FunctionBody
 import net.postchain.rell.compiler.base.core.C_CompilerPass
 import net.postchain.rell.compiler.base.core.C_FunctionBodyContext
-import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.fn.*
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.utils.C_LateInit
-import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget
 import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget_RegularUserFunction
 import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.*
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.RecursionAwareCalculator
 import net.postchain.rell.utils.RecursionAwareResult
 
-abstract class C_GlobalFunction(val ideInfo: IdeSymbolInfo) {
+abstract class C_GlobalFunction {
     open fun getFunctionDefinition(): R_FunctionDefinition? = null
     open fun getAbstractDescriptor(): C_AbstractFunctionDescriptor? = null
     open fun getExtendableDescriptor(): C_ExtendableFunctionDescriptor? = null
@@ -59,8 +56,7 @@ class C_UserFunctionHeader(
 
 abstract class C_UserGlobalFunction(
         val rFunction: R_FunctionDefinition,
-        ideInfo: IdeSymbolInfo
-): C_GlobalFunction(ideInfo) {
+): C_GlobalFunction() {
     private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_UserFunctionHeader.ERROR)
 
     protected val headerGetter = headerLate.getter
@@ -164,8 +160,7 @@ class C_UserFunctionBody(
 class C_RegularUserGlobalFunction(
         rFunction: R_FunctionDefinition,
         private val abstractDescriptor: C_AbstractFunctionDescriptor?,
-        ideInfo: IdeSymbolInfo
-): C_UserGlobalFunction(rFunction, ideInfo) {
+): C_UserGlobalFunction(rFunction) {
     override fun getAbstractDescriptor() = abstractDescriptor
 
     override fun compileCallTarget(ctx: C_ExprContext, callInfo: C_FunctionCallInfo, retType: R_Type?): C_FunctionCallTarget {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -259,6 +259,7 @@ class MountTest: BaseRellTest() {
     @Test fun testConflictFileLevel() {
         chkConflictGeneric("main.rell", "main.rell") { foo, bar, exp ->
             val t = RellCodeTester(tstCtx)
+            t.ideDefIdConflictError = false
             t.errMsgPos = true
             t.chkCompile("$foo\n$bar", exp)
         }

@@ -222,6 +222,8 @@ class ExpressionTest: BaseRellTest(false) {
         chk("(a=123,'Hello')", "(a=int[123],text[Hello])")
         chk("(123,b='Hello')", "(int[123],b=text[Hello])")
         chk("(a='Hello',b=(x=123,y=456))", "(a=text[Hello],b=(x=int[123],y=int[456]))")
+
+        tst.ideDefIdConflictError = false
         chk("(a=123,a=456)", "ct_err:expr_tuple_dupname:a")
         chk("(a=123,a=123)", "ct_err:expr_tuple_dupname:a")
     }

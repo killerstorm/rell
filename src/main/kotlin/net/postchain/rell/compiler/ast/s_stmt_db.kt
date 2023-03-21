@@ -74,7 +74,7 @@ class S_UpdateTarget_Simple(
         entity ?: return null
 
         val atEntityId = ctx.appCtx.nextAtEntityId(atExprId)
-        val atEntity = C_AtEntity(alias.pos, entity, alias.rName, explicitAlias != null, atEntityId)
+        val atEntity = C_AtEntity(alias.pos, entity, alias.rName, alias.pos, explicitAlias != null, atEntityId)
         return atEntity
     }
 }
@@ -156,7 +156,7 @@ class S_UpdateTarget_Expr(private val expr: S_Expr): S_UpdateTarget() {
     }
 
     private fun compileFrom(ctx: C_ExprContext, stmtPos: S_Pos, rAtEntity: R_DbAtEntity): C_AtFrom_Entities {
-        val cEntity = C_AtEntity(expr.startPos, rAtEntity.rEntity, rAtEntity.rEntity.rName, false, rAtEntity.id)
+        val cEntity = C_AtEntity(expr.startPos, rAtEntity.rEntity, rAtEntity.rEntity.rName, expr.startPos, false, rAtEntity.id)
         val fromCtx = C_AtFromContext(stmtPos, cEntity.atExprId, null)
         return C_AtFrom_Entities(ctx, fromCtx, listOf(cEntity))
     }

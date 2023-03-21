@@ -15,6 +15,7 @@ import net.postchain.rell.compiler.vexpr.V_LocalVarExpr
 import net.postchain.rell.compiler.vexpr.V_SmartNullableExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
+import net.postchain.rell.tools.api.IdeLocalSymbolLink
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.*
@@ -131,9 +132,11 @@ class C_BlockEntry_Var(
     }
 }
 
-class C_BlockEntry_AtEntity(val atEntity: C_AtEntity): C_BlockEntry() {
+class C_BlockEntry_AtEntity(private val atEntity: C_AtEntity): C_BlockEntry() {
+    private val ideInfo = IdeSymbolInfo(IdeSymbolKind.LOC_AT_ALIAS, link = IdeLocalSymbolLink(atEntity.aliasPos))
+
     override fun toLocalVarOpt() = null
-    override fun ideSymbolInfo() = IdeSymbolInfo(IdeSymbolKind.LOC_AT_ALIAS)
+    override fun ideSymbolInfo() = ideInfo
 
     override fun compile(ctx: C_ExprContext, pos: S_Pos, ambiguous: Boolean): V_Expr {
         return atEntity.toVExpr(ctx, pos, ambiguous)

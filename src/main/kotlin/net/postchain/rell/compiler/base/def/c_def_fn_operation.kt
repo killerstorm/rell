@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -17,7 +17,6 @@ import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget_Operation
 import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.lib.test.R_TestOpType
 import net.postchain.rell.model.R_OperationDefinition
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 
 class C_OperationFunctionHeader(val params: C_FormalParameters) {
@@ -26,7 +25,7 @@ class C_OperationFunctionHeader(val params: C_FormalParameters) {
     }
 }
 
-class C_OperationGlobalFunction(val rOp: R_OperationDefinition, ideInfo: IdeSymbolInfo): C_GlobalFunction(ideInfo) {
+class C_OperationGlobalFunction(val rOp: R_OperationDefinition): C_GlobalFunction() {
     private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_OperationFunctionHeader.ERROR)
 
     fun setHeader(header: C_OperationFunctionHeader) {

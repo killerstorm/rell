@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
 
 import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_DefinitionContext
 import net.postchain.rell.compiler.base.core.C_ForIterator
-import net.postchain.rell.compiler.base.core.C_NamespaceContext
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
@@ -25,7 +25,6 @@ import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_CollectionKind
 import net.postchain.rell.runtime.*
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.LazyString
 import net.postchain.rell.lib.type.C_Lib_Type_Any as AnyFns
@@ -81,9 +80,9 @@ abstract class C_CollectionKindAdapter(val rawTypeName: String) {
     abstract fun elementTypeFromTypeHint(typeHint: C_TypeHint): R_Type?
     abstract fun makeKind(rElementType: R_Type): R_CollectionKind
 
-    protected abstract fun checkElementType0(ctx: C_NamespaceContext, pos: S_Pos, elemTypePos: S_Pos, rElemType: R_Type)
+    protected abstract fun checkElementType0(ctx: C_DefinitionContext, pos: S_Pos, elemTypePos: S_Pos, rElemType: R_Type)
 
-    fun checkElementType(ctx: C_NamespaceContext, pos: S_Pos, elemTypePos: S_Pos, rElemType: R_Type) {
+    fun checkElementType(ctx: C_DefinitionContext, pos: S_Pos, elemTypePos: S_Pos, rElemType: R_Type) {
         val checkedType = C_Types.checkNotUnit(ctx.msgCtx, elemTypePos, rElemType, null) {
             "$rawTypeName:elem" toCodeMsg "$rawTypeName element"
         }
@@ -96,7 +95,7 @@ abstract class C_CollectionKindAdapter(val rawTypeName: String) {
 class C_CollectionConstructorFunction(
     private val kindAdapter: C_CollectionKindAdapter,
     private val rExplicitElementType: R_Type?,
-): C_GlobalFunction(IdeSymbolInfo.DEF_TYPE) {
+): C_GlobalFunction() {
     private val colType = kindAdapter.rawTypeName
 
     override fun compileCall(
@@ -123,7 +122,7 @@ class C_CollectionConstructorFunction(
     ): C_FunctionCallTarget() {
         override fun retType() = null
         override fun typeHints(): C_CallTypeHints = C_CallTypeHints_None
-        override fun hasParameter(name: R_Name) = false
+        override fun getParameter(name: R_Name) = null
 
         override fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall? {
             val vArgs = args.compileSimpleArgs(LazyString.of(colType))
@@ -173,7 +172,7 @@ class C_CollectionConstructorFunction(
             )
 
             if (rType == null) {
-                kindAdapter.checkElementType(ctx.nsCtx, name.pos, vArg.pos, cIterator.itemType)
+                kindAdapter.checkElementType(ctx.defCtx, name.pos, vArg.pos, cIterator.itemType)
             }
 
             val kind = kindAdapter.makeKind(rElementType)

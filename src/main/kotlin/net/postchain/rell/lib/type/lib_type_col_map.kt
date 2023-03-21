@@ -8,8 +8,8 @@ import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
 import net.postchain.rell.compiler.ast.S_VirtualType
+import net.postchain.rell.compiler.base.core.C_DefinitionContext
 import net.postchain.rell.compiler.base.core.C_ForIterator
-import net.postchain.rell.compiler.base.core.C_NamespaceContext
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.def.C_GenericType
@@ -23,7 +23,6 @@ import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_TypeAdapter
 import net.postchain.rell.runtime.*
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
@@ -117,7 +116,7 @@ object C_Lib_Type_Map {
 private object C_GenericType_Map: C_GenericType(C_Lib_Type_Map.TYPE_NAME, C_Lib_Type_Map.DEF_NAME, 2) {
     override val rawConstructorFn: C_GlobalFunction = C_MapConstructorFunction(null)
 
-    override fun compileType0(ctx: C_NamespaceContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type {
+    override fun compileType0(ctx: C_DefinitionContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type {
         checkEquals(args.size, 2)
         val keyEntry = args[0]
         val valueEntry = args[1]
@@ -129,14 +128,14 @@ private object C_GenericType_Map: C_GenericType(C_Lib_Type_Map.TYPE_NAME, C_Lib_
         }
     }
 
-    private fun checkElementType(ctx: C_NamespaceContext, type: S_PosValue<R_Type>): R_Type {
+    private fun checkElementType(ctx: C_DefinitionContext, type: S_PosValue<R_Type>): R_Type {
         return C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.value, null) { "map_elem" toCodeMsg "map element" }
     }
 }
 
 private class C_MapConstructorFunction(
     private val rExplicitKeyValueTypes: R_MapKeyValueTypes?,
-): C_GlobalFunction(IdeSymbolInfo.DEF_TYPE) {
+): C_GlobalFunction() {
     override fun compileCall(
         ctx: C_ExprContext,
         name: LazyPosString,
@@ -155,7 +154,7 @@ private class C_MapConstructorFunction(
     ): C_FunctionCallTarget() {
         override fun retType() = null
         override fun typeHints(): C_CallTypeHints = C_CallTypeHints_None
-        override fun hasParameter(name: R_Name) = false
+        override fun getParameter(name: R_Name) = null
 
         override fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall {
             val vArgs = args.compileSimpleArgs(LazyString.of(C_Lib_Type_Map.TYPE_NAME))

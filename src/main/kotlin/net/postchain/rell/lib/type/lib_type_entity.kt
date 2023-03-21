@@ -50,26 +50,26 @@ object C_Lib_Type_Entity {
         return dbExpr
     }
 
-    private class C_TypeValueMember_EntityAttr(val attr: C_EntityAttrRef): C_TypeValueMember(attr.attrName, attr.type) {
+    private class C_TypeValueMember_EntityAttr(val attr: C_EntityAttrRef): C_TypeValueMember(attr.ideName, attr.type) {
         override fun kindMsg() = "attribute"
         override fun nameMsg(): C_CodeMsg = attr.attrName.str toCodeMsg attr.attrName.str
-        override fun ideInfo() = attr.ideSymbolInfo()
 
-        override fun value(ctx: C_ExprContext, linkPos: S_Pos): V_TypeValueMember {
-            return V_TypeValueMember_EntityAttr(ctx, linkPos, attr, null)
+        override fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember {
+            return V_TypeValueMember_EntityAttr(ctx, linkPos, linkName, attr, null)
         }
     }
 
     private class V_TypeValueMember_EntityAttr(
         private val exprCtx: C_ExprContext,
         private val memberPos: S_Pos,
+        private val memberName: C_Name?,
         private val attrRef: C_EntityAttrRef,
         private val prev: V_TypeValueMember_EntityAttr?,
     ): V_TypeValueMember(attrRef.type) {
         private val cLambda = EntityUtils.createLambda(exprCtx, attrRef.rEntity)
 
-        override fun implicitAttrName() = if (prev != null) null else attrRef.attrName
-        override fun ideInfo() = attrRef.ideSymbolInfo()
+        override fun implicitAttrName() = if (prev != null) null else memberName
+        override fun ideInfo() = attrRef.ideName.ideInfo
         override fun vExprs() = immListOf<V_Expr>()
         override fun globalConstantRestriction() = V_GlobalConstantRestriction("entity_attr", null)
 
@@ -118,7 +118,7 @@ object C_Lib_Type_Entity {
             exprHint: C_ExprHint,
         ): V_TypeValueMember? {
             if (member !is C_TypeValueMember_EntityAttr) return null
-            return V_TypeValueMember_EntityAttr(ctx, memberName.pos, member.attr, this)
+            return V_TypeValueMember_EntityAttr(ctx, memberName.pos, memberName, member.attr, this)
         }
     }
 

@@ -181,7 +181,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         safe: Boolean,
         exprHint: C_ExprHint,
     ): C_ExprMember {
-        val link = C_MemberLink(this, memberName.pos, safe)
+        val link = C_MemberLink(this, memberName.pos, memberName, safe)
         return memberValue.compile(ctx, link)
     }
 
@@ -247,7 +247,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     open fun isAtExprItem(): Boolean = false
     open fun implicitTargetAttrName(): R_Name? = null
     open fun implicitAtWhereAttrName(): R_Name? = implicitTargetAttrName()
-    open fun implicitAtWhatAttrName(): R_Name? = null
+    open fun implicitAtWhatAttrName(): C_Name? = null
     open fun varId(): C_VarUid? = null
     open fun globalConstantId(): R_GlobalConstantId? = null
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null

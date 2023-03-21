@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.fn
@@ -16,6 +16,8 @@ import net.postchain.rell.model.R_CtErrorType
 import net.postchain.rell.model.R_FunctionType
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_Type
+import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.toImmList
@@ -24,7 +26,7 @@ import net.postchain.rell.utils.toImmMap
 abstract class C_FunctionCallTargetInfo {
     abstract fun retType(): R_Type?
     abstract fun typeHints(): C_CallTypeHints
-    abstract fun hasParameter(name: R_Name): Boolean
+    abstract fun getParameter(name: R_Name): IdeSymbolInfo?
 }
 
 abstract class C_FunctionCallTarget: C_FunctionCallTargetInfo() {
@@ -43,7 +45,7 @@ abstract class C_FunctionCallTarget_Regular(
 
     final override fun retType() = retType
     final override fun typeHints() = callInfo.params.typeHints
-    final override fun hasParameter(name: R_Name) = name in callInfo.params.set
+    final override fun getParameter(name: R_Name) = callInfo.params.map[name]
 
     final override fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall? {
         retType ?: return null
@@ -109,11 +111,12 @@ class C_FunctionCallInfo(
 class C_FunctionCallParameters(list: List<C_FunctionCallParameter>) {
     val list = list.toImmList()
     val set = list.mapNotNull { it.name }.toImmList()
+    val map = list.mapNotNull { if (it.name == null) null else (it.name to it.namedArgIdeInfo) }.toMap().toImmMap()
     val typeHints: C_CallTypeHints = C_FunctionCallParametersTypeHints(this.list)
 
     companion object {
         fun fromTypes(types: List<R_Type>): C_FunctionCallParameters {
-            val params = types.mapIndexed { index, rType -> C_FunctionCallParameter(null, rType, index, null) }
+            val params = types.mapIndexed { index, rType -> C_FunctionCallParameter(null, rType, index, IdeSymbolInfo.UNKNOWN, null) }
             return C_FunctionCallParameters(params)
         }
     }
@@ -123,8 +126,11 @@ class C_FunctionCallParameter(
         val name: R_Name?,
         val type: R_Type,
         val index: Int,
-        private val defaultValue: C_ParameterDefaultValue?
+        ideInfo: IdeSymbolInfo,
+        private val defaultValue: C_ParameterDefaultValue?,
 ) {
+    val namedArgIdeInfo = ideInfo.update(kind = IdeSymbolKind.EXPR_CALL_ARG)
+
     fun nameCodeMsg(): C_CodeMsg {
         val code = if (name != null) "$index:$name" else "$index"
         val msg = if (name != null) "'$name'" else "${index+1}"

@@ -43,7 +43,7 @@ object C_LibUtils {
     ): C_Namespace {
         val b = C_SysNsProtoBuilder(basePath)
         for ((name, f) in functions.toMap()) {
-            b.addFunction(name, f)
+            b.addFunction(name, f.fn, f.ideInfo)
         }
         for ((name, v) in properties) {
             b.addProperty(name, v)
@@ -128,7 +128,7 @@ object C_LibUtils {
     fun constValue(name: String, value: BigDecimal) = constValue0(name, Rt_DecimalValue.of(value))
 
     private fun constValue0(name: String, value: Rt_Value): Pair<String, C_NamespaceProperty> {
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
+        val ideInfo = IdeSymbolInfo.DEF_CONSTANT
         return Pair(name, C_NamespaceProperty_RtValue(ideInfo, value))
     }
 
@@ -136,8 +136,8 @@ object C_LibUtils {
     fun depError(newName: String) = C_Deprecated(useInstead = newName, error = true)
 
     fun bindFunctions(nsBuilder: C_SysNsProtoBuilder, fns: C_GlobalFuncTable) {
-        for (f in fns.toMap()) {
-            nsBuilder.addFunction(f.key, f.value)
+        for ((name, rec) in fns.toMap()) {
+            nsBuilder.addFunction(name, rec.fn, rec.ideInfo)
         }
     }
 
@@ -148,6 +148,16 @@ object C_LibUtils {
     ): List<C_TypeValueMember> {
         val fnMembers = fns.toMap().entries.map { C_TypeValueMember_Function(it.key, baseType, it.value) }
         return (otherMembers + fnMembers).toImmList()
+    }
+
+    fun ideName(name: String, kind: IdeSymbolKind): R_IdeName {
+        val rName = R_Name.of(name)
+        return ideName(rName, kind)
+    }
+
+    fun ideName(rName: R_Name, kind: IdeSymbolKind): R_IdeName {
+        val ideInfo = IdeSymbolInfo.get(kind)
+        return R_IdeName(rName, ideInfo)
     }
 }
 
@@ -293,11 +303,11 @@ abstract class C_SpecialGlobalFuncCaseMatch(resType: R_Type): C_GlobalFuncCaseMa
             V_GlobalConstantRestriction("fn:${caseCtx.qualifiedNameMsg()}", "function '${caseCtx.qualifiedNameMsg()}'")
 }
 
-class C_GlobalFuncTable(map: Map<R_Name, C_GlobalFunction>) {
+class C_GlobalFuncTable(map: Map<R_Name, C_GlobalFunctionRec>) {
     private val map = map.toImmMap()
 
     fun get(name: R_Name): C_GlobalFunction? {
-        return map[name]
+        return map[name]?.fn
     }
 
     fun toMap() = map
@@ -511,10 +521,12 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT, ExprT>(
     }
 }
 
+class C_GlobalFunctionRec(val fn: C_GlobalFunction, val ideInfo: IdeSymbolInfo)
+
 class C_GlobalFuncBuilder(
     defPath: C_DefinitionPath = C_DefinitionPath.ROOT,
     typeNames: Set<R_Name> = immSetOf()
-): C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCtx, C_GlobalFunction, V_GlobalFunctionCall>(
+): C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCtx, C_GlobalFunctionRec, V_GlobalFunctionCall>(
         defPath
 ) {
     private val typeNames = typeNames.toImmSet()
@@ -523,9 +535,18 @@ class C_GlobalFuncBuilder(
         return C_SysGlobalFormalParamsFuncBody(result, cFn)
     }
 
-    override fun makeFunc(simpleName: R_Name, fullName: String, cases: List<C_FuncCase<C_GlobalFuncCaseCtx, V_GlobalFunctionCall>>): C_GlobalFunction {
+    override fun makeFunc(
+        simpleName: R_Name,
+        fullName: String,
+        cases: List<C_FuncCase<C_GlobalFuncCaseCtx, V_GlobalFunctionCall>>,
+    ): C_GlobalFunctionRec {
+        val fn = C_RegularSysGlobalFunction(simpleName, fullName, cases)
         val ideInfo = if (simpleName in typeNames) IdeSymbolInfo.DEF_TYPE else IdeSymbolInfo.DEF_FUNCTION_SYSTEM
-        return C_RegularSysGlobalFunction(simpleName, fullName, cases, ideInfo)
+        return C_GlobalFunctionRec(fn, ideInfo)
+    }
+
+    fun add(name: String, fn: C_GlobalFunction, ideInfo: IdeSymbolInfo = IdeSymbolInfo.DEF_FUNCTION_SYSTEM): C_GlobalFuncBuilder {
+        return add(name, C_GlobalFunctionRec(fn, ideInfo))
     }
 
     fun build(): C_GlobalFuncTable {

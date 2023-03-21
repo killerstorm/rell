@@ -352,10 +352,11 @@ object TestSnippetsRecorder {
         val res = mutableMapOf<String, List<IdeSnippetMessage>>()
 
         for ((file, code) in files) {
-            val path = C_SourcePath.parse(file)
+            val sourcePath = C_SourcePath.parse(file)
+            val idePath = IdeSourcePathFilePath(sourcePath)
             val messages = try {
-                C_Parser.parse(path, code)
-                listOf<IdeSnippetMessage>()
+                C_Parser.parse(sourcePath, idePath, code)
+                listOf()
             } catch (e: C_Error) {
                 listOf(IdeSnippetMessage(e.pos.str(), C_MessageType.ERROR, e.code, e.errMsg))
             }

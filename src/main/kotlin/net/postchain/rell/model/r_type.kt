@@ -135,7 +135,7 @@ private abstract class R_TypeSqlAdapter_Primitive(
 }
 
 private class R_TypeAtImplicitAttrs(private val calculator: () -> List<C_AtTypeImplicitAttr>) {
-    private val byNameLazy: Map<R_Name, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.member.name } }
+    private val byNameLazy: Map<R_Name, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.member.ideName?.rName } }
     private val byTypeLazy: Map<R_Type, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.type } }
     private val attrsLazy: List<C_AtTypeImplicitAttr> by lazy { calculator().toImmList() }
 
@@ -154,7 +154,7 @@ private class R_TypeAtImplicitAttrs(private val calculator: () -> List<C_AtTypeI
 private class R_TypeValueMembers(private val calculator: () -> List<C_TypeValueMember>) {
     private val byNameLazy: Map<R_Name, List<C_TypeValueMember>> by lazy {
         allLazy
-            .mapNotNull { if (it.name == null) null else (it.name to it) }
+            .mapNotNull { if (it.ideName == null) null else (it.ideName.rName to it) }
             .groupBy({it.first}, {it.second})
             .mapValues { it.value.toImmList() }
             .toImmMap()
@@ -819,7 +819,7 @@ class R_MapType(
     ).toGtv()
 }
 
-class R_TupleField(val name: R_Name?, val type: R_Type, val ideInfo: IdeSymbolInfo) {
+class R_TupleField(val name: R_IdeName?, val type: R_Type) {
     fun str(): String = strCode()
 
     fun strCode(): String {
@@ -835,7 +835,7 @@ class R_TupleField(val name: R_Name?, val type: R_Type, val ideInfo: IdeSymbolIn
     override fun hashCode() = Objects.hash(name, type)
 
     fun toMetaGtv() = mapOf(
-            "name" to (name?.str?.toGtv() ?: GtvNull),
+            "name" to (name?.rName?.str?.toGtv() ?: GtvNull),
             "type" to type.toMetaGtv()
     ).toGtv()
 }
@@ -886,10 +886,7 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
             when {
                 type == field.type -> field
                 type == otherField.type -> otherField
-                else -> {
-                    val ideInfo = IdeSymbolInfo.MEM_TUPLE_FIELD
-                    R_TupleField(field.name, type, ideInfo)
-                }
+                else -> R_TupleField(field.name, type)
             }
         }
 
@@ -924,14 +921,14 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
         }
 
         fun create(vararg fields: R_Type): R_TupleType {
-            val fieldsList = fields.map { R_TupleField(null, it, IdeSymbolInfo.MEM_TUPLE_FIELD) }
+            val fieldsList = fields.map { R_TupleField(null, it) }
             return R_TupleType(fieldsList)
         }
 
         fun createNamed(vararg fields: Pair<String?, R_Type>): R_TupleType {
             val fieldsList = fields.map {
-                val name = it.first?.let { s -> R_Name.of(s) }
-                R_TupleField(name, it.second, IdeSymbolInfo.MEM_TUPLE_FIELD)
+                val name = it.first?.let { s -> R_IdeName(R_Name.of(s), IdeSymbolInfo.MEM_TUPLE_ATTR) }
+                R_TupleField(name, it.second)
             }
             return R_TupleType(fieldsList)
         }

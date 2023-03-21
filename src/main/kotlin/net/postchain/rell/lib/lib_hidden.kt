@@ -20,7 +20,6 @@ import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.Rt_RowidValue
 import net.postchain.rell.runtime.Rt_TextValue
 import net.postchain.rell.runtime.utils.RellInterpreterCrashException
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.checkEquals
 
@@ -60,7 +59,7 @@ private class C_SysFn_Nop(private val print: Boolean): C_GlobalSpecialFuncCase()
     }
 }
 
-private object C_SysFn_TypeOf: C_SpecialSysGlobalFunction(IdeSymbolInfo.DEF_FUNCTION_SYSTEM) {
+private object C_SysFn_TypeOf: C_SpecialSysGlobalFunction() {
     override fun paramCount() = 1
 
     override fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_GlobalFunctionCall {

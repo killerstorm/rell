@@ -132,7 +132,7 @@ class C_SystemDefs private constructor(
             nsBuilder.addAll(libNs)
 
             for (entity in sysEntities) {
-                nsBuilder.addEntity(entity.rName, entity, IdeSymbolInfo(IdeSymbolKind.DEF_ENTITY))
+                nsBuilder.addEntity(entity.rName, entity, IdeSymbolInfo.get(IdeSymbolKind.DEF_ENTITY))
             }
 
             return nsBuilder.build()
@@ -164,6 +164,7 @@ class C_CompilerOptions(
         val allowDbModificationsInObjectExprs: Boolean,
         val symbolInfoFile: C_SourcePath?,
         val complexWhatEnabled: Boolean,
+        val ideDefIdConflictError: Boolean,
 ) {
     fun toPojoMap(): Map<String, Any> {
         val map = mutableMapOf(
@@ -177,6 +178,7 @@ class C_CompilerOptions(
                 "complexWhatEnabled" to complexWhatEnabled,
         )
         if (symbolInfoFile != null) map["symbolInfoFile"] = symbolInfoFile.str()
+        if (ideDefIdConflictError != DEFAULT.ideDefIdConflictError) map["ideDefIdConflictError"] = ideDefIdConflictError
         if (compatibility != null) map["compatibility"] = compatibility.str()
         return map.toImmMap()
     }
@@ -194,6 +196,7 @@ class C_CompilerOptions(
                 allowDbModificationsInObjectExprs = true,
                 symbolInfoFile = null,
                 complexWhatEnabled = true,
+                ideDefIdConflictError = false,
         )
 
         @JvmStatic fun builder() = Builder()
@@ -215,6 +218,7 @@ class C_CompilerOptions(
                             getBoolOpt(map, "allowDbModificationsInObjectExprs", DEFAULT.allowDbModificationsInObjectExprs),
                     symbolInfoFile = (map["symbolInfoFile"] as String?)?.let { C_SourcePath.parse(it) },
                     complexWhatEnabled = getBoolOpt(map, "complexWhatEnabled", DEFAULT.complexWhatEnabled),
+                    ideDefIdConflictError = getBoolOpt(map, "ideDefIdConflictError", DEFAULT.ideDefIdConflictError),
             )
         }
 
@@ -237,6 +241,7 @@ class C_CompilerOptions(
         private var allowDbModificationsInObjectExprs = proto.allowDbModificationsInObjectExprs
         private var symbolInfoFile = proto.symbolInfoFile
         private var complexWhatEnabled = proto.complexWhatEnabled
+        private var ideDefIdConflictError = proto.ideDefIdConflictError
 
         @Suppress("UNUSED") fun compatibility(v: R_LangVersion): Builder {
             compatibility = v
@@ -288,6 +293,11 @@ class C_CompilerOptions(
             return this
         }
 
+        @Suppress("UNUSED") fun ideDefIdConflictError(v: Boolean): Builder {
+            ideDefIdConflictError = v
+            return this
+        }
+
         fun build() = C_CompilerOptions(
                 compatibility = compatibility,
                 gtv = gtv,
@@ -300,6 +310,7 @@ class C_CompilerOptions(
                 allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
                 symbolInfoFile = symbolInfoFile,
                 complexWhatEnabled = complexWhatEnabled,
+                ideDefIdConflictError = ideDefIdConflictError,
         )
     }
 }
@@ -344,7 +355,7 @@ object C_Compiler {
             controller: C_CompilerController,
             moduleSelection: C_CompilerModuleSelection
     ): C_CompilationResult {
-        val symCtxManager = C_SymbolContextManager(msgCtx.globalCtx.compilerOptions.symbolInfoFile)
+        val symCtxManager = C_SymbolContextManager(msgCtx.globalCtx.compilerOptions)
         val symCtxProvider = symCtxManager.provider
 
         val extModules = msgCtx.consumeError {
@@ -434,11 +445,13 @@ object C_Compiler {
 
 class C_ComparablePos(sPos: S_Pos): Comparable<C_ComparablePos> {
     private val path: C_SourcePath = sPos.path()
-    private val pos = sPos.pos()
+    private val line = sPos.line()
+    private val column = sPos.column()
 
     override fun compareTo(other: C_ComparablePos): Int {
         var d = path.compareTo(other.path)
-        if (d == 0) d = pos.compareTo(other.pos)
+        if (d == 0) d = line.compareTo(other.line)
+        if (d == 0) d = column.compareTo(other.column)
         return d
     }
 }

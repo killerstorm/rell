@@ -4,6 +4,7 @@
 
 package net.postchain.rell.model
 
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.VersionNumber
 import net.postchain.rell.utils.toImmList
@@ -162,6 +163,14 @@ class R_Name private constructor(val str: String): Comparable<R_Name> {
             return names2.toImmList()
         }
     }
+}
+
+class R_IdeName(val rName: R_Name, val ideInfo: IdeSymbolInfo) {
+    val str = rName.str
+
+    override fun equals(other: Any?) = other is R_IdeName && rName == other.rName
+    override fun hashCode() = Objects.hash(javaClass, rName)
+    override fun toString() = rName.toString()
 }
 
 class R_LangVersion(private val ver: VersionNumber): Comparable<R_LangVersion> {

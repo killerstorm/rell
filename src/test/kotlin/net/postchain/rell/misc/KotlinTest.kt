@@ -5,6 +5,8 @@
 package net.postchain.rell.misc
 
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.mutableMultisetOf
+import net.postchain.rell.utils.toImmMultiset
 import net.postchain.rell.utils.toImmSet
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -221,5 +223,18 @@ class KotlinTest {
         assertNotNull(a?.l)
         //assertEquals(0, a?.f(123)) // Compilation error
         //assertEquals(0, a?.l[0]) // Compilation error
+    }
+
+    @Test fun testMutableMultisetOrder() {
+        val s = mutableMultisetOf<Int>()
+        listOf(123, 789, 456, 654, 321, 123, 987, 456).forEach { s.add(it) }
+        assertEquals("[123 x 2, 789, 456 x 2, 654, 321, 987]", s.toString())
+        assertEquals("[123 x 2, 789, 456 x 2, 654, 321, 987]", s.toImmMultiset().toString())
+        s.remove(456)
+        assertEquals("[123 x 2, 789, 456, 654, 321, 987]", s.toString())
+        assertEquals("[123 x 2, 789, 456, 654, 321, 987]", s.toImmMultiset().toString())
+        s.remove(654)
+        assertEquals("[123 x 2, 789, 456, 321, 987]", s.toString())
+        assertEquals("[123 x 2, 789, 456, 321, 987]", s.toImmMultiset().toString())
     }
 }

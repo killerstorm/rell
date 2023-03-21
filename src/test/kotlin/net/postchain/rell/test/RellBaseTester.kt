@@ -41,6 +41,7 @@ abstract class RellBaseTester(
     var hiddenLib = true
     var allowDbModificationsInObjectExprs = C_CompilerOptions.DEFAULT.allowDbModificationsInObjectExprs
     var complexWhatEnabled = true
+    var ideDefIdConflictError = true
     var compatibilityVer = C_CompilerOptions.DEFAULT.compatibility
 
     var blockchainRid = RellTestUtils.strToRidHex("DEADBEEF")
@@ -130,6 +131,7 @@ abstract class RellBaseTester(
             allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
             symbolInfoFile = C_SourcePath.parse(RellTestUtils.MAIN_FILE),
             complexWhatEnabled = complexWhatEnabled,
+            ideDefIdConflictError = ideDefIdConflictError,
     )
 
     fun def(defs: List<String>) {

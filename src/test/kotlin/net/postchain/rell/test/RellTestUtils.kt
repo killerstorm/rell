@@ -63,7 +63,8 @@ object RellTestUtils {
 
         val errMsgs = errs
                 .sortedBy { it.code }
-                .sortedBy { it.pos.pos() }
+                .sortedBy { it.pos.column() }
+                .sortedBy { it.pos.line() }
                 .sortedBy { it.pos.path() }
                 .sortedBy { it.pos.path().str() != "main.rell" }
                 .map { errToString(it.pos, it.code, errPos, forceFile) }

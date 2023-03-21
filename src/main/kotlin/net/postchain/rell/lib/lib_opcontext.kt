@@ -90,7 +90,7 @@ object C_Lib_OpContext {
         C_LibUtils.bindFunctions(nsBuilder, fb.build())
 
         for (struct in GLOBAL_STRUCTS) {
-            nsBuilder.addStruct(struct.name, struct, IdeSymbolInfo(IdeSymbolKind.DEF_STRUCT))
+            nsBuilder.addStruct(struct.name, struct, IdeSymbolInfo.DEF_STRUCT)
         }
 
         if (!testLib) {
@@ -125,21 +125,23 @@ object C_Lib_OpContext {
         }
     }
 
-    private class BaseNsProperty(val resType: R_Type, val rFn: R_SysFunction): C_NamespaceProperty(IdeSymbolInfo.MEM_SYS_PROPERTY) {
+    private fun propIdeInfo() = IdeSymbolInfo.get(IdeSymbolKind.MEM_SYS_PROPERTY)
+
+    private class BaseNsProperty(val resType: R_Type, val rFn: R_SysFunction): C_NamespaceProperty(propIdeInfo()) {
         override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
             checkCtx(ctx, name)
             return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, resType, rFn, name, pure = false)
         }
     }
 
-    private object Property_Transaction: C_NamespaceProperty(IdeSymbolInfo.MEM_SYS_PROPERTY) {
+    private object Property_Transaction: C_NamespaceProperty(propIdeInfo()) {
         override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
             checkCtx(ctx, name)
             return transactionExpr(ctx, name.pos)
         }
     }
 
-    private object Property_Exists: C_NamespaceProperty(IdeSymbolInfo.MEM_SYS_PROPERTY) {
+    private object Property_Exists: C_NamespaceProperty(propIdeInfo()) {
         override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
             val nameMsg = name.last.str
             return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, R_BooleanType, OpCtxFns.Exists, name.pos, nameMsg, pure = false)

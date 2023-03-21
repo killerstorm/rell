@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -17,7 +17,6 @@ import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget
 import net.postchain.rell.compiler.vexpr.V_FunctionCallTarget_ExtendableUserFunction
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 
@@ -61,8 +60,7 @@ class C_ExtendableUserGlobalFunction(
         rFunction: R_FunctionDefinition,
         private val extFnUid: R_ExtendableFunctionUid,
         private val typePos: S_Pos,
-        ideInfo: IdeSymbolInfo
-): C_UserGlobalFunction(rFunction, ideInfo) {
+): C_UserGlobalFunction(rFunction) {
     private val msgCtx = appCtx.msgCtx
 
     private val descriptor = C_ExtendableFunctionDescriptor(extFnUid, headerGetter)

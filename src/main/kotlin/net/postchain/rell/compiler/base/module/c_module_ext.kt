@@ -4,8 +4,8 @@
 
 package net.postchain.rell.compiler.base.module
 
+import net.postchain.rell.compiler.ast.C_ImportTarget
 import net.postchain.rell.compiler.ast.S_BasicDefinition
-import net.postchain.rell.compiler.ast.S_ImportTarget
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.modifier.C_MountAnnotationValue
 import net.postchain.rell.compiler.base.namespace.C_Deprecated
@@ -34,9 +34,9 @@ class C_ExtModule(
 }
 
 class C_ExtModuleFile(
-        private val path: C_SourcePath,
-        members: List<C_ExtModuleMember>,
-        private val symCtx: C_SymbolContext
+    private val path: C_SourcePath,
+    members: List<C_ExtModuleMember>,
+    private val symCtx: C_SymbolContext,
 ) {
     private val members = members.toImmList()
 
@@ -90,7 +90,7 @@ class C_ExtModuleMember_Enum(
 
 class C_ExtModuleMember_Import(
         private val importDef: C_ImportDefinition,
-        private val target: S_ImportTarget,
+        private val target: C_ImportTarget,
         private val moduleName: R_ModuleName,
         private val extChainName: C_ExtChainName?
 ): C_ExtModuleMember() {
@@ -120,11 +120,11 @@ class C_ExtModuleMember_Import(
 }
 
 class C_ExtModuleMember_Namespace(
-        private val qualifiedName: C_QualifiedName?,
-        members: List<C_ExtModuleMember>,
-        private val mount: C_MountAnnotationValue?,
-        private val extChainName: C_ExtChainName?,
-        private val deprecated: C_Deprecated?,
+    private val qualifiedName: C_IdeQualifiedName?,
+    members: List<C_ExtModuleMember>,
+    private val mount: C_MountAnnotationValue?,
+    private val extChainName: C_ExtChainName?,
+    private val deprecated: C_Deprecated?,
 ): C_ExtModuleMember() {
     private val members = members.toImmList()
 
@@ -137,7 +137,7 @@ class C_ExtModuleMember_Namespace(
 
     private fun createSubMountContext(mntCtx: C_MountContext): C_MountContext {
         val extChain = extChainName?.toExtChain(mntCtx.appCtx)
-        val subMountName = mntCtx.mountName(mount, qualifiedName)
+        val subMountName = mntCtx.mountName(mount, qualifiedName?.toCQualifiedName())
 
         if (qualifiedName == null) {
             return C_MountContext(mntCtx.fileCtx, mntCtx.nsCtx, extChain, mntCtx.nsBuilder, subMountName)
@@ -146,9 +146,9 @@ class C_ExtModuleMember_Namespace(
         var nsBuilder = mntCtx.nsBuilder
         var nsCtx = mntCtx.nsCtx
 
-        for (name in qualifiedName.parts) {
-            nsBuilder = nsBuilder.addNamespace(name, true, deprecated)
-            val nsPath = nsCtx.namespacePath.child(name.rName)
+        for (ideName in qualifiedName.parts) {
+            nsBuilder = nsBuilder.addNamespace(ideName.name, true, ideName.ideInfo, deprecated = deprecated)
+            val nsPath = nsCtx.namespacePath.child(ideName.name.rName)
             val subScopeBuilder = nsCtx.scopeBuilder.nested(nsBuilder.futureNs())
             nsCtx = C_NamespaceContext(mntCtx.modCtx, mntCtx.symCtx, nsPath, subScopeBuilder)
         }

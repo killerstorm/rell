@@ -24,7 +24,7 @@ import net.postchain.rell.compiler.vexpr.V_ParameterDefaultValueExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.utils.toGtv
-import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeFilePath
 import net.postchain.rell.utils.*
 import java.util.*
 
@@ -125,11 +125,11 @@ object C_Utils {
         return true
     }
 
-    fun checkMapKeyType(ctx: C_NamespaceContext, pos: S_Pos, type: R_Type) {
+    fun checkMapKeyType(ctx: C_DefinitionContext, pos: S_Pos, type: R_Type) {
         checkMapKeyType0(ctx.appCtx, pos, type, "expr_map_keytype", "as a map key")
     }
 
-    fun checkSetElementType(ctx: C_NamespaceContext, pos: S_Pos, type: R_Type) {
+    fun checkSetElementType(ctx: C_DefinitionContext, pos: S_Pos, type: R_Type) {
         checkMapKeyType0(ctx.appCtx, pos, type, "expr_set_type", "as a set element")
     }
 
@@ -230,7 +230,7 @@ object C_Utils {
             appCtx: C_AppContext,
             defBase: R_DefinitionBase,
             defType: C_DefinitionType,
-            operation: R_MountName? = null
+            operation: R_MountName? = null,
     ): R_MirrorStructs {
         val res = R_MirrorStructs(defBase, defType.name, operation)
         appCtx.defsAdder.addStruct(res.immutable)
@@ -247,9 +247,10 @@ object C_Utils {
     private fun setEntityMirrorStructAttrs(body: R_EntityBody, entity: R_EntityDefinition, mutable: Boolean) {
         val struct = entity.mirrorStructs.getStruct(mutable)
 
-        val structAttrs = body.attributes.mapValues {
-            val ideInfo = C_AttrUtils.getIdeSymbolInfo(false, mutable, it.value.keyIndexKind)
-            it.value.copy(mutable = mutable, ideInfo = ideInfo)
+        val structAttrs = body.attributes.mapValues { (_, attr) ->
+            val ideKind = C_AttrUtils.getIdeSymbolKind(false, mutable, attr.keyIndexKind)
+            val ideInfo = attr.ideInfo.update(kind = ideKind, defId = null)
+            attr.copy(mutable = mutable, ideInfo = ideInfo)
         }
 
         struct.setAttributes(structAttrs)
@@ -261,7 +262,6 @@ object C_Utils {
                 name.toGtv(),
                 mirrorStructs = null,
                 initFrameGetter = R_CallFrame.NONE_INIT_FRAME_GETTER,
-                ideInfo = IdeSymbolInfo.DEF_STRUCT,
         )
         val rAttrs = attrs.mapIndexed { i, attr -> attr.name to attr.compile(i, false) }.toMap().toImmMap()
         rStruct.setAttributes(rAttrs)
@@ -348,32 +348,45 @@ private class C_ErrorParserResult<T>(val error: C_Error, val eof: Boolean): C_Pa
     override fun getAst() = throw error
 }
 
-object C_Parser {
-    private val currentFileLocal = ThreadLocalContext(C_SourcePath.parse("?"))
+data class C_ParserFilePath(val sourcePath: C_SourcePath, val idePath: IdeFilePath) {
+    override fun toString() = sourcePath.toString()
+}
 
-    fun parse(filePath: C_SourcePath, sourceCode: String): S_RellFile {
-        val res = parse0(filePath, sourceCode, S_Grammar)
+object C_Parser {
+    private val currentFileLocal = let {
+        val sourcePath = C_SourcePath.parse("?")
+        val idePath = IdeSourcePathFilePath(sourcePath)
+        ThreadLocalContext(C_ParserFilePath(sourcePath, idePath))
+    }
+
+    private val replParserPath: C_ParserFilePath = let {
+        val path = C_SourcePath.parse("<console>")
+        C_ParserFilePath(path, IdeSourcePathFilePath(path))
+    }
+
+    fun parse(filePath: C_SourcePath, idePath: IdeFilePath, sourceCode: String): S_RellFile {
+        val parserPath = C_ParserFilePath(filePath, idePath)
+        val res = parse0(parserPath, sourceCode, S_Grammar)
         val ast = res.getAst()
         return ast
     }
 
     fun parseRepl(code: String): S_ReplCommand {
-        val path = C_SourcePath.parse("<console>")
-        val res = parse0(path, code, S_Grammar.replParser)
+        val res = parse0(replParserPath, code, S_Grammar.replParser)
         val ast = res.getAst()
         return ast
     }
 
     fun checkEofErrorRepl(code: String): C_Error? {
         val path = C_SourcePath.parse("<console>")
-        val res = parse0(path, code, S_Grammar.replParser)
+        val res = parse0(replParserPath, code, S_Grammar.replParser)
         return when (res) {
             is C_SuccessParserResult -> null
             is C_ErrorParserResult -> if (res.eof) res.error else null
         }
     }
 
-    private fun <T> parse0(filePath: C_SourcePath, sourceCode: String, parser: Parser<T>): C_ParserResult<T> {
+    private fun <T> parse0(filePath: C_ParserFilePath, sourceCode: String, parser: Parser<T>): C_ParserResult<T> {
         // The syntax error position returned by the parser library is misleading: if there is an error in the middle
         // of an operation, it returns the position of the beginning of the operation.
         // Following workaround handles this by tracking the position of the farthest reached token (seems to work fine).
@@ -381,26 +394,26 @@ object C_Parser {
         val state = RellTokenizerState()
         val tokenSeq = S_Grammar.tokenizer.tokenize(sourceCode, state)
 
-        try {
+        return try {
             val ast = overrideCurrentFile(filePath) {
                 parser.parseToEnd(tokenSeq)
             }
-            return C_SuccessParserResult(ast)
+            C_SuccessParserResult(ast)
         } catch (e: RellTokenizerException) {
             val error = e.toCError()
-            return C_ErrorParserResult(error, e.eof)
+            C_ErrorParserResult(error, e.eof)
         } catch (e: ParseException) {
             val pos = S_BasicPos(filePath, state.lastRow, state.lastCol)
             val error = C_Error.other(pos, "syntax", "Syntax error")
-            return C_ErrorParserResult(error, state.lastEof)
+            C_ErrorParserResult(error, state.lastEof)
         }
     }
 
-    private fun <T> overrideCurrentFile(file: C_SourcePath, code: () -> T): T {
+    private fun <T> overrideCurrentFile(file: C_ParserFilePath, code: () -> T): T {
         return currentFileLocal.set(file, code)
     }
 
-    fun currentFile() = currentFileLocal.get()
+    fun currentFile(): C_ParserFilePath = currentFileLocal.get()
 }
 
 object C_GraphUtils {

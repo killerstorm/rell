@@ -11,6 +11,7 @@ import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.module.C_ModuleKey
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.R_Name
+import net.postchain.rell.tools.api.IdeGlobalSymbolLink
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.*
 import java.util.*
@@ -24,7 +25,7 @@ class C_NsImp_Namespace(directDefs: Map<R_Name, C_NsImp_Def>, importDefs: Multim
 
 sealed class C_NsImp_Def
 
-class C_NsImp_Def_Simple(val member: C_NamespaceMember): C_NsImp_Def()
+class C_NsImp_Def_Simple(val item: C_NamespaceItem): C_NsImp_Def()
 
 class C_NsImp_Def_Namespace(
     private val getter: LateGetter<C_NsImp_Namespace>,
@@ -78,7 +79,7 @@ object C_NsImp_ImportsProcessor {
 private class C_NsImp_InternalImportsProcessor(
         private val msgCtx: C_MessageContext,
         modules: Map<C_ModuleKey, C_NsAsm_Namespace>,
-        preModules: Map<C_ModuleKey, C_NsAsm_Namespace>
+        preModules: Map<C_ModuleKey, C_NsAsm_Namespace>,
 ) {
     private val importResolver = C_NsImp_ImportResolver(modules, preModules)
     private val states = mutableMapOf<C_NsAsm_Namespace, C_NsImp_NamespaceState>()
@@ -142,7 +143,7 @@ private class C_NsImp_InternalImportsProcessor(
     private fun processDirectDef(builder: C_NsImp_NamespaceBuilder, name: R_Name, def: C_NsAsm_Def) {
         return when (def) {
             is C_NsAsm_Def_Simple -> {
-                builder.addDirectDef(name, def.member)
+                builder.addDirectDef(name, def.item)
             }
             is C_NsAsm_Def_ExactImport -> {
                 processDirectExactImport(builder, name, def)
@@ -167,7 +168,12 @@ private class C_NsImp_InternalImportsProcessor(
         return when (resDef) {
             null -> {}
             is C_NsAsm_Def_Simple -> {
-                builder.addDirectDef(name, resDef.member)
+                val aliasIdeId = impDef.names.aliasIdeId
+                val item = if (aliasIdeId == null) resDef.item else {
+                    val ideInfo = resDef.item.ideInfo.update(link = IdeGlobalSymbolLink(aliasIdeId))
+                    C_NamespaceItem(resDef.item.member, ideInfo)
+                }
+                builder.addDirectDef(name, item)
             }
             is C_NsAsm_Def_Namespace -> {
                 processImportNamespaceDef(builder, name, resDef)
@@ -181,7 +187,7 @@ private class C_NsImp_InternalImportsProcessor(
     private fun processImportDef(builder: C_NsImp_NamespaceBuilder, name: R_Name, def: C_NsAsm_Def) {
         return when (def) {
             is C_NsAsm_Def_Simple -> {
-                builder.addImportDef(name, def.member)
+                builder.addImportDef(name, def.item)
             }
             is C_NsAsm_Def_Namespace -> {
                 processImportNamespaceDef(builder, name, def)
@@ -237,8 +243,8 @@ private class C_NsImp_NamespaceBuilder {
         directDefs[name] = def
     }
 
-    fun addDirectDef(name: R_Name, member: C_NamespaceMember) {
-        val def = C_NsImp_Def_Simple(member)
+    fun addDirectDef(name: R_Name, item: C_NamespaceItem) {
+        val def = C_NsImp_Def_Simple(item)
         addDirectDef(name, def)
     }
 
@@ -246,8 +252,8 @@ private class C_NsImp_NamespaceBuilder {
         importDefs.put(name, def)
     }
 
-    fun addImportDef(name: R_Name, member: C_NamespaceMember) {
-        val def = C_NsImp_Def_Simple(member)
+    fun addImportDef(name: R_Name, item: C_NamespaceItem) {
+        val def = C_NsImp_Def_Simple(item)
         addImportDef(name, def)
     }
 
@@ -288,11 +294,11 @@ private class C_NsImp_NamespaceConverter {
 
     private fun convertDef(def: C_NsImp_Def): C_NsAsm_Def {
         return when (def) {
-            is C_NsImp_Def_Simple -> C_NsAsm_Def_Simple(def.member)
+            is C_NsImp_Def_Simple -> C_NsAsm_Def_Simple(def.item)
             is C_NsImp_Def_Namespace -> {
                 val ns = def.ns()
                 val late = convertNamespaceLate(ns)
-                C_NsAsm_Def_Namespace.createLate(def.defName, def.deprecated, late)
+                C_NsAsm_Def_Namespace.createLate(def.defName, def.deprecated, def.ideInfo, late)
             }
         }
     }
@@ -401,8 +407,8 @@ private class C_NsImp_ImportResolver(
         if (def0 !is C_NsAsm_Def_ExactImport) return res0
 
         val set = mutableSetOf(imp)
-
         var curImp = def0.imp
+
         while (true) {
             if (!set.add(curImp)) {
                 return if (curImp == imp) {
@@ -438,9 +444,7 @@ private class C_NsImp_ImportResolver(
     private fun resolveExactImportDirect(imp: C_NsAsm_ExactImport): C_NsImp_Result<C_NsAsm_Def> {
         val nsRes = resolveNamespaceByPath(imp.module, imp.qName.parentPath())
         val ns = nsRes.value
-        if (ns == null) {
-            return nsRes.castType()
-        }
+        ns ?: return nsRes.castType()
 
         val lastName = imp.qName.last
         val defRes = resolveDef(ns, lastName.rName)
@@ -519,7 +523,7 @@ private class C_NsImp_ImportResolver(
 
     private fun makeDefResult(def: C_NsAsm_Def): C_RecursionSafeResult<C_Name, C_NsImp_NameRes<C_NsAsm_Def>> {
         val ideInfo = when (def) {
-            is C_NsAsm_Def_Simple -> def.member.ideInfo
+            is C_NsAsm_Def_Simple -> def.item.ideInfo
             is C_NsAsm_Def_Namespace -> def.ideSymbolInfo()
             is C_NsAsm_Def_ExactImport -> IdeSymbolInfo.UNKNOWN
         }

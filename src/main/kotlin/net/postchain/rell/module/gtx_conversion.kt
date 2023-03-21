@@ -436,7 +436,7 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
         checkEquals(rtFields.size, type.fields.size)
         val gtv = rtFields.mapIndexed { i, rtField ->
             val field = type.fields[i]
-            Pair(field.name!!.str, field.type.rtToGtv(rtField, true))
+            field.name!!.str to field.type.rtToGtv(rtField, true)
         }.toMap()
         return GtvFactory.gtv(gtv)
     }

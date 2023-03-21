@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -21,7 +21,6 @@ import net.postchain.rell.model.R_FunctionBase
 import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_Type
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.Nullable
 import net.postchain.rell.utils.One
 import net.postchain.rell.utils.toImmList
@@ -32,8 +31,7 @@ class C_AbstractUserGlobalFunction(
         rFunction: R_FunctionDefinition,
         hasDefaultBody: Boolean,
         private val rFnBase: R_FunctionBase,
-        ideInfo: IdeSymbolInfo
-): C_UserGlobalFunction(rFunction, ideInfo) {
+): C_UserGlobalFunction(rFunction) {
     val descriptor = C_AbstractFunctionDescriptor(fnPos, rFunction, hasDefaultBody, headerGetter)
 
     private val rOverrideLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBase())

@@ -42,9 +42,9 @@ class C_AtFromMember(private val base: C_AtFromBase, private val member: C_TypeV
     fun isCallable() = member.isCallable()
     fun valueType() = member.valueType
 
-    fun compile(ctx: C_ExprContext, pos: S_Pos): C_ExprMember {
-        val baseExpr = base.compile(pos)
-        val link = C_MemberLink(baseExpr, pos, false)
+    fun compile(ctx: C_ExprContext, cName: C_Name): C_ExprMember {
+        val baseExpr = base.compile(cName.pos)
+        val link = C_MemberLink(baseExpr, cName.pos, cName, false)
         return member.compile(ctx, link)
     }
 }
@@ -218,14 +218,14 @@ class C_AtContextMember(private val member: C_AtFromMember, private val outerAtE
         return "${owner.code}:$name" toCodeMsg "${owner.msg}.$name"
     }
 
-    fun compile(ctx: C_ExprContext, pos: S_Pos): C_ExprMember {
+    fun compile(ctx: C_ExprContext, cName: C_Name): C_ExprMember {
         if (outerAtExpr) {
             val name = member.nameMsg()
             val owner = member.ownerMsg()
-            ctx.msgCtx.error(pos, "at_expr:attr:belongs_to_outer:$name:${owner.code}",
+            ctx.msgCtx.error(cName.pos, "at_expr:attr:belongs_to_outer:$name:${owner.code}",
                 "Name '$name' belongs to an outer at-expression, fully qualified name is required")
         }
-        return member.compile(ctx, pos)
+        return member.compile(ctx, cName)
     }
 }
 
@@ -246,7 +246,7 @@ class C_AtFromImplicitAttr(
 
     fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
         val vBase = base.compile(pos)
-        val link = C_MemberLink(vBase, pos, false)
+        val link = C_MemberLink(vBase, pos, null, false)
         val cExpr = attr.member.compile(ctx, link).expr
         return cExpr.value()
     }

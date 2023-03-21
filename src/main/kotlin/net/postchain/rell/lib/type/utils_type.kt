@@ -35,7 +35,7 @@ abstract class C_Lib_Type(
         val m = b.build().toMap()
         if (m.isEmpty()) null else {
             checkEquals(m.size, 1)
-            m.values.first()
+            m.values.first().fn
         }
     }
 

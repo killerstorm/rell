@@ -8,9 +8,10 @@ import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.utils.C_RNamePath
 import net.postchain.rell.compiler.base.utils.C_SourcePath
+import net.postchain.rell.model.R_IdeName
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.model.R_QualifiedName
-import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.*
 import net.postchain.rell.utils.*
 
 data class C_NameValue<T>(val name: C_Name, val value: T)
@@ -45,6 +46,50 @@ class C_QualifiedName(parts: List<C_Name>) {
 
     fun str() = parts.joinToString(".")
     override fun toString() = str()
+}
+
+class C_IdeName(val name: C_Name, val ideInfo: IdeSymbolInfo) {
+    val pos = name.pos
+    val str = name.str
+
+    fun toRName(): R_IdeName = R_IdeName(name.rName, ideInfo)
+    override fun toString() = name.toString()
+}
+
+class C_IdeQualifiedName(parts: List<C_IdeName>) {
+    val parts = parts.toImmList()
+
+    init {
+        check(this.parts.isNotEmpty())
+    }
+
+    val last = this.parts.last()
+
+    fun toCQualifiedName() = C_QualifiedName(parts.map { it.name })
+    fun toPath() = C_RNamePath.of(parts.map { it.name.rName })
+
+    fun str() = parts.joinToString(".") { it.name.str }
+    override fun toString() = str()
+}
+
+class C_IdeSymbolDef(val defInfo: IdeSymbolInfo, val refInfo: IdeSymbolInfo) {
+    companion object {
+        fun make(kind: IdeSymbolKind, globalId: IdeSymbolGlobalId?): C_IdeSymbolDef {
+            val defInfo = IdeSymbolInfo(kind, defId = globalId?.symId)
+            val link = if (globalId == null) null else IdeGlobalSymbolLink(globalId)
+            val refInfo = IdeSymbolInfo(kind, link = link)
+            return C_IdeSymbolDef(defInfo, refInfo)
+        }
+
+        fun make(kind: IdeSymbolKind, pos: S_Pos, id: IdeSymbolId): C_IdeSymbolDef {
+            val file = pos.idePath()
+            return make(kind, file, id)
+        }
+
+        fun make(kind: IdeSymbolKind, file: IdeFilePath, id: IdeSymbolId): C_IdeSymbolDef {
+            return make(kind, IdeSymbolGlobalId(file, id))
+        }
+    }
 }
 
 sealed class C_NameHandle(val pos: S_Pos, val rName: R_Name) {
@@ -94,6 +139,8 @@ private abstract class C_NameHandleAbstract(pos: S_Pos, rName: R_Name): C_NameHa
 sealed class C_SymbolContext {
     abstract fun addName(sName: S_Name, rName: R_Name): C_NameHandle
     abstract fun addSymbol(pos: S_Pos, ideInfo: IdeSymbolInfo)
+    abstract fun setDefId(pos: S_Pos, defId: IdeSymbolId)
+    abstract fun setLink(pos: S_Pos, link: IdeSymbolLink)
 }
 
 object C_NopSymbolContext: C_SymbolContext() {
@@ -105,6 +152,14 @@ object C_NopSymbolContext: C_SymbolContext() {
         // Do nothing.
     }
 
+    override fun setDefId(pos: S_Pos, defId: IdeSymbolId) {
+        // Do nothing.
+    }
+
+    override fun setLink(pos: S_Pos, link: IdeSymbolLink) {
+        // Do nothing.
+    }
+
     private class C_NopNameHandle(pos: S_Pos, rName: R_Name): C_NameHandleAbstract(pos, rName) {
         override fun setIdeInfo(info: IdeSymbolInfo) {
             // Do nothing.
@@ -112,30 +167,51 @@ object C_NopSymbolContext: C_SymbolContext() {
     }
 }
 
-private class C_DefaultSymbolContext: C_SymbolContext() {
-    private val nameMap = mutableMapOf<S_Name, C_NameHandleImpl>()
+private class C_DefaultSymbolContext(private val checkDefIdConflicts: Boolean): C_SymbolContext() {
+    private val nameMap = mutableMapOf<S_Pos, C_NameHandleImpl>()
     private val symbolMap = mutableMapOf<S_Pos, IdeSymbolInfo>()
+    private val extraMap = mutableMapOf<S_Pos, ExtraInfo>()
 
     override fun addName(sName: S_Name, rName: R_Name): C_NameHandle {
-        val oldHand = nameMap[sName]
+        val pos = sName.pos
+        if (CommonUtils.IS_UNIT_TEST) {
+            check(pos !in symbolMap)
+        }
+
+        val oldHand = nameMap[pos]
         if (oldHand != null) {
             oldHand.redefinition()
             return oldHand
         }
 
-        val hand = C_NameHandleImpl(sName.pos, rName)
-        nameMap[sName] = hand
+        val hand = C_NameHandleImpl(pos, rName)
+        nameMap[pos] = hand
         return hand
     }
 
     override fun addSymbol(pos: S_Pos, ideInfo: IdeSymbolInfo) {
         if (CommonUtils.IS_UNIT_TEST) {
             check(pos !in symbolMap)
+            check(pos !in nameMap)
         }
         symbolMap[pos] = ideInfo
     }
 
-    protected fun finish0(): Map<S_Pos, IdeSymbolInfo> {
+    override fun setDefId(pos: S_Pos, defId: IdeSymbolId) {
+        val extra = extraMap.computeIfAbsent(pos) { ExtraInfo() }
+        check(extra.defId == null || !CommonUtils.IS_UNIT_TEST) { "name not found: $pos" }
+        extra.defId = defId
+    }
+
+    override fun setLink(pos: S_Pos, link: IdeSymbolLink) {
+        val extra = extraMap.computeIfAbsent(pos) { ExtraInfo() }
+        check(extra.link == null || !CommonUtils.IS_UNIT_TEST) { "name not found: $pos" }
+        extra.link = link
+    }
+
+    private fun finish0(): Map<S_Pos, IdeSymbolInfo> {
+        finishExtra()
+
         val res = mutableMapOf<S_Pos, IdeSymbolInfo>()
 
         res.putAll(symbolMap)
@@ -143,15 +219,56 @@ private class C_DefaultSymbolContext: C_SymbolContext() {
         for (hand in nameMap.values) {
             val ideInfo = hand.ideInfo()
             if (ideInfo != null) {
+                if (CommonUtils.IS_UNIT_TEST) {
+                    check(hand.pos !in res)
+                }
                 res[hand.pos] = ideInfo
             }
         }
 
-        return res.toImmMap()
+        val immRes = res.toImmMap()
+
+        if (CommonUtils.IS_UNIT_TEST && checkDefIdConflicts) {
+            checkDefIdConflicts(immRes)
+        }
+
+        return immRes
+    }
+
+    private fun finishExtra() {
+        for ((pos, extra) in extraMap) {
+            val nameHand = nameMap[pos]
+            check(nameHand != null || !CommonUtils.IS_UNIT_TEST) { "name not found: $pos" }
+            val defId = extra.defId
+            val link = extra.link
+            if (defId != null) {
+                nameHand?.setDefId(defId)
+            }
+            if (link != null) {
+                nameHand?.setLink(link)
+            }
+        }
+    }
+
+    private fun checkDefIdConflicts(map: Map<S_Pos, IdeSymbolInfo>) {
+        val fileMap = mutableMapOf<C_SourcePath, MutableMap<IdeSymbolId, S_Pos>>()
+        for ((pos, info) in map) {
+            if (info.defId != null) {
+                val path = pos.path()
+                val subMap = fileMap.computeIfAbsent(path) { mutableMapOf() }
+                val oldPos = subMap.put(info.defId, pos)
+                check(oldPos == null) { "$oldPos $pos ${info.defId}" }
+            }
+        }
+    }
+
+    private class ExtraInfo {
+        var defId: IdeSymbolId? = null
+        var link: IdeSymbolLink? = null
     }
 
     private class C_NameHandleImpl(pos: S_Pos, rName: R_Name): C_NameHandleAbstract(pos, rName) {
-        val initStack = Exception("Stack")
+        private val initStack = Exception("Stack")
 
         private var mIdeInfo: IdeSymbolInfo? = null
         private var ideInfoStack: Throwable? = null
@@ -180,6 +297,24 @@ private class C_DefaultSymbolContext: C_SymbolContext() {
                 mIdeInfo = info
             }
         }
+
+        fun setDefId(defId: IdeSymbolId) {
+            val ideInfo = mIdeInfo
+            when {
+                ideInfo == null -> check(!CommonUtils.IS_UNIT_TEST)
+                ideInfo.defId != null -> check(!CommonUtils.IS_UNIT_TEST)
+                else -> mIdeInfo = ideInfo.update(defId = defId)
+            }
+        }
+
+        fun setLink(link: IdeSymbolLink) {
+            val ideInfo = mIdeInfo
+            when {
+                ideInfo == null -> check(!CommonUtils.IS_UNIT_TEST)
+                ideInfo.link != null -> check(!CommonUtils.IS_UNIT_TEST)
+                else -> mIdeInfo = ideInfo.update(link = link)
+            }
+        }
     }
 
     fun finish(): Map<S_Pos, IdeSymbolInfo> {
@@ -191,10 +326,12 @@ interface C_SymbolContextProvider {
     fun getSymbolContext(path: C_SourcePath): C_SymbolContext
 }
 
-class C_SymbolContextManager(private val mainFile: C_SourcePath?) {
+class C_SymbolContextManager(private val opts: C_CompilerOptions) {
+    private val mainFile = opts.symbolInfoFile
+
     val provider: C_SymbolContextProvider = C_SymbolContextProviderImpl()
 
-    private val mainSymCtx = C_DefaultSymbolContext()
+    private val mainSymCtx = C_DefaultSymbolContext(opts.ideDefIdConflictError)
 
     fun finish(): Map<S_Pos, IdeSymbolInfo> {
         val res = mainSymCtx.finish()

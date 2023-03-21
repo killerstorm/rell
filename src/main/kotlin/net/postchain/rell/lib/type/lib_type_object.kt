@@ -5,6 +5,7 @@
 package net.postchain.rell.lib.type
 
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_QualifiedName
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.*
@@ -36,23 +37,23 @@ object C_Lib_Type_Object {
     private class C_TypeValueMember_ObjectAttr(
         private val rObject: R_ObjectDefinition,
         private val attr: R_Attribute,
-    ): C_TypeValueMember(attr.rName, attr.type) {
+    ): C_TypeValueMember(attr.ideName, attr.type) {
         override fun kindMsg() = "attribute"
         override fun nameMsg(): C_CodeMsg = attr.rName.str toCodeMsg attr.rName.str
-        override fun ideInfo() = attr.ideInfo
 
-        override fun value(ctx: C_ExprContext, linkPos: S_Pos): V_TypeValueMember {
-            return V_TypeValueMember_ObjectAttr(ctx, linkPos, rObject, attr)
+        override fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember {
+            return V_TypeValueMember_ObjectAttr(ctx, linkPos, linkName, rObject, attr)
         }
     }
 
     private class V_TypeValueMember_ObjectAttr(
         private val exprCtx: C_ExprContext,
         private val memberPos: S_Pos,
+        private val memberName: C_Name?,
         private val rObject: R_ObjectDefinition,
         private val attr: R_Attribute,
     ): V_TypeValueMember(attr.type) {
-        override fun implicitAttrName() = attr.rName
+        override fun implicitAttrName() = memberName
         override fun ideInfo() = attr.ideInfo
         override fun vExprs() = immListOf<V_Expr>()
         override fun globalConstantRestriction() = V_GlobalConstantRestriction("object_attr", null)

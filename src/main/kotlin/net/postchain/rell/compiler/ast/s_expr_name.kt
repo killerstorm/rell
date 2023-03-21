@@ -15,7 +15,6 @@ import net.postchain.rell.model.R_EnumType
 import net.postchain.rell.model.R_Name
 import net.postchain.rell.runtime.Rt_EnumValue
 import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.toImmList
 
 class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
@@ -100,7 +99,7 @@ class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
         val attr = if (qNameHand.size > 1) null else type.enum.attr(qNameHand.first.str)
         attr ?: return compile0(ctx, C_ExprHint.DEFAULT, qNameHand)
 
-        qNameHand.setIdeInfo(IdeSymbolInfo(IdeSymbolKind.MEM_ENUM_VALUE))
+        qNameHand.setIdeInfo(attr.ideInfo)
         val value = Rt_EnumValue(type, attr)
         val vExpr = V_ConstantValueExpr(ctx, startPos, value)
         return C_ValueExpr(vExpr)
@@ -160,7 +159,7 @@ class S_AttrExpr(pos: S_Pos, private val name: S_Name): S_Expr(pos) {
             }
 
             val attr = members[0]
-            val res = attr.compile(ctx, name.pos)
+            val res = attr.compile(ctx, cName)
             nameHand.setIdeInfo(res.ideInfo)
 
             return res.expr
@@ -194,12 +193,12 @@ class S_MemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos) {
     private fun compileNullMember(ctx: C_ExprContext, cName: C_Name): C_ExprMember? {
         if (base !is S_NullLiteralExpr) return null
 
-        val members = C_Lib_Type_Null.valueMembers.filter { it.name == cName.rName }
+        val members = C_Lib_Type_Null.valueMembers.filter { it.ideName?.rName == cName.rName }
         if (members.size != 1) return null
         val member = members[0]
 
         val vBase = base.compileSafe(ctx, C_ExprHint.DEFAULT).value()
-        val link = C_MemberLink(vBase, cName.pos, false)
+        val link = C_MemberLink(vBase, cName.pos, cName, false)
         return member.compile(ctx, link)
     }
 }

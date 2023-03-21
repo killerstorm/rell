@@ -88,13 +88,14 @@ class C_ValueMemberExpr(
 ): C_Expr() {
     private val vBase = memberLink.base
     private val memberPos = memberLink.linkPos
+    private val memberName = memberLink.linkName
     private val safe = memberLink.safe
 
     override fun startPos() = vBase.pos
     override fun isCallable() = member.isCallable()
 
     override fun value(): V_Expr {
-        val vMember = member.value(exprCtx, memberPos)
+        val vMember = member.value(exprCtx, memberPos, memberName)
         return makeMemberExpr(vMember)
     }
 

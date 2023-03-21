@@ -10,8 +10,8 @@ import net.postchain.rell.compiler.base.core.C_NamespaceContext
 import net.postchain.rell.compiler.base.modifier.*
 import net.postchain.rell.compiler.base.module.C_MidModuleFile
 import net.postchain.rell.compiler.base.module.C_MidModuleHeader
-import net.postchain.rell.compiler.base.module.C_ModuleSourceContext
 import net.postchain.rell.compiler.base.module.C_ModuleUtils
+import net.postchain.rell.compiler.base.module.S_FileContext
 import net.postchain.rell.compiler.base.namespace.C_NsAsm_ComponentAssembler
 import net.postchain.rell.compiler.base.namespace.C_UserNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_RNamePath
@@ -54,10 +54,10 @@ class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition
         return header?.compile(modifierCtx)
     }
 
-    fun compile(ctx: C_ModuleSourceContext, path: C_SourcePath): C_MidModuleFile {
-        val defCtx = ctx.createDefinitionContext(path)
+    fun compile(ctx: S_FileContext): C_MidModuleFile {
+        val defCtx = ctx.createDefinitionContext()
         val members = definitions.mapNotNull { it.compile(defCtx) }
-        return C_MidModuleFile(path, members, startPos, defCtx.symCtx)
+        return C_MidModuleFile(ctx.path, members, startPos, defCtx.symCtx)
     }
 
     fun ideModuleInfo(path: C_SourcePath): IdeModuleInfo? {

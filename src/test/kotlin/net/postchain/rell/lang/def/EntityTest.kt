@@ -475,6 +475,7 @@ class EntityTest: BaseRellTest(false) {
     }
 
     @Test fun testImplicitTypeConflict() {
+        tst.ideDefIdConflictError = false
         val defs = "namespace a { enum foo {} } namespace b { enum foo {} }"
         chkKeyIndex("$defs entity data { a.foo; b.foo; }", "ct_err:dup_attr:foo")
         chkKeyIndex("$defs entity data { a.foo; KW b.foo; }", "ct_err:entity:attr:type_diff:[a.foo]:[b.foo]")

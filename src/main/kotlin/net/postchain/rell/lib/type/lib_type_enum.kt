@@ -18,7 +18,7 @@ import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.Db_SysFunction
 import net.postchain.rell.runtime.*
-import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.toImmMap
 
 object C_Lib_Type_Enum {
@@ -57,8 +57,9 @@ object C_Lib_Type_Enum {
     fun getValueMembers(type: R_EnumType): List<C_TypeValueMember> {
         val fns = C_LibUtils.typeMemFuncBuilder(type).build()
         val attrMembers = PROPERTIES.entries.map {
-            val attr: C_MemberAttr = C_MemberAttr_SysProperty(it.key, it.value)
-            C_TypeValueMember_BasicAttr(attr, IdeSymbolInfo.MEM_STRUCT_ATTR)
+            val ideName = C_LibUtils.ideName(it.key, IdeSymbolKind.MEM_STRUCT_ATTR)
+            val attr: C_MemberAttr = C_MemberAttr_SysProperty(ideName, it.value)
+            C_TypeValueMember_BasicAttr(attr)
         }
         return C_LibUtils.makeValueMembers(type, fns, attrMembers)
     }

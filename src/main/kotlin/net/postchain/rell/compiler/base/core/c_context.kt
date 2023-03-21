@@ -9,6 +9,7 @@ import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.compiler.base.def.C_AbstractFunctionDescriptor
 import net.postchain.rell.compiler.base.def.C_MountTablesBuilder
 import net.postchain.rell.compiler.base.def.C_OverrideFunctionDescriptor
+import net.postchain.rell.compiler.base.def.C_Struct
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.fn.C_FormalParameters
 import net.postchain.rell.compiler.base.modifier.C_ModifierValue
@@ -21,6 +22,9 @@ import net.postchain.rell.compiler.base.namespace.C_NsAsm_ComponentAssembler
 import net.postchain.rell.compiler.base.namespace.C_UserNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.*
+import net.postchain.rell.tools.api.IdeSymbolCategory
+import net.postchain.rell.tools.api.IdeSymbolId
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.*
 import org.apache.commons.lang3.mutable.MutableLong
 
@@ -129,7 +133,7 @@ sealed class C_ModuleContext(
 
     abstract fun createFileNsAssembler(): C_NsAsm_ComponentAssembler
     abstract fun getModuleDefs(): C_ModuleDefs
-    abstract fun getModuleArgsStruct(): R_Struct?
+    abstract fun getModuleArgsStruct(): C_Struct?
 }
 
 class C_RegularModuleContext(
@@ -170,10 +174,10 @@ class C_RegularModuleContext(
 
     override fun getModuleDefs() = defsGetter.get()
 
-    override fun getModuleArgsStruct(): R_Struct? {
+    override fun getModuleArgsStruct(): C_Struct? {
         val contents = module.contents()
         val struct = contents.defs.structs[C_Constants.MODULE_ARGS_STRUCT]
-        return struct?.structDef?.struct
+        return struct
     }
 }
 
@@ -205,7 +209,10 @@ class C_ReplModuleContext(
     override fun getModuleArgsStruct() = null
 }
 
-class C_FileContext(val modCtx: C_ModuleContext, val symCtx: C_SymbolContext) {
+class C_FileContext(
+    val modCtx: C_ModuleContext,
+    val symCtx: C_SymbolContext,
+) {
     val executor = modCtx.executor
     val appCtx = modCtx.appCtx
 
@@ -325,42 +332,48 @@ class C_MountContext(
         return if (ann == null) extChain else appCtx.addExternalChain(ann.name)
     }
 
-    fun defBase(simpleName: C_Name, extChain: C_ExternalChain? = null): C_DefinitionBase {
-        val cQualifiedName = C_StringQualifiedName.of(simpleName.str)
-        return defBase(cQualifiedName, extChain)
-    }
-
     fun defBase(qualifiedName: C_StringQualifiedName, extChain: C_ExternalChain? = null): C_DefinitionBase {
         val moduleKey = modCtx.rModuleKey.copy(externalChain = extChain?.name)
         val fullName = C_StringQualifiedName.of(stringNamespacePath + qualifiedName.parts)
         return C_Utils.createDefBase(moduleKey, fullName)
     }
-}
 
-enum class C_DefinitionType {
-    ENTITY,
-    OBJECT,
-    STRUCT,
-    QUERY,
-    OPERATION,
-    FUNCTION,
-    CONSTANT,
-    REPL,
-    ;
-
-    fun isEntityLike() = this == ENTITY || this == OBJECT
-
-    companion object {
-        val NAMESPACE_MSG = "namespace" toCodeMsg "namespace"
-        val TYPE_MSG = "type" toCodeMsg "type"
-        val ENTITY_MSG = "entity" toCodeMsg "entity"
-        val FUNCTION_MSG = "function" toCodeMsg "function"
-        val OPERATION_MSG = "operation" toCodeMsg "operation"
-        val OBJECT_MSG = "object" toCodeMsg "object"
+    fun defBaseEx(
+        simpleName: C_Name,
+        defType: C_DefinitionType,
+        ideKind: IdeSymbolKind,
+        extChain: C_ExternalChain? = null,
+    ): C_DefinitionBaseEx {
+        val qualifiedName = C_StringQualifiedName.of(simpleName.str)
+        val base = defBase(qualifiedName, extChain)
+        val ideId = base.ideId(defType)
+        return base.baseEx(simpleName.pos, defType, ideKind, ideId)
     }
 }
 
-class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_DefinitionType, val defId: R_DefinitionId) {
+enum class C_DefinitionType(val ideCategory: IdeSymbolCategory) {
+    REPL(IdeSymbolCategory.NONE),
+    CONSTANT(IdeSymbolCategory.CONSTANT),
+    ENTITY(IdeSymbolCategory.ENTITY),
+    ENUM(IdeSymbolCategory.ENUM),
+    FUNCTION(IdeSymbolCategory.FUNCTION),
+    IMPORT(IdeSymbolCategory.IMPORT),
+    OBJECT(IdeSymbolCategory.OBJECT),
+    OPERATION(IdeSymbolCategory.OPERATION),
+    QUERY(IdeSymbolCategory.QUERY),
+    STRUCT(IdeSymbolCategory.STRUCT),
+    ;
+
+    fun isEntityLike() = this == ENTITY || this == OBJECT
+}
+
+class C_DefinitionContext(
+    val mntCtx: C_MountContext,
+    val definitionType: C_DefinitionType,
+    val defId: R_DefinitionId,
+    val defName: R_DefinitionName,
+    private val ideId: IdeSymbolId,
+) {
     val nsCtx = mntCtx.nsCtx
     val modCtx = nsCtx.modCtx
     val appCtx = modCtx.appCtx
@@ -384,6 +397,8 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
         C_ExprContext.createRoot(initFrameCtx.rootBlkCtx)
     }
 
+    private var tupleFieldIdCounter: Long = 0
+
     fun getDbModificationRestriction(): C_CodeMsg? {
         return when {
             definitionType == C_DefinitionType.QUERY -> {
@@ -399,11 +414,10 @@ class C_DefinitionContext(val mntCtx: C_MountContext, val definitionType: C_Defi
         }
     }
 
-    fun checkDbUpdateAllowed(pos: S_Pos) {
-        val r = getDbModificationRestriction()
-        if (r != null) {
-            msgCtx.error(pos, r.code, r.msg)
-        }
+    fun tupleIdeId(): IdeSymbolId {
+        val k = tupleFieldIdCounter++
+        val name = R_Name.of("_${k}")
+        return ideId.appendMember(IdeSymbolCategory.TUPLE, name)
     }
 }
 

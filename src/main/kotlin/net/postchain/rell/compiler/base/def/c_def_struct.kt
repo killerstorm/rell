@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -10,10 +10,12 @@ import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_GraphUtils
 import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.model.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.toImmSet
 
 class C_Struct(
         val name: C_Name,
+        val ideInfo: IdeSymbolInfo,
         val structDef: R_StructDefinition,
         val attrsGetter: C_LateGetter<List<C_CompiledAttribute>>
 )

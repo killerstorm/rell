@@ -1,10 +1,11 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.def.C_GlobalAttrHeaderIdeData
 import net.postchain.rell.compiler.base.expr.C_ExprHint
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.expr.C_StmtContext
@@ -16,15 +17,15 @@ import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.stmt.R_ExprStatement
 import net.postchain.rell.model.stmt.R_ReturnStatement
-import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolCategory
 import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.MutableTypedKeyMap
 import net.postchain.rell.utils.TypedKeyMap
 
 class S_FormalParameter(private val attr: S_AttrHeader, private val expr: S_Expr?) {
     fun compile(defCtx: C_DefinitionContext, index: Int): C_FormalParameter {
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.LOC_PARAMETER)
-        val attrHeader = attr.compile(defCtx.nsCtx, false, ideInfo)
+        val ideData = C_GlobalAttrHeaderIdeData(IdeSymbolCategory.PARAMETER, IdeSymbolKind.LOC_PARAMETER, null)
+        val attrHeader = attr.compile(defCtx, false, ideData)
 
         val name = attrHeader.name
         val type = attrHeader.type ?: R_CtErrorType
@@ -44,7 +45,7 @@ class S_FormalParameter(private val attr: S_AttrHeader, private val expr: S_Expr
             C_ParameterDefaultValue(expr.startPos, name.rName, rExprLate.getter, defCtx.initFrameGetter, rValueLate.getter)
         }
 
-        return C_FormalParameter(name, type, ideInfo, index, defaultValue)
+        return C_FormalParameter(name, type, attrHeader.ideInfo, index, defaultValue)
     }
 
     private fun compileExpr(defCtx: C_DefinitionContext, paramName: R_Name, paramType: R_Type): V_Expr {

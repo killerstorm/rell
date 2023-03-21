@@ -515,6 +515,7 @@ class ImportTest: BaseRellTest(false) {
     @Test fun testAliasConflictNamespace() {
         file("a.rell", "module; function f(): integer = 123;")
 
+        tst.ideDefIdConflictError = false
         chkCompile("import a; namespace a {}",
                 "ct_err:[name_conflict:user:a:NAMESPACE:main.rell(1:21)][name_conflict:user:a:IMPORT:main.rell(1:8)]")
 

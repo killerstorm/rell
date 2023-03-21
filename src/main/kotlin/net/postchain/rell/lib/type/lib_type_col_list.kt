@@ -7,7 +7,7 @@ package net.postchain.rell.lib.type
 import com.google.common.math.LongMath
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
-import net.postchain.rell.compiler.base.core.C_NamespaceContext
+import net.postchain.rell.compiler.base.core.C_DefinitionContext
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.def.C_GenericType
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
@@ -103,7 +103,7 @@ object C_Lib_Type_List {
 private object C_GenericType_List: C_GenericType(C_Lib_Type_List.TYPE_NAME, C_Lib_Type_List.DEF_NAME, 1) {
     override val rawConstructorFn: C_GlobalFunction = C_CollectionConstructorFunction(C_CollectionKindAdapter_List, null)
 
-    override fun compileType0(ctx: C_NamespaceContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type {
+    override fun compileType0(ctx: C_DefinitionContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type {
         checkEquals(args.size, 1)
         val elemEntry = args[0]
         C_CollectionKindAdapter_List.checkElementType(ctx, pos, elemEntry.pos, elemEntry.value)
@@ -114,7 +114,7 @@ private object C_GenericType_List: C_GenericType(C_Lib_Type_List.TYPE_NAME, C_Li
 private object C_CollectionKindAdapter_List: C_CollectionKindAdapter(C_Lib_Type_List.TYPE_NAME) {
     override fun elementTypeFromTypeHint(typeHint: C_TypeHint) = typeHint.getListElementType()
     override fun makeKind(rElementType: R_Type) = R_CollectionKind_List(R_ListType(rElementType))
-    override fun checkElementType0(ctx: C_NamespaceContext, pos: S_Pos, elemTypePos: S_Pos, rElemType: R_Type) {}
+    override fun checkElementType0(ctx: C_DefinitionContext, pos: S_Pos, elemTypePos: S_Pos, rElemType: R_Type) {}
 }
 
 private object ListFns {

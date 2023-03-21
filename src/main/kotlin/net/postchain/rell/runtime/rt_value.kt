@@ -308,12 +308,12 @@ class Rt_TextValue(val value: String): Rt_Value() {
 
     companion object {
         fun like(s: String, pattern: String): Boolean {
-            val regex = likePatternToRegex(pattern)
+            val regex = likePatternToRegex(pattern, '_', '%')
             val m = regex.matcher(s)
             return m.matches()
         }
 
-        private fun likePatternToRegex(pattern: String): Pattern {
+        fun likePatternToRegex(pattern: String, one: Char, many: Char): Pattern {
             val buf = StringBuilder()
             val raw = StringBuilder()
             var esc = false
@@ -324,10 +324,10 @@ class Rt_TextValue(val value: String): Rt_Value() {
                     esc = false
                 } else if (c == '\\') {
                     esc = true
-                } else if (c == '%' || c == '_') {
+                } else if (c == one || c == many) {
                     if (raw.isNotEmpty()) buf.append(Pattern.quote(raw.toString()))
                     raw.setLength(0)
-                    buf.append(if (c == '%') ".*" else ".")
+                    buf.append(if (c == many) ".*" else ".")
                 } else {
                     raw.append(c)
                 }

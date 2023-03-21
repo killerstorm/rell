@@ -106,6 +106,7 @@ class R_Attribute(
         val sqlMapping: String = rName.str,
         private val exprGetter: C_LateGetter<R_DefaultValue>?
 ) {
+    val ideName = R_IdeName(rName, ideInfo)
     val name = rName.str
 
     val expr: R_Expr? get() = exprGetter?.get()?.rExpr

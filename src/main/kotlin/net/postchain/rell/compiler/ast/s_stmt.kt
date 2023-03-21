@@ -5,6 +5,7 @@
 package net.postchain.rell.compiler.ast
 
 import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.def.C_LocalAttrHeaderIdeData
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_Utils
@@ -15,7 +16,6 @@ import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.model.R_UnitType
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.model.stmt.*
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.MutableTypedKeyMap
 import net.postchain.rell.utils.TypedKey
@@ -72,9 +72,8 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
 
     override fun compile(ctx: C_StmtContext, mutable: Boolean, hasExpr: Boolean): C_VarDeclarator {
         val ideKind = if (mutable) IdeSymbolKind.LOC_VAR else IdeSymbolKind.LOC_VAL
-        val ideInfo = IdeSymbolInfo(ideKind)
-
-        val cAttrHeader = attrHeader.compile(ctx.nsCtx, hasExpr, ideInfo)
+        val ideData = C_LocalAttrHeaderIdeData(ideKind)
+        val cAttrHeader = attrHeader.compile(ctx.defCtx, hasExpr, ideData)
         val cName = cAttrHeader.name
         val explicitType = if (cAttrHeader.isExplicitType) cAttrHeader.type else null
 
@@ -84,7 +83,7 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
             }
             C_WildcardVarDeclarator(ctx, mutable, cName, explicitType != null)
         } else {
-            C_SimpleVarDeclarator(ctx, mutable, cAttrHeader, cName, explicitType, ideInfo)
+            C_SimpleVarDeclarator(ctx, mutable, cAttrHeader, cName, explicitType, cAttrHeader.ideInfo)
         }
     }
 }

@@ -23,7 +23,7 @@ import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
 
 abstract class V_TypeValueMember(val type: R_Type) {
-    abstract fun implicitAttrName(): R_Name?
+    abstract fun implicitAttrName(): C_Name?
     abstract fun ideInfo(): IdeSymbolInfo
     abstract fun vExprs(): List<V_Expr>
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
@@ -66,10 +66,13 @@ class V_ValueMemberExpr(
 
     override fun implicitTargetAttrName(): R_Name? {
         val isAt = base.isAtExprItem()
-        return if (isAt) member.implicitAttrName() else null
+        return if (isAt) member.implicitAttrName()?.rName else null
     }
 
-    override fun implicitAtWhatAttrName() = implicitTargetAttrName()
+    override fun implicitAtWhatAttrName(): C_Name? {
+        val isAt = base.isAtExprItem()
+        return if (isAt) member.implicitAttrName() else null
+    }
 
     override fun globalConstantRestriction() = member.globalConstantRestriction()
 

@@ -751,12 +751,12 @@ object S_Grammar : Grammar<S_RellFile>() {
     private val importTargetExact by -LCURL * separatedTerms(importTargetExactItem, COMMA, true) * -RCURL map {
         items -> S_ExactImportTarget(items)
     }
-    private val importTargetWildcard by MUL map { S_WildcardImportTarget() }
+    private val importTargetWildcard by MUL map { S_WildcardImportTarget }
     private val importTarget by -DOT * (importTargetExact or importTargetWildcard)
 
     private val importDef by ( IMPORT * optional( name * -COLON) * importModule * optional(importTarget) * -SEMI ) map {
         (kw, alias, module, target) ->
-        AnnotatedDef { S_ImportDefinition(kw.pos, it, alias, module, target ?: S_DefaultImportTarget()) }
+        AnnotatedDef { S_ImportDefinition(kw.pos, it, alias, module, target ?: S_DefaultImportTarget) }
     }
 
     private val includeDef by ( INCLUDE * STRING * -SEMI) map {

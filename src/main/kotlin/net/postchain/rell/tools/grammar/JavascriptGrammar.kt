@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.grammar
@@ -25,6 +25,7 @@ fun main() {
     println("        \"generals\": {")
     println("            \"IDENTIFIER\": \"${tokenizer.tkIdentifier.name}\",")
     println("            \"INTEGER\": \"${tokenizer.tkInteger.name}\",")
+    println("            \"BIG_INTEGER\": \"${tokenizer.tkBigInteger.name}\",")
     println("            \"DECIMAL\": \"${tokenizer.tkDecimal.name}\",")
     println("            \"STRING\": \"${tokenizer.tkString.name}\",")
     println("            \"BYTE_ARRAY\": \"${tokenizer.tkByteArray.name}\",")

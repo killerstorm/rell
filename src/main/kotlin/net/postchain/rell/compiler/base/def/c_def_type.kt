@@ -6,9 +6,9 @@ package net.postchain.rell.compiler.base.def
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_PosValue
+import net.postchain.rell.compiler.base.core.C_DefinitionContext
 import net.postchain.rell.compiler.base.core.C_DefinitionName
 import net.postchain.rell.compiler.base.core.C_MessageContext
-import net.postchain.rell.compiler.base.core.C_NamespaceContext
 import net.postchain.rell.compiler.base.expr.C_Expr
 import net.postchain.rell.compiler.base.expr.C_RawGenericTypeExpr
 import net.postchain.rell.compiler.base.expr.C_SpecificTypeExpr
@@ -44,9 +44,9 @@ class C_TypeDef_Generic(val type: C_GenericType): C_TypeDef() {
 abstract class C_GenericType(val name: String, val defName: C_DefinitionName, private val paramCount: Int) {
     open val rawConstructorFn: C_GlobalFunction? = null
 
-    abstract fun compileType0(ctx: C_NamespaceContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type
+    abstract fun compileType0(ctx: C_DefinitionContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type
 
-    fun compileType(ctx: C_NamespaceContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type {
+    fun compileType(ctx: C_DefinitionContext, pos: S_Pos, args: List<S_PosValue<R_Type>>): R_Type {
         if (args.size != paramCount) {
             ctx.msgCtx.error(pos, "type:generic:wrong_arg_count:$name:$paramCount:${args.size}",
                 "Wrong number of type arguments for type '$name': ${args.size} instead of $paramCount")

@@ -10,12 +10,20 @@ import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
+import net.postchain.rell.tools.api.IdeFilePath
 import net.postchain.rell.utils.queueOf
 import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import net.postchain.rell.utils.toImmSet
 
+class C_ModuleInfo(val idePath: IdeFilePath?)
+
 sealed class C_ImportModuleLoader {
-    abstract fun loadModule(name: R_ModuleName): Boolean
+    abstract fun loadModule(name: R_ModuleName)
+
+    // Load the specified module. If the module doesn't exist, loads the deepest existing parent module.
+    // Returns info about all existing parent modules.
+    abstract fun loadModuleEx(name: R_ModuleName): Map<R_ModuleName, C_ModuleInfo>
 }
 
 class C_ModuleLoader(
@@ -26,7 +34,7 @@ class C_ModuleLoader(
 ) {
     private val preModuleNames = preModuleNames.toImmSet()
 
-    val readerCtx = C_ModuleReaderContext(msgCtx, symCtxProvider, C_ImportModuleLoaderImpl())
+    val readerCtx = C_ModuleReaderContext(S_AppContext(msgCtx, symCtxProvider, C_ImportModuleLoaderImpl()))
     private val moduleReader = C_ModuleReader(readerCtx, sourceDir)
 
     private val testLoader = C_TestModuleLoader(moduleReader, this::loadTestModule)
@@ -57,7 +65,8 @@ class C_ModuleLoader(
             selectedModules.add(name)
         }
 
-        if (isModuleLoaded(name)) {
+        val loaded = getLoadedModule(name)
+        if (loaded != null) {
             return true
         }
 
@@ -131,9 +140,39 @@ class C_ModuleLoader(
 
     private fun isModuleLoaded(name: R_ModuleName) = name in loadedModules || name in preModuleNames
 
+    private fun getLoadedModule(name: R_ModuleName): C_ModuleInfo? {
+        return if (name in preModuleNames) {
+            C_ModuleInfo(null)
+        } else {
+            val state = loadedModules[name]
+            if (state == null) null else C_ModuleInfo(state.idePath)
+        }
+    }
+
     private inner class C_ImportModuleLoaderImpl: C_ImportModuleLoader() {
-        override fun loadModule(name: R_ModuleName): Boolean {
-            return loadModule0(name, false)
+        override fun loadModule(name: R_ModuleName) {
+            loadModule0(name, false)
+        }
+
+        override fun loadModuleEx(name: R_ModuleName): Map<R_ModuleName, C_ModuleInfo> {
+            var curName = name
+            while (!loadModule0(curName, false) && !curName.isEmpty()) {
+                curName = curName.parent()
+            }
+
+            val res = mutableMapOf<R_ModuleName, C_ModuleInfo>()
+            while (true) {
+                val state = loadedModules[curName]
+                if (state != null) {
+                    res[curName] = C_ModuleInfo(state.idePath)
+                } else if (curName in preModuleNames) {
+                    res[curName] = C_ModuleInfo(null)
+                }
+                if (curName.isEmpty()) break
+                curName = curName.parent()
+            }
+
+            return res.toImmMap()
         }
     }
 
@@ -141,6 +180,8 @@ class C_ModuleLoader(
             val moduleName: R_ModuleName,
             source: C_ModuleSource
     ) {
+        val idePath = source.idePath()
+
         private var modSource: C_ModuleSource? = source
 
         fun load() {

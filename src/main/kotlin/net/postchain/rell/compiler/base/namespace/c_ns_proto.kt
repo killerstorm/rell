@@ -12,17 +12,19 @@ import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.module.C_ModuleDefsBuilder
 import net.postchain.rell.compiler.base.module.C_ModuleKey
 import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.C_RNamePath
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.lib.type.V_ObjectExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
-class C_NsEntry(val name: R_Name, val def: C_NamespaceMember) {
+class C_NsEntry(val name: R_Name, val item: C_NamespaceItem) {
     fun addToNamespace(nsBuilder: C_NamespaceBuilder) {
-        nsBuilder.add(name, def)
+        nsBuilder.add(name, item)
     }
 
     companion object {
@@ -386,14 +388,15 @@ class C_SysNsProtoBuilder(val basePath: C_DefinitionPath) {
 
     private fun addDef(name: R_Name, def: C_NamespaceMember): C_NsEntry {
         check(!completed)
-        val entry = C_NsEntry(name, def)
+        val entry = C_NsEntry(name, C_NamespaceItem(def))
         entries.add(entry)
         return entry
     }
 
     fun addNamespace(name: String, ns: C_Namespace) {
         val rName = R_Name.of(name)
-        val base = makeBase(rName, IdeSymbolInfo.DEF_NAMESPACE)
+        val ideInfo = IdeSymbolInfo.get(IdeSymbolKind.DEF_NAMESPACE)
+        val base = makeBase(rName, ideInfo)
         addDef(rName, C_NamespaceMember_SysNamespace(base, ns))
     }
 
@@ -420,8 +423,8 @@ class C_SysNsProtoBuilder(val basePath: C_DefinitionPath) {
         addDef(rName, C_NamespaceMember_SysStruct(base, struct))
     }
 
-    fun addFunction(name: R_Name, fn: C_GlobalFunction) {
-        val base = makeBase(name, fn.ideInfo)
+    fun addFunction(name: R_Name, fn: C_GlobalFunction, ideInfo: IdeSymbolInfo) {
+        val base = makeBase(name, ideInfo)
         addDef(name, C_NamespaceMember_SysFunction(base, fn))
     }
 
@@ -450,8 +453,10 @@ class C_UserNsProtoBuilder(private val assembler: C_NsAsm_ComponentAssembler) {
         assembler.addDef(name, def)
     }
 
-    fun addNamespace(name: C_Name, expandable: Boolean, deprecated: C_Deprecated?): C_UserNsProtoBuilder {
-        val subAssembler = assembler.addNamespace(name, expandable, deprecated)
+    fun namespacePath(): C_RNamePath = assembler.namespacePath()
+
+    fun addNamespace(name: C_Name, merge: Boolean, ideInfo: IdeSymbolInfo, deprecated: C_Deprecated?): C_UserNsProtoBuilder {
+        val subAssembler = assembler.addNamespace(name, merge, ideInfo, deprecated)
         return C_UserNsProtoBuilder(subAssembler)
     }
 

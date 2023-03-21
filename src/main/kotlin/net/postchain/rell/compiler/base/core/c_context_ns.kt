@@ -4,6 +4,7 @@
 
 package net.postchain.rell.compiler.base.core
 
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.def.C_TypeDef
 import net.postchain.rell.compiler.base.expr.C_Expr
@@ -13,7 +14,10 @@ import net.postchain.rell.compiler.base.modifier.C_ModifierValue
 import net.postchain.rell.compiler.base.namespace.*
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.*
+import net.postchain.rell.tools.api.IdeSymbolCategory
+import net.postchain.rell.tools.api.IdeSymbolId
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
@@ -91,9 +95,65 @@ class C_DefinitionBase(
 
     fun rBase(initFrameGetter: C_LateGetter<R_CallFrame>) = R_DefinitionBase(defId, defName, cDefName, initFrameGetter)
 
+    fun ideId(defType: C_DefinitionType, member: Pair<IdeSymbolCategory, R_Name>? = null): IdeSymbolId {
+        return IdeSymbolId(defType.ideCategory, defName.qualifiedName, listOfNotNull(member))
+    }
+
+    fun ideDef(pos: S_Pos, defType: C_DefinitionType, ideKind: IdeSymbolKind, member: Pair<IdeSymbolCategory, R_Name>? = null): C_IdeSymbolDef {
+        return ideDef(pos, defType, defName, ideKind, member)
+    }
+
+    fun baseEx(pos: S_Pos, defType: C_DefinitionType, ideKind: IdeSymbolKind, ideId: IdeSymbolId): C_DefinitionBaseEx {
+        val ideDef = C_IdeSymbolDef.make(ideKind, pos.idePath(), ideId)
+        return C_DefinitionBaseEx(this, defType, ideId, ideDef)
+    }
+
     fun nsMemBase(ideInfo: IdeSymbolInfo, deprecatedValue: C_ModifierValue<C_Deprecated>): C_NamespaceMemberBase {
         val deprecated = deprecatedValue.value()
         return C_NamespaceMemberBase(cDefName, ideInfo, deprecated)
+    }
+
+    companion object {
+        fun ideDef(
+            pos: S_Pos,
+            defType: C_DefinitionType,
+            defName: R_DefinitionName,
+            ideKind: IdeSymbolKind,
+            member: Pair<IdeSymbolCategory, R_Name>?,
+        ): C_IdeSymbolDef {
+            val ideId = IdeSymbolId(defType.ideCategory, defName.qualifiedName, listOfNotNull(member))
+            return C_IdeSymbolDef.make(ideKind, pos.idePath(), ideId)
+        }
+    }
+}
+
+class C_DefinitionBaseEx(
+    private val base: C_DefinitionBase,
+    private val defType: C_DefinitionType,
+    private val ideId: IdeSymbolId,
+    private val ideDef: C_IdeSymbolDef,
+) {
+    val defName = base.defName
+    val ideDefInfo = ideDef.defInfo
+    val ideRefInfo = ideDef.refInfo
+
+    val simpleName = base.simpleName
+    val appLevelName = base.appLevelName
+    val qualifiedName = base.qualifiedName
+
+    fun defCtx(mntCtx: C_MountContext): C_DefinitionContext {
+        return C_DefinitionContext(mntCtx, defType, base.defId, base.defName, ideId)
+    }
+
+    fun rBase(initFrameGetter: C_LateGetter<R_CallFrame>) = base.rBase(initFrameGetter)
+
+    fun nsMemBase(deprecatedValue: C_ModifierValue<C_Deprecated>): C_NamespaceMemberBase {
+        val deprecated = deprecatedValue.value()
+        return nsMemBase(deprecated = deprecated)
+    }
+
+    fun nsMemBase(deprecated: C_Deprecated? = null, defName: C_DefinitionName = base.cDefName): C_NamespaceMemberBase {
+        return C_NamespaceMemberBase(defName, ideDef.refInfo, deprecated)
     }
 }
 
@@ -114,7 +174,8 @@ private class C_NameNode(
     }
 
     fun access() {
-        nameHand.setIdeInfo(elem?.member?.ideInfo ?: IdeSymbolInfo.UNKNOWN)
+        val ideInfo = elem?.item?.ideInfo ?: IdeSymbolInfo.UNKNOWN
+        nameHand.setIdeInfo(ideInfo)
     }
 }
 
@@ -187,7 +248,7 @@ sealed class C_GlobalNameRes(
     }
 
     private fun access() {
-        accessPrivate(msgCtx)
+        return accessPrivate(msgCtx)
     }
 
     protected abstract fun accessPrivate(msgCtx: C_MessageContext)
@@ -220,22 +281,33 @@ private class C_GlobalNameRes_Private(
 }
 
 private object C_GlobalNameResolver {
-    fun resolve(msgCtx: C_MessageContext, scope: C_Scope, qName: C_QualifiedNameHandle, tags: List<C_NamespaceMemberTag>): C_GlobalNameRes {
-        val tags0 = if (qName.size == 1) tags else C_NamespaceMemberTag.NAMESPACE.list
-        val entry0 = scope.findEntry(qName.first.rName, tags0)
-        var node = entryToNode(qName.first, null, entry0, tags0)
+    fun resolve(
+        msgCtx: C_MessageContext,
+        scope: C_Scope,
+        qName: C_QualifiedNameHandle,
+        tags: List<C_NamespaceMemberTag>,
+    ): C_GlobalNameRes {
+        val firstTags = if (qName.size == 1) tags else C_NamespaceMemberTag.NAMESPACE.list
+        val firstEntry = scope.findEntry(qName.first.rName, firstTags)
+        var node = entryToNode(qName.first, null, firstEntry, firstTags)
 
         for ((i, name) in qName.parts.withIndex().drop(1)) {
             val ns = node.elem?.member?.getNamespaceOpt()
             val entry = ns?.getEntry(name.rName)
-            val tagsI = if (i == qName.parts.indices.last) tags else C_NamespaceMemberTag.NAMESPACE.list
-            node = entryToNode(name, node, entry, tagsI)
+            val isLast = i == qName.parts.indices.last
+            val curTags = if (isLast) tags else C_NamespaceMemberTag.NAMESPACE.list
+            node = entryToNode(name, node, entry, curTags)
         }
 
         return C_GlobalNameRes_Private(msgCtx, qName.qName, node)
     }
 
-    private fun entryToNode(name: C_NameHandle, prevNode: C_NameNode?, entry: C_NamespaceEntry?, tags: List<C_NamespaceMemberTag>): C_NameNode {
+    private fun entryToNode(
+        name: C_NameHandle,
+        prevNode: C_NameNode?,
+        entry: C_NamespaceEntry?,
+        tags: List<C_NamespaceMemberTag>,
+    ): C_NameNode {
         val elem = entry?.element(tags)
         return C_NameNode(prev = prevNode, valid = entry != null, nameHand = name, elem = elem)
     }

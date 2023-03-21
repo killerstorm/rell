@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -13,7 +13,9 @@ import net.postchain.rell.compiler.base.expr.C_ExprHint
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.*
+import net.postchain.rell.tools.api.IdeSymbolCategory
 import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.toImmMap
 import net.postchain.rell.utils.toImmSet
 
@@ -35,9 +37,9 @@ private class C_EntityAttributeClause(
         val (primaryDefs, secondaryDefs) = defs.partition { it.primary }
 
         if (sysAttr != null) {
-            val ideInfo = C_AttrUtils.getIdeSymbolInfo(persistent, sysAttr.mutable, keyIndexKind)
-            processOtherDefs(primaryDefs, secondaryDefs, sysAttr.type, ideInfo)
+            val ideKind = C_AttrUtils.getIdeSymbolKind(persistent, sysAttr.mutable, keyIndexKind)
             val rAttr = sysAttr.compile(index, persistent)
+            processOtherDefs(primaryDefs, secondaryDefs, sysAttr.type, ideKind, rAttr.ideInfo)
             return C_CompiledAttribute(null, rAttr)
         }
 
@@ -46,13 +48,14 @@ private class C_EntityAttributeClause(
         val otherDefs = secondaryDefs.filter { it !== mainDef }
 
         val mutable = mainDef.attrDef.mutablePos != null
-        val ideInfo = C_AttrUtils.getIdeSymbolInfo(persistent, mutable, keyIndexKind)
+        val ideKind = C_AttrUtils.getIdeSymbolKind(persistent, mutable, keyIndexKind)
 
-        val mainHeader = mainDef.attrHeader.compile(false, ideInfo)
+        val ideData = C_GlobalAttrHeaderIdeData(IdeSymbolCategory.ATTRIBUTE, ideKind, null)
+        val mainHeader = mainDef.attrHeader.compile(defCtx, false, ideData)
         val type = mainHeader.type ?: R_CtErrorType
 
         checkAttrType(mainDef, type)
-        processOtherDefs(conflictDefs, otherDefs, type, ideInfo)
+        processOtherDefs(conflictDefs, otherDefs, type, ideKind, mainHeader.ideInfo)
 
         val exprGetter = processAttrExpr(mainDef.name, mainDef.attrDef.expr, type)
 
@@ -62,7 +65,7 @@ private class C_EntityAttributeClause(
                 type,
                 mutable = mutable,
                 keyIndexKind = keyIndexKind,
-                ideInfo = ideInfo,
+                ideInfo = mainHeader.ideInfo,
                 exprGetter = exprGetter
         )
 
@@ -73,16 +76,18 @@ private class C_EntityAttributeClause(
             conflictDefs: List<C_AttributeDefinition>,
             secondaryDefs: List<C_AttributeDefinition>,
             type: R_Type,
-            ideInfo: IdeSymbolInfo
+            ideKind: IdeSymbolKind,
+            mainIdeInfo: IdeSymbolInfo,
     ) {
         for (def in conflictDefs) {
-            val attrHeader = def.attrHeader.compile(false, ideInfo)
+            val ideData = C_GlobalAttrHeaderIdeData(IdeSymbolCategory.ATTRIBUTE, ideKind, null)
+            val attrHeader = def.attrHeader.compile(defCtx, false, ideData)
             processAttrExpr(def.name, def.attrDef.expr, attrHeader.type)
             C_Errors.errDuplicateAttribute(msgCtx, def.name)
         }
 
         for (def in secondaryDefs) {
-            processSecondaryDef(def, type, ideInfo)
+            processSecondaryDef(def, type, ideKind, mainIdeInfo)
         }
     }
 
@@ -109,8 +114,9 @@ private class C_EntityAttributeClause(
         return late.getter
     }
 
-    private fun processSecondaryDef(def: C_AttributeDefinition, rPrimaryType: R_Type, ideInfo: IdeSymbolInfo) {
-        val header = def.attrHeader.compile(true, ideInfo)
+    private fun processSecondaryDef(def: C_AttributeDefinition, rPrimaryType: R_Type, ideKind: IdeSymbolKind, mainIdeInfo: IdeSymbolInfo) {
+        val ideData = C_GlobalAttrHeaderIdeData(IdeSymbolCategory.ATTRIBUTE, ideKind, mainIdeInfo)
+        val header = def.attrHeader.compile(defCtx, true, ideData)
 
         if (header.type != null && header.type != rPrimaryType && header.isExplicitType) {
             C_Errors.errTypeMismatch(msgCtx, def.name.pos, header.type, rPrimaryType) {

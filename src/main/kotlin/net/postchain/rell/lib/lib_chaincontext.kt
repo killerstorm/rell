@@ -16,7 +16,6 @@ import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.checkEquals
 
 object C_Lib_ChainContext {
@@ -32,7 +31,7 @@ object C_Lib_ChainContext {
     }
 }
 
-private object C_NsProperty_ChainContext_Args: C_NamespaceProperty(IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)) {
+private object C_NsProperty_ChainContext_Args: C_NamespaceProperty(IdeSymbolInfo.DEF_CONSTANT) {
     override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
         val struct = ctx.modCtx.getModuleArgsStruct()
         if (struct == null) {
@@ -41,10 +40,15 @@ private object C_NsProperty_ChainContext_Args: C_NamespaceProperty(IdeSymbolInfo
                 "To use '$nameStr', define a struct '${C_Constants.MODULE_ARGS_STRUCT}'")
         }
 
+        val ideInfo = struct.ideInfo
+        if (ideInfo.link != null) {
+            ctx.exprCtx.symCtx.setLink(name.last.pos, ideInfo.link)
+        }
+
         val moduleName = ctx.modCtx.moduleName
         val rFn = ChainCtxFns.Args(moduleName)
 
-        return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, struct.type, rFn, name, pure = true)
+        return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, struct.structDef.type, rFn, name, pure = true)
     }
 }
 
@@ -74,6 +78,6 @@ private object ChainCtxFns {
 }
 
 private fun makeProperty(type: R_Type, fn: R_SysFunction, pure: Boolean = false): C_NamespaceProperty {
-    val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
+    val ideInfo = IdeSymbolInfo.DEF_CONSTANT
     return C_NamespaceProperty_SysFunction(ideInfo, type, fn, pure = pure)
 }

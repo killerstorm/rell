@@ -109,8 +109,8 @@ class C_CallArgumentIdeInfoProvider_Argument(
         private val targetInfo: C_FunctionCallTargetInfo
 ): C_CallArgumentIdeInfoProvider() {
     override fun getIdeInfo(name: R_Name): IdeSymbolInfo {
-        val param = targetInfo.hasParameter(name)
-        return if (param) IdeSymbolInfo.EXPR_CALL_ARG else IdeSymbolInfo.UNKNOWN
+        val param = targetInfo.getParameter(name)
+        return param ?: IdeSymbolInfo.UNKNOWN
     }
 }
 

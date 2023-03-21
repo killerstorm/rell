@@ -7,12 +7,17 @@ package net.postchain.rell.compiler.base.fn
 import net.postchain.rell.compiler.ast.*
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.compiler.base.expr.*
-import net.postchain.rell.compiler.base.utils.*
+import net.postchain.rell.compiler.base.expr.C_CallTypeHints
+import net.postchain.rell.compiler.base.expr.C_CallTypeHints_None
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.compiler.base.utils.C_Errors
+import net.postchain.rell.compiler.base.utils.C_SysFunction
+import net.postchain.rell.compiler.base.utils.C_SysFunctionBody
+import net.postchain.rell.compiler.base.utils.C_SysFunctionCtx
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
-import net.postchain.rell.runtime.Rt_CallFrame
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
@@ -155,8 +160,7 @@ class C_RegularSysGlobalFunction(
         private val simpleName: R_Name,
         fullName: String,
         private val cases: List<C_GlobalFuncCase>,
-        ideInfo: IdeSymbolInfo
-): C_GlobalFunction(ideInfo) {
+): C_GlobalFunction() {
     private val fullNameLazy = LazyString.of(fullName)
 
     override fun compileCall(
@@ -189,7 +193,7 @@ class C_RegularSysGlobalFunction(
     ): C_FunctionCallTarget() {
         override fun retType() = null
         override fun typeHints() = C_SysFunctionParamHints(cases)
-        override fun hasParameter(name: R_Name) = false
+        override fun getParameter(name: R_Name) = null
 
         override fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall? {
             val vArgs = args.compileSimpleArgs(name.lazyStr)
@@ -240,7 +244,7 @@ class C_RegularSysGlobalFunction(
     }
 }
 
-abstract class C_SpecialSysGlobalFunction(ideInfo: IdeSymbolInfo): C_GlobalFunction(ideInfo) {
+abstract class C_SpecialSysGlobalFunction: C_GlobalFunction() {
     protected open fun paramCount(): Int? = null
     protected abstract fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_GlobalFunctionCall
 

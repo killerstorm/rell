@@ -44,6 +44,7 @@ class CompilerErrorsTest: BaseRellTest(false) {
     }
 
     @Test fun testDefEntity() {
+        tst.ideDefIdConflictError = false
         val un = "unknown_name"
         val ut = "unknown_name"
 
@@ -96,6 +97,7 @@ class CompilerErrorsTest: BaseRellTest(false) {
     }
 
     @Test fun testDefFunctionParamDuplicate() {
+        tst.ideDefIdConflictError = false
         chkCompile("function foo(x: integer, x: text) {}", "ct_err:dup_param_name:x")
         chkCompile("function foo(x: integer, x: text) { val t: integer = x; }", "ct_err:dup_param_name:x")
         chkCompile("function foo(x: integer, x: text) { val t: text = x; }", "ct_err:[dup_param_name:x][stmt_var_type:t:[text]:[integer]]")
@@ -324,6 +326,7 @@ class CompilerErrorsTest: BaseRellTest(false) {
     }
 
     @Test fun testExprTuple() {
+        tst.ideDefIdConflictError = false
         chk("(a = $badExpr1, b = $badExpr2)", "ct_err:[$badError1][$badError2]")
         chk("(a: $badExpr1, b: $badExpr2)", "ct_err:[tuple_name_colon_expr:a][$badError1][tuple_name_colon_expr:b][$badError2]")
         chk("(a = $badExpr1, a = $badExpr2)", "ct_err:[$badError1][expr_tuple_dupname:a][$badError2]")

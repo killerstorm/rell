@@ -24,7 +24,6 @@ import net.postchain.rell.model.expr.Db_Expr
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.checkEquals
 
@@ -37,7 +36,7 @@ object C_Lib_Exists {
     }
 }
 
-private class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction(IdeSymbolInfo.DEF_FUNCTION_SYSTEM) {
+private class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction() {
     override fun paramCount() = 1
 
     override fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_GlobalFunctionCall {

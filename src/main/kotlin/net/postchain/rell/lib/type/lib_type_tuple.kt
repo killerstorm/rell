@@ -5,7 +5,10 @@
 package net.postchain.rell.lib.type
 
 import net.postchain.rell.compiler.ast.S_VirtualType
-import net.postchain.rell.compiler.base.expr.*
+import net.postchain.rell.compiler.base.expr.C_AtTypeImplicitAttr
+import net.postchain.rell.compiler.base.expr.C_MemberAttr_TupleAttr
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember
+import net.postchain.rell.compiler.base.expr.C_TypeValueMember_BasicAttr
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.model.R_TupleField
 import net.postchain.rell.model.R_TupleType
@@ -19,7 +22,7 @@ object C_Lib_Type_Tuple {
         val fns = C_LibUtils.typeMemFuncBuilder(type).build()
         val attrMembers = type.fields.mapIndexed { idx, field ->
             val mem = C_MemberAttr_RegularTupleAttr(field.type, idx, field)
-            C_TypeValueMember_BasicAttr(mem, field.ideInfo)
+            C_TypeValueMember_BasicAttr(mem)
         }
         return C_LibUtils.makeValueMembers(type, fns, attrMembers)
     }
@@ -27,7 +30,7 @@ object C_Lib_Type_Tuple {
     fun getAtImplicitAttrs(type: R_TupleType): List<C_AtTypeImplicitAttr> {
         val attrMembers = type.fields.mapIndexed { idx, field ->
             val mem = C_MemberAttr_RegularTupleAttr(field.type, idx, field)
-            val typeMember = C_TypeValueMember_BasicAttr(mem, field.ideInfo)
+            val typeMember = C_TypeValueMember_BasicAttr(mem)
             C_AtTypeImplicitAttr(typeMember, field.type)
         }
         return attrMembers
@@ -49,7 +52,7 @@ object C_Lib_Type_VirtualTuple {
         val attrMembers = type.innerType.fields.mapIndexed { idx, field ->
             val virtualType = S_VirtualType.virtualMemberType(field.type)
             val mem = C_TypeValueMember_VirtualTupleAttr(virtualType, idx, field)
-            C_TypeValueMember_BasicAttr(mem, field.ideInfo)
+            C_TypeValueMember_BasicAttr(mem)
         }
 
         return C_LibUtils.makeValueMembers(type, fns, attrMembers)
