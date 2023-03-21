@@ -15,10 +15,10 @@
     <name>rell</name>
 
     <properties>
-        <postchain.version>3.8.0-SNAPSHOT</postchain.version>
+        <postchain.version>3.9.0-SNAPSHOT</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.build.outputTimestamp>10</project.build.outputTimestamp>
-        <kotlin.version>1.6.21</kotlin.version>
+        <kotlin.version>1.8.10</kotlin.version>
         <kotlin.compiler.jvmTarget>11</kotlin.compiler.jvmTarget>
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
