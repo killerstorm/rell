@@ -15,6 +15,7 @@ import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
+import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
 class C_UpdateTarget(val rTarget: R_UpdateTarget, val cFrom: C_AtFrom_Entities)
@@ -73,7 +74,7 @@ class S_UpdateTarget_Simple(
         entity ?: return null
 
         val atEntityId = ctx.appCtx.nextAtEntityId(atExprId)
-        val atEntity = C_AtEntity(alias.pos, entity, alias.rName, explicitAlias != null, atEntityId)
+        val atEntity = C_AtEntity(alias.pos, entity, alias.rName, alias.pos, explicitAlias != null, atEntityId)
         return atEntity
     }
 }
@@ -127,7 +128,7 @@ class S_UpdateTarget_Expr(private val expr: S_Expr): S_UpdateTarget() {
 
         val whereRight = cLambda.compileVarDbExpr(cFrom.innerExprCtx().blkCtx.blockUid)
         val where = C_ExprUtils.makeDbBinaryExprEq(whereLeft, whereRight)
-        val rTarget = R_UpdateTarget_Expr_One(rAtEntity, where, tCtx.rExpr, cLambda.rLambda)
+        val rTarget = R_UpdateTarget_Expr_One(rAtEntity, immListOf(), where, tCtx.rExpr, cLambda.rLambda)
 
         return C_UpdateTarget(rTarget, cFrom)
     }
@@ -155,7 +156,7 @@ class S_UpdateTarget_Expr(private val expr: S_Expr): S_UpdateTarget() {
     }
 
     private fun compileFrom(ctx: C_ExprContext, stmtPos: S_Pos, rAtEntity: R_DbAtEntity): C_AtFrom_Entities {
-        val cEntity = C_AtEntity(expr.startPos, rAtEntity.rEntity, rAtEntity.rEntity.rName, false, rAtEntity.id)
+        val cEntity = C_AtEntity(expr.startPos, rAtEntity.rEntity, rAtEntity.rEntity.rName, expr.startPos, false, rAtEntity.id)
         val fromCtx = C_AtFromContext(stmtPos, cEntity.atExprId, null)
         return C_AtFrom_Entities(ctx, fromCtx, listOf(cEntity))
     }
@@ -168,7 +169,18 @@ class S_UpdateTarget_Expr(private val expr: S_Expr): S_UpdateTarget() {
     )
 }
 
-class S_UpdateWhat(val pos: S_Pos, val name: S_Name?, val op: S_AssignOpCode?, val expr: S_Expr)
+class S_UpdateWhat(val pos: S_Pos, val name: S_Name?, val op: S_AssignOpCode?, val expr: S_Expr) {
+    companion object {
+        fun makeRWhat(entity: R_DbAtEntity, attr: R_Attribute, expr: Db_Expr, op: Db_BinaryOp?): R_UpdateStatementWhat {
+            val resExpr = if (op == null) expr else {
+                val tableExpr = Db_EntityExpr(entity)
+                val attrExpr = Db_AttrExpr(tableExpr, attr)
+                Db_BinaryExpr(attr.type, op, attrExpr, expr) //TODO determine the result type in a cleaner way
+            }
+            return R_UpdateStatementWhat(attr, resExpr)
+        }
+    }
+}
 
 class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S_UpdateWhat>): S_Statement(pos) {
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
@@ -188,10 +200,10 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
             C_Errors.errCannotUpdate(ctx.msgCtx, pos, rEntity.simpleName)
         }
 
-        val dbWhat = compileWhat(cTarget.cFrom.innerExprCtx(), rEntity, subValues)
+        val rWhat = compileWhat(cTarget.cFrom.innerExprCtx(), cTarget.rTarget, rEntity, subValues)
 
         val rFromBlock = cTarget.cFrom.compileUpdate()
-        val rStmt = R_UpdateStatement(cTarget.rTarget, rFromBlock, dbWhat)
+        val rStmt = R_UpdateStatement(cTarget.rTarget, rFromBlock, rWhat)
 
         val resFacts = C_ExprVarFacts.forSubExpressions(subValues)
         return C_Statement(rStmt, false, resFacts.postFacts)
@@ -199,6 +211,7 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
 
     private fun compileWhat(
             ctx: C_ExprContext,
+            target: R_UpdateTarget,
             entity: R_EntityDefinition,
             subValues: MutableList<V_Expr>
     ): List<R_UpdateStatementWhat> {
@@ -213,19 +226,18 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
 
             val cExpr = w.expr.compileSafe(ctx)
             val vExpr = cExpr.value()
-            val exprName = cExpr.implicitMatchName()
-
-            C_AttrArgument(i, nameHand?.name, vExpr, exprName)
+            C_AttrArgument(i, nameHand?.name, vExpr)
         }
 
         subValues.addAll(args.map { it.vExpr })
 
         val attrs = C_AttributeResolver.resolveUpdate(ctx, entity, args)
+        val entity = target.entity()
 
         val updAttrs = attrs.mapNotNull { (arg, attr) ->
             val w = what[arg.index]
             val op = if (w.op == null) S_AssignOp_Eq else w.op.op
-            op.compileDbUpdate(ctx, w.pos, attr, arg.vExpr)
+            op.compileDbUpdate(ctx, w.pos, entity, attr, arg.vExpr)
         }.toImmList()
 
         return updAttrs

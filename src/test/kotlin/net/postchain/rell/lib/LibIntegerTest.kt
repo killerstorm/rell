@@ -13,20 +13,6 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer.MAX_VALUE", "int[9223372036854775807]")
     }
 
-    @Test fun testConstructorDecimal() {
-        chk("integer(decimal('0'))", "int[0]")
-        chk("integer(decimal('123456'))", "int[123456]")
-        chk("integer(decimal('-123456'))", "int[-123456]")
-        chk("integer(decimal('123.456'))", "int[123]")
-        chk("integer(decimal('-123.456'))", "int[-123]")
-        chk("integer(decimal('123.789'))", "int[123]")
-        chk("integer(decimal('-123.789'))", "int[-123]")
-        chk("integer(decimal('9223372036854775807'))", "int[9223372036854775807]")
-        chk("integer(decimal('9223372036854775808'))", "rt_err:decimal.to_integer:overflow:9223372036854775808")
-        chk("integer(decimal('-9223372036854775808'))", "int[-9223372036854775808]")
-        chk("integer(decimal('-9223372036854775809'))", "rt_err:decimal.to_integer:overflow:-9223372036854775809")
-    }
-
     @Test fun testFromText() {
         chk("integer.from_text('0')", "int[0]")
         chk("integer.from_text('123456789')", "int[123456789]")
@@ -39,16 +25,17 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer.from_text(' 123')", "rt_err:fn:integer.from_text: 123")
         chk("integer.from_text('123 ')", "rt_err:fn:integer.from_text:123 ")
         chk("integer.from_text('0123')", "int[123]")
-        chk("integer.from_text('0x123')", "rt_err:fn:integer.from_text:0x123")
+        chk("integer.from_text('0x1234')", "rt_err:fn:integer.from_text:0x1234")
         chk("integer.from_text(123)", "ct_err:expr_call_argtypes:[integer.from_text]:integer")
         chk("integer.from_text('aaa')", "rt_err:fn:integer.from_text:aaa")
+
         chk("integer.from_text('123', 0)", "rt_err:fn:integer.from_text:radix:0")
         chk("integer.from_text('123', 1)", "rt_err:fn:integer.from_text:radix:1")
         chk("integer.from_text('123', 40)", "rt_err:fn:integer.from_text:radix:40")
         chk("integer.from_text('123', -1)", "rt_err:fn:integer.from_text:radix:-1")
     }
 
-    @Test fun testFromText2() {
+    @Test fun testFromTextBase2() {
         chk("integer.from_text('0', 2)", "int[0]")
         chk("integer.from_text('1111011', 2)", "int[123]")
         chk("integer.from_text('11111111', 2)", "int[255]")
@@ -61,7 +48,7 @@ class LibIntegerTest: BaseRellTest(false) {
                 "rt_err:fn:integer.from_text:-1000000000000000000000000000000000000000000000000000000000000001")
     }
 
-    @Test fun testFromText8() {
+    @Test fun testFromTextBase8() {
         chk("integer.from_text('0', 8)", "int[0]")
         chk("integer.from_text('173', 8)", "int[123]")
         chk("integer.from_text('377', 8)", "int[255]")
@@ -72,7 +59,7 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer.from_text('-1000000000000000000001', 8)", "rt_err:fn:integer.from_text:-1000000000000000000001")
     }
 
-    @Test fun testFromText10() {
+    @Test fun testFromTextBase10() {
         chk("integer.from_text('0', 10)", "int[0]")
         chk("integer.from_text('123456789', 10)", "int[123456789]")
         chk("integer.from_text('9223372036854775807', 10)", "int[9223372036854775807]")
@@ -82,7 +69,7 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer.from_text('-9223372036854775809', 10)", "rt_err:fn:integer.from_text:-9223372036854775809")
     }
 
-    @Test fun testFromText16() {
+    @Test fun testFromTextBase16() {
         chk("integer.from_text('0', 16)", "int[0]")
         chk("integer.from_text('7b', 16)", "int[123]")
         chk("integer.from_text('ff', 16)", "int[255]")
@@ -106,6 +93,7 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer.from_hex(123)", "ct_err:expr_call_argtypes:[integer.from_hex]:integer")
         chk("integer.from_hex('')", "rt_err:fn:integer.from_hex:")
         chk("integer.from_hex('ghi')", "rt_err:fn:integer.from_hex:ghi")
+        chk("integer.from_hex('0x7b')", "rt_err:fn:integer.from_hex:0x7b")
     }
 
     @Test fun testToDecimal() {
@@ -133,7 +121,7 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("(-9223372036854775807-1).to_text()", "text[-9223372036854775808]")
     }
 
-    @Test fun testToText2() {
+    @Test fun testToTextBase2() {
         chk("(0).to_text(2)", "text[0]")
         chk("(123).to_text(2)", "text[1111011]")
         chk("(255).to_text(2)", "text[11111111]")
@@ -142,7 +130,7 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("(-9223372036854775807-1).to_text(2)", "text[-1000000000000000000000000000000000000000000000000000000000000000]")
     }
 
-    @Test fun testToText8() {
+    @Test fun testToTextBase8() {
         chk("(0).to_text(8)", "text[0]")
         chk("(123).to_text(8)", "text[173]")
         chk("(255).to_text(8)", "text[377]")
@@ -151,7 +139,7 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("(-9223372036854775807-1).to_text(8)", "text[-1000000000000000000000]")
     }
 
-    @Test fun testToText10() {
+    @Test fun testToTextBase10() {
         chk("(0).to_text(10)", "text[0]")
         chk("(123).to_text(10)", "text[123]")
         chk("(255).to_text(10)", "text[255]")
@@ -160,7 +148,7 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("(-9223372036854775807-1).to_text(10)", "text[-9223372036854775808]")
     }
 
-    @Test fun testToText16() {
+    @Test fun testToTextBase16() {
         chk("(0).to_text(16)", "text[0]")
         chk("(123).to_text(16)", "text[7b]")
         chk("(255).to_text(16)", "text[ff]")

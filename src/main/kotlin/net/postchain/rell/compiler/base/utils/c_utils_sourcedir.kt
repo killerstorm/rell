@@ -1,15 +1,23 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.utils
 
 import net.postchain.rell.compiler.ast.S_RellFile
+import net.postchain.rell.tools.api.IdeFilePath
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.lang3.StringUtils
 import java.io.File
+import java.util.*
+
+class IdeSourcePathFilePath(val path: C_SourcePath): IdeFilePath() {
+    override fun equals(other: Any?) = other is IdeSourcePathFilePath && path == other.path
+    override fun hashCode() = Objects.hash(javaClass, path)
+    override fun toString() = path.str()
+}
 
 class C_SourcePath private constructor(parts: List<String>): Comparable<C_SourcePath> {
     val parts = parts.toImmList()
@@ -86,6 +94,7 @@ class C_SourcePath private constructor(parts: List<String>): Comparable<C_Source
 }
 
 abstract class C_SourceFile {
+    abstract fun idePath(): IdeFilePath
     abstract fun readAst(): S_RellFile
     abstract fun readText(): String
 }
@@ -126,8 +135,12 @@ abstract class C_SourceDir {
 }
 
 class C_TextSourceFile(private val path: C_SourcePath, private val text: String): C_SourceFile() {
+    private val idePath: IdeFilePath = IdeSourcePathFilePath(path)
+
+    override fun idePath(): IdeFilePath = idePath
+
     override fun readAst(): S_RellFile {
-        return C_Parser.parse(path, text)
+        return C_Parser.parse(path, idePath, text)
     }
 
     override fun readText() = text
@@ -146,7 +159,7 @@ private class C_MapSourceDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDi
         if (n == 0) return null
 
         val dir = findDir(path.parts.subList(0, n - 1))
-        if (dir == null) return null
+        dir ?: return null
 
         val file = dir.files[path.parts[n - 1]]
         return file
@@ -154,13 +167,13 @@ private class C_MapSourceDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDi
 
     override fun dirs(path: C_SourcePath): List<String> {
         val dir = findDir(path.parts)
-        if (dir == null) return listOf()
+        dir ?: return listOf()
         return dir.dirs.keys.sorted().toImmList()
     }
 
     override fun files(path: C_SourcePath): List<String> {
         val dir = findDir(path.parts)
-        if (dir == null) return listOf()
+        dir ?: return listOf()
         return dir.files.keys.sorted().toImmList()
     }
 
@@ -168,7 +181,7 @@ private class C_MapSourceDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDi
         var dir = root
         for (part in path) {
             val next = dir.dirs[part]
-            if (next == null) return null
+            next ?: return null
             dir = next
         }
         return dir
@@ -236,9 +249,13 @@ private class C_DiskSourceDir(private val dir: File): C_SourceDir() {
     }
 
     private class C_DiskSourceFile(private val file: File, private val sourcePath: C_SourcePath): C_SourceFile() {
+        private val idePath: IdeFilePath = IdeSourcePathFilePath(sourcePath)
+
+        override fun idePath() = idePath
+
         override fun readAst(): S_RellFile {
             val text = readText()
-            return C_Parser.parse(sourcePath, text)
+            return C_Parser.parse(sourcePath, idePath, text)
         }
 
         override fun readText() = file.readText()
@@ -297,8 +314,13 @@ private class C_CachedSourceDir(private val sourceDir: C_SourceDir): C_SourceDir
     private fun lookup(path: C_SourcePath): CacheEntry = cache.computeIfAbsent(path) { CacheEntry() }
 
     private class C_CachedSourceFile(private val file: C_SourceFile): C_SourceFile() {
+        private val idePath = CachedField { file.idePath() }
         private val ast = CachedField { file.readAst() }
         private val text = CachedField { file.readText() }
+
+        override fun idePath(): IdeFilePath {
+            return idePath.get()
+        }
 
         override fun readAst(): S_RellFile {
             return ast.get()

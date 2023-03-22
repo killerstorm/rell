@@ -67,7 +67,7 @@ Launch a run config
 First, set up a PostgreSQL database and user:
 
 ```
-CREATE DATABASE "relltestdb" WITH TEMPLATE = template0 LC_COLLATE = 'C' LC_CTYPE = 'C';
+CREATE DATABASE "relltestdb" WITH TEMPLATE = template0 LC_COLLATE = 'C.UTF-8' LC_CTYPE = 'C.UTF-8' ENCODING 'UTF-8';
 CREATE USER "relltestuser" WITH PASSWORD '1234';
 GRANT ALL ON DATABASE "relltestdb" TO "relltestuser";
 ```

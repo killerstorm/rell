@@ -11,7 +11,6 @@ import net.postchain.rell.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.compiler.base.modifier.*
 import net.postchain.rell.compiler.base.module.*
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
-import net.postchain.rell.compiler.base.namespace.C_NamespaceMemberBase
 import net.postchain.rell.compiler.base.namespace.C_NamespacePropertyContext
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.vexpr.V_ConstantValueEvalContext
@@ -19,27 +18,24 @@ import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.model.*
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.utils.toGtv
-import net.postchain.rell.tools.api.IdeOutlineNodeType
-import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
-import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.tools.api.IdeSymbolKind
+import net.postchain.rell.tools.api.*
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 
 sealed class S_AttrHeader: S_Node() {
     abstract fun discoverVar(): R_Name
-    abstract fun compile(ctx: C_NamespaceContext): C_AttrHeaderHandle
+    abstract fun compile(ctx: C_DefinitionContext): C_AttrHeaderHandle
     abstract fun ideOutlineTreeNodeName(): S_Name
 
-    fun compile(ctx: C_NamespaceContext, canInferType: Boolean, ideInfo: IdeSymbolInfo): C_AttrHeader {
+    fun compile(ctx: C_DefinitionContext, canInferType: Boolean, ideData: C_AttrHeaderIdeData): C_AttrHeader {
         val handle = compile(ctx)
-        return handle.compile(canInferType, ideInfo)
+        return handle.compile(ctx, canInferType, ideData)
     }
 
     companion object {
-        fun checkUnitType(ctx: C_NamespaceContext, pos: S_Pos, rType: R_Type, cName: C_Name): R_Type {
-            return C_Types.checkNotUnit(ctx.msgCtx, pos, rType, cName.str) { "attr_var" toCodeMsg "attribute or variable" }
+        fun checkUnitType(msgCtx: C_MessageContext, pos: S_Pos, rType: R_Type, cName: C_Name): R_Type {
+            return C_Types.checkNotUnit(msgCtx, pos, rType, cName.str) { "attr_var" toCodeMsg "attribute or variable" }
         }
     }
 }
@@ -49,10 +45,10 @@ class S_NamedAttrHeader(private val name: S_Name, private val type: S_Type): S_A
         return name.getRNameSpecial()
     }
 
-    override fun compile(ctx: C_NamespaceContext): C_AttrHeaderHandle {
+    override fun compile(ctx: C_DefinitionContext): C_AttrHeaderHandle {
         val nameHand = name.compile(ctx)
         val rType = type.compileOpt(ctx) ?: R_CtErrorType
-        val rResType = checkUnitType(ctx, type.pos, rType, nameHand.name)
+        val rResType = checkUnitType(ctx.msgCtx, type.pos, rType, nameHand.name)
         return C_NamedAttrHeaderHandle(nameHand, rResType)
     }
 
@@ -64,9 +60,9 @@ class S_AnonAttrHeader(private val typeName: S_QualifiedName, private val nullab
         return typeName.last.getRNameSpecial()
     }
 
-    override fun compile(ctx: C_NamespaceContext): C_AttrHeaderHandle {
+    override fun compile(ctx: C_DefinitionContext): C_AttrHeaderHandle {
         val typeNameHand = typeName.compile(ctx)
-        return C_AnonAttrHeaderHandle(ctx, typeNameHand, nullable)
+        return C_AnonAttrHeaderHandle(ctx.nsCtx, typeNameHand, nullable)
     }
 
     override fun ideOutlineTreeNodeName() = typeName.last
@@ -79,7 +75,7 @@ sealed class S_RelClause: S_Node() {
 
 class S_AttributeClause(private val attr: S_AttributeDefinition): S_RelClause() {
     override fun compile(ctx: C_EntityContext) {
-        val attrHeader = attr.header.compile(ctx.defCtx.nsCtx)
+        val attrHeader = attr.header.compile(ctx.defCtx)
         ctx.addAttribute(attr, attrHeader, true)
     }
 
@@ -92,7 +88,7 @@ class S_AttributeClause(private val attr: S_AttributeDefinition): S_RelClause() 
 class S_KeyIndexClause(val pos: S_Pos, val kind: R_KeyIndexKind, val attrs: List<S_AttributeDefinition>): S_RelClause() {
     override fun compile(ctx: C_EntityContext) {
         val cAttrs = attrs.map {
-            val cHeader = it.header.compile(ctx.defCtx.nsCtx)
+            val cHeader = it.header.compile(ctx.defCtx)
             AttrRec(cHeader, it)
         }
 
@@ -159,7 +155,7 @@ class S_AttributeDefinition(val mutablePos: S_Pos?, val header: S_AttrHeader, va
 abstract class S_Definition(val kwPos: S_Pos, val modifiers: S_Modifiers): S_Node() {
     val startPos = modifiers.pos ?: kwPos
 
-    abstract fun compile(ctx: C_ModuleDefinitionContext): C_MidModuleMember?
+    abstract fun compile(ctx: S_DefinitionContext): C_MidModuleMember?
 
     abstract fun ideBuildOutlineTree(b: IdeOutlineTreeBuilder)
 
@@ -181,7 +177,7 @@ abstract class S_Definition(val kwPos: S_Pos, val modifiers: S_Modifiers): S_Nod
 }
 
 abstract class S_BasicDefinition(pos: S_Pos, modifiers: S_Modifiers): S_Definition(pos, modifiers) {
-    final override fun compile(ctx: C_ModuleDefinitionContext): C_MidModuleMember {
+    final override fun compile(ctx: S_DefinitionContext): C_MidModuleMember {
         return C_MidModuleMember_Basic(this)
     }
 
@@ -204,11 +200,12 @@ class S_EntityDefinition(
                     "Keyword 'class' is deprecated, use 'entity' instead")
         }
 
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_ENTITY)
-        val cName = name.compile(ctx, ideInfo)
+        val nameHand = name.compile(ctx)
+        val cName = nameHand.name
 
         if (body == null) {
-            compileHeader(ctx, cName, ideInfo)
+            val ideInfo = compileHeader(ctx, cName)
+            nameHand.setIdeInfo(ideInfo ?: IdeSymbolInfo.get(IdeSymbolKind.DEF_ENTITY))
             return
         }
 
@@ -224,7 +221,8 @@ class S_EntityDefinition(
         val isExternalChain = extChainRef != null
         val rFlags = compileFlags(ctx, isExternalChain, modLog.hasValue())
 
-        val cDefBase = ctx.defBase(cName, extChain)
+        val cDefBase = ctx.defBaseEx(cName, C_DefinitionType.ENTITY, IdeSymbolKind.DEF_ENTITY, extChain = extChain)
+        nameHand.setIdeInfo(cDefBase.ideDefInfo)
 
         val isExternalChainOrModule = isExternalChain || ctx.modCtx.external
 
@@ -245,7 +243,9 @@ class S_EntityDefinition(
             R_EntitySqlMapping_External(mountName, extChainRef)
         }
 
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.ENTITY, cDefBase.defId)
+        checkEntityMountNameLen(ctx.msgCtx, cName, mountName)
+
+        val defCtx = cDefBase.defCtx(ctx)
         val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
         val rExternalEntity = if (extChainRef == null) null else R_ExternalEntity(extChainRef, true)
@@ -262,15 +262,15 @@ class S_EntityDefinition(
         )
 
         ctx.appCtx.defsAdder.addEntity(C_Entity(cName.pos, rEntity))
-        ctx.nsBuilder.addEntity(cDefBase.nsMemBase(ideInfo, modDeprecated), cName, rEntity)
-        ctx.mntBuilder.addEntity(cName.pos, rEntity)
+        ctx.nsBuilder.addEntity(cDefBase.nsMemBase(modDeprecated), cName, rEntity)
+        ctx.mntBuilder.addEntity(cName, rEntity)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
             membersPass(defCtx, cName, extChain, rEntity, body)
         }
     }
 
-    private fun compileHeader(ctx: C_MountContext, cName: C_Name, ideInfo: IdeSymbolInfo) {
+    private fun compileHeader(ctx: C_MountContext, cName: C_Name): IdeSymbolInfo? {
         var err = false
 
         val mods = C_ModifierValues(C_ModifierTargetType.ENTITY, cName)
@@ -299,17 +299,21 @@ class S_EntityDefinition(
         val extChain = ctx.externalChain(modExternal)
         if (extChain == null && !ctx.modCtx.external) {
             ctx.msgCtx.error(name.pos, "def_entity_hdr_noexternal:$name", "Entity header must be declared as external")
-            return
+            return null
         }
 
         if (err || entGetter == null) {
-            return
+            return null
         }
 
         val sysDefs = extChain?.sysDefs ?: ctx.modCtx.sysDefs
         val rEntity = entGetter(sysDefs)
-        val cNsMemBase = C_NamespaceMemberBase(rEntity.cDefName, ideInfo, null)
+
+        val cDefBase = ctx.defBaseEx(cName, C_DefinitionType.ENTITY, IdeSymbolKind.DEF_ENTITY, extChain = extChain)
+        val cNsMemBase = cDefBase.nsMemBase(defName = rEntity.cDefName)
         ctx.nsBuilder.addEntity(cNsMemBase, cName, rEntity, addToModule = false)
+
+        return cDefBase.ideDefInfo
     }
 
     private fun checkHeaderNoModifier(ctx: C_MountContext, modValue: C_ModifierValue<*>) {
@@ -405,6 +409,26 @@ class S_EntityDefinition(
                 C_Constants.BLOCK_ENTITY to { sysDefs: C_SystemDefs -> sysDefs.blockEntity },
                 C_Constants.TRANSACTION_ENTITY to { sysDefs: C_SystemDefs -> sysDefs.transactionEntity }
         )
+
+        private const val MAX_ENTITY_MOUNT_NAME_LEN = 60 // Postgres allows 63, minimal prefix is "c0.", i. e. 3 characters.
+        private const val MAX_ATTR_NAME_LEN = 63
+
+        fun checkEntityMountNameLen(msgCtx: C_MessageContext, name: C_Name, mountName: R_MountName) {
+            val s = mountName.str()
+            val n = s.length
+            val max = MAX_ENTITY_MOUNT_NAME_LEN
+            if (n > max) {
+                msgCtx.error(name.pos, "mount:too_long:entity:$max:$n:$s", "Mount name '$s' is too long: $n (max $max)")
+            }
+        }
+
+        fun checkAttrNameLen(msgCtx: C_MessageContext, name: C_Name) {
+            val n = name.str.length
+            val max = MAX_ATTR_NAME_LEN
+            if (n > max) {
+                msgCtx.error(name.pos, "mount:too_long:attr:$max:$n:$name", "Attribute name '$name' is too long: $n (max $max)")
+            }
+        }
     }
 }
 
@@ -427,19 +451,22 @@ class S_ObjectDefinition(
                 log = false
         )
 
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_OBJECT)
-        val cName = name.compile(ctx, ideInfo)
+        val nameHand = name.compile(ctx)
+        val cName = nameHand.name
 
         val mods = C_ModifierValues(C_ModifierTargetType.OBJECT, cName)
         val modMount = mods.field(C_ModifierFields.MOUNT)
         val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(ctx, mods)
 
-        val cDefBase = ctx.defBase(cName)
+        val cDefBase = ctx.defBaseEx(cName, C_DefinitionType.OBJECT, IdeSymbolKind.DEF_OBJECT)
+        nameHand.setIdeInfo(cDefBase.ideDefInfo)
+
         val mountName = ctx.mountName(modMount, cName)
         val sqlMapping = R_EntitySqlMapping_Regular(mountName)
+        S_EntityDefinition.checkEntityMountNameLen(ctx.msgCtx, cName, mountName)
 
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.OBJECT, cDefBase.defId)
+        val defCtx = cDefBase.defCtx(ctx)
         val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
         val rEntity = C_Utils.createEntity(
@@ -456,8 +483,8 @@ class S_ObjectDefinition(
         val rObject = R_ObjectDefinition(defBase, rEntity)
 
         ctx.appCtx.defsAdder.addObject(rObject)
-        ctx.nsBuilder.addObject(cDefBase.nsMemBase(ideInfo, modDeprecated), cName, rObject)
-        ctx.mntBuilder.addObject(name, rObject)
+        ctx.nsBuilder.addObject(cDefBase.nsMemBase(modDeprecated), cName, rObject)
+        ctx.mntBuilder.addObject(cName, rObject)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
             membersPass(defCtx, cName, rObject)
@@ -468,7 +495,7 @@ class S_ObjectDefinition(
         val entCtx = C_EntityContext(defCtx, cName.str, false, listOf(), persistent = true)
 
         for (attr in attrs) {
-            val attrHeader = attr.header.compile(defCtx.nsCtx)
+            val attrHeader = attr.header.compile(defCtx)
             entCtx.addAttribute(attr, attrHeader, true)
         }
 
@@ -500,25 +527,33 @@ class S_StructDefinition(
 
         ctx.checkNotExternal(name.pos, C_DeclarationType.STRUCT)
 
-        val ideInfo = IdeSymbolInfo.DEF_STRUCT
-        val cName = name.compile(ctx, ideInfo)
+        val nameHand = name.compile(ctx)
+        val cName = nameHand.name
 
         val mods = C_ModifierValues(C_ModifierTargetType.STRUCT, cName)
         val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(ctx, mods)
 
-        val cDefBase = ctx.defBase(cName)
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.STRUCT, cDefBase.defId)
+        val cDefBase = ctx.defBaseEx(cName, C_DefinitionType.STRUCT, IdeSymbolKind.DEF_STRUCT)
+        nameHand.setIdeInfo(cDefBase.ideDefInfo)
+
+        val defCtx = cDefBase.defCtx(ctx)
         val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
-        val rStruct = R_Struct(cDefBase.appLevelName, cDefBase.appLevelName.toGtv(), defBase.initFrameGetter, mirrorStructs = null, ideInfo = ideInfo)
+        val rStruct = R_Struct(
+            cDefBase.appLevelName,
+            cDefBase.appLevelName.toGtv(),
+            defBase.initFrameGetter,
+            mirrorStructs = null,
+        )
+
         val rStructDef = R_StructDefinition(defBase, rStruct)
 
         val attrsLate = C_LateInit<List<C_CompiledAttribute>>(C_CompilerPass.MEMBERS, immListOf())
-        val cStruct = C_Struct(cName, rStructDef, attrsLate.getter)
+        val cStruct = C_Struct(cName, cDefBase.ideRefInfo, rStructDef, attrsLate.getter)
 
         ctx.appCtx.defsAdder.addStruct(rStruct)
-        ctx.nsBuilder.addStruct(cDefBase.nsMemBase(ideInfo, modDeprecated), cStruct)
+        ctx.nsBuilder.addStruct(cDefBase.nsMemBase(modDeprecated), cStruct)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
             membersPass(defCtx, cName, cStruct, attrsLate)
@@ -534,7 +569,7 @@ class S_StructDefinition(
         val entCtx = C_EntityContext(defCtx, cName.str, false, immListOf(), persistent = false)
 
         for (attr in attrs) {
-            val attrHeader = attr.header.compile(defCtx.nsCtx)
+            val attrHeader = attr.header.compile(defCtx)
             entCtx.addAttribute(attr, attrHeader, true)
         }
 
@@ -561,34 +596,44 @@ class S_EnumDefinition(
         val attrs: List<S_Name>
 ): S_Definition(pos, modifiers) {
     // TODO Better design: compile external module in two steps, all definitions must be processed same way.
-    override fun compile(ctx: C_ModuleDefinitionContext): C_MidModuleMember {
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_ENUM)
-        val cName = name.compile(ctx.symCtx, ideInfo)
+    override fun compile(ctx: S_DefinitionContext): C_MidModuleMember {
+        val nameHand = name.compile(ctx.symCtx)
+        val cName = nameHand.name
 
         val modifierCtx = C_ModifierContext(ctx.msgCtx, ctx.symCtx)
         val mods = C_ModifierValues(C_ModifierTargetType.ENUM, cName)
         val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(modifierCtx, mods)
 
+        val fullName = C_StringQualifiedName.ofRNames(ctx.namespacePath.parts + cName.rName)
+        val cDefBase = C_Utils.createDefBase(R_ModuleKey(ctx.moduleName, null), fullName)
+
+        val ideDef = cDefBase.ideDef(startPos, C_DefinitionType.ENUM, IdeSymbolKind.DEF_ENUM)
+        nameHand.setIdeInfo(ideDef.defInfo)
+
         val set = mutableSetOf<String>()
         val rAttrs = mutableListOf<R_EnumAttr>()
 
         for (attr in attrs) {
-            val attrIdeInfo = IdeSymbolInfo(IdeSymbolKind.MEM_ENUM_VALUE)
-            val cAttrName = attr.compile(ctx.symCtx, attrIdeInfo)
-            if (set.add(cAttrName.str)) {
-                rAttrs.add(R_EnumAttr(cAttrName.rName, rAttrs.size, attrIdeInfo))
+            val attrNameHand = attr.compile(ctx.symCtx)
+            val attrIdeDef = cDefBase.ideDef(
+                attrNameHand.pos,
+                C_DefinitionType.ENUM,
+                IdeSymbolKind.MEM_ENUM_VALUE,
+                IdeSymbolCategory.ENUM_VALUE to attrNameHand.rName
+            )
+            attrNameHand.setIdeInfo(attrIdeDef.defInfo)
+            val attrName = attrNameHand.name
+            if (set.add(attrName.str)) {
+                rAttrs.add(R_EnumAttr(attrName.rName, rAttrs.size, attrIdeDef.refInfo))
             } else {
-                ctx.msgCtx.error(attr.pos, "enum_dup:$attr", "Duplicate enum value: '$cAttrName'")
+                ctx.msgCtx.error(attr.pos, "enum_dup:$attr", "Duplicate enum value: '$attrName'")
             }
         }
 
-        val fullName = C_StringQualifiedName.ofRNames(ctx.namespacePath.parts + cName.rName)
-        val cDefBase = C_Utils.createDefBase(R_ModuleKey(ctx.moduleName, null), fullName)
         val defBase = cDefBase.rBase(R_CallFrame.NONE_INIT_FRAME_GETTER)
-
         val rEnum = R_EnumDefinition(defBase, rAttrs.toList())
-        val memBase = cDefBase.nsMemBase(ideInfo, modDeprecated)
+        val memBase = cDefBase.nsMemBase(ideDef.refInfo, modDeprecated)
         return C_MidModuleMember_Enum(cName, rEnum, memBase)
     }
 
@@ -606,8 +651,26 @@ class S_NamespaceDefinition(
         private val qualifiedName: S_QualifiedName?,
         private val definitions: List<S_Definition>
 ): S_Definition(pos, modifiers) {
-    override fun compile(ctx: C_ModuleDefinitionContext): C_MidModuleMember {
-        val cQualifiedName = qualifiedName?.compile(ctx.symCtx, IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE))
+    override fun compile(ctx: S_DefinitionContext): C_MidModuleMember {
+        val cQualifiedName = if (qualifiedName == null) null else {
+            val names = mutableListOf<C_IdeName>()
+            var nsPath = ctx.namespacePath
+
+            for (name in qualifiedName.parts) {
+                val nameHand = name.compile(ctx.symCtx)
+
+                val fullName = nsPath.fullName(nameHand.rName)
+                val ideId = ctx.fileCtx.addNamespaceName(nameHand, fullName)
+                val ideLink = IdeGlobalSymbolLink(IdeSymbolGlobalId(name.pos.idePath(), ideId))
+                val refIdeInfo = IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE, link = ideLink)
+
+                names.add(C_IdeName(nameHand.name, refIdeInfo))
+                nsPath = nsPath.child(nameHand.rName)
+            }
+
+            C_IdeQualifiedName(names)
+        }
+
         val subCtx = ctx.namespace(cQualifiedName?.toPath() ?: C_RNamePath.EMPTY)
         val midMembers = definitions.mapNotNull { it.compile(subCtx) }
         return C_MidModuleMember_Namespace(modifiers, cQualifiedName, midMembers)
@@ -631,7 +694,7 @@ class S_NamespaceDefinition(
 }
 
 class S_IncludeDefinition(pos: S_Pos): S_Definition(pos, S_Modifiers(listOf())) {
-    override fun compile(ctx: C_ModuleDefinitionContext): C_MidModuleMember? {
+    override fun compile(ctx: S_DefinitionContext): C_MidModuleMember? {
         ctx.msgCtx.error(kwPos, "include", "Include not supported since Rell ${RellVersions.MODULE_SYSTEM_VERSION_STR}")
         return null
     }
@@ -649,15 +712,17 @@ class S_GlobalConstantDefinition(
         val expr: S_Expr
 ): S_BasicDefinition(pos, modifiers) {
     override fun compileBasic(ctx: C_MountContext) {
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
-        val cName = name.compile(ctx, ideInfo)
+        val nameHand = name.compile(ctx)
+        val cName = nameHand.name
 
         val mods = C_ModifierValues(C_ModifierTargetType.CONSTANT, cName)
         val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
         modifiers.compile(ctx, mods)
 
-        val cDefBase = ctx.defBase(cName)
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.CONSTANT, cDefBase.defId)
+        val cDefBase = ctx.defBaseEx(cName, C_DefinitionType.CONSTANT, IdeSymbolKind.DEF_CONSTANT)
+        nameHand.setIdeInfo(cDefBase.ideDefInfo)
+
+        val defCtx = cDefBase.defCtx(ctx)
         val errorExpr = C_ExprUtils.errorVExpr(defCtx.initExprCtx, expr.startPos)
 
         val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_GlobalConstantFunctionHeader.ERROR)
@@ -673,7 +738,7 @@ class S_GlobalConstantDefinition(
             C_GlobalConstantDefinition(rDef, typePos, varUid, headerLate.getter, exprLate.getter)
         }
 
-        ctx.nsBuilder.addConstant(cDefBase.nsMemBase(ideInfo, modDeprecated), cName, cDef)
+        ctx.nsBuilder.addConstant(cDefBase.nsMemBase(modDeprecated), cName, cDef)
 
         if (cName.str == "_") {
             ctx.msgCtx.error(cName.pos, "def:const:wildcard", "Name '$cName' is a wildcard, not allowed for constants")

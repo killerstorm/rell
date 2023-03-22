@@ -25,7 +25,12 @@ object SqlGen {
 
     val DSL_CTX = DSL.using(SQLDialect.POSTGRES)
 
+    // (!) When changing a function, change its name e.g. to fn_v2. Functions in the database are not upgraded - a function is created
+    // only once, if there is no function with the same name in the database.
     val RELL_SYS_FUNCTIONS = mapOf(
+            genFunctionBigNumberFromText(SqlConstants.FN_BIGINTEGER_FROM_TEXT, "big_integer", "^[-+]?[0-9]+$"),
+            genFunctionBigNumberFromText(SqlConstants.FN_DECIMAL_FROM_TEXT, "decimal", "^[-+]?([0-9]+([.][0-9]+)?|[.][0-9]+)([Ee][-+]?[0-9]+)?$"),
+            genFunctionDecimalToText(SqlConstants.FN_DECIMAL_TO_TEXT),
             genFunctionSubstr1(SqlConstants.FN_BYTEA_SUBSTR1, "BYTEA"),
             genFunctionSubstr2(SqlConstants.FN_BYTEA_SUBSTR2, "BYTEA"),
             genFunctionRepeat(SqlConstants.FN_TEXT_REPEAT, "TEXT"),
@@ -33,6 +38,29 @@ object SqlGen {
             genFunctionSubstr2(SqlConstants.FN_TEXT_SUBSTR2, "TEXT"),
             genFunctionTextGetChar(SqlConstants.FN_TEXT_GETCHAR),
     ).toImmMap()
+
+    private fun genFunctionBigNumberFromText(name: String, type: String, regex: String): Pair<String, String> {
+        return name to """
+                CREATE FUNCTION "$name"(s TEXT) RETURNS NUMERIC AS $$
+                BEGIN
+                    IF s !~ '$regex' THEN RAISE EXCEPTION 'bad $type value: "%"', s; END IF;
+                    RETURN s :: NUMERIC;
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
+
+    private fun genFunctionDecimalToText(name: String): Pair<String, String> {
+        // Using regexp to remove trailing zeros.
+        // Clever regexp: can handle special cases like "0.0", "0.000000", etc.
+        return name to """
+                CREATE FUNCTION "$name"(v NUMERIC) RETURNS TEXT AS $$
+                BEGIN
+                    RETURN REGEXP_REPLACE(v::TEXT, '(([.][0-9]*[1-9])(0+)$)|([.]0+$)', '\2');
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
 
     private fun genFunctionRepeat(name: String, type: String): Pair<String, String> {
         return name to """

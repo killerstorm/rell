@@ -6,7 +6,9 @@ package net.postchain.rell.compiler.vexpr
 
 import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.compiler.base.core.*
+import net.postchain.rell.compiler.base.core.C_Name
+import net.postchain.rell.compiler.base.core.C_TypeHint
+import net.postchain.rell.compiler.base.core.C_VarUid
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.fn.C_FunctionCallInfo
 import net.postchain.rell.compiler.base.fn.C_FunctionCallTarget_FunctionType
@@ -132,7 +134,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     }
 
     fun toDbExprWhat(): C_DbAtWhatValue {
-        return if (info.canBeDbExpr && type.sqlAdapter.isSqlCompatible()) {
+        return if ((info.canBeDbExpr && type.sqlAdapter.isSqlCompatible()) || !exprCtx.globalCtx.compilerOptions.complexWhatEnabled) {
             toDbExprWhatDirect()
         } else {
             toDbExprWhat0()
@@ -153,42 +155,34 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     }
 
     fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
-        val baseType = type
-        val effectiveBaseType = C_Types.removeNullable(baseType)
-
-        val members = effectiveBaseType.getValueMembers(memberName.rName)
-        if (members.isEmpty()) {
-            C_Errors.errUnknownMember(ctx.msgCtx, effectiveBaseType, memberName)
-            return C_ExprUtils.errorMember(ctx, memberName.pos)
+        if (safe) {
+            if (asNullable().type !is R_NullableType && type.isNotError()) {
+                val typeStr = type.strCode()
+                ctx.msgCtx.error(memberName.pos, "expr_safemem_type:[$typeStr]", "Wrong type for operator '?.': $typeStr")
+            }
+        } else {
+            if (type is R_NullableType) {
+                val nameStr = memberName.str
+                val msg = "Cannot access member '$nameStr' of nullable type ${type.str()}"
+                ctx.msgCtx.error(memberName.pos, "expr_mem_null:$nameStr", msg)
+            }
         }
 
-        checkNullAccess(ctx.msgCtx, baseType, memberName, safe)
+        val member = C_TypeValueMember.getTypeMember(ctx, type, memberName, exprHint)
+        member ?: return C_ExprUtils.errorMember(ctx, memberName.pos)
 
-        var filteredMembers = members.filter { if (exprHint.callable) it.isCallable() else it.valueType != null }
-        if (filteredMembers.isEmpty()) {
-            filteredMembers = members
-        }
-
-        if (filteredMembers.size > 1) {
-            val kinds = filteredMembers.map { it.kindMsg() }
-            val listCode = kinds.joinToString(",")
-            val listMsg = kinds.joinToString()
-            msgCtx.error(memberName.pos, "name:ambig:$memberName:[$listCode]", "Name '$memberName' is ambiguous: $listMsg")
-        }
-
-        val memberRef = C_MemberRef(this, memberName, safe)
-        val memberLink = memberRef.toLink()
-
-        val member = filteredMembers[0]
-        return member.compile(ctx, memberLink)
+        return member0(ctx, memberName, member, safe && (type is R_NullableType), exprHint)
     }
 
-    private fun checkNullAccess(msgCtx: C_MessageContext, type: R_Type, name: C_Name, safe: Boolean) {
-        if (!safe && type is R_NullableType) {
-            val nameStr = name.str
-            val msg = "Cannot access member '$nameStr' of nullable type ${type.str()}"
-            msgCtx.error(name.pos, "expr_mem_null:$nameStr", msg)
-        }
+    protected open fun member0(
+        ctx: C_ExprContext,
+        memberName: C_Name,
+        memberValue: C_TypeValueMember,
+        safe: Boolean,
+        exprHint: C_ExprHint,
+    ): C_ExprMember {
+        val link = C_MemberLink(this, memberName.pos, memberName, safe)
+        return memberValue.compile(ctx, link)
     }
 
     open fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
@@ -206,7 +200,8 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         if (type is R_FunctionType) {
             val callInfo = C_FunctionCallInfo.forFunctionType(pos, type)
             val callTarget = C_FunctionCallTarget_FunctionType(ctx, callInfo, this, type, safe)
-            return C_FunctionUtils.compileRegularCall(ctx, callInfo, callTarget, args, resTypeHint)
+            val vCall = C_FunctionUtils.compileRegularCall(ctx, callInfo, callTarget, args, resTypeHint)
+            return vCall.vExpr()
         }
 
         // Validate args.
@@ -250,8 +245,9 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     open fun constantValue(ctx: V_ConstantValueEvalContext): Rt_Value? = null
 
     open fun isAtExprItem(): Boolean = false
-    open fun implicitAtWhereAttrName(): R_Name? = null
-    open fun implicitAtWhatAttrName(): R_Name? = null
+    open fun implicitTargetAttrName(): R_Name? = null
+    open fun implicitAtWhereAttrName(): R_Name? = implicitTargetAttrName()
+    open fun implicitAtWhatAttrName(): C_Name? = null
     open fun varId(): C_VarUid? = null
     open fun globalConstantId(): R_GlobalConstantId? = null
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null

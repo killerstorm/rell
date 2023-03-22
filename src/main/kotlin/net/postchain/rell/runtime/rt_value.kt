@@ -10,17 +10,19 @@ import com.google.common.math.LongMath
 import mu.KLogging
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvVirtual
+import net.postchain.rell.lib.type.Lib_BigIntegerMath
 import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.*
+import net.postchain.rell.model.expr.R_FunctionCallTarget
 import net.postchain.rell.model.expr.R_PartialArgMapping
 import net.postchain.rell.model.expr.R_PartialCallMapping
-import net.postchain.rell.model.expr.Rt_FunctionCallTarget
 import net.postchain.rell.runtime.utils.Rt_ValueRecursionDetector
 import net.postchain.rell.utils.CommonUtils
 import net.postchain.rell.utils.PostchainUtils
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.util.*
 import java.util.regex.Pattern
 
@@ -37,6 +39,7 @@ enum class Rt_CoreValueTypes {
     UNIT,
     BOOLEAN,
     INTEGER,
+    BIG_INTEGER,
     DECIMAL,
     TEXT,
     BYTE_ARRAY,
@@ -88,6 +91,7 @@ abstract class Rt_Value {
 
     open fun asBoolean(): Boolean = throw errType(Rt_CoreValueTypes.BOOLEAN)
     open fun asInteger(): Long = throw errType(Rt_CoreValueTypes.INTEGER)
+    open fun asBigInteger(): BigInteger = throw errType(Rt_CoreValueTypes.BIG_INTEGER)
     open fun asDecimal(): BigDecimal = throw errType(Rt_CoreValueTypes.DECIMAL)
     open fun asRowid(): Long = throw errType(Rt_CoreValueTypes.ROWID)
     open fun asString(): String = throw errType(Rt_CoreValueTypes.TEXT)
@@ -179,6 +183,63 @@ class Rt_IntValue(val value: Long): Rt_Value() {
     override fun hashCode() = java.lang.Long.hashCode(value)
 }
 
+class Rt_BigIntegerValue private constructor(private val value: BigInteger): Rt_Value() {
+    override val valueType = Rt_CoreValueTypes.BIG_INTEGER.type()
+
+    override fun type() = R_BigIntegerType
+    override fun asBigInteger() = value
+    override fun asFormatArg() = value
+    override fun strCode(showTupleFieldNames: Boolean) = "bigint[${str()}]"
+    override fun str() = value.toString()
+    override fun equals(other: Any?) = other === this || (other is Rt_BigIntegerValue && value == other.value)
+    override fun hashCode() = value.hashCode()
+
+    companion object : KLogging() {
+        val ZERO = Rt_BigIntegerValue(BigInteger.ZERO)
+
+        fun of(v: BigInteger): Rt_Value {
+            if (v.signum() == 0) {
+                return ZERO
+            }
+
+            val res = ofTry(v)
+            return res ?: throw errOverflow("bigint:overflow", "Big integer value out of range")
+        }
+
+        fun ofTry(v: BigInteger): Rt_Value? {
+            return if (v < Lib_BigIntegerMath.MIN_VALUE || v > Lib_BigIntegerMath.MAX_VALUE) null else Rt_BigIntegerValue(v)
+        }
+
+        fun of(v: BigDecimal): Rt_Value {
+            val bigInt = try {
+                v.toBigIntegerExact()
+            } catch (e: ArithmeticException) {
+                throw Rt_Exception.common("bigint:nonint:$v", "Value is not an integer: '$v'")
+            }
+            return of(bigInt)
+        }
+
+        fun of(s: String): Rt_Value {
+            val v = try {
+                BigInteger(s)
+            } catch (e: NumberFormatException) {
+                throw Rt_Exception.common("bigint:invalid:$s", "Invalid big integer value: '$s'")
+            }
+            return of(v)
+        }
+
+        fun of(v: Long): Rt_Value {
+            val bi = BigInteger.valueOf(v)
+            return of(bi)
+        }
+
+        fun errOverflow(code: String, msg: String): Rt_Exception {
+            val p = Lib_BigIntegerMath.PRECISION
+            return Rt_Exception.common(code, "$msg (allowed range is -10^$p..10^$p, exclusive)")
+        }
+    }
+}
+
 class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
     override val valueType = Rt_CoreValueTypes.DECIMAL.type()
 
@@ -247,12 +308,12 @@ class Rt_TextValue(val value: String): Rt_Value() {
 
     companion object {
         fun like(s: String, pattern: String): Boolean {
-            val regex = likePatternToRegex(pattern)
+            val regex = likePatternToRegex(pattern, '_', '%')
             val m = regex.matcher(s)
             return m.matches()
         }
 
-        private fun likePatternToRegex(pattern: String): Pattern {
+        fun likePatternToRegex(pattern: String, one: Char, many: Char): Pattern {
             val buf = StringBuilder()
             val raw = StringBuilder()
             var esc = false
@@ -263,10 +324,10 @@ class Rt_TextValue(val value: String): Rt_Value() {
                     esc = false
                 } else if (c == '\\') {
                     esc = true
-                } else if (c == '%' || c == '_') {
+                } else if (c == one || c == many) {
                     if (raw.isNotEmpty()) buf.append(Pattern.quote(raw.toString()))
                     raw.setLength(0)
-                    buf.append(if (c == '%') ".*" else ".")
+                    buf.append(if (c == many) ".*" else ".")
                 } else {
                     raw.append(c)
                 }
@@ -852,7 +913,8 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
 class Rt_FunctionValue(
         private val type: R_Type,
         private val mapping: R_PartialCallMapping,
-        private val target: Rt_FunctionCallTarget,
+        private val target: R_FunctionCallTarget,
+        private val baseValue: Rt_Value?,
         exprValues: List<Rt_Value>
 ): Rt_Value() {
     private val exprValues = let {
@@ -868,16 +930,16 @@ class Rt_FunctionValue(
     override fun strCode(showTupleFieldNames: Boolean): String {
         return STR_RECURSION_DETECTOR.calculate(this) {
             val argsStr = mapping.args.joinToString(",") { if (it.wild) "*" else exprValues[it.index].strCode() }
-            "fn[${target.strCode()}($argsStr)]"
+            "fn[${target.strCode(baseValue)}($argsStr)]"
         } ?: "fn[...]"
     }
 
-    override fun str() = "${target.str()}(*)"
+    override fun str() = "${target.str(baseValue)}(*)"
 
     fun call(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         checkEquals(args.size, mapping.wildCount)
         val combinedArgs = mapping.args.map { if (it.wild) args[it.index] else exprValues[it.index] }
-        return target.call(callCtx, combinedArgs)
+        return target.call(callCtx, baseValue, combinedArgs)
     }
 
     fun combine(newType: R_Type, newMapping: R_PartialCallMapping, newArgs: List<Rt_Value>): Rt_Value {
@@ -896,7 +958,7 @@ class Rt_FunctionValue(
         }
 
         val resMapping = R_PartialCallMapping(resExprValues.size, newMapping.wildCount, resArgMappings)
-        return Rt_FunctionValue(newType, resMapping, target, resExprValues)
+        return Rt_FunctionValue(newType, resMapping, target, baseValue, resExprValues)
     }
 
     companion object {

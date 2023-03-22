@@ -6,6 +6,7 @@ package net.postchain.rell.compiler.base.namespace
 
 import com.google.common.collect.Multimap
 import com.google.common.collect.Sets
+import net.postchain.rell.compiler.ast.S_ExactImportTargetItem
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.module.*
@@ -15,8 +16,9 @@ import net.postchain.rell.compiler.base.utils.C_LateInit
 import net.postchain.rell.compiler.base.utils.C_RNamePath
 import net.postchain.rell.model.R_AppUid
 import net.postchain.rell.model.R_Name
+import net.postchain.rell.tools.api.IdeSymbolCategory
+import net.postchain.rell.tools.api.IdeSymbolGlobalId
 import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.*
 import java.util.*
 
@@ -25,8 +27,9 @@ interface C_NsAsm_BasicAssembler {
 }
 
 interface C_NsAsm_ComponentAssembler: C_NsAsm_BasicAssembler {
+    fun namespacePath(): C_RNamePath
     fun addDef(name: C_Name, def: C_NamespaceMember)
-    fun addNamespace(name: C_Name, merge: Boolean, deprecated: C_Deprecated?): C_NsAsm_ComponentAssembler
+    fun addNamespace(name: C_Name, merge: Boolean, ideInfo: IdeSymbolInfo, deprecated: C_Deprecated?): C_NsAsm_ComponentAssembler
     fun addModuleImport(alias: C_Name, module: C_ModuleKey, ideInfo: IdeSymbolInfo)
     fun addExactImport(alias: C_Name, module: C_ModuleKey, qNameHand: C_QualifiedNameHandle, aliasHand: C_NameHandle?)
     fun addWildcardImport(module: C_ModuleKey, pathHands: List<C_NameHandle>)
@@ -103,7 +106,8 @@ class C_NsAsm_WildcardImportNames(executor: C_CompilerExecutor, pathHands: List<
 class C_NsAsm_ExactImportNames(
         executor: C_CompilerExecutor,
         private val aliasHand: C_NameHandle?,
-        private val qNameHand: C_QualifiedNameHandle
+        private val qNameHand: C_QualifiedNameHandle,
+        val aliasIdeId: IdeSymbolGlobalId?,
 ) {
     private var ideInfoDefined = false
 
@@ -122,8 +126,10 @@ class C_NsAsm_ExactImportNames(
         val fullIdeInfos = qNameHand.parts.indices.map { ideInfos.getOrNull(it) ?: IdeSymbolInfo.UNKNOWN }.toImmList()
         qNameHand.setIdeInfo(fullIdeInfos)
 
-        val lastIdeInfo = fullIdeInfos.lastOrNull() ?: IdeSymbolInfo.UNKNOWN
-        aliasHand?.setIdeInfo(lastIdeInfo)
+        if (aliasHand != null) {
+            val lastIdeInfo = (fullIdeInfos.lastOrNull() ?: IdeSymbolInfo.UNKNOWN).update(defId = aliasIdeId?.symId, link = null)
+            aliasHand.setIdeInfo(lastIdeInfo)
+        }
     }
 }
 
@@ -141,7 +147,7 @@ class C_NsAsm_Namespace(
 
 sealed class C_NsAsm_Def
 
-class C_NsAsm_Def_Simple(val member: C_NamespaceMember): C_NsAsm_Def()
+class C_NsAsm_Def_Simple(val item: C_NamespaceItem): C_NsAsm_Def()
 
 class C_NsAsm_Def_ExactImport(
         val imp: C_NsAsm_ExactImport,
@@ -157,8 +163,13 @@ sealed class C_NsAsm_Def_Namespace(val defName: C_DefinitionName, val deprecated
             return C_NsAsm_Def_DirectNamespace(defName, deprecated, ns, ideInfo)
         }
 
-        fun createLate(defName: C_DefinitionName, deprecated: C_Deprecated?, getter: LateGetter<C_NsAsm_Namespace>): C_NsAsm_Def {
-            return C_NsAsm_Def_LateNamespace(defName, deprecated, getter)
+        fun createLate(
+            defName: C_DefinitionName,
+            deprecated: C_Deprecated?,
+            ideInfo: IdeSymbolInfo,
+            getter: LateGetter<C_NsAsm_Namespace>,
+        ): C_NsAsm_Def {
+            return C_NsAsm_Def_LateNamespace(defName, deprecated, ideInfo, getter)
         }
     }
 }
@@ -176,13 +187,11 @@ private class C_NsAsm_Def_DirectNamespace(
 private class C_NsAsm_Def_LateNamespace(
     defName: C_DefinitionName,
     deprecated: C_Deprecated?,
+    private val ideInfo: IdeSymbolInfo,
     private val getter: LateGetter<C_NsAsm_Namespace>,
 ): C_NsAsm_Def_Namespace(defName, deprecated) {
     override fun ns() = getter.get()
-
-    override fun ideSymbolInfo(): IdeSymbolInfo {
-        return IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE)
-    }
+    override fun ideSymbolInfo() = ideInfo
 }
 
 private sealed class C_NsAsm_InternalAssembler {
@@ -256,17 +265,18 @@ private class C_NsAsm_InternalComponentAssembler(
         entries.add(C_NsAsm_MutableEntry(name, type, def, identity, nsKey.container, stamp))
     }
 
+    override fun namespacePath(): C_RNamePath = nsKey.path
+
     override fun addDef(name: C_Name, def: C_NamespaceMember) {
         val type = def.declarationType()
-        val def2 = C_NsAsm_RawDef_Simple(def)
+        val def2 = C_NsAsm_RawDef_Simple(C_NamespaceItem(def))
         addEntry(name, type, C_NsAsm_MutableDef_Simple(def2), C_NsAsm_Identity_Def(def2))
     }
 
-    override fun addNamespace(name: C_Name, merge: Boolean, deprecated: C_Deprecated?): C_NsAsm_ComponentAssembler {
+    override fun addNamespace(name: C_Name, merge: Boolean, ideInfo: IdeSymbolInfo, deprecated: C_Deprecated?): C_NsAsm_ComponentAssembler {
         checkCanModify()
         val asm = createSubAssembler(name)
         val defName = nsKey.toDefPath().subName(name.rName)
-        val ideInfo = IdeSymbolInfo.DEF_NAMESPACE
         val def = C_NsAsm_MutableDef_Namespace(asm, merge, defName, ideInfo, deprecated)
         addEntry(name, C_DeclarationType.NAMESPACE, def, C_NsAsm_Identity_Unique())
         return asm
@@ -292,13 +302,18 @@ private class C_NsAsm_InternalComponentAssembler(
             alias: C_Name,
             module: C_ModuleKey,
             qNameHand: C_QualifiedNameHandle,
-            aliasHand: C_NameHandle?
+            aliasHand: C_NameHandle?,
     ) {
+        val aliasIdeId = if (aliasHand == null) null else {
+            S_ExactImportTargetItem.makeAliasIdeId(nsKey.path, aliasHand.name, IdeSymbolCategory.IMPORT)
+        }
+
         val qName = qNameHand.qName
-        val names = C_NsAsm_ExactImportNames(executor, aliasHand, qNameHand)
+        val names = C_NsAsm_ExactImportNames(executor, aliasHand, qNameHand, aliasIdeId)
         val imp = C_NsAsm_ExactImport(module, qName)
         val def = C_NsAsm_RawDef_ExactImport(imp, names)
         val mutDef = C_NsAsm_MutableDef_Simple(def)
+
         addEntry(alias, C_DeclarationType.IMPORT, mutDef, C_NsAsm_Identity_ExactImport(imp))
     }
 
@@ -432,7 +447,7 @@ class C_NsAsm_RawNamespace(
         val defs = mutableMapOf<R_Name, C_NsAsm_Def>()
 
         for (entry in sysEntries) {
-            defs[entry.name] = C_NsAsm_Def_Simple(entry.def)
+            defs[entry.name] = C_NsAsm_Def_Simple(entry.item)
         }
 
         for (entry in entries) {
@@ -498,13 +513,13 @@ sealed class C_NsAsm_RawDef {
     abstract fun assemble(): C_NsAsm_Def
 }
 
-private class C_NsAsm_RawDef_Simple(private val def: C_NamespaceMember): C_NsAsm_RawDef() {
+private class C_NsAsm_RawDef_Simple(private val item: C_NamespaceItem): C_NsAsm_RawDef() {
     override fun filterByStamp(targetStamp: R_AppUid) = this
 
-    override fun addToDefs(b: C_ModuleDefsBuilder) = def.addToDefs(b)
+    override fun addToDefs(b: C_ModuleDefsBuilder) = item.member.addToDefs(b)
 
     override fun assemble(): C_NsAsm_Def {
-        return C_NsAsm_Def_Simple(def)
+        return C_NsAsm_Def_Simple(item)
     }
 }
 
@@ -721,7 +736,7 @@ private class C_NsAsm_ConflictsProcessor(
 ) {
     private val sysDefs: Map<R_Name, C_DeclarationType> = let {
         val mutSysDefs = mutableMapOf<R_Name, C_DeclarationType>()
-        for (entry in sysNsProto.entries) if (entry.name !in mutSysDefs) mutSysDefs[entry.name] = entry.def.declarationType()
+        for (entry in sysNsProto.entries) if (entry.name !in mutSysDefs) mutSysDefs[entry.name] = entry.item.member.declarationType()
         mutSysDefs.toImmMap()
     }
 

@@ -1,22 +1,25 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.expr
 
-import net.postchain.rell.compiler.base.utils.C_Constants
+import net.postchain.rell.lib.type.Lib_BigIntegerMath
 import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.RellTestContext
 import net.postchain.rell.test.SqlTestUtils
 import net.postchain.rell.utils.CommonUtils
+import org.junit.Test
 import java.math.BigDecimal
+import java.math.BigInteger
 import kotlin.test.assertEquals
 
 class OperatorsDbTest: OperatorsBaseTest() {
     private val dataAttrs = listOf(
             Triple("b", "boolean", "false"),
             Triple("i", "integer", "0"),
+            Triple("l", "big_integer", "0"),
             Triple("d", "decimal", "0"),
             Triple("t", "text", "''"),
             Triple("ba", "byte_array", "''"),
@@ -67,6 +70,11 @@ class OperatorsDbTest: OperatorsBaseTest() {
 
     private val tstCtx = resource(RellTestContext())
     private val tst = RellCodeTester(tstCtx, entityDefs = entityDefs, inserts = inserts)
+
+    @Test fun testComplexWhat() {
+        // Make sure that complex what is not enabled in this test class, so all expressions are evaluated via SQL.
+        chkExpr("[#0 : #1]", "ct_err:expr_sqlnotallowed", vInt(123), vText("Hello"))
+    }
 
     override fun chkExpr(expr: String, args: List<TstVal>, expected: Boolean) {
         val (expr2, values) = transformExpr(expr, args)
@@ -122,6 +130,7 @@ class OperatorsDbTest: OperatorsBaseTest() {
 
     private fun calc(values: Map<String, String>, code: String): String {
         tst.inserts = makeInserts(values)
+        tst.complexWhatEnabled = false
         return tst.callQuery("query q() $code", "q", listOf())
     }
 
@@ -146,6 +155,7 @@ class OperatorsDbTest: OperatorsBaseTest() {
 
     override fun vBool(v: Boolean): TstVal = AtTstVal.Bool(v)
     override fun vInt(v: Long): TstVal = AtTstVal.Integer(v)
+    override fun vBigInt(v: BigInteger): TstVal = AtTstVal.BigInteger(v)
     override fun vDec(v: BigDecimal): TstVal = AtTstVal.Decimal(v)
     override fun vText(v: String): TstVal = AtTstVal.Text(v)
     override fun vBytes(v: String): TstVal = AtTstVal.Bytes(v)
@@ -164,6 +174,10 @@ class OperatorsDbTest: OperatorsBaseTest() {
 
         class Integer(val v: Long): AtTstVal("i") {
             override fun sql(): String = "$v"
+        }
+
+        class BigInteger(val v: java.math.BigInteger): AtTstVal("l") {
+            override fun sql(): String = "('$v' :: ${Lib_BigIntegerMath.SQL_TYPE_STR})"
         }
 
         class Decimal(val v: BigDecimal): AtTstVal("d") {

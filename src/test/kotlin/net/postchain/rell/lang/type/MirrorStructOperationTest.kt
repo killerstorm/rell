@@ -134,6 +134,7 @@ class MirrorStructOperationTest: BaseRellTest(false) {
     }
 
     @Test fun testBugParameterNameConflict() {
+        tst.ideDefIdConflictError = false
         chkCompile("operation op(x: integer, x: text) {}", "ct_err:dup_param_name:x")
     }
 }

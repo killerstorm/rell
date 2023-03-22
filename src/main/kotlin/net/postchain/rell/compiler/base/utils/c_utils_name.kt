@@ -101,6 +101,7 @@ class C_RNamePath private constructor(parts: List<R_Name>) {
 
     fun child(name: R_Name) = C_RNamePath(parts + name)
     fun child(names: List<R_Name>) = of(parts + names)
+    fun fullName(name: R_Name): R_QualifiedName = R_QualifiedName(parts + name)
 
     override fun equals(other: Any?) = other is C_RNamePath && parts == other.parts
     override fun hashCode() = parts.hashCode()

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.expr
@@ -23,6 +23,13 @@ object R_UnaryOp_Minus_Integer: R_UnaryOp() {
         }
 
         return Rt_IntValue(res)
+    }
+}
+
+object R_UnaryOp_Minus_BigInteger: R_UnaryOp() {
+    override fun evaluate(operand: Rt_Value): Rt_Value {
+        val v = operand.asBigInteger()
+        return Rt_BigIntegerValue.of(v.negate())
     }
 }
 

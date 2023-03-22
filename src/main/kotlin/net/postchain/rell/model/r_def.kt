@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model
@@ -137,7 +137,6 @@ class R_Struct(
         val typeMetaGtv: Gtv,
         val initFrameGetter: C_LateGetter<R_CallFrame>,
         val mirrorStructs: R_MirrorStructs?,
-        val ideInfo: IdeSymbolInfo,
 ) {
     private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, ERROR_BODY)
     private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, ERROR_STRUCT_FLAGS)
@@ -219,7 +218,7 @@ class R_MirrorStructs(
                 "mutable" to mutable.toGtv()
         ).toGtv()
 
-        return R_Struct(structName, structMetaGtv, defBase.initFrameGetter, mirrorStructs = this, ideInfo = IdeSymbolInfo.DEF_STRUCT)
+        return R_Struct(structName, structMetaGtv, defBase.initFrameGetter, mirrorStructs = this)
     }
 }
 

@@ -10,6 +10,7 @@ import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.common.BlockchainRid
 import net.postchain.common.hexStringToByteArray
+import net.postchain.common.toHex
 import net.postchain.common.types.WrappedByteArray
 import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
@@ -35,7 +36,7 @@ class RellCodeTester(
         tstCtx: RellTestContext,
         entityDefs: List<String> = listOf(),
         inserts: List<String> = listOf(),
-        gtv: Boolean = false
+        gtv: Boolean = false,
 ): RellBaseTester(tstCtx, entityDefs, inserts, gtv) {
     var gtvResult: Boolean = gtv
         set(value) {
@@ -143,12 +144,14 @@ class RellCodeTester(
 
     fun chkQueryGtv(code: String, expected: String) {
         val queryCode = "query q() $code"
-        val actual = callQuery0(queryCode, "q", listOf(), GtvTestUtils::decodeGtvQueryArgs)
+        val encoder = resultEncoder()
+        val actual = callQuery0(queryCode, "q", listOf(), GtvTestUtils::decodeGtvQueryArgs, encoder)
         checkResult(expected, actual)
     }
 
     fun chkQueryGtvEx(code: String, args: List<String>, expected: String) {
-        val actual = callQuery0(code, "q", args, GtvTestUtils::decodeGtvQueryArgs)
+        val encoder = resultEncoder()
+        val actual = callQuery0(code, "q", args, GtvTestUtils::decodeGtvQueryArgs, encoder)
         checkResult(expected, actual)
     }
 
@@ -192,14 +195,31 @@ class RellCodeTester(
     }
 
     fun callQuery(code: String, name: String, args: List<Rt_Value>): String {
-        return callQuery0(code, name, args) { _, v -> v }
+        val encoder = resultEncoder()
+        return callQuery0(code, name, args, { _, v -> v }, encoder)
+    }
+
+    fun callQueryGtv(code: String, name: String, args: List<Rt_Value>): Gtv {
+        val encoder = { t: R_Type, v: Rt_Value -> PostchainUtils.gtvToBytes(t.rtToGtv(v, true)).toHex() }
+        val str = callQuery0(code, name, args, { _, v -> v }, encoder)
+        val bytes = str.hexStringToByteArray()
+        return PostchainUtils.bytesToGtv(bytes)
+    }
+
+    private fun resultEncoder(): (R_Type, Rt_Value) -> String {
+        return when {
+            gtvResult -> RellTestUtils.ENCODER_GTV
+            strictToString -> RellTestUtils.ENCODER_STRICT
+            else -> RellTestUtils.ENCODER_PLAIN
+        }
     }
 
     private fun <T> callQuery0(
             code: String,
             name: String,
             args: List<T>,
-            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>
+            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>,
+            encoder: (R_Type, Rt_Value) -> String,
     ): String {
         val evalRes = eval.eval {
             if (wrapInit) {
@@ -209,12 +229,6 @@ class RellCodeTester(
             }
 
             val moduleCode = moduleCode(code)
-
-            val encoder = when {
-                gtvResult -> RellTestUtils.ENCODER_GTV
-                strictToString -> RellTestUtils.ENCODER_STRICT
-                else -> RellTestUtils.ENCODER_PLAIN
-            }
 
             processWithExeCtx(moduleCode, false) { appCtx ->
                 RellTestUtils.callQueryGeneric(eval, appCtx, name, args, decoder, encoder)

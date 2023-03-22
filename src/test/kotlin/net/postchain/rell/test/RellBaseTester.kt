@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -40,6 +40,8 @@ abstract class RellBaseTester(
     var testLib = false
     var hiddenLib = true
     var allowDbModificationsInObjectExprs = C_CompilerOptions.DEFAULT.allowDbModificationsInObjectExprs
+    var complexWhatEnabled = true
+    var ideDefIdConflictError = true
     var compatibilityVer = C_CompilerOptions.DEFAULT.compatibility
 
     var blockchainRid = RellTestUtils.strToRidHex("DEADBEEF")
@@ -127,7 +129,9 @@ abstract class RellBaseTester(
             testLib = testLib,
             hiddenLib = hiddenLib,
             allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
-            symbolInfoFile = C_SourcePath.parse(RellTestUtils.MAIN_FILE)
+            symbolInfoFile = C_SourcePath.parse(RellTestUtils.MAIN_FILE),
+            complexWhatEnabled = complexWhatEnabled,
+            ideDefIdConflictError = ideDefIdConflictError,
     )
 
     fun def(defs: List<String>) {

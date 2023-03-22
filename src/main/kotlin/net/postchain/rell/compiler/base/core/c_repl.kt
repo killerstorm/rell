@@ -16,6 +16,8 @@ import net.postchain.rell.model.*
 import net.postchain.rell.repl.*
 import net.postchain.rell.utils.*
 
+private const val REPL_NAME = "<REPL>"
+
 class C_ExtReplCommand(
         extModules: List<C_ExtModule>,
         extMembers: List<C_ExtModuleMember>,
@@ -71,9 +73,10 @@ class C_ExtReplCommand(
 
     private fun createReplContext(mntCtx: C_MountContext, codeState: ReplCodeState): C_ReplCommandContext {
         val stmtVars = discoverStatementVars()
-        val cDefBase = mntCtx.defBase(C_StringQualifiedName.of("<REPL>"))
-        val defCtx = C_DefinitionContext(mntCtx, C_DefinitionType.REPL, cDefBase.defId)
-        val fnCtx = C_FunctionContext(defCtx, "<REPL>", null, stmtVars)
+        val cDefBase = mntCtx.defBase(C_StringQualifiedName.of(REPL_NAME))
+        val ideId = cDefBase.ideId(C_DefinitionType.REPL)
+        val defCtx = C_DefinitionContext(mntCtx, C_DefinitionType.REPL, cDefBase.defId, cDefBase.defName, ideId)
+        val fnCtx = C_FunctionContext(defCtx, REPL_NAME, null, stmtVars)
         val frameCtx = C_FrameContext.create(fnCtx, codeState.cState.frameProto)
         return C_ReplCommandContext(frameCtx, codeState)
     }

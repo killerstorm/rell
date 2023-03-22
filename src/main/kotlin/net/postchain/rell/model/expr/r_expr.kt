@@ -6,6 +6,7 @@ package net.postchain.rell.model.expr
 
 import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.compiler.base.utils.toCodeMsg
+import net.postchain.rell.lib.type.C_Lib_Type_BigInteger
 import net.postchain.rell.lib.type.C_Lib_Type_Decimal
 import net.postchain.rell.model.*
 import net.postchain.rell.model.stmt.R_ForIterator
@@ -16,6 +17,7 @@ import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlGen
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
+import java.math.BigDecimal
 
 abstract class R_Expr(val type: R_Type) {
     protected abstract fun evaluate0(frame: Rt_CallFrame): Rt_Value
@@ -538,40 +540,6 @@ class R_StructExpr(private val struct: R_Struct, private val attrs: List<R_Creat
     }
 }
 
-class R_ObjectExpr(val objType: R_ObjectType): R_Expr(objType) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        return Rt_ObjectValue(objType)
-    }
-}
-
-class R_ObjectAttrExpr(type: R_Type, val rObject: R_ObjectDefinition, val atBase: Db_AtExprBase): R_Expr(type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        var records = atBase.execute(frame, Rt_AtExprExtras.NULL)
-
-        if (records.isEmpty()) {
-            val forced = frame.defCtx.appCtx.forceObjectInit(rObject)
-            if (forced) {
-                records = atBase.execute(frame, Rt_AtExprExtras.NULL)
-            }
-        }
-
-        val count = records.size
-
-        if (count == 0) {
-            val name = rObject.appLevelName
-            throw Rt_Exception.common("obj_norec:$name", "No record for object '$name' in database")
-        } else if (count > 1) {
-            val name = rObject.appLevelName
-            throw Rt_Exception.common("obj_multirec:$name:$count", "Multiple records for object '$name' in database: $count")
-        }
-
-        val record = records[0]
-        checkEquals(record.size, 1)
-        val value = record[0]
-        return value
-    }
-}
-
 class R_AssignExpr(
         type: R_Type,
         val op: R_BinaryOp,
@@ -645,9 +613,25 @@ object R_TypeAdapter_Direct: R_TypeAdapter() {
     override fun adaptValue(value: Rt_Value) = value
 }
 
+object R_TypeAdapter_IntegerToBigInteger: R_TypeAdapter() {
+    override fun adaptValue(value: Rt_Value): Rt_Value {
+        val r = C_Lib_Type_BigInteger.calcFromInteger(value)
+        return r
+    }
+}
+
 object R_TypeAdapter_IntegerToDecimal: R_TypeAdapter() {
     override fun adaptValue(value: Rt_Value): Rt_Value {
         val r = C_Lib_Type_Decimal.calcFromInteger(value)
+        return r
+    }
+}
+
+object R_TypeAdapter_BigIntegerToDecimal: R_TypeAdapter() {
+    override fun adaptValue(value: Rt_Value): Rt_Value {
+        val bigInt = value.asBigInteger()
+        val bigDec = BigDecimal(bigInt)
+        val r = Rt_DecimalValue.of(bigDec)
         return r
     }
 }

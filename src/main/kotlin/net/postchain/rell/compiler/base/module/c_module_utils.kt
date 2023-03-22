@@ -4,18 +4,16 @@
 
 package net.postchain.rell.compiler.base.module
 
+import com.google.common.collect.Multimap
 import net.postchain.rell.compiler.ast.S_RellFile
-import net.postchain.rell.compiler.base.core.C_MessageContext
-import net.postchain.rell.compiler.base.core.C_NopSymbolContext
-import net.postchain.rell.compiler.base.core.C_SymbolContext
-import net.postchain.rell.compiler.base.core.C_SymbolContextProvider
+import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.modifier.C_ModifierContext
 import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.model.R_Name
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.immListOf
-import net.postchain.rell.utils.toImmList
+import net.postchain.rell.model.R_QualifiedName
+import net.postchain.rell.tools.api.*
+import net.postchain.rell.utils.*
 
 object C_ModuleUtils {
     const val FILE_SUFFIX = ".rell"
@@ -57,14 +55,8 @@ object C_ModuleUtils {
     fun isAllowedModuleName(name: R_ModuleName) = !name.startsWith(RELL_MODULE)
 }
 
-class C_ModuleReaderContext(
-        val msgCtx: C_MessageContext,
-        private val symCtxProvider: C_SymbolContextProvider,
-        private val importLoader: C_ImportModuleLoader
-) {
-    fun createModuleSourceContext(moduleName: R_ModuleName): C_ModuleSourceContext {
-        return C_ModuleSourceContext(msgCtx, symCtxProvider, importLoader, moduleName)
-    }
+class C_ModuleReaderContext(val appCtx: S_AppContext) {
+    val msgCtx = appCtx.msgCtx
 }
 
 class C_ModuleReader(
@@ -105,7 +97,7 @@ class C_ModuleReader(
 
 private class C_ModuleDirTree(
         private val readerCtx: C_ModuleReaderContext,
-        private val sourceDir: C_SourceDir
+        private val sourceDir: C_SourceDir,
 ) {
     private val rootDir = DirNode(C_SourcePath.EMPTY, R_ModuleName.EMPTY)
 
@@ -270,7 +262,7 @@ private class C_ModuleDirTree(
                 val ast = fileNode.getAst()
                 val isMainFile = fileNode.fileName == C_ModuleUtils.MODULE_FILE
                 if (isMainFile || ast == null || ast.header == null) {
-                    val parsedFile = C_ParsedRellFile(fileNode.path, ast)
+                    val parsedFile = C_ParsedRellFile(fileNode.path, fileNode.idePath, ast)
                     modFiles.add(parsedFile)
                     if (isMainFile) {
                         mainFile = parsedFile
@@ -279,8 +271,7 @@ private class C_ModuleDirTree(
             }
 
             return if (modFiles.isEmpty()) null else {
-                val srcCtx = readerCtx.createModuleSourceContext(moduleName)
-                C_DirModuleSource(srcCtx, path, modFiles.toImmList(), mainFile)
+                C_DirModuleSource(readerCtx.appCtx, moduleName, path, modFiles.toImmList(), mainFile)
             }
         }
 
@@ -319,8 +310,10 @@ private class C_ModuleDirTree(
             private val dirModuleName: R_ModuleName,
             val fileName: String,
             private val rName: R_Name?,
-            private val sourceFile: C_SourceFile?
+            private val sourceFile: C_SourceFile,
     ): TreeNode(path) {
+        val idePath = sourceFile.idePath()
+
         private val astLazy: S_RellFile? by lazy {
             calcAst()
         }
@@ -354,127 +347,207 @@ private class C_ModuleDirTree(
 
             return if (ast != null && ast.header == null) null else {
                 val moduleName = dirModuleName.child(rName)
-                val srcCtx = readerCtx.createModuleSourceContext(moduleName)
-                C_FileModuleSource(srcCtx, C_ParsedRellFile(path, ast))
+                C_FileModuleSource(readerCtx.appCtx, moduleName, C_ParsedRellFile(path, idePath, ast))
             }
         }
     }
 }
 
-class C_ModuleSourceContext(
-        val msgCtx: C_MessageContext,
-        val symCtxProvider: C_SymbolContextProvider,
-        private val importLoader: C_ImportModuleLoader,
-        val moduleName: R_ModuleName
+class S_AppContext(
+    val msgCtx: C_MessageContext,
+    val symCtxProvider: C_SymbolContextProvider,
+    val importLoader: C_ImportModuleLoader,
 ) {
-    fun createDefinitionContext(path: C_SourcePath): C_ModuleDefinitionContext {
-        val symCtx = symCtxProvider.getSymbolContext(path)
-        return C_ModuleDefinitionContext.root(msgCtx, importLoader, moduleName, symCtx)
+    fun <T> withModuleContext(moduleName: R_ModuleName, code: (S_ModuleContext) -> T): T {
+        val modCtx = S_PrivateModuleContext(this, moduleName)
+        val res = code(modCtx)
+        modCtx.finish()
+        return res
     }
 }
 
-class C_ModuleDefinitionContext private constructor(
-    val msgCtx: C_MessageContext,
-    private val importLoader: C_ImportModuleLoader,
-    val moduleName: R_ModuleName,
-    val namespacePath: C_RNamePath,
-    val symCtx: C_SymbolContext
-) {
-    fun loadModule(name: R_ModuleName): Boolean {
-        return importLoader.loadModule(name)
+sealed class S_ModuleContext(val appCtx: S_AppContext, val moduleName: R_ModuleName) {
+    val msgCtx = appCtx.msgCtx
+
+    abstract fun createFileContext(path: C_SourcePath, idePath: IdeFilePath): S_FileContext
+}
+
+private class S_PrivateModuleContext(appCtx: S_AppContext, moduleName: R_ModuleName): S_ModuleContext(appCtx, moduleName) {
+    private val files = mutableSetOf<C_SourcePath>()
+    private val namespaces = mutableMultimapOf<R_QualifiedName, NamespaceNameInfoRec>()
+    private var finished = false
+
+    override fun createFileContext(path: C_SourcePath, idePath: IdeFilePath): S_FileContext {
+        check(files.add(path)) { "$moduleName $path" }
+        val symCtx = appCtx.symCtxProvider.getSymbolContext(path)
+        return S_PrivateFileContext(this, symCtx, path, idePath, namespaces)
     }
 
-    fun namespace(path: C_RNamePath): C_ModuleDefinitionContext {
-        val subNamespacePath = namespacePath.child(path.parts)
-        return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, subNamespacePath, symCtx)
-    }
+    fun finish() {
+        check(!finished)
+        finished = true
 
-    companion object {
-        fun root(
-            msgCtx: C_MessageContext,
-            importLoader: C_ImportModuleLoader,
-            moduleName: R_ModuleName,
-            symCtx: C_SymbolContext
-        ): C_ModuleDefinitionContext {
-            return C_ModuleDefinitionContext(msgCtx, importLoader, moduleName, C_RNamePath.EMPTY, symCtx)
+        for (name in namespaces.keySet()) {
+            val recs = namespaces[name].toList()
+            for ((i, rec) in recs.withIndex()) {
+                val link = if (recs.size == 1) null else recs[(i + 1) % recs.size].link
+                val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE, defId = rec.defId, link = link)
+                rec.nameHand.setIdeInfo(ideInfo)
+            }
         }
     }
 }
 
-sealed class C_ModuleSource(protected val ctx: C_ModuleSourceContext) {
-    val moduleName = ctx.moduleName
+sealed class S_FileContext(
+    val modCtx: S_ModuleContext,
+    val symCtx: C_SymbolContext,
+    val path: C_SourcePath,
+    val idePath: IdeFilePath,
+) {
+    fun createDefinitionContext(): S_DefinitionContext {
+        //val defIdeInfo = IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE, defId = ideId)
+        //nameHand.setIdeInfo(ideDef.defInfo)
+        return S_DefinitionContext.root(this)
+    }
 
+    abstract fun addNamespaceName(nameHand: C_NameHandle, fullName: R_QualifiedName): IdeSymbolId
+}
+
+private class S_PrivateFileContext(
+    modCtx: S_ModuleContext,
+    symCtx: C_SymbolContext,
+    path: C_SourcePath,
+    idePath: IdeFilePath,
+    private val modNamespaces: Multimap<R_QualifiedName, NamespaceNameInfoRec>,
+): S_FileContext(modCtx, symCtx, path, idePath) {
+    private val namespaces = mutableMultisetOf<R_QualifiedName>()
+
+    override fun addNamespaceName(nameHand: C_NameHandle, fullName: R_QualifiedName): IdeSymbolId {
+        val count = namespaces.count(fullName)
+        val fullNameStr = fullName.str()
+        val defName = if (count == 0) fullNameStr else "$fullNameStr:$count"
+        val defId = IdeSymbolId(IdeSymbolCategory.NAMESPACE, defName, immListOf())
+        val link = IdeGlobalSymbolLink(IdeSymbolGlobalId(nameHand.pos.idePath(), defId))
+        val rec = NamespaceNameInfoRec(nameHand, defId, link)
+        namespaces.add(fullName)
+        modNamespaces.put(fullName, rec)
+        return defId
+    }
+}
+
+private class NamespaceNameInfoRec(val nameHand: C_NameHandle, val defId: IdeSymbolId, val link: IdeSymbolLink)
+
+class S_DefinitionContext private constructor(val fileCtx: S_FileContext, val namespacePath: C_RNamePath) {
+    val modCtx = fileCtx.modCtx
+    val appCtx = modCtx.appCtx
+    val msgCtx = modCtx.msgCtx
+    val symCtx = fileCtx.symCtx
+
+    val moduleName = modCtx.moduleName
+
+    fun namespace(path: C_RNamePath): S_DefinitionContext {
+        val subNamespacePath = namespacePath.child(path.parts)
+        return S_DefinitionContext(fileCtx, subNamespacePath)
+    }
+
+    companion object {
+        fun root(fileCtx: S_FileContext): S_DefinitionContext {
+            return S_DefinitionContext(fileCtx, C_RNamePath.EMPTY)
+        }
+    }
+}
+
+sealed class C_ModuleSource(protected val appCtx: S_AppContext, val moduleName: R_ModuleName) {
     private val compiledHeader by lazy {
         compileHeader0()
     }
 
     private val compiledFiles by lazy {
-        compile0()
+        appCtx.withModuleContext(moduleName) { modCtx ->
+            compile0(modCtx)
+        }
     }
 
     abstract fun isDirectory(): Boolean
+    abstract fun idePath(): IdeFilePath
 
     protected abstract fun compileHeader0(): C_MidModuleHeader?
-    protected abstract fun compile0(): List<C_MidModuleFile>
+    protected abstract fun compile0(modCtx: S_ModuleContext): List<C_MidModuleFile>
 
     fun compileHeader(): C_MidModuleHeader? = compiledHeader
     fun compile(): List<C_MidModuleFile> = compiledFiles
 }
 
 class C_FileModuleSource(
-        ctx: C_ModuleSourceContext,
-        val file: C_ParsedRellFile
-): C_ModuleSource(ctx) {
+        appCtx: S_AppContext,
+        moduleName: R_ModuleName,
+        val file: C_ParsedRellFile,
+): C_ModuleSource(appCtx, moduleName) {
     override fun isDirectory() = false
+    override fun idePath() = file.idePath
 
     override fun compileHeader0(): C_MidModuleHeader? {
-        val symCtx = ctx.symCtxProvider.getSymbolContext(file.path)
-        val modifierCtx = C_ModifierContext(ctx.msgCtx, symCtx)
+        val symCtx = appCtx.symCtxProvider.getSymbolContext(file.path)
+        val modifierCtx = C_ModifierContext(appCtx.msgCtx, symCtx)
         return file.compileHeader(modifierCtx)
     }
 
-    override fun compile0(): List<C_MidModuleFile> {
-        val compiled = file.compile(ctx)
+    override fun compile0(modCtx: S_ModuleContext): List<C_MidModuleFile> {
+        val compiled = file.compile(modCtx)
         return listOf(compiled)
     }
 }
 
 class C_DirModuleSource(
-        ctx: C_ModuleSourceContext,
+        appCtx: S_AppContext,
+        moduleName: R_ModuleName,
         val path: C_SourcePath,
         files: List<C_ParsedRellFile>,
-        private val mainFile: C_ParsedRellFile?
-): C_ModuleSource(ctx) {
-    private val files = files.toImmList()
+        private val mainFile: C_ParsedRellFile?,
+): C_ModuleSource(appCtx, moduleName) {
+    private val files = files.sortedBy { it.path }.toImmList()
+
+    init {
+        check(this.files.isNotEmpty())
+    }
+
+    private val idePath = mainFile?.idePath ?: this.files.first().idePath
 
     override fun isDirectory() = true
+    override fun idePath() = idePath
 
     override fun compileHeader0(): C_MidModuleHeader? {
         mainFile ?: return null
-        val symCtx = ctx.symCtxProvider.getSymbolContext(mainFile.path)
-        val modifierCtx = C_ModifierContext(ctx.msgCtx, symCtx)
+        val symCtx = appCtx.symCtxProvider.getSymbolContext(mainFile.path)
+        val modifierCtx = C_ModifierContext(appCtx.msgCtx, symCtx)
         return mainFile.compileHeader(modifierCtx)
     }
 
-    override fun compile0(): List<C_MidModuleFile> {
-        return files.sortedBy { it.path }
-                .map { it.compile(ctx) }
-                .toImmList()
+    override fun compile0(modCtx: S_ModuleContext): List<C_MidModuleFile> {
+        return files.map { it.compile(modCtx) }.toImmList()
     }
 }
 
-class C_ParsedRellFile(val path: C_SourcePath, private val ast: S_RellFile?) {
+class C_ParsedRellFile(
+    val path: C_SourcePath,
+    val idePath: IdeFilePath,
+    private val ast: S_RellFile?,
+) {
     fun compileHeader(modifierCtx: C_ModifierContext): C_MidModuleHeader? {
         return ast?.compileHeader(modifierCtx)
     }
 
-    fun compile(ctx: C_ModuleSourceContext): C_MidModuleFile {
+    fun compile(modCtx: S_ModuleContext): C_MidModuleFile {
+        val moduleName = modCtx.moduleName
         val pos = ast?.startPos
-        if (!C_ModuleUtils.isAllowedModuleName(ctx.moduleName) && pos != null) {
-            ctx.msgCtx.error(pos, "module:reserved_name:${ctx.moduleName}", "Defining a module called '${ctx.moduleName}' is not allowed")
+        if (!C_ModuleUtils.isAllowedModuleName(moduleName) && pos != null) {
+            modCtx.msgCtx.error(pos, "module:reserved_name:${moduleName}", "Defining a module called '${moduleName}' is not allowed")
         }
 
-        return ast?.compile(ctx, path) ?: C_MidModuleFile(path, immListOf(), null, C_NopSymbolContext)
+        ast ?: return C_MidModuleFile(path, immListOf(), null, C_NopSymbolContext)
+
+        val fileCtx = modCtx.createFileContext(path, idePath)
+        return ast.compile(fileCtx)
     }
 
     override fun toString() = path.toString()

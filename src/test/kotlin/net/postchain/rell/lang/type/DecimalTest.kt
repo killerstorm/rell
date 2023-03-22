@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.type
@@ -349,6 +349,9 @@ class DecimalTest: BaseRellTest(false) {
         chkEx("{ var x = 123; x = decimal(456); return x; }", "ct_err:stmt_assign_type:[integer]:[decimal]")
         chkEx("{ var x = 123; x += decimal(456); return x; }", "ct_err:binop_operand_type:+=:[integer]:[decimal]")
         chkEx("{ var x = 123; x *= decimal(456); return x; }", "ct_err:binop_operand_type:*=:[integer]:[decimal]")
+
+        chkEx("{ var x = 123L; x = decimal(456); return x; }", "ct_err:stmt_assign_type:[big_integer]:[decimal]")
+        chkEx("{ var x = 123L; x += decimal(456); return x; }", "ct_err:binop_operand_type:+=:[big_integer]:[decimal]")
     }
 
     @Test fun testPromotionUserFunction() {
@@ -500,50 +503,26 @@ class DecimalTest: BaseRellTest(false) {
         val SUB_TEST_CASES = makeSubCases()
 
         private fun makeAddCases(): List<DecAddCase> {
-            val list = mutableListOf<DecAddCase>()
-
-            addCase(list, "+", "123", "456", "579")
-            addCase(list, "+", "12345", "67890", "80235")
-            addCase(list, "+", "12.34", "56.78", "69.12")
-
-            // Extreme values.
+            val list = BigIntegerTest.makeAddCases().toMutableList()
             val d = DecVals()
-
-            addCase(list, "+", "${d.lim2}", "1", "${d.lim1}")
-            addCase(list, "+", "${d.lim2}", "2", null)
-            addCase(list, "+", "-${d.lim2}", "-1", "-${d.lim1}")
-            addCase(list, "+", "-${d.lim2}", "-2", null)
-
+            addCase(list, "+", "12.34", "56.78", "69.12")
             addCase(list, "+", "0.${d.frac3}12", "0.${d.frac0}34", "0.${d.frac3}46")
             addCase(list, "+", "${d.lim1}.${d.frac3}12", "0.${d.frac6}34", "${d.lim1}.${d.frac9}46")
             addCase(list, "+", "${d.lim1}.${d.frac3}95", "0.${d.frac6}04", "${d.lim1}.${d.frac9}99")
             addCase(list, "+", "-${d.lim1}.${d.frac3}95", "-0.${d.frac6}04", "-${d.lim1}.${d.frac9}99")
             addCase(list, "+", "-${d.lim1}.${d.frac3}95", "-0.${d.frac6}05", null)
-
             return list.toImmList()
         }
 
         private fun makeSubCases(): List<DecAddCase> {
-            val list = mutableListOf<DecAddCase>()
-
-            addCase(list, "-", "12345", "67890", "-55545")
-            addCase(list, "-", "67890", "12345", "55545")
-            addCase(list, "-", "12.34", "56.78", "-44.44")
-
-            // Extreme values.
+            val list = BigIntegerTest.makeSubCases().toMutableList()
             val d = DecVals()
-
-            addCase(list, "-", "-${d.lim2}", "1", "-${d.lim1}")
-            addCase(list, "-", "-${d.lim2}", "2", null)
-            addCase(list, "-", "${d.lim2}", "-1", "${d.lim1}")
-            addCase(list, "-", "${d.lim2}", "-2", null)
-
+            addCase(list, "-", "12.34", "56.78", "-44.44")
             addCase(list, "-", "0.${d.frac3}34", "0.${d.frac0}12", "0.${d.frac3}22")
             addCase(list, "-", "${d.lim1}.${d.frac9}34", "0.${d.frac6}12", "${d.lim1}.${d.frac3}22")
             addCase(list, "-", "-${d.lim1}.${d.frac3}95", "0.${d.frac6}04", "-${d.lim1}.${d.frac9}99")
             addCase(list, "-", "-${d.lim1}.${d.frac3}95", "0.${d.frac6}04", "-${d.lim1}.${d.frac9}99")
             addCase(list, "-", "-${d.lim1}.${d.frac3}95", "0.${d.frac6}05", null)
-
             return list.toImmList()
         }
 

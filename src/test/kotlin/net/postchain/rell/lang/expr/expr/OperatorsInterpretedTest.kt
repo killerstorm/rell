@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.expr
@@ -16,6 +16,7 @@ import net.postchain.rell.test.RellTestUtils
 import net.postchain.rell.utils.CommonUtils
 import org.junit.Test
 import java.math.BigDecimal
+import java.math.BigInteger
 import kotlin.test.assertEquals
 
 class OperatorsInterpretedTest: OperatorsBaseTest() {
@@ -93,6 +94,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
 
     override fun vBool(v: Boolean): TstVal = InterpTstVal.Bool(v)
     override fun vInt(v: Long): TstVal = InterpTstVal.Integer(v)
+    override fun vBigInt(v: BigInteger): TstVal = InterpTstVal.BigInteger(v)
     override fun vDec(v: BigDecimal): TstVal = InterpTstVal.Decimal(v)
     override fun vText(v: String): TstVal = InterpTstVal.Text(v)
     override fun vBytes(v: String): TstVal = InterpTstVal.Bytes(v)
@@ -111,6 +113,10 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
 
         class Integer(val v: Long): InterpTstVal("integer") {
             override fun rt(c: ValCtx): Rt_Value = Rt_IntValue(v)
+        }
+
+        class BigInteger(val v: java.math.BigInteger): InterpTstVal("big_integer") {
+            override fun rt(c: ValCtx): Rt_Value = Rt_BigIntegerValue.of(v)
         }
 
         class Decimal(val v: BigDecimal): InterpTstVal("decimal") {

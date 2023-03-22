@@ -12,16 +12,18 @@ import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
+import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.chainToIterable
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 
 class C_AtEntity(
-        val declPos: S_Pos,
-        val rEntity: R_EntityDefinition,
-        val alias: R_Name,
-        val explicitAlias: Boolean,
-        atEntityId: R_AtEntityId
+    val declPos: S_Pos,
+    val rEntity: R_EntityDefinition,
+    val alias: R_Name,
+    val aliasPos: S_Pos,
+    val explicitAlias: Boolean,
+    atEntityId: R_AtEntityId,
 ) {
     val atExprId = atEntityId.exprId
 
@@ -79,7 +81,7 @@ class C_AtFrom_Entities(
 
     override fun makeDefaultWhat(): V_DbAtWhat {
         val fields = entities.map {
-            val name = if (entities.size == 1) null else it.alias
+            val name = if (entities.size == 1) null else R_IdeName(it.alias, IdeSymbolInfo.MEM_TUPLE_ATTR)
             val vExpr = it.toVExpr(innerExprCtx, it.declPos, false)
             V_DbAtWhatField(outerExprCtx.appCtx, name, vExpr.type, vExpr, V_AtWhatFieldFlags.DEFAULT, null)
         }

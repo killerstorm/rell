@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -8,10 +8,12 @@ import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_StmtContext
 import net.postchain.rell.compiler.base.modifier.C_ModifierContext
+import net.postchain.rell.compiler.base.utils.C_ParserFilePath
 import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.compiler.parser.RellTokenMatch
 import net.postchain.rell.model.R_FilePos
 import net.postchain.rell.model.R_Name
+import net.postchain.rell.tools.api.IdeFilePath
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.ThreadLocalContext
 import net.postchain.rell.utils.immListOf
@@ -21,23 +23,26 @@ import java.util.function.Supplier
 
 abstract class S_Pos {
     abstract fun path(): C_SourcePath
+    abstract fun idePath(): IdeFilePath
     abstract fun line(): Int
     abstract fun column(): Int
-    abstract fun pos(): Long
-    abstract fun str(): String
-    abstract fun strLine(): String
-    override fun toString() = str()
+
+    fun str() = "${path()}(${line()}:${column()})"
+    fun strLine() = "${path()}:${line()}"
 
     fun toFilePos() = R_FilePos(path().str(), line())
+    final override fun toString() = str()
 }
 
-class S_BasicPos(private val file: C_SourcePath, private val row: Int, private val col: Int): S_Pos() {
-    override fun path() = file
+class S_BasicPos(
+    private val file: C_ParserFilePath,
+    private val row: Int,
+    private val col: Int,
+): S_Pos() {
+    override fun path() = file.sourcePath
+    override fun idePath() = file.idePath
     override fun line() = row
     override fun column() = col
-    override fun pos() = Math.min(row, 1_000_000_000) * 1_000_000_000L + Math.min(col, 1_000_000_000)
-    override fun str() = "$file($row:$col)"
-    override fun strLine() = "$file:$row"
 
     override fun equals(other: Any?): Boolean {
         return other is S_BasicPos && row == other.row && col == other.col && file == other.file
@@ -77,8 +82,8 @@ data class S_PosValue<T>(val pos: S_Pos, val value: T) {
 
 data class S_NameOptValue<T>(val name: S_Name?, val value: T)
 
-class S_Name(val pos: S_Pos, private val str: String): S_Node() {
-    private val rName = R_Name.of(str)
+class S_Name(val pos: S_Pos, private val rName: R_Name): S_Node() {
+    private val str = rName.str
 
     fun compile(ctx: C_SymbolContext): C_NameHandle {
         return ctx.addName(this, rName)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -8,7 +8,6 @@ import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_FunctionBody
 import net.postchain.rell.compiler.base.core.C_CompilerPass
 import net.postchain.rell.compiler.base.core.C_FunctionBodyContext
-import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.fn.C_FormalParameters
@@ -16,12 +15,11 @@ import net.postchain.rell.compiler.base.fn.C_FunctionCallInfo
 import net.postchain.rell.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.utils.C_LateInit
-import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.R_QueryBody
 import net.postchain.rell.model.R_QueryDefinition
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.R_UserQueryBody
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 
 class C_QueryFunctionHeader(
@@ -36,14 +34,19 @@ class C_QueryFunctionHeader(
     }
 }
 
-class C_QueryGlobalFunction(val rQuery: R_QueryDefinition, ideInfo: IdeSymbolInfo): C_GlobalFunction(ideInfo) {
+class C_QueryGlobalFunction(val rQuery: R_QueryDefinition): C_GlobalFunction() {
     private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_QueryFunctionHeader.ERROR)
 
     fun setHeader(header: C_QueryFunctionHeader) {
         headerLate.set(header)
     }
 
-    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+    override fun compileCall(
+        ctx: C_ExprContext,
+        name: LazyPosString,
+        args: List<S_CallArgument>,
+        resTypeHint: C_TypeHint,
+    ): V_GlobalFunctionCall {
         val header = headerLate.get()
         val retType = C_FunctionUtils.compileReturnType(ctx, name, header)
         val callInfo = C_FunctionCallInfo.forDirectFunction(name, header.params)

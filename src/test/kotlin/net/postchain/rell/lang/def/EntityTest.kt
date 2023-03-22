@@ -475,10 +475,69 @@ class EntityTest: BaseRellTest(false) {
     }
 
     @Test fun testImplicitTypeConflict() {
+        tst.ideDefIdConflictError = false
         val defs = "namespace a { enum foo {} } namespace b { enum foo {} }"
         chkKeyIndex("$defs entity data { a.foo; b.foo; }", "ct_err:dup_attr:foo")
         chkKeyIndex("$defs entity data { a.foo; KW b.foo; }", "ct_err:entity:attr:type_diff:[a.foo]:[b.foo]")
         chkKeyIndex("$defs entity data { KW b.foo; a.foo; }", "ct_err:entity:attr:type_diff:[a.foo]:[b.foo]")
+    }
+
+    @Test fun testPathQueryCount() {
+        tstCtx.useSql = true
+        def("entity e1 { v: integer; }")
+        def("entity e2 { e1; }")
+        def("entity e3 { e2; }")
+        def("entity e4 { e3; }")
+        def("entity e5 { e4; }")
+        insert("c0.e1", "v", "11,123")
+        insert("c0.e2", "e1", "12,11")
+        insert("c0.e3", "e2", "13,12")
+        insert("c0.e4", "e3", "14,13")
+        insert("c0.e5", "e4", "15,14")
+
+        resetSqlCtr()
+        chkEx("{ val e = e5@{}; return e; }", "e5[15]")
+        chkSql(1)
+        chkEx("{ val e = e5@{}; return e.e4; }", "e4[14]")
+        chkSql(2)
+        chkEx("{ val e = e5@{}; return e.e4.e3; }", "e3[13]")
+        chkSql(2)
+        chkEx("{ val e = e5@{}; return e.e4.e3.e2; }", "e2[12]")
+        chkSql(2)
+        chkEx("{ val e = e5@{}; return e.e4.e3.e2.e1; }", "e1[11]")
+        chkSql(2)
+        chkEx("{ val e = e5@{}; return e.e4.e3.e2.e1.v; }", "int[123]")
+        chkSql(2)
+    }
+
+    @Test fun testPathQueryCountNullable() {
+        tstCtx.useSql = true
+        def("entity e1 { v: integer; }")
+        def("entity e2 { e1; }")
+        def("entity e3 { e2; }")
+        def("entity e4 { e3; }")
+        def("entity e5 { e4; }")
+        insert("c0.e1", "v", "11,123")
+        insert("c0.e2", "e1", "12,11")
+        insert("c0.e3", "e2", "13,12")
+        insert("c0.e4", "e3", "14,13")
+        insert("c0.e5", "e4", "15,14")
+
+        chkEx("{ val e = e5@?{}; return e; }", "e5[15]")
+        chkSql(1)
+        chkEx("{ val e = e5@?{}; return e?.e4; }", "e4[14]")
+        chkSql(2)
+        chkEx("{ val e = e5@?{}; return e?.e4?.e3; }", "e3[13]")
+        chkSql(2)
+        chkEx("{ val e = e5@?{}; return e?.e4?.e3?.e2; }", "e2[12]")
+        chkSql(2)
+        chkEx("{ val e = e5@?{}; return e?.e4?.e3?.e2?.e1; }", "e1[11]")
+        chkSql(2)
+        chkEx("{ val e = e5@?{}; return e?.e4?.e3?.e2?.e1?.v; }", "int[123]")
+        chkSql(2)
+
+        chkEx("{ val e = e5@?{false}; return e?.e4?.e3?.e2?.e1?.v; }", "null")
+        chkSql(1)
     }
 
     private fun chkKeyIndex(code: String, exp: String) {

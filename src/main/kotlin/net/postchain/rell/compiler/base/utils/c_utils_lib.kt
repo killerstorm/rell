@@ -14,18 +14,13 @@ import net.postchain.rell.compiler.base.expr.C_TypeValueMember
 import net.postchain.rell.compiler.base.expr.C_TypeValueMember_Function
 import net.postchain.rell.compiler.base.fn.*
 import net.postchain.rell.compiler.base.namespace.*
-import net.postchain.rell.compiler.vexpr.V_Expr
-import net.postchain.rell.compiler.vexpr.V_GlobalConstantRestriction
-import net.postchain.rell.compiler.vexpr.V_SysSpecialGlobalCaseCallExpr
+import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.lib.type.C_Lib_Type_Any
 import net.postchain.rell.lib.type.C_Lib_Type_Virtual
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.Db_SysFunction
 import net.postchain.rell.model.expr.R_Expr
-import net.postchain.rell.runtime.Rt_CallContext
-import net.postchain.rell.runtime.Rt_DecimalValue
-import net.postchain.rell.runtime.Rt_IntValue
-import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
@@ -33,6 +28,7 @@ import net.postchain.rell.utils.*
 import org.apache.commons.collections4.MultiValuedMap
 import org.apache.commons.collections4.multimap.ArrayListValuedHashMap
 import java.math.BigDecimal
+import java.math.BigInteger
 
 object C_LibUtils {
     val DEFAULT_MODULE = R_ModuleName.EMPTY
@@ -47,7 +43,7 @@ object C_LibUtils {
     ): C_Namespace {
         val b = C_SysNsProtoBuilder(basePath)
         for ((name, f) in functions.toMap()) {
-            b.addFunction(name, f)
+            b.addFunction(name, f.fn, f.ideInfo)
         }
         for ((name, v) in properties) {
             b.addProperty(name, v)
@@ -127,11 +123,12 @@ object C_LibUtils {
         b.add(name, resType, listOf(), resFn, deprecated = deprecated)
     }
 
-    fun constValue(name: String, value: Long) = constValue(name, Rt_IntValue(value))
-    fun constValue(name: String, value: BigDecimal) = constValue(name, Rt_DecimalValue.of(value))
+    fun constValue(name: String, value: Long) = constValue0(name, Rt_IntValue(value))
+    fun constValue(name: String, value: BigInteger) = constValue0(name, Rt_BigIntegerValue.of(value))
+    fun constValue(name: String, value: BigDecimal) = constValue0(name, Rt_DecimalValue.of(value))
 
-    private fun constValue(name: String, value: Rt_Value): Pair<String, C_NamespaceProperty> {
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_CONSTANT)
+    private fun constValue0(name: String, value: Rt_Value): Pair<String, C_NamespaceProperty> {
+        val ideInfo = IdeSymbolInfo.DEF_CONSTANT
         return Pair(name, C_NamespaceProperty_RtValue(ideInfo, value))
     }
 
@@ -139,8 +136,8 @@ object C_LibUtils {
     fun depError(newName: String) = C_Deprecated(useInstead = newName, error = true)
 
     fun bindFunctions(nsBuilder: C_SysNsProtoBuilder, fns: C_GlobalFuncTable) {
-        for (f in fns.toMap()) {
-            nsBuilder.addFunction(f.key, f.value)
+        for ((name, rec) in fns.toMap()) {
+            nsBuilder.addFunction(name, rec.fn, rec.ideInfo)
         }
     }
 
@@ -151,6 +148,16 @@ object C_LibUtils {
     ): List<C_TypeValueMember> {
         val fnMembers = fns.toMap().entries.map { C_TypeValueMember_Function(it.key, baseType, it.value) }
         return (otherMembers + fnMembers).toImmList()
+    }
+
+    fun ideName(name: String, kind: IdeSymbolKind): R_IdeName {
+        val rName = R_Name.of(name)
+        return ideName(rName, kind)
+    }
+
+    fun ideName(rName: R_Name, kind: IdeSymbolKind): R_IdeName {
+        val ideInfo = IdeSymbolInfo.get(kind)
+        return R_IdeName(rName, ideInfo)
     }
 }
 
@@ -287,19 +294,20 @@ abstract class C_SpecialGlobalFuncCaseMatch(resType: R_Type): C_GlobalFuncCaseMa
 
     abstract fun compileCallR(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): R_Expr
 
-    final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_Expr {
-        return V_SysSpecialGlobalCaseCallExpr(ctx, caseCtx, this)
+    final override fun compileCall(ctx: C_ExprContext, caseCtx: C_GlobalFuncCaseCtx): V_GlobalFunctionCall {
+        val vExpr = V_SysSpecialGlobalCaseCallExpr(ctx, caseCtx, this)
+        return V_GlobalFunctionCall(vExpr)
     }
 
     open fun globalConstantRestriction(caseCtx: C_GlobalFuncCaseCtx): V_GlobalConstantRestriction? =
             V_GlobalConstantRestriction("fn:${caseCtx.qualifiedNameMsg()}", "function '${caseCtx.qualifiedNameMsg()}'")
 }
 
-class C_GlobalFuncTable(map: Map<R_Name, C_GlobalFunction>) {
+class C_GlobalFuncTable(map: Map<R_Name, C_GlobalFunctionRec>) {
     private val map = map.toImmMap()
 
     fun get(name: R_Name): C_GlobalFunction? {
-        return map[name]
+        return map[name]?.fn
     }
 
     fun toMap() = map
@@ -323,16 +331,16 @@ class C_MemberFuncTable(map: Map<R_Name, C_SysMemberFunction>) {
     }
 }
 
-sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT>(
+sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT, ExprT>(
         private val defPath: C_DefinitionPath
 ) {
-    private val caseMap: MultiValuedMap<R_Name, C_FuncCase<CaseCtxT>> = ArrayListValuedHashMap()
+    private val caseMap: MultiValuedMap<R_Name, C_FuncCase<CaseCtxT, ExprT>> = ArrayListValuedHashMap()
     private val fnMap = mutableMapOf<R_Name, FuncT>()
 
-    protected abstract fun makeBody(result: R_Type, cFn: C_SysFunction): C_FormalParamsFuncBody<CaseCtxT>
-    protected abstract fun makeFunc(simpleName: R_Name, fullName: String, cases: List<C_FuncCase<CaseCtxT>>): FuncT
+    protected abstract fun makeBody(result: R_Type, cFn: C_SysFunction): C_FormalParamsFuncBody<CaseCtxT, ExprT>
+    protected abstract fun makeFunc(simpleName: R_Name, fullName: String, cases: List<C_FuncCase<CaseCtxT, ExprT>>): FuncT
 
-    private fun addCase(name: String, case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated?) {
+    private fun addCase(name: String, case: C_FuncCase<CaseCtxT, ExprT>, deprecated: C_Deprecated?) {
         val rName = R_Name.of(name)
         val case2 = if (deprecated == null) case else makeDeprecatedCase(case, deprecated)
         caseMap.put(rName, case2)
@@ -355,16 +363,16 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT>(
         return res.toMap()
     }
 
-    private fun makeCase(params: List<C_ArgTypeMatcher>, body: C_FormalParamsFuncBody<CaseCtxT>): C_FuncCase<CaseCtxT> {
+    private fun makeCase(params: List<C_ArgTypeMatcher>, body: C_FormalParamsFuncBody<CaseCtxT, ExprT>): C_FuncCase<CaseCtxT, ExprT> {
         val matcher = C_ArgsTypesMatcher_Fixed(params)
         return makeCase(matcher, body)
     }
 
-    private fun makeCase(matcher: C_ArgsTypesMatcher, body: C_FormalParamsFuncBody<CaseCtxT>): C_FuncCase<CaseCtxT> {
+    private fun makeCase(matcher: C_ArgsTypesMatcher, body: C_FormalParamsFuncBody<CaseCtxT, ExprT>): C_FuncCase<CaseCtxT, ExprT> {
         return C_FormalParamsFuncCase(matcher, body)
     }
 
-    private fun makeDeprecatedCase(case: C_FuncCase<CaseCtxT>, deprecated: C_Deprecated): C_FuncCase<CaseCtxT> {
+    private fun makeDeprecatedCase(case: C_FuncCase<CaseCtxT, ExprT>, deprecated: C_Deprecated): C_FuncCase<CaseCtxT, ExprT> {
         return C_DeprecatedFuncCase(case, deprecated)
     }
 
@@ -431,7 +439,7 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT>(
 
     fun add(
             name: String,
-            case: C_FuncCase<CaseCtxT>,
+            case: C_FuncCase<CaseCtxT, ExprT>,
             deprecated: C_Deprecated? = null
     ): BuilderT {
         addCase(name, case, deprecated = deprecated)
@@ -513,21 +521,32 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT>(
     }
 }
 
+class C_GlobalFunctionRec(val fn: C_GlobalFunction, val ideInfo: IdeSymbolInfo)
+
 class C_GlobalFuncBuilder(
     defPath: C_DefinitionPath = C_DefinitionPath.ROOT,
     typeNames: Set<R_Name> = immSetOf()
-): C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCtx, C_GlobalFunction>(
+): C_FuncBuilder<C_GlobalFuncBuilder, C_GlobalFuncCaseCtx, C_GlobalFunctionRec, V_GlobalFunctionCall>(
         defPath
 ) {
     private val typeNames = typeNames.toImmSet()
 
-    override fun makeBody(result: R_Type, cFn: C_SysFunction): C_FormalParamsFuncBody<C_GlobalFuncCaseCtx> {
+    override fun makeBody(result: R_Type, cFn: C_SysFunction): C_FormalParamsFuncBody<C_GlobalFuncCaseCtx, V_GlobalFunctionCall> {
         return C_SysGlobalFormalParamsFuncBody(result, cFn)
     }
 
-    override fun makeFunc(simpleName: R_Name, fullName: String, cases: List<C_FuncCase<C_GlobalFuncCaseCtx>>): C_GlobalFunction {
+    override fun makeFunc(
+        simpleName: R_Name,
+        fullName: String,
+        cases: List<C_FuncCase<C_GlobalFuncCaseCtx, V_GlobalFunctionCall>>,
+    ): C_GlobalFunctionRec {
+        val fn = C_RegularSysGlobalFunction(simpleName, fullName, cases)
         val ideInfo = if (simpleName in typeNames) IdeSymbolInfo.DEF_TYPE else IdeSymbolInfo.DEF_FUNCTION_SYSTEM
-        return C_RegularSysGlobalFunction(simpleName, fullName, cases, ideInfo)
+        return C_GlobalFunctionRec(fn, ideInfo)
+    }
+
+    fun add(name: String, fn: C_GlobalFunction, ideInfo: IdeSymbolInfo = IdeSymbolInfo.DEF_FUNCTION_SYSTEM): C_GlobalFuncBuilder {
+        return add(name, C_GlobalFunctionRec(fn, ideInfo))
     }
 
     fun build(): C_GlobalFuncTable {
@@ -538,14 +557,18 @@ class C_GlobalFuncBuilder(
 
 class C_MemberFuncBuilder(
         defName: C_DefinitionName,
-): C_FuncBuilder<C_MemberFuncBuilder, C_MemberFuncCaseCtx, C_SysMemberFunction>(
+): C_FuncBuilder<C_MemberFuncBuilder, C_MemberFuncCaseCtx, C_SysMemberFunction, V_MemberFunctionCall>(
         defName.toPath(),
 ) {
-    override fun makeBody(result: R_Type, cFn: C_SysFunction): C_FormalParamsFuncBody<C_MemberFuncCaseCtx> {
+    override fun makeBody(result: R_Type, cFn: C_SysFunction): C_FormalParamsFuncBody<C_MemberFuncCaseCtx, V_MemberFunctionCall> {
         return C_SysMemberFormalParamsFuncBody(result, cFn)
     }
 
-    override fun makeFunc(simpleName: R_Name, fullName: String, cases: List<C_FuncCase<C_MemberFuncCaseCtx>>): C_SysMemberFunction {
+    override fun makeFunc(
+        simpleName: R_Name,
+        fullName: String,
+        cases: List<C_FuncCase<C_MemberFuncCaseCtx, V_MemberFunctionCall>>,
+    ): C_SysMemberFunction {
         return C_CasesSysMemberFunction(cases)
     }
 

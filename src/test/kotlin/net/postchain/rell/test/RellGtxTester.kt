@@ -107,9 +107,7 @@ class RellGtxTester(
         return eval.eval {
             eval.wrapRt { init() }
 
-            val queryMap = mutableMapOf<String, Gtv>("type" to GtvFactory.gtv("q"))
-            queryMap.putAll(args)
-            val queryGtv = GtvFactory.gtv(queryMap)
+            val queryGtv = GtvFactory.gtv(args)
 
             val module = eval.wrapCt { createGtxModule(moduleCode) }
 

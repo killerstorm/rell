@@ -6,8 +6,10 @@ package net.postchain.rell.compiler.base.expr
 
 import net.postchain.rell.compiler.ast.C_BinOp
 import net.postchain.rell.compiler.ast.S_Pos
+import net.postchain.rell.compiler.ast.S_UpdateWhat
 import net.postchain.rell.compiler.base.core.C_LambdaBlock
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.lib.type.C_Lib_Type_Entity
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.*
@@ -53,7 +55,8 @@ class C_Destination_Simple(private val rDstExpr: R_DestinationExpr): C_Destinati
 class C_Destination_EntityAttr(
         private val base: V_Expr,
         private val rEntity: R_EntityDefinition,
-        private val attr: R_Attribute
+        private val path: List<C_EntityAttrRef>,
+        private val attr: R_Attribute,
 ): C_Destination() {
     override fun type() = attr.type
     override fun resultType(srcType: R_Type) = R_UnitType
@@ -71,20 +74,20 @@ class C_Destination_EntityAttr(
         val baseVar = lambdaBlkCtx.newLocalVar("<$metaName:base>", null, base.type, false, null)
         val srcVar = lambdaBlkCtx.newLocalVar("<$metaName:src>", null, srcExpr.type, false, null)
 
-        val cLambdaB = C_LambdaBlock.builder(lambdaCtx, rEntity.type)
+        val cLambdaB = C_LambdaBlock.builder(lambdaCtx, base.type)
         val fromBlkCtx = cLambdaB.innerBlkCtx.createSubContext("<$metaName:from>")
         val rFromBlock = fromBlkCtx.buildBlock().rBlock
         val cLambda = cLambdaB.build()
 
-        val atEntity = ctx.makeAtEntity(rEntity, ctx.appCtx.nextAtExprId())
-        val whereLeft = Db_EntityExpr(atEntity)
-        val whereRight = cLambda.compileVarDbExpr(rFromBlock.uid)
-        val where = C_ExprUtils.makeDbBinaryExprEq(whereLeft, whereRight)
+        val atExprId = ctx.appCtx.nextAtExprId()
+        val atEntity = ctx.makeAtEntity(rEntity, atExprId)
+        val extraAtEntities = mutableListOf<R_DbAtEntity>()
+        val where = makeWhere(ctx, atExprId, atEntity, extraAtEntities, cLambda, rFromBlock)
 
         val rBaseVarExpr = baseVar.toRef(lambdaBlkCtx.blockUid).toRExpr()
-        val rTarget = R_UpdateTarget_Expr_One(atEntity, where, rBaseVarExpr, cLambda.rLambda)
+        val rTarget = R_UpdateTarget_Expr_One(atEntity, extraAtEntities, where, rBaseVarExpr, cLambda.rLambda)
         val dbSrcVarExpr = srcVar.toRef(rFromBlock.uid).toDbExpr()
-        val rWhat = R_UpdateStatementWhat(attr, dbSrcVarExpr, op?.dbOp)
+        val rWhat = S_UpdateWhat.makeRWhat(atEntity, attr, dbSrcVarExpr, op?.dbOp)
         val rUpdateStmt = R_UpdateStatement(rTarget, rFromBlock, listOf(rWhat))
 
         val rBaseExpr = base.toRExpr()
@@ -95,6 +98,35 @@ class C_Destination_EntityAttr(
 
         val rSubBlock = lambdaBlkCtx.buildBlock().rBlock
         return R_LambdaStatement(lambdaArgs, rSubBlock, rUpdateStmt)
+    }
+
+    private fun makeWhere(
+        ctx: C_ExprContext,
+        atExprId: R_AtExprId,
+        lastAtEntity: R_DbAtEntity,
+        extraAtEntities: MutableList<R_DbAtEntity>,
+        cLambda: C_LambdaBlock,
+        rFromBlock: R_FrameBlock,
+    ): Db_Expr {
+        if (path.isEmpty()) {
+            val left = Db_EntityExpr(lastAtEntity)
+            val right = cLambda.compileVarDbExpr(rFromBlock.uid)
+            return C_ExprUtils.makeDbBinaryExprEq(left, right)
+        }
+
+        val first = path.first()
+        val firstAtEntity = ctx.makeAtEntity(first.rEntity, atExprId)
+        extraAtEntities.add(firstAtEntity)
+
+        val left1 = Db_EntityExpr(firstAtEntity)
+        val right1 = cLambda.compileVarDbExpr(rFromBlock.uid)
+        val where1 = C_ExprUtils.makeDbBinaryExprEq(left1, right1)
+
+        val left2 = Db_EntityExpr(lastAtEntity)
+        val right2 = C_Lib_Type_Entity.pathToDbExpr(ctx, firstAtEntity, path, rEntity.type, base.pos) //TODO base.pos is a bit wrong
+        val where2 = C_ExprUtils.makeDbBinaryExprEq(left2, right2)
+
+        return C_ExprUtils.makeDbBinaryExpr(R_BooleanType, R_BinaryOp_And, Db_BinaryOp_And, where1, where2)
     }
 
     override fun compileAssignExpr(
@@ -135,7 +167,7 @@ class C_Destination_ObjectAttr(
         val rAtEntity = ctx.makeAtEntity(rObject.rEntity, ctx.appCtx.nextAtExprId())
         val rTarget = R_UpdateTarget_Object(rAtEntity)
         val dbSrcVarExpr = srcVar.toRef(rFromBlock.uid).toDbExpr()
-        val rWhat = R_UpdateStatementWhat(attr, dbSrcVarExpr, op?.dbOp)
+        val rWhat = S_UpdateWhat.makeRWhat(rAtEntity, attr, dbSrcVarExpr, op?.dbOp)
         val rUpdateStmt = R_UpdateStatement(rTarget, rFromBlock, listOf(rWhat))
 
         val lambdaArgs = listOf(

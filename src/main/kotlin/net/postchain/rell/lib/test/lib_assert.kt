@@ -20,7 +20,7 @@ import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.module.GtvRtConversion
 import net.postchain.rell.module.GtvRtConversion_None
 import net.postchain.rell.runtime.*
-import net.postchain.rell.tools.api.IdeSymbolInfo
+import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.immListOf
 
 private const val FAILURE_SNAME = "failure"
@@ -354,9 +354,9 @@ private object C_Lib_Type_Failure: C_Lib_Type(FAILURE_SNAME, R_TestFailureType, 
     val VALUE_TYPE = Rt_LibValueType.of("TEST_FAILURE")
 
     override fun bindMemberValues(b: MutableList<C_TypeValueMember>) {
-        val name = R_Name.of("message")
-        val attr: C_MemberAttr = C_MemberAttr_SysProperty(name, PropMessage)
-        b.add(C_TypeValueMember_BasicAttr(name, attr, IdeSymbolInfo.MEM_STRUCT_ATTR))
+        val ideName = C_LibUtils.ideName("message", IdeSymbolKind.MEM_STRUCT_ATTR)
+        val attr: C_MemberAttr = C_MemberAttr_SysProperty(ideName, PropMessage)
+        b.add(C_TypeValueMember_BasicAttr(attr))
     }
 
     private val PropMessage = C_SysMemberProperty.simple(R_TextType, pure = true) { a ->

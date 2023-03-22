@@ -29,7 +29,7 @@ class C_SpecificTypeExpr(private val pos: S_Pos, private val type: R_Type): C_No
         }
 
         val qName = C_QualifiedName(memberName)
-        return memberElem.toExprMember(ctx, qName, implicitAttrMatchName = null)
+        return memberElem.toExprMember(ctx, qName)
     }
 
     override fun isCallable(): Boolean {
@@ -47,7 +47,7 @@ class C_SpecificTypeExpr(private val pos: S_Pos, private val type: R_Type): C_No
         fn ?: return super.call(ctx, pos, args, resTypeHint)
 
         val lazyName = LazyPosString.of(this.pos) { type.name }
-        val vExpr = fn.compileCall(ctx, lazyName, args, resTypeHint)
+        val vExpr = fn.compileCall(ctx, lazyName, args, resTypeHint).vExpr()
         return C_ValueExpr(vExpr)
     }
 
@@ -81,7 +81,7 @@ class C_RawGenericTypeExpr(private val pos: S_Pos, private val type: C_GenericTy
         fn ?: return super.call(ctx, pos, args, resTypeHint)
 
         val lazyName = LazyPosString.of(this.pos) { type.name }
-        val vExpr = fn.compileCall(ctx, lazyName, args, resTypeHint)
+        val vExpr = fn.compileCall(ctx, lazyName, args, resTypeHint).vExpr()
         return C_ValueExpr(vExpr)
     }
 

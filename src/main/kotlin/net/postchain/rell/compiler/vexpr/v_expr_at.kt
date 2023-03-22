@@ -12,7 +12,7 @@ import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.model.R_AtExprId
 import net.postchain.rell.model.R_FrameBlock
-import net.postchain.rell.model.R_Name
+import net.postchain.rell.model.R_IdeName
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.model.stmt.R_ForIterator
@@ -32,7 +32,7 @@ class V_AtEntityExpr(
     )
 
     override fun isAtExprItem() = true
-    override fun implicitAtWhereAttrName() = cAtEntity.alias
+    override fun implicitTargetAttrName() = cAtEntity.alias
 
     override fun toRExpr0() = throw C_Errors.errExprDbNotAllowed(pos)
 
@@ -56,12 +56,12 @@ class V_AtWhatFieldFlags(
 }
 
 class V_DbAtWhatField(
-        private val appCtx: C_AppContext,
-        val name: R_Name?,
-        val resultType: R_Type,
-        val expr: V_Expr,
-        val flags: V_AtWhatFieldFlags,
-        val summarization: C_AtSummarization?
+    private val appCtx: C_AppContext,
+    val name: R_IdeName?,
+    val resultType: R_Type,
+    val expr: V_Expr,
+    val flags: V_AtWhatFieldFlags,
+    val summarization: C_AtSummarization?,
 ) {
     fun isIgnored() = flags.omit && flags.sort == null && summarization == null
 

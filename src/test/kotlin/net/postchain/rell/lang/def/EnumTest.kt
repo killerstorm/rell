@@ -43,8 +43,11 @@ class EnumTest: BaseRellTest() {
     }
 
     @Test fun testMisc() {
+        tst.ideDefIdConflictError = false
+
         chkCompile("enum foo { A, B, C, }", "OK")
         chkCompile("enum foo {}", "OK")
+
         chkCompile("enum foo { A, B, C, A }", "ct_err:enum_dup:A")
 
         chkCompile("enum foo {} enum foo {}", """ct_err:

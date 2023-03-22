@@ -14,12 +14,12 @@ import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.base.utils.C_SysFunction
 import net.postchain.rell.compiler.vexpr.V_ConstantValueExpr
 import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.Rt_RowidValue
 import net.postchain.rell.runtime.Rt_TextValue
 import net.postchain.rell.runtime.utils.RellInterpreterCrashException
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.checkEquals
 
@@ -59,10 +59,10 @@ private class C_SysFn_Nop(private val print: Boolean): C_GlobalSpecialFuncCase()
     }
 }
 
-private object C_SysFn_TypeOf: C_SpecialSysGlobalFunction(IdeSymbolInfo.DEF_FUNCTION_SYSTEM) {
+private object C_SysFn_TypeOf: C_SpecialSysGlobalFunction() {
     override fun paramCount() = 1
 
-    override fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr {
+    override fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_GlobalFunctionCall {
         checkEquals(1, args.size)
 
         val arg = args[0]
@@ -73,7 +73,8 @@ private object C_SysFn_TypeOf: C_SpecialSysGlobalFunction(IdeSymbolInfo.DEF_FUNC
         val str = type.strCode()
         val value = Rt_TextValue(str)
 
-        return V_ConstantValueExpr(ctx, name.pos, value)
+        val vExpr = V_ConstantValueExpr(ctx, name.pos, value)
+        return V_GlobalFunctionCall(vExpr)
     }
 }
 

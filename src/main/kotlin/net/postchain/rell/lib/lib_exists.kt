@@ -15,6 +15,7 @@ import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_ExprInfo
+import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.R_BooleanType
 import net.postchain.rell.model.R_NullableType
 import net.postchain.rell.model.R_SysFunction_1
@@ -23,7 +24,6 @@ import net.postchain.rell.model.expr.Db_Expr
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_Value
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 import net.postchain.rell.utils.checkEquals
 
@@ -36,10 +36,10 @@ object C_Lib_Exists {
     }
 }
 
-private class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction(IdeSymbolInfo.DEF_FUNCTION_SYSTEM) {
+private class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction() {
     override fun paramCount() = 1
 
-    override fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr {
+    override fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_GlobalFunctionCall {
         checkEquals(1, args.size)
 
         val arg = args[0]
@@ -55,13 +55,14 @@ private class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFuncti
         val condition = compileCondition(vArg)
         if (condition == null) {
             C_FuncMatchUtils.errNoMatch(ctx, name.pos, name.str, listOf(vArg.type))
-            return C_ExprUtils.errorVExpr(ctx, name.pos, R_BooleanType)
+            return C_ExprUtils.errorVGlobalCall(ctx, name.pos, R_BooleanType)
         }
 
         val preFacts = C_ExprVarFacts.forSubExpressions(listOf(vArg))
         val varFacts = preFacts.and(C_ExprVarFacts.forNullCheck(vArg, not))
 
-        return V_ExistsExpr(ctx, name, vArg, condition, not, varFacts)
+        val vExpr = V_ExistsExpr(ctx, name, vArg, condition, not, varFacts)
+        return V_GlobalFunctionCall(vExpr)
     }
 
     private fun compileCondition(arg: V_Expr): R_RequireCondition? {

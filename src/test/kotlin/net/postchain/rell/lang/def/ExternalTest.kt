@@ -309,16 +309,6 @@ class ExternalTest: BaseRellTest() {
         chkCompile("namespace abc { @external('foo') namespace { entity block; } }", "OK")
         chkCompile("namespace abc { @external('foo') namespace { entity transaction; entity block; } }", "OK")
 
-        chkCompile("namespace abc { @external('foo') namespace { entity transaction; entity transaction; } }", """ct_err:
-            [name_conflict:user:transaction:ENTITY:main.rell(1:73)]
-            [name_conflict:user:transaction:ENTITY:main.rell(1:53)]
-        """)
-
-        chkCompile("namespace abc { @external('foo') namespace { entity block; entity block; } }", """ct_err:
-            [name_conflict:user:block:ENTITY:main.rell(1:67)]
-            [name_conflict:user:block:ENTITY:main.rell(1:53)]
-        """)
-
         chkCompile("@external('foo') namespace { entity foo; }", "ct_err:def_entity_hdr_name:foo")
         chkCompile("namespace abc { @external('foo') namespace { entity foo; } }", "ct_err:def_entity_hdr_name:foo")
 
@@ -354,6 +344,20 @@ class ExternalTest: BaseRellTest() {
         chkCompile("@external('foo') namespace xyz { entity block; }", "OK")
         chkCompile("namespace abc { @external('foo') entity transaction; }", "OK")
         chkCompile("namespace abc { @external('foo') entity block; }", "OK")
+    }
+
+    @Test fun testTxExplicitTypeDeclarationNameConflict() {
+        tst.ideDefIdConflictError = false
+
+        chkCompile("namespace abc { @external('foo') namespace { entity transaction; entity transaction; } }", """ct_err:
+            [name_conflict:user:transaction:ENTITY:main.rell(1:73)]
+            [name_conflict:user:transaction:ENTITY:main.rell(1:53)]
+        """)
+
+        chkCompile("namespace abc { @external('foo') namespace { entity block; entity block; } }", """ct_err:
+            [name_conflict:user:block:ENTITY:main.rell(1:67)]
+            [name_conflict:user:block:ENTITY:main.rell(1:53)]
+        """)
     }
 
     @Test fun testTxExplicitTypeMount() {

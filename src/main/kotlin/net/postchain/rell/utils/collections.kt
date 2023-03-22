@@ -51,15 +51,17 @@ private class ChainIterable<T>(private val head: T, private val nextGetter: (T) 
 
 fun <T> immListOf(vararg values: T): List<T> = ImmutableList.copyOf(values)
 fun <T> immListOfNotNull(value: T?): List<T> = if (value == null) immListOf() else immListOf(value)
-fun <T> immSetOf(): Set<T> = ImmutableSet.of()
-fun <T> immSetOf(vararg values: T): Set<T> = ImmutableSet.copyOf(values)
-fun <K, V> immMapOf(vararg entries: Pair<K, V>): Map<K, V> = mapOf(*entries).toImmMap()
-
 fun <T> Iterable<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
 fun <T> Array<T>.toImmList(): List<T> = ImmutableList.copyOf(this)
+
+fun <T> immSetOf(): Set<T> = ImmutableSet.of()
+fun <T> immSetOf(vararg values: T): Set<T> = ImmutableSet.copyOf(values)
 fun <T> Iterable<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
 fun <T> Array<T>.toImmSet(): Set<T> = ImmutableSet.copyOf(this)
+
+fun <K, V> immMapOf(vararg entries: Pair<K, V>): Map<K, V> = mapOf(*entries).toImmMap()
 fun <K, V> Map<K, V>.toImmMap(): Map<K, V> = ImmutableMap.copyOf(this)
+fun <K, V> Iterable<Pair<K, V>>.toImmMap(): Map<K, V> = toMap().toImmMap()
 
 fun <K, V> immMultimapOf(): Multimap<K, V> = ImmutableMultimap.of()
 fun <K, V> mutableMultimapOf(): Multimap<K, V> = LinkedListMultimap.create()
@@ -93,6 +95,9 @@ fun <K, V> Map<K, Iterable<V>>.toImmMultimap(): Multimap<K, V> {
     }
     return map.toImmMultimap()
 }
+
+fun <T> mutableMultisetOf(): Multiset<T> = LinkedHashMultiset.create()
+fun <T> Multiset<T>.toImmMultiset(): Multiset<T> = ImmutableMultiset.copyOf(this)
 
 fun <K, V> MutableMap<K, V>.putAllAbsent(map: Map<K, V>) {
     for ((key, value) in map) {

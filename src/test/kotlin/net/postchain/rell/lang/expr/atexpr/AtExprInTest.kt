@@ -325,6 +325,14 @@ class AtExprInTest: BaseRellTest() {
                 [${'$'}]
             );
         """)
+        def("""
+            function get_country_names_map(codes: list<text>) {
+                val m = ['DE':'Germany','FR':'France','UK':'UK','ES':'Spain','IT':'Italy'];
+                val r = map<text,integer>();
+                for (code in codes) r[m[code]] = r.size();
+                return r;
+            }
+        """)
         initData()
 
         chk("city @* { .country in ['Germany','France'] } ( .name )", "[Paris, Berlin]")
@@ -338,6 +346,9 @@ class AtExprInTest: BaseRellTest() {
         chk("city @* { .country in get_country_names(['IT']) } ( .name )", "[]")
 
         chk("city @* { .country in ['Germany':1,'France':2] } ( .name )", "ct_err:expr_nosql:map<text,integer>")
+        chk("city @* { .country in ['Germany':1,'France':2].keys() } ( .name )", "[Paris, Berlin]")
+        chk("city @* { .country in get_country_names_map(['DE', 'FR']) } ( .name )", "ct_err:expr_nosql:map<text,integer>")
+        chk("city @* { .country in get_country_names_map(['DE', 'FR']).keys() } ( .name )", "[Paris, Berlin]")
     }
 
     @Test fun testInCollectionTypes() {

@@ -4,10 +4,7 @@
 
 package net.postchain.rell.compiler.ast
 
-import net.postchain.rell.compiler.base.core.C_ForIterator
-import net.postchain.rell.compiler.base.core.C_Name
-import net.postchain.rell.compiler.base.core.C_TypeHint
-import net.postchain.rell.compiler.base.core.C_Types
+import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Errors
@@ -17,6 +14,7 @@ import net.postchain.rell.compiler.vexpr.*
 import net.postchain.rell.model.*
 import net.postchain.rell.model.stmt.R_ForIterator_Collection
 import net.postchain.rell.runtime.*
+import net.postchain.rell.tools.api.IdeSymbolCategory
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.toImmSet
@@ -47,7 +45,7 @@ abstract class S_Expr(val startPos: S_Pos) {
         return when (item) {
             is C_AtFromItem_Entity -> {
                 val atEntityId = ctx.appCtx.nextAtEntityId(fromCtx.atExprId)
-                val cEntity = C_AtEntity(item.pos, item.entity, item.alias.rName, false, atEntityId)
+                val cEntity = C_AtEntity(item.pos, item.entity, item.alias.rName, item.alias.pos, false, atEntityId)
                 C_AtFrom_Entities(ctx, fromCtx, listOf(cEntity))
             }
             is C_AtFromItem_Iterable -> {
@@ -113,7 +111,7 @@ class S_IntegerLiteralExpr(pos: S_Pos, val value: Long): S_LiteralExpr(pos) {
     override fun value() = Rt_IntValue(value)
 }
 
-class S_DecimalLiteralExpr(pos: S_Pos, val value: Rt_Value): S_LiteralExpr(pos) {
+class S_CommonLiteralExpr(pos: S_Pos, val value: Rt_Value): S_LiteralExpr(pos) {
     override fun value() = value
 }
 
@@ -285,7 +283,7 @@ class S_ParenthesesExpr(startPos: S_Pos, val expr: S_Expr): S_Expr(startPos) {
     override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
         val cExpr = expr.compile(ctx, hint)
         val vExpr = cExpr.value()
-        return C_ValueExpr(vExpr, cExpr.implicitMatchName())
+        return C_ValueExpr(vExpr)
     }
 
     override fun compileNestedAt(ctx: C_ExprContext, parentAtCtx: C_AtContext) = expr.compileNestedAt(ctx, parentAtCtx)
@@ -310,10 +308,17 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
             }
         }
 
+        val tupleIdeId = ctx.defCtx.tupleIdeId()
+
         val fields = sPairs.map { (name, expr) ->
-            val ideInfo = IdeSymbolInfo.MEM_TUPLE_FIELD
-            val cName = name?.compile(ctx, ideInfo)
-            C_TupleField(cName, expr, ideInfo)
+            val nameHand = name?.compile(ctx)
+            val fieldName = if (nameHand == null) null else {
+                val attrIdeId = tupleIdeId.appendMember(IdeSymbolCategory.ATTRIBUTE, nameHand.rName)
+                val ideDef = C_IdeSymbolDef.make(IdeSymbolKind.MEM_TUPLE_ATTR, nameHand.pos.idePath(), attrIdeId)
+                nameHand.setIdeInfo(ideDef.defInfo)
+                C_IdeName(nameHand.name, ideDef.refInfo)
+            }
+            C_TupleField(fieldName, expr)
         }
 
         checkNameConflicts(ctx, fields)
@@ -352,7 +357,7 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
             }
         }
 
-        val rFields = vExprs.mapIndexed { i, vExpr -> R_TupleField(fields[i].name?.rName, vExpr.type, fields[i].ideInfo) }
+        val rFields = vExprs.mapIndexed { i, vExpr -> R_TupleField(fields[i].name?.toRName(), vExpr.type) }
         val type = R_TupleType(rFields)
         return V_TupleExpr(ctx, startPos, type, vExprs)
     }
@@ -401,7 +406,8 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
             val explicitAlias = pairs[i].first
             val alias = explicitAlias ?: item.alias
             val atEntityId = ctx.appCtx.nextAtEntityId(fromCtx.atExprId)
-            C_AtEntity(item.pos, item.entity, alias.rName, explicitAlias != null, atEntityId)
+            val aliasPos = explicitAlias?.pos ?: item.pos
+            C_AtEntity(item.pos, item.entity, alias.rName, aliasPos, explicitAlias != null, atEntityId)
         }
 
         return C_AtFrom_Entities(ctx, fromCtx, cEntities)
@@ -414,7 +420,7 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
         targets.add(item)
     }
 
-    private class C_TupleField(val name: C_Name?, val sExpr: S_Expr, val ideInfo: IdeSymbolInfo)
+    private class C_TupleField(val name: C_IdeName?, val sExpr: S_Expr)
 }
 
 class S_IfExpr(pos: S_Pos, val cond: S_Expr, val trueExpr: S_Expr, val falseExpr: S_Expr): S_Expr(pos) {
@@ -519,7 +525,7 @@ class S_MapLiteralExpr(startPos: S_Pos, val entries: List<Pair<S_Expr, S_Expr>>)
             val valueExpr = entries[i].second
             C_Utils.checkUnitType(keyExpr.startPos, keyType) { "expr_map_key_unit" toCodeMsg "Key expression returns nothing" }
             C_Utils.checkUnitType(valueExpr.startPos, valueType) { "expr_map_value_unit" toCodeMsg "Value expression returns nothing" }
-            C_Utils.checkMapKeyType(ctx.nsCtx, valueExpr.startPos, keyType)
+            C_Utils.checkMapKeyType(ctx.defCtx, valueExpr.startPos, keyType)
         }
 
         val hintKeyValueTypes = typeHint.getMapKeyValueTypes()
@@ -565,8 +571,7 @@ class S_CallArgumentValue_Expr(val expr: S_Expr): S_CallArgumentValue() {
         val exprHint = C_ExprHint(typeHint)
         val cExpr = expr.compile(ctx, exprHint)
         val vExpr = cExpr.value()
-        val implicitName = cExpr.implicitMatchName()
-        return C_CallArgumentValue_Expr(expr.startPos, vExpr, implicitName)
+        return C_CallArgumentValue_Expr(expr.startPos, vExpr)
     }
 }
 
@@ -613,7 +618,7 @@ class S_TypeExpr(val type: S_Type): S_Expr(type.pos) {
 
 class S_MirrorStructExpr(pos: S_Pos, val mutable: Boolean, val type: S_Type): S_Expr(pos) {
     override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
-        val structType = type.compileMirrorStructType(ctx.nsCtx, mutable)
+        val structType = type.compileMirrorStructType(ctx.defCtx, mutable)
         structType ?: return C_ExprUtils.errorExpr(ctx, startPos)
         return C_SpecificTypeExpr(startPos, structType)
     }

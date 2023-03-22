@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.expr
@@ -8,7 +8,7 @@ import net.postchain.rell.compiler.ast.S_CallArgument
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_TypeHint
-import net.postchain.rell.compiler.base.fn.C_FunctionCallTarget
+import net.postchain.rell.compiler.base.fn.C_FunctionCallTargetInfo
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.R_Attribute
@@ -26,7 +26,7 @@ object C_CallTypeHints_None: C_CallTypeHints {
 }
 
 sealed class C_CallArgumentValue(val pos: S_Pos)
-class C_CallArgumentValue_Expr(pos: S_Pos, val vExpr: V_Expr, val implicitName: R_Name?): C_CallArgumentValue(pos)
+class C_CallArgumentValue_Expr(pos: S_Pos, val vExpr: V_Expr): C_CallArgumentValue(pos)
 class C_CallArgumentValue_Wildcard(pos: S_Pos): C_CallArgumentValue(pos)
 
 class C_CallArgument(val index: Int, val name: C_Name?, val value: C_CallArgumentValue) {
@@ -64,8 +64,7 @@ class C_CallArgument(val index: Int, val name: C_Name?, val value: C_CallArgumen
             return callArgs.mapNotNull {
                 when (it.value) {
                     is C_CallArgumentValue_Expr -> {
-                        val exprName = it.value.implicitName
-                        C_AttrArgument(it.index, it.name, it.value.vExpr, exprName)
+                        C_AttrArgument(it.index, it.name, it.value.vExpr)
                     }
                     is C_CallArgumentValue_Wildcard -> {
                         if (!wildcardErr) {
@@ -76,7 +75,7 @@ class C_CallArgument(val index: Int, val name: C_Name?, val value: C_CallArgumen
                         }
                         if (it.name == null) null else {
                             val vExpr = C_ExprUtils.errorVExpr(ctx, it.value.pos)
-                            C_AttrArgument(it.index, it.name, vExpr, null)
+                            C_AttrArgument(it.index, it.name, vExpr)
                         }
                     }
                 }
@@ -107,11 +106,11 @@ object C_CallArgumentIdeInfoProvider_Unknown: C_CallArgumentIdeInfoProvider() {
 }
 
 class C_CallArgumentIdeInfoProvider_Argument(
-        private val target: C_FunctionCallTarget
+        private val targetInfo: C_FunctionCallTargetInfo
 ): C_CallArgumentIdeInfoProvider() {
     override fun getIdeInfo(name: R_Name): IdeSymbolInfo {
-        val param = target.hasParameter(name)
-        return if (param) IdeSymbolInfo.EXPR_CALL_ARG else IdeSymbolInfo.UNKNOWN
+        val param = targetInfo.getParameter(name)
+        return param ?: IdeSymbolInfo.UNKNOWN
     }
 }
 

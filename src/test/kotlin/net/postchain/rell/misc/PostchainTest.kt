@@ -28,6 +28,7 @@ class PostchainTest: BaseResourcefulTest() {
         chkTables(con,
                 "blockchain_replicas(blockchain_rid:text,node:text)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
+                "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
                 "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
@@ -38,6 +39,7 @@ class PostchainTest: BaseResourcefulTest() {
         chkTables(con,
                 "blockchain_replicas(blockchain_rid:text,node:text)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
+                "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
                 "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
@@ -53,6 +55,7 @@ class PostchainTest: BaseResourcefulTest() {
         chkTables(con,
                 "blockchain_replicas(blockchain_rid:text,node:text)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
+                "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
                 "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
@@ -67,6 +70,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,height:int8)",
                 "c123.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_rid:bytea)",
+                "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
                 "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
@@ -80,6 +84,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,height:int8)",
                 "c123.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_rid:bytea)",
+                "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
                 "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
@@ -97,6 +102,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "c456.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c456.configurations(configuration_data:bytea,height:int8)",
                 "c456.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_rid:bytea)",
+                "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
                 "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"

@@ -23,7 +23,7 @@ import net.postchain.rell.utils.CommonUtils
 object RellTestUtils {
     const val MAIN_FILE = "main.rell"
 
-    const val RELL_VER = "0.11.0"
+    const val RELL_VER = "0.12.0"
 
     val DEFAULT_COMPILER_OPTIONS = C_CompilerOptions.builder().hiddenLib(true).build()
 
@@ -63,7 +63,8 @@ object RellTestUtils {
 
         val errMsgs = errs
                 .sortedBy { it.code }
-                .sortedBy { it.pos.pos() }
+                .sortedBy { it.pos.column() }
+                .sortedBy { it.pos.line() }
                 .sortedBy { it.pos.path() }
                 .sortedBy { it.pos.path().str() != "main.rell" }
                 .map { errToString(it.pos, it.code, errPos, forceFile) }

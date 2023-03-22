@@ -20,7 +20,6 @@ import net.postchain.rell.runtime.Rt_StructValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.BytesKeyPair
 import net.postchain.rell.utils.toImmMap
 
@@ -56,7 +55,7 @@ object C_Lib_Test_KeyPairs {
         b.addNamespace("keypairs", KEYPAIRS_NAMESPACE)
         b.addNamespace("privkeys", PRIVKEYS_NAMESPACE)
         b.addNamespace("pubkeys", PUBKEYS_NAMESPACE)
-        b.addStruct("keypair", KEYPAIR_STRUCT, IdeSymbolInfo(IdeSymbolKind.DEF_STRUCT))
+        b.addStruct("keypair", KEYPAIR_STRUCT, IdeSymbolInfo.DEF_STRUCT)
 
         val keyPairValue = keyPairToStruct(UnitTestBlockRunner.getTestKeyPair())
         b.addProperty("BLOCKCHAIN_SIGNER_KEYPAIR", C_NamespaceProperty_RtValue(IdeSymbolInfo.DEF_CONSTANT, keyPairValue))

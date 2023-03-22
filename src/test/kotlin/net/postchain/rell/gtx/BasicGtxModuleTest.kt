@@ -1,12 +1,13 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
 
+import net.postchain.common.BlockchainRid
+import net.postchain.concurrent.util.get
 import net.postchain.crypto.Secp256K1CryptoSystem
 import net.postchain.crypto.devtools.KeyPairHelper
-import net.postchain.common.BlockchainRid
 import net.postchain.devtools.IntegrationTest
 import net.postchain.devtools.PostchainTestNode
 import net.postchain.gtv.Gtv
@@ -63,29 +64,29 @@ class BasicGtxModuleTest : IntegrationTest() {
 
     @Test fun testQueryGetAllCities() {
         val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_all_cities" }""", "[1,2,3]")
+        chkQuery(node, "get_all_cities", gtv(mapOf()), gtv(listOf(gtv(1), gtv(2), gtv(3))))
     }
 
     @Test fun testQueryGetAllCityNames() {
         val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_all_city_names" }""", """["New York","Los Angeles","Seattle"]""")
+        chkQuery(node, "get_all_city_names", gtv(mapOf()), gtv(listOf(gtv("New York"), gtv("Los Angeles"), gtv("Seattle"))))
     }
 
     @Test fun testQueryGetPersonsByCity() {
         val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_persons_by_city", city : 1 }""", "[5]")
-        chkQuery(node, """{ type : "get_persons_by_city", city : 2 }""", "[4,6]")
-        chkQuery(node, """{ type : "get_persons_by_city", city : 3 }""", "[]")
+        chkQuery(node, "get_persons_by_city", gtv("city" to gtv(1)), gtv(listOf(gtv(5))))
+        chkQuery(node, "get_persons_by_city", gtv("city" to gtv(2)), gtv(listOf(gtv(4), gtv(6))))
+        chkQuery(node, "get_persons_by_city", gtv("city" to gtv(3)), gtv(listOf()))
     }
 
     @Test fun testObject() {
         val node = setupNodeAndObjects()
-        chkQuery(node, """{ type : "get_state" }""", "5")
+        chkQuery(node, "get_state", gtv(mapOf()), gtv(5))
 
         enqueueTx(node, makeTx_setState(0, 33), 0)
         buildBlockAndCommit(node)
 
-        chkQuery(node, """{ type : "get_state" }""", "33")
+        chkQuery(node, "get_state", gtv(mapOf()), gtv(33))
     }
 
     private fun makeTx(ownerIdx: Int, opName: String, vararg opArgs: Gtv): ByteArray {
@@ -132,15 +133,14 @@ class BasicGtxModuleTest : IntegrationTest() {
         buildBlockAndCommit(node)
     }
 
-    private fun chkQuery(node: PostchainTestNode, json: String, expected: String) {
-        val actual = callQuery(node, json)
+    private fun chkQuery(node: PostchainTestNode, name: String, args: Gtv, expected: Gtv) {
+        val actual = callQuery(node, name, args)
         assertEquals(expected, actual)
     }
 
-    private fun callQuery(node: PostchainTestNode, json: String): String {
+    private fun callQuery(node: PostchainTestNode, name: String, args: Gtv): Gtv {
         val blockQueries = node.getBlockchainInstance().blockchainEngine.getBlockQueries()
-        val actual = blockQueries.query(json).get()
-        return actual
+        return blockQueries.query(name, args).get()
     }
 
     @After override fun tearDown() {

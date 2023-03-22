@@ -1,0 +1,130 @@
+RELEASE NOTES 0.12.0 (2023-03-22)
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+1. Language: big_integer type
+
+New type "big_integer" can handle big integer numbers. It is similar to the "decimal" type, but can hold only integer
+numbers.
+
+Details:
+
+- A value can have up to 131072 decimal digits, so the type supports numbers from -(10^131072)+1 to (10^131072)-1.
+- Literals (constants) of type big_integer have same syntax as integer literals, but with suffux "L": 123L, 0x123L.
+- Supports same arithmetic operators as type integer: "+", "-", "*", "/", "%".
+- Uses the Java class java.math.BigInteger internally.
+
+Gtv conversion:
+
+- to Gtv: always converted to GtvBigInteger
+- from Gtv: only GtvBigInteger in compact mode and either GtvInteger or GtvBigInteger in pretty mode
+
+* New Library definitions *
+
+(a) Constants:
+
+    big_integer.PRECISION: integer
+
+        Maximum number of decimal digits (131072).
+
+    big_integer.MIN_VALUE: big_inetger
+    big_integer.MAX_VALUE: big_inetger
+
+        Minimum and maximum values: -(10^131072) + 1 and (10^131072) - 1, respectively.
+
+(b) Constructors:
+
+    big_integer(integer): big_integer
+
+        Creates a big_integer from integer.
+
+    big_integer(text): big_integer
+
+        Creates a big_integer from a decimal string representation, possibly with a sign.
+        Fails is the string is not a valid decimal number.
+
+(c) Conversions:
+
+    big_integer.to_integer(): integer
+    integer.to_big_integer(): big_integer
+
+        Conversion to/from integer; .to_integer() fails if the value is out of range.
+
+    big_integer.to_decimal(): decimal
+    decimal.to_big_integer(): big_integer
+
+        Conversion to/from decimal; .to_decimal() truncates the fractional part.
+
+    big_integer.to_bytes(): byte_array
+
+        Converts a *signed* (positive or negative) big_integer to a byte array.
+        Equivalent to Java method BigInteger.toByteArray(): big-endian byte order, two's complement representation,
+        one extra bit for sign. For example: value 0x7FL is encoded as x'7F', but 0x80L is encoded as x'0080', because
+        a sign needs an extra byte.
+
+    big_integer.from_bytes(byte_array): big_integer
+
+        Converts a byte array produced by .to_bytes() back to big_integer.
+        Equivalent to Java constructor BigInteger(byte[]).
+
+    big_integer.to_bytes_unsigned(): byte_array
+
+        Converts a *positive* big_integer to a byte array. Does not add a sign bit. Fails on negative value.
+        For example: 0x80L is encoded as x'80', 0xFFL as x'FF' and 0x100L as x'0100'.
+
+    big_integer.from_bytes_unsigned(byte_array): big_integer
+
+        Converts a byte array produced by .to_bytes_unsigned() back to big_integer.
+        Equivalent to Java constructor BigInteger(1, byte[]).
+
+    big_integer.to_hex(): text
+    big_integer.from_hex(text): big_integer
+
+        Conversion to/from hex string. Supports positive and negative numbers.
+        For example, (127L).to_hex() returns '7f'.
+
+    big_integer.to_text(): text
+    big_integer.from_text(text): big_integer
+
+        Conversion to/from a decimal string representation.
+
+    big_integer.to_text(radix: integer): text
+    big_integer.from_text(text, radix: integer): big_integer
+
+        Converts to/from a string representation with a specific base (radix, from 2 to 36).
+
+(d) Other functions of big_integer:
+
+    .abs(): big_integer
+    .max(big_integer): big_integer
+    .max(decimal): decimal
+    .min(big_integer): big_integer
+    .min(decimal): decimal
+    .sign(): integer
+
+        Those functions do the same as same functions of types "integer" and "decimal".
+
+(e) Functions of other types and global functions:
+
+    decimal(big_integer): decimal
+
+        Same as big_integer.to_decimal().
+
+    integer.max(big_integer): big_integer
+    integer.min(big_integer): big_integer
+
+        New variants supporting big_integer.
+
+    abs(big_integer): big_integer
+    max(big_integer, big_integer): big_integer
+    min(big_integer, big_integer): big_integer
+
+        New variants supporting big_integer.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Maximum length of entity, object and attribute names
+
+Maximum table or column name length in Postgres is 63 characters. In Rell, following limits were added for entities
+and objects:
+
+- maximum mount name length is 60 characters (assuming there will be a chain prefix, e.g. "c0.")
+- maximum attribute name length is 63 characters

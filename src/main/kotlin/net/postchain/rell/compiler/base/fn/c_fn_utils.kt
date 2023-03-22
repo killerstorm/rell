@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.fn
@@ -10,7 +10,7 @@ import net.postchain.rell.compiler.base.def.*
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
-import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.*
 import net.postchain.rell.utils.LazyPosString
 
@@ -23,7 +23,7 @@ object C_FunctionUtils {
         retType: S_Type?,
         body: S_FunctionBody?
     ): C_UserFunctionHeader {
-        val explicitRetType = if (retType == null) null else (retType.compileOpt(defCtx.nsCtx) ?: R_CtErrorType)
+        val explicitRetType = if (retType == null) null else (retType.compileOpt(defCtx) ?: R_CtErrorType)
         val bodyRetType = if (body == null) R_UnitType else null
         val rRetType = explicitRetType ?: bodyRetType
 
@@ -45,7 +45,7 @@ object C_FunctionUtils {
         retType: S_Type?,
         body: S_FunctionBody
     ): C_QueryFunctionHeader {
-        val rRetType = if (retType == null) null else (retType.compileOpt(defCtx.nsCtx) ?: R_CtErrorType)
+        val rRetType = if (retType == null) null else (retType.compileOpt(defCtx) ?: R_CtErrorType)
         val cParams = C_FormalParameters.compile(defCtx, params, defCtx.globalCtx.compilerOptions.gtv)
         val bodyCtx = C_FunctionBodyContext(defCtx, simpleName.pos, defName, rRetType, cParams)
         val cBody = C_QueryFunctionBody(bodyCtx, body)
@@ -61,7 +61,7 @@ object C_FunctionUtils {
         constId: R_GlobalConstantId
     ): C_GlobalConstantFunctionHeader {
         val explicitRetType = if (explicitType == null) null else {
-            val type = (explicitType.compileOpt(defCtx.nsCtx) ?: R_CtErrorType)
+            val type = (explicitType.compileOpt(defCtx) ?: R_CtErrorType)
             C_Types.checkNotUnit(defCtx.msgCtx, explicitType.pos, type, simpleName.str) {
                 "def:const" toCodeMsg "global constant"
             }
@@ -79,9 +79,9 @@ object C_FunctionUtils {
             callTarget: C_FunctionCallTarget,
             args: List<S_CallArgument>,
             resTypeHint: C_TypeHint
-    ): V_Expr {
+    ): V_GlobalFunctionCall {
         val res = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, callTarget)
-        return res ?: C_ExprUtils.errorVExpr(ctx, callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
+        return res ?: C_ExprUtils.errorVGlobalCall(ctx, callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
     }
 
     fun compileReturnType(ctx: C_ExprContext, name: LazyPosString, header: C_FunctionHeader): R_Type? {

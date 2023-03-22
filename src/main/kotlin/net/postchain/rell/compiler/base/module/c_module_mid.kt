@@ -4,8 +4,8 @@
 
 package net.postchain.rell.compiler.base.module
 
+import net.postchain.rell.compiler.ast.C_ImportTarget
 import net.postchain.rell.compiler.ast.S_BasicDefinition
-import net.postchain.rell.compiler.ast.S_ImportTarget
 import net.postchain.rell.compiler.ast.S_Modifiers
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
@@ -80,10 +80,10 @@ class C_MidModule(
 }
 
 class C_MidModuleFile(
-        val path: C_SourcePath,
-        members: List<C_MidModuleMember>,
-        val startPos: S_Pos?,
-        private val symCtx: C_SymbolContext
+    val path: C_SourcePath,
+    members: List<C_MidModuleMember>,
+    val startPos: S_Pos?,
+    private val symCtx: C_SymbolContext,
 ) {
     val members = members.toImmList()
 
@@ -126,10 +126,10 @@ class C_ImportDefinition(
 )
 
 class C_MidModuleMember_Import(
-        private val modifiers: S_Modifiers,
-        private val importDef: C_ImportDefinition,
-        private val target: S_ImportTarget,
-        private val moduleName: R_ModuleName
+    private val modifiers: S_Modifiers,
+    private val importDef: C_ImportDefinition,
+    private val target: C_ImportTarget,
+    private val moduleName: R_ModuleName,
 ): C_MidModuleMember() {
     override fun compile(ctx: C_MidMemberContext): C_ExtModuleMember {
         val mods = C_ModifierValues(C_ModifierTargetType.IMPORT, null)
@@ -144,14 +144,14 @@ class C_MidModuleMember_Import(
 }
 
 class C_MidModuleMember_Namespace(
-        private val modifiers: S_Modifiers,
-        private val qualifiedName: C_QualifiedName?,
-        members: List<C_MidModuleMember>
+    private val modifiers: S_Modifiers,
+    private val qualifiedName: C_IdeQualifiedName?,
+    members: List<C_MidModuleMember>,
 ): C_MidModuleMember() {
     private val members = members.toImmList()
 
     override fun compile(ctx: C_MidMemberContext): C_ExtModuleMember {
-        val mods = C_ModifierValues(C_ModifierTargetType.NAMESPACE, name = qualifiedName?.last)
+        val mods = C_ModifierValues(C_ModifierTargetType.NAMESPACE, name = qualifiedName?.last?.name)
         val modExternal = mods.field(C_ModifierFields.EXTERNAL_CHAIN)
         val modMount = mods.field(C_ModifierFields.MOUNT)
         val modDeprecated = if (qualifiedName == null) null else mods.field(C_ModifierFields.DEPRECATED)

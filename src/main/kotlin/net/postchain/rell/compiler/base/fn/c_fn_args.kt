@@ -13,6 +13,7 @@ import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.compiler.vexpr.V_FunctionCallArgs
+import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.R_PartialArgMapping
 import net.postchain.rell.model.expr.R_PartialCallMapping
@@ -36,12 +37,14 @@ class C_EffectivePartialArguments(
     fun toRMapping() = R_PartialCallMapping(exprArgs.size, wildArgs.size, combinedArgs)
 }
 
-sealed class C_FullCallArguments(protected val ctx: C_ExprContext) {
+sealed class C_CallArguments
+
+sealed class C_FullCallArguments(protected val ctx: C_ExprContext): C_CallArguments() {
     abstract fun compileSimpleArgs(functionName: LazyString): List<V_Expr>
     abstract fun compileComplexArgs(callInfo: C_FunctionCallInfo): V_FunctionCallArgs?
 }
 
-sealed class C_PartialCallArguments(protected val ctx: C_ExprContext, val wildcardPos: S_Pos) {
+sealed class C_PartialCallArguments(protected val ctx: C_ExprContext, val wildcardPos: S_Pos): C_CallArguments() {
     abstract fun compileEffectiveArgs(callInfo: C_FunctionCallInfo): C_EffectivePartialArguments?
     abstract fun errPartialNotSupported(functionName: String?)
 }
@@ -52,19 +55,31 @@ object C_FunctionCallArgsUtils {
             args: List<S_CallArgument>,
             resTypeHint: C_TypeHint,
             target: C_FunctionCallTarget
-    ): V_Expr? {
-        val ideInfoProvider = C_CallArgumentIdeInfoProvider_Argument(target)
-        val cArgs = C_CallArgument.compileArguments(ctx, args, target.typeHints(), ideInfoProvider)
-
-        return when (val fnCallArgs = C_ArgsListProcessor.processArgs(ctx, cArgs)) {
+    ): V_GlobalFunctionCall? {
+        val callArgs = compileCallArgs(ctx, args, target)
+        return when (callArgs) {
             null -> null
-            is C_InternalCallArguments_Full -> {
-                target.compileFull(C_FullCallArguments_Impl(ctx, fnCallArgs))
+            is C_FullCallArguments -> {
+                target.compileFull(callArgs)
             }
-            is C_InternalCallArguments_Partial -> {
+            is C_PartialCallArguments -> {
                 val resFnType = resTypeHint.getFunctionType()
-                target.compilePartial(C_PartialCallArguments_Impl(ctx, fnCallArgs), resFnType)
+                target.compilePartial(callArgs, resFnType)
             }
+        }
+    }
+
+    fun compileCallArgs(
+        ctx: C_ExprContext,
+        args: List<S_CallArgument>,
+        targetInfo: C_FunctionCallTargetInfo,
+    ): C_CallArguments? {
+        val ideInfoProvider = C_CallArgumentIdeInfoProvider_Argument(targetInfo)
+        val cArgs = C_CallArgument.compileArguments(ctx, args, targetInfo.typeHints(), ideInfoProvider)
+        return when (val callArgs0 = C_ArgsListProcessor.processArgs(ctx, cArgs)) {
+            null -> null
+            is C_InternalCallArguments_Full -> C_FullCallArguments_Impl(ctx, callArgs0)
+            is C_InternalCallArguments_Partial -> C_PartialCallArguments_Impl(ctx, callArgs0)
         }
     }
 }
@@ -188,7 +203,7 @@ private class C_PartialCallArguments_Impl(
 
 private sealed class C_FunctionCallArgument
 private class C_FunctionCallArgument_Expr(val vExpr: V_Expr): C_FunctionCallArgument()
-private class C_FunctionCallArgument_Wildcard: C_FunctionCallArgument()
+private object C_FunctionCallArgument_Wildcard: C_FunctionCallArgument()
 
 private sealed class C_InternalCallArguments
 
@@ -236,7 +251,7 @@ private class C_InternalCallArguments_Full(
 
 private sealed class C_PartialCallArgument
 private class C_PartialCallArgument_Expr(val vExpr: V_Expr): C_PartialCallArgument()
-private class C_PartialCallArgument_Wildcard: C_PartialCallArgument()
+private object C_PartialCallArgument_Wildcard: C_PartialCallArgument()
 
 private class C_InternalCallArguments_Partial(
         private val genArgs: C_GenericCallArgs<C_PartialCallArgument>,
@@ -263,7 +278,7 @@ private class C_InternalCallArguments_Partial(
             val arg = args[i]
             if (arg != null) arg else {
                 val index = nextIndex++
-                IndexedValue(index, C_PartialCallArgument_Wildcard())
+                IndexedValue(index, C_PartialCallArgument_Wildcard)
             }
         }.toImmList()
     }
@@ -427,7 +442,7 @@ private object C_ArgsListProcessor {
                     }
                     C_FunctionCallArgument_Expr(it.value.vExpr)
                 }
-                is C_CallArgumentValue_Wildcard -> C_FunctionCallArgument_Wildcard()
+                is C_CallArgumentValue_Wildcard -> C_FunctionCallArgument_Wildcard
             }
             C_GenericCallArg(it, fnArg)
         }
@@ -438,7 +453,7 @@ private object C_ArgsListProcessor {
             failFlag: MutableBoolean,
             genArgs: List<C_GenericCallArg<C_FunctionCallArgument>>
     ): C_InternalCallArguments {
-        val fullArgs = genArgs.mapIndexed { exprIndex, genArg ->
+        val fullArgs = genArgs.map { genArg ->
             when (genArg.value) {
                 is C_FunctionCallArgument_Expr -> C_GenericCallArg(genArg, genArg.value.vExpr)
                 is C_FunctionCallArgument_Wildcard -> throw IllegalStateException() // already checked
@@ -471,7 +486,7 @@ private object C_ArgsListProcessor {
             val v = it.value
             val v2 = when (v) {
                 is C_FunctionCallArgument_Expr -> C_PartialCallArgument_Expr(v.vExpr)
-                is C_FunctionCallArgument_Wildcard -> C_PartialCallArgument_Wildcard()
+                is C_FunctionCallArgument_Wildcard -> C_PartialCallArgument_Wildcard
             }
             C_GenericCallArg(it, v2)
         }

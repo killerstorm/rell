@@ -185,7 +185,7 @@ private class C_FixedModifierValues_Impl(
 
         val ok = compile0(ctx, link, args)
 
-        val ideInfo = if (ok) IdeSymbolInfo(IdeSymbolKind.MOD_ANNOTATION) else IdeSymbolInfo.UNKNOWN
+        val ideInfo = if (ok) IdeSymbolInfo.get(IdeSymbolKind.MOD_ANNOTATION) else IdeSymbolInfo.UNKNOWN
         nameHand.setIdeInfo(ideInfo)
     }
 

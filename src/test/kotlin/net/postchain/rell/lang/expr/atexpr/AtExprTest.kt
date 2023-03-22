@@ -283,6 +283,7 @@ class AtExprTest: BaseRellTest() {
         chk("(u: user, company) @ { u.firstName == 'Bill', company.name == 'Facebook' }",
                 "(u=user[40],company=company[100])")
 
+        tst.ideDefIdConflictError = false
         chk("user @ { .firstName == 'Bill' } ( x = .firstName, x = .lastName )", "ct_err:at:dup_field_name:x")
         chk("user @ { .firstName == 'Bill' } ( x = .firstName, y = .lastName )", "(x=text[Bill],y=text[Gates])")
     }
@@ -392,10 +393,12 @@ class AtExprTest: BaseRellTest() {
         insert("c0.user", "name", "1,'Bob'")
         insert("c0.company", "name", "1,'Apple'")
 
+        tst.ideDefIdConflictError = false
         chk("(u: user, c: company) @ {} ( u.name, c.name )", "ct_err:at:dup_field_name:name")
         chk("(u: user, c: company) @ {} ( name = u.name, c.name )", "ct_err:at:dup_field_name:name")
         chk("(u: user, c: company) @ {} ( u.name, name = c.name )", "ct_err:at:dup_field_name:name")
         chk("(u: user, c: company) @ {} ( name1 = u.name, name2 = c.name )", "(name1=Bob,name2=Apple)")
+        tst.ideDefIdConflictError = true
 
         chk("(u: user, c: company) @ {} ( _ = u.name, c.name )", "(Bob,name=Apple)")
         chk("(u: user, c: company) @ {} ( u.name, _ = c.name )", "(name=Bob,Apple)")
@@ -418,8 +421,11 @@ class AtExprTest: BaseRellTest() {
         chk("(u: user, c: company) @ {} ( @omit @sort u.name, _ = c.name )", "Apple")
         chk("(u: user, c: company) @ {} ( _ = u.name, @omit @sort c.name )", "Bob")
 
+        tst.ideDefIdConflictError = false
         chk("(u: user, c: company) @ {} ( @omit name = u.name, c.name )", "ct_err:at:dup_field_name:name")
         chk("(u: user, c: company) @ {} ( @omit name = u.name, name = c.name )", "ct_err:at:dup_field_name:name")
+        tst.ideDefIdConflictError = true
+
         chk("(u: user, c: company) @ {} ( @omit u.name, c.name )", "Apple")
         chk("(u: user, c: company) @ {} ( @omit u.name, name = c.name )", "(name=Apple)")
         chk("(u: user, c: company) @ {} ( @omit u.name, c.name, c )", "(name=Apple,company[1])")

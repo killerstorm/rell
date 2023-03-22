@@ -10,7 +10,6 @@ import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.compiler.base.def.C_StructGlobalFunction
 import net.postchain.rell.compiler.base.expr.C_AtTypeImplicitAttr
-import net.postchain.rell.compiler.base.expr.C_AtTypeImplicitAttr_TypeMember
 import net.postchain.rell.compiler.base.expr.C_TypeValueMember
 import net.postchain.rell.compiler.base.fn.C_FunctionCallParameter
 import net.postchain.rell.compiler.base.fn.C_FunctionCallParameters
@@ -22,13 +21,14 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.*
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.*
+import org.bouncycastle.util.Arrays
 import org.jooq.DataType
 import org.jooq.SQLDialect
 import org.jooq.impl.DefaultDataType
 import org.jooq.impl.SQLDataType
 import org.jooq.util.postgres.PostgresDataType
 import org.postgresql.util.PGobject
-import org.bouncycastle.util.Arrays
+import java.math.BigDecimal
 import java.sql.PreparedStatement
 import java.sql.ResultSet
 import java.util.*
@@ -135,7 +135,7 @@ private abstract class R_TypeSqlAdapter_Primitive(
 }
 
 private class R_TypeAtImplicitAttrs(private val calculator: () -> List<C_AtTypeImplicitAttr>) {
-    private val byNameLazy: Map<R_Name, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.name } }
+    private val byNameLazy: Map<R_Name, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.member.ideName?.rName } }
     private val byTypeLazy: Map<R_Type, List<C_AtTypeImplicitAttr>> by lazy { getAtImplicitAttrs { it.type } }
     private val attrsLazy: List<C_AtTypeImplicitAttr> by lazy { calculator().toImmList() }
 
@@ -154,7 +154,7 @@ private class R_TypeAtImplicitAttrs(private val calculator: () -> List<C_AtTypeI
 private class R_TypeValueMembers(private val calculator: () -> List<C_TypeValueMember>) {
     private val byNameLazy: Map<R_Name, List<C_TypeValueMember>> by lazy {
         allLazy
-            .map { it.name to it }
+            .mapNotNull { if (it.ideName == null) null else (it.ideName.rName to it) }
             .groupBy({it.first}, {it.second})
             .mapValues { it.value.toImmList() }
             .toImmMap()
@@ -251,7 +251,7 @@ abstract class R_Type(
     fun getAtImplicitAttrs(name: R_Name) = atImplicitAttrs.get(name)
     fun getAtImplicitAttrs(type: R_Type) = atImplicitAttrs.get(type)
     protected open fun getAtImplicitAttrs0(): List<C_AtTypeImplicitAttr> = valueMembers.getAll()
-        .mapNotNull { if (it.valueType == null) null else C_AtTypeImplicitAttr_TypeMember(it.name, it.valueType, it) }
+        .mapNotNull { if (it.valueType == null) null else C_AtTypeImplicitAttr(it, it.valueType) }
 
     companion object {
         fun commonTypeOpt(a: R_Type, b: R_Type): R_Type? {
@@ -387,6 +387,38 @@ object R_IntegerType: R_PrimitiveType("integer") {
     }
 }
 
+object R_BigIntegerType: R_PrimitiveType("big_integer") {
+    override fun defaultValue() = Rt_BigIntegerValue.ZERO
+    override fun comparator() = Rt_Comparator.create { it.asBigInteger() }
+    override fun fromCli(s: String): Rt_Value = Rt_BigIntegerValue.of(s)
+
+    override fun createGtvConversion() = GtvRtConversion_BigInteger
+    override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_BigInteger
+
+    override fun getTypeAdapter(sourceType: R_Type): C_TypeAdapter? {
+        return when (sourceType) {
+            R_IntegerType -> C_TypeAdapter_IntegerToBigInteger
+            else -> super.getTypeAdapter(sourceType)
+        }
+    }
+
+    override fun getLibType(): C_Lib_Type = C_Lib_Type_BigInteger
+
+    private object R_TypeSqlAdapter_BigInteger: R_TypeSqlAdapter_Primitive("big_integer", Lib_BigIntegerMath.SQL_TYPE) {
+        override fun toSqlValue(value: Rt_Value) = value.asBigInteger()
+
+        override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) {
+            val v = value.asBigInteger()
+            stmt.setBigDecimal(idx, BigDecimal(v))
+        }
+
+        override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
+            val v = rs.getBigDecimal(idx)
+            return checkSqlNull(v, R_BigIntegerType, nullable) ?: Rt_BigIntegerValue.of(v)
+        }
+    }
+}
+
 object R_DecimalType: R_PrimitiveType("decimal") {
     override fun defaultValue() = Rt_DecimalValue.ZERO
     override fun comparator() = Rt_Comparator.create { it.asDecimal() }
@@ -396,10 +428,10 @@ object R_DecimalType: R_PrimitiveType("decimal") {
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Decimal
 
     override fun getTypeAdapter(sourceType: R_Type): C_TypeAdapter? {
-        return if (sourceType == R_IntegerType) {
-            C_TypeAdapter_IntegerToDecimal
-        } else {
-            super.getTypeAdapter(sourceType)
+        return when (sourceType) {
+            R_IntegerType -> C_TypeAdapter_IntegerToDecimal
+            R_BigIntegerType -> C_TypeAdapter_BigIntegerToDecimal
+            else -> super.getTypeAdapter(sourceType)
         }
     }
 
@@ -521,7 +553,6 @@ object R_NullType: R_Type("null") {
     override fun createGtvConversion() = GtvRtConversion_Null
     override fun strCode() = "null"
     override fun toMetaGtv() = "null".toGtv()
-    override fun getValueMembers0() = C_Lib_Type_Null.valueMembers
 }
 
 class R_EntityType(val rEntity: R_EntityDefinition): R_Type(rEntity.appLevelName, rEntity.cDefName) {
@@ -788,7 +819,7 @@ class R_MapType(
     ).toGtv()
 }
 
-class R_TupleField(val name: R_Name?, val type: R_Type, val ideInfo: IdeSymbolInfo) {
+class R_TupleField(val name: R_IdeName?, val type: R_Type) {
     fun str(): String = strCode()
 
     fun strCode(): String {
@@ -804,7 +835,7 @@ class R_TupleField(val name: R_Name?, val type: R_Type, val ideInfo: IdeSymbolIn
     override fun hashCode() = Objects.hash(name, type)
 
     fun toMetaGtv() = mapOf(
-            "name" to (name?.str?.toGtv() ?: GtvNull),
+            "name" to (name?.rName?.str?.toGtv() ?: GtvNull),
             "type" to type.toMetaGtv()
     ).toGtv()
 }
@@ -855,10 +886,7 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
             when {
                 type == field.type -> field
                 type == otherField.type -> otherField
-                else -> {
-                    val ideInfo = IdeSymbolInfo.MEM_TUPLE_FIELD
-                    R_TupleField(field.name, type, ideInfo)
-                }
+                else -> R_TupleField(field.name, type)
             }
         }
 
@@ -893,14 +921,14 @@ class R_TupleType(fields: List<R_TupleField>): R_Type(calcName(fields)) {
         }
 
         fun create(vararg fields: R_Type): R_TupleType {
-            val fieldsList = fields.map { R_TupleField(null, it, IdeSymbolInfo.MEM_TUPLE_FIELD) }
+            val fieldsList = fields.map { R_TupleField(null, it) }
             return R_TupleType(fieldsList)
         }
 
         fun createNamed(vararg fields: Pair<String?, R_Type>): R_TupleType {
             val fieldsList = fields.map {
-                val name = it.first?.let { s -> R_Name.of(s) }
-                R_TupleField(name, it.second, IdeSymbolInfo.MEM_TUPLE_FIELD)
+                val name = it.first?.let { s -> R_IdeName(R_Name.of(s), IdeSymbolInfo.MEM_TUPLE_ATTR) }
+                R_TupleField(name, it.second)
             }
             return R_TupleType(fieldsList)
         }

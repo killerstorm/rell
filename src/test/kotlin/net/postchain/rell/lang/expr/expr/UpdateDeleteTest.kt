@@ -561,6 +561,9 @@ class UpdateDeleteTest: BaseRellTest() {
 
         chkOp("val b = bar @ {}; b.f.p.score *= 11;")
         chkData("person(1,James,913)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
+
+        chkOp("val b0 = bar @ {}; update (p:person, b:bar) @* { p == b.f.p, b == b0 } ( score += 33 );")
+        chkData("person(1,James,946)", "person(2,Mike,250)", "foo(1,1)", "bar(1,1)")
     }
 
     @Test fun testUpdateIncrementDecrement() {
@@ -644,14 +647,15 @@ class UpdateDeleteTest: BaseRellTest() {
         initPathAssignment()
 
         chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
+
         resetSqlCtr()
         chkOp("val u = user @ {}; u.company.city = 'Seattle';")
-        chkSql(3) // TODO Shall be 2, not 3 - to be optimized.
+        chkSql(2)
         chkData("group(300,Foo)", "company(100,Adidas,Seattle,300)", "user(200,Bob,100)")
 
         resetSqlCtr()
         chkOp("val u = user @ {}; u.company.group.name = 'Bar';")
-        chkSql(3) // TODO Shall be 2, not 3 - to be optimized.
+        chkSql(2)
         chkData("group(300,Bar)", "company(100,Adidas,Seattle,300)", "user(200,Bob,100)")
     }
 
@@ -659,11 +663,14 @@ class UpdateDeleteTest: BaseRellTest() {
         initPathAssignment()
 
         chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
+
         chkOp("val u = user @? {}; u.company.city = 'Dallas';", "ct_err:expr_mem_null:company")
         chkOp("val u = user @? {}; u?.company.city = 'Dallas';", "ct_err:expr_mem_null:city")
         chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
 
+        resetSqlCtr()
         chkOp("val u = user @? {}; u?.company?.city = 'Dallas';")
+        chkSql(2)
         chkData("group(300,Foo)", "company(100,Adidas,Dallas,300)", "user(200,Bob,100)")
 
         chkOp("val u = user @? { 'Alice' }; u?.company?.city = 'Chicago';")
@@ -677,6 +684,69 @@ class UpdateDeleteTest: BaseRellTest() {
         insert("c0.group", "name", "300,'Foo'")
         insert("c0.company", "name,city,group", "100,'Adidas','Boston',300")
         insert("c0.user", "name,company", "200,'Bob',100")
+    }
+
+    @Test fun testUpdatePathAmbiguousColumnShortSyntax() {
+        initUpdatePathAmbiguousColumn()
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,100,50,30)", "B(21,200,60,31)", "C(30,300,70)", "C(31,400,80)")
+
+        chkOp("val a = A @ {1}; a.b.c.x = 111;")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,100,50,30)", "B(21,200,60,31)", "C(30,111,70)", "C(31,400,80)")
+        chkOp("val a = A @ {2}; a.b.c.x = 222;")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,100,50,30)", "B(21,200,60,31)", "C(30,111,70)", "C(31,222,80)")
+
+        chkOp("val a = A @ {1}; a.b.x = 333;")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,333,50,30)", "B(21,200,60,31)", "C(30,111,70)", "C(31,222,80)")
+        chkOp("val a = A @ {2}; a.b.x = 444;")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,333,50,30)", "B(21,444,60,31)", "C(30,111,70)", "C(31,222,80)")
+
+        chkOp("val a = A @ {1}; a.b.c.x += 5;")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,333,50,30)", "B(21,444,60,31)", "C(30,116,70)", "C(31,222,80)")
+        chkOp("val a = A @ {2}; a.b.c.x += 5;")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,333,50,30)", "B(21,444,60,31)", "C(30,116,70)", "C(31,227,80)")
+
+        chkOp("val a = A @ {1}; a.b.x += 5;")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,338,50,30)", "B(21,444,60,31)", "C(30,116,70)", "C(31,227,80)")
+        chkOp("val a = A @ {2}; a.b.x += 5;")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,338,50,30)", "B(21,449,60,31)", "C(30,116,70)", "C(31,227,80)")
+    }
+
+    @Test fun testUpdatePathAmbiguousColumnLongSyntax() {
+        initUpdatePathAmbiguousColumn()
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,100,50,30)", "B(21,200,60,31)", "C(30,300,70)", "C(31,400,80)")
+
+        chkOp("update (c:C, a:A) @ { a.id == 1, c == a.b.c } ( .x = 111 );")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,100,50,30)", "B(21,200,60,31)", "C(30,111,70)", "C(31,400,80)")
+        chkOp("update (c:C, a:A) @ { a.id == 2, c == a.b.c } ( .x = 222 );")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,100,50,30)", "B(21,200,60,31)", "C(30,111,70)", "C(31,222,80)")
+
+        chkOp("update (b:B, a:A) @ { a.id == 1, b == a.b } ( .x = 333 );")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,333,50,30)", "B(21,200,60,31)", "C(30,111,70)", "C(31,222,80)")
+        chkOp("update (b:B, a:A) @ { a.id == 2, b == a.b } ( .x = 444 );")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,333,50,30)", "B(21,444,60,31)", "C(30,111,70)", "C(31,222,80)")
+
+        chkOp("update (c:C, a:A) @ { a.id == 1, c == a.b.c } ( .x += 5 );")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,333,50,30)", "B(21,444,60,31)", "C(30,116,70)", "C(31,222,80)")
+        chkOp("update (c:C, a:A) @ { a.id == 2, c == a.b.c } ( .x += 5 );")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,333,50,30)", "B(21,444,60,31)", "C(30,116,70)", "C(31,227,80)")
+
+        chkOp("update (b:B, a:A) @ { a.id == 1, b == a.b } ( .x += 5 );")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,338,50,30)", "B(21,444,60,31)", "C(30,116,70)", "C(31,227,80)")
+        chkOp("update (b:B, a:A) @ { a.id == 2, b == a.b } ( .x += 5 );")
+        chkData("A(10,1,20)", "A(11,2,21)", "B(20,338,50,30)", "B(21,449,60,31)", "C(30,116,70)", "C(31,227,80)")
+    }
+
+    private fun initUpdatePathAmbiguousColumn() {
+        def("entity A { id: integer; b: B; }")
+        def("entity B { mutable x: integer; y: integer; c: C; }")
+        def("entity C { mutable x: integer; y: integer; }")
+        tst.inserts = listOf()
+        insert("c0.C", "x,y", "30,300,70")
+        insert("c0.C", "x,y", "31,400,80")
+        insert("c0.B", "x,y,c", "20,100,50,30")
+        insert("c0.B", "x,y,c", "21,200,60,31")
+        insert("c0.A", "id,b", "10,1,20")
+        insert("c0.A", "id,b", "11,2,21")
     }
 
     private fun resetChkOp(code: String, expected: String = "OK") {

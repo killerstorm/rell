@@ -4,6 +4,8 @@
 
 package net.postchain.rell.compiler.ast
 
+import net.postchain.rell.compiler.base.core.C_IdeSymbolDef
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.expr.*
 import net.postchain.rell.compiler.base.modifier.*
@@ -16,8 +18,11 @@ import net.postchain.rell.compiler.vexpr.V_DbAtWhatField
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
+import net.postchain.rell.runtime.Rt_BigIntegerValue
 import net.postchain.rell.runtime.Rt_DecimalValue
 import net.postchain.rell.runtime.Rt_IntValue
+import net.postchain.rell.tools.api.IdeSymbolCategory
+import net.postchain.rell.tools.api.IdeSymbolId
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.CommonUtils
@@ -49,7 +54,8 @@ class S_AtExprWhat_Simple(val path: List<S_Name>): S_AtExprWhat() {
         }
 
         val vExpr = expr.value()
-        val fields = listOf(V_DbAtWhatField(ctx.appCtx, null, vExpr.type, vExpr, V_AtWhatFieldFlags.DEFAULT, null))
+        val field = V_DbAtWhatField(ctx.appCtx, null, vExpr.type, vExpr, V_AtWhatFieldFlags.DEFAULT, null)
+        val fields = listOf(field)
         return V_DbAtWhat(fields)
     }
 }
@@ -82,7 +88,9 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     }
 
     private fun processFields(ctx: C_ExprContext): List<WhatField> {
-        val procFields = fields.map { processField(ctx, it) }
+        val lazyTupleIdeId = lazy { ctx.defCtx.tupleIdeId() }
+
+        val procFields = fields.map { processField(ctx, it, lazyTupleIdeId) }
 
         val (aggrFields, noAggrFields) = procFields.withIndex().partition {
             it.value.summarization != null || it.value.flags.aggregate != null
@@ -101,7 +109,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         return res
     }
 
-    private fun processField(ctx: C_ExprContext, field: S_AtExprWhatComplexField): WhatField {
+    private fun processField(ctx: C_ExprContext, field: S_AtExprWhatComplexField, lazyTupleIdeId: Lazy<IdeSymbolId>): WhatField {
         val mods = C_ModifierValues(C_ModifierTargetType.EXPRESSION, null)
         val modOmit = mods.field(C_ModifierFields.OMIT)
         val modSort = mods.field(C_ModifierFields.SORT)
@@ -125,22 +133,44 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         val cSummarization = compileSummarization(ctx, vExpr, summ?.value)
 
         var namePos: S_Pos = field.expr.startPos
-        var name: R_Name? = null
+        var name: R_IdeName? = null
         var nameExplicit = false
 
         val attr = field.attr
+
         if (attr != null) {
-            val cAttr = attr.compile(ctx, IdeSymbolInfo(IdeSymbolKind.MEM_TUPLE_ATTR))
+            var defIdeInfo = IdeSymbolInfo.MEM_TUPLE_ATTR
+            val attrNameHand = attr.compile(ctx)
+            val cAttr = attrNameHand.name
+
             if (cAttr.str != "_") {
                 namePos = cAttr.pos
-                name = cAttr.rName
                 nameExplicit = true
+
+                val ideDef = makeFieldIdeDef(attrNameHand.name, lazyTupleIdeId)
+                if (!omit) defIdeInfo = ideDef.defInfo
+                name = R_IdeName(cAttr.rName, ideDef.refInfo)
             }
+
+            attrNameHand.setIdeInfo(defIdeInfo)
         } else if (!omit && (cSummarization == null || cSummarization.isGroup())) {
-            name = vExpr.implicitAtWhatAttrName()
+            val impName = vExpr.implicitAtWhatAttrName()
+            if (impName != null) {
+                val ideDef = makeFieldIdeDef(impName, lazyTupleIdeId)
+                name = R_IdeName(impName.rName, ideDef.refInfo)
+                if (ideDef.defInfo.defId != null) {
+                    ctx.symCtx.setDefId(impName.pos, ideDef.defInfo.defId)
+                }
+            }
         }
 
         return WhatField(vExpr, namePos, name, nameExplicit, flags, cSummarization)
+    }
+
+    private fun makeFieldIdeDef(name: C_Name, lazyTupleIdeId: Lazy<IdeSymbolId>): C_IdeSymbolDef {
+        val tupleIdeId = lazyTupleIdeId.value
+        val attrIdeId = tupleIdeId.appendMember(IdeSymbolCategory.ATTRIBUTE, name.rName)
+        return C_IdeSymbolDef.make(IdeSymbolKind.MEM_TUPLE_ATTR, name.pos, attrIdeId)
     }
 
     private fun compileSummarization(ctx: C_ExprContext, vExpr: V_Expr, ann: C_AtSummarizationKind?): C_AtSummarization? {
@@ -166,6 +196,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     private fun compileSummarizationSum(pos: C_AtSummarizationPos, type: R_Type): C_AtSummarization? {
         return when (type) {
             R_IntegerType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_Integer, Rt_IntValue(0))
+            R_BigIntegerType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_BigInteger, Rt_BigIntegerValue.ZERO)
             R_DecimalType -> C_AtSummarization_Aggregate_Sum(pos, type, R_BinaryOp_Add_Decimal, Rt_DecimalValue.ZERO)
             else -> null
         }
@@ -189,12 +220,13 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
         val names = mutableSetOf<R_Name>()
 
         for (f in procFields) {
-            var name = f.name
-            if (name != null && !names.add(name)) {
+            val name = f.name
+            var field = f
+            if (name != null && !names.add(name.rName)) {
                 ctx.msgCtx.error(f.namePos, "at:dup_field_name:$name", "Duplicate field name: '$name'")
-                name = null
+                field = f.updateName(null)
             }
-            res.add(f.updateName(name))
+            res.add(field)
         }
 
         return res
@@ -203,19 +235,19 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     private class WhatField(
             val vExpr: V_Expr,
             val namePos: S_Pos,
-            val name: R_Name?,
+            val name: R_IdeName?,
             val nameExplicit: Boolean,
             val flags: V_AtWhatFieldFlags,
-            val summarization: C_AtSummarization?
+            val summarization: C_AtSummarization?,
     ) {
-        fun updateName(newName: R_Name?): WhatField {
+        fun updateName(newName: R_IdeName?): WhatField {
             return WhatField(
                     vExpr = vExpr,
                     namePos = namePos,
                     name = newName,
                     nameExplicit = nameExplicit,
                     flags = flags,
-                    summarization = summarization
+                    summarization = summarization,
             )
         }
     }
@@ -418,7 +450,7 @@ class S_AtExpr(
             rowDecoder = R_AtExprRowDecoder_Simple
             recordType = selFields[0].resultType
         } else {
-            val tupleFields = selFields.map { R_TupleField(it.name, it.resultType, IdeSymbolInfo.MEM_TUPLE_FIELD) }
+            val tupleFields = selFields.map { R_TupleField(it.name, it.resultType) }
             val type = R_TupleType(tupleFields)
             rowDecoder = R_AtExprRowDecoder_Tuple(type)
             recordType = type

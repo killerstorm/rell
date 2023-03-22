@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
 
-import net.postchain.rell.compiler.ast.S_Name
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_MessageContext
+import net.postchain.rell.compiler.base.core.C_Name
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.model.*
@@ -126,11 +126,15 @@ class C_MountTablesBuilder(private val stamp: R_AppUid) {
         }
     }
 
-    fun addEntity(namePos: S_Pos?, rEntity: R_EntityDefinition) {
-        addEntity0(C_DeclarationType.ENTITY, namePos, rEntity, rEntity)
+    fun addEntity(name: C_Name, rEntity: R_EntityDefinition) {
+        addEntity0(C_DeclarationType.ENTITY, name.pos, rEntity, rEntity)
     }
 
-    fun addObject(name: S_Name, rObject: R_ObjectDefinition) {
+    fun addSysEntity(rEntity: R_EntityDefinition) {
+        addEntity0(C_DeclarationType.ENTITY, null, rEntity, rEntity)
+    }
+
+    fun addObject(name: C_Name, rObject: R_ObjectDefinition) {
         addEntity0(C_DeclarationType.OBJECT, name.pos, rObject, rObject.rEntity)
     }
 
@@ -140,12 +144,12 @@ class C_MountTablesBuilder(private val stamp: R_AppUid) {
         b.entities.add(type, def, namePos, rEntity.mountName)
     }
 
-    fun addOperation(name: S_Name, o: R_OperationDefinition) {
+    fun addOperation(name: C_Name, o: R_OperationDefinition) {
         val b = chainBuilder("")
         b.operations.add(C_DeclarationType.OPERATION, o, name.pos, o.mountName)
     }
 
-    fun addQuery(name: S_Name, q: R_QueryDefinition) {
+    fun addQuery(name: C_Name, q: R_QueryDefinition) {
         val b = chainBuilder("")
         b.queries.add(C_DeclarationType.QUERY, q, name.pos, q.mountName)
     }

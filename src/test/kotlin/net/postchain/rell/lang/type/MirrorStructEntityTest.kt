@@ -260,6 +260,26 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("users() @* {} ( @sum $.to_struct() )", "ct_err:at:what:aggr:bad_type:SUM:struct<user>")
     }
 
+    @Test fun testToStructEntityQueryCount() {
+        tstCtx.useSql = true
+        def("entity company { name; city: text; }")
+        def("entity user { name; company; }")
+        insert("c0.company", "name,city", "55,'ChromaWay','Stockholm'")
+        insert("c0.user", "name,company", "33,'Bob',55")
+
+        chk("user@{} (user.to_struct())", "struct<user>[name=text[Bob],company=company[55]]")
+        chkSql(1)
+
+        chk("user@{} (user.company.to_struct())", "struct<company>[name=text[ChromaWay],city=text[Stockholm]]")
+        chkSql(1)
+
+        chkEx("{ val u = user@{}; return u.to_struct(); }", "struct<user>[name=text[Bob],company=company[55]]")
+        chkSql(2)
+
+        chkEx("{ val u = user@{}; return u.company.to_struct(); }", "struct<company>[name=text[ChromaWay],city=text[Stockholm]]")
+        chkSql(3) //TODO shall be 2, not 3
+    }
+
     private fun initToStructEntity() {
         tstCtx.useSql = true
         def("entity user { name; rating: integer; }")

@@ -5,10 +5,12 @@
 package net.postchain.rell.model.expr
 
 import com.google.common.math.LongMath
+import net.postchain.rell.lib.type.Lib_BigIntegerMath
 import net.postchain.rell.lib.type.Lib_DecimalMath
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
 import java.math.BigDecimal
+import java.math.BigInteger
 
 sealed class R_CmpOp(val code: String, val checker: (Int) -> Boolean) {
     fun check(cmp: Int): Boolean = checker(cmp)
@@ -30,6 +32,7 @@ sealed class R_CmpType {
             return when (type) {
                 R_BooleanType -> R_CmpType_Boolean
                 R_IntegerType -> R_CmpType_Integer
+                R_BigIntegerType -> R_CmpType_BigInteger
                 R_DecimalType -> R_CmpType_Decimal
                 R_TextType -> R_CmpType_Text
                 R_ByteArrayType -> R_CmpType_ByteArray
@@ -54,6 +57,14 @@ object R_CmpType_Integer: R_CmpType() {
     override fun compare(left: Rt_Value, right: Rt_Value): Int {
         val l = left.asInteger()
         val r = right.asInteger()
+        return l.compareTo(r)
+    }
+}
+
+object R_CmpType_BigInteger: R_CmpType() {
+    override fun compare(left: Rt_Value, right: Rt_Value): Int {
+        val l = left.asBigInteger()
+        val r = right.asBigInteger()
         return l.compareTo(r)
     }
 }
@@ -225,6 +236,17 @@ sealed class R_BinaryOp_Arith_Integer(code: String): R_BinaryOp(code) {
     }
 }
 
+sealed class R_BinaryOp_Arith_BigInteger(code: String): R_BinaryOp(code) {
+    abstract fun evaluate(left: BigInteger, right: BigInteger): BigInteger
+
+    final override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
+        val leftVal = left.asBigInteger()
+        val rightVal = right.asBigInteger()
+        val resVal = evaluate(leftVal, rightVal)
+        return Rt_BigIntegerValue.ofTry(resVal) ?: throw errDecOverflow(code)
+    }
+}
+
 sealed class R_BinaryOp_Arith_Decimal(code: String): R_BinaryOp(code) {
     abstract fun evaluate(left: BigDecimal, right: BigDecimal): BigDecimal
 
@@ -240,6 +262,10 @@ object R_BinaryOp_Add_Integer: R_BinaryOp_Arith_Integer("+") {
     override fun evaluate(left: Long, right: Long) = LongMath.checkedAdd(left, right)
 }
 
+object R_BinaryOp_Add_BigInteger: R_BinaryOp_Arith_BigInteger("+") {
+    override fun evaluate(left: BigInteger, right: BigInteger) = Lib_BigIntegerMath.add(left, right)
+}
+
 object R_BinaryOp_Add_Decimal: R_BinaryOp_Arith_Decimal("+") {
     override fun evaluate(left: BigDecimal, right: BigDecimal) = Lib_DecimalMath.add(left, right)
 }
@@ -248,12 +274,20 @@ object R_BinaryOp_Sub_Integer: R_BinaryOp_Arith_Integer("-") {
     override fun evaluate(left: Long, right: Long) = LongMath.checkedSubtract(left, right)
 }
 
+object R_BinaryOp_Sub_BigInteger: R_BinaryOp_Arith_BigInteger("-") {
+    override fun evaluate(left: BigInteger, right: BigInteger) = Lib_BigIntegerMath.subtract(left, right)
+}
+
 object R_BinaryOp_Sub_Decimal: R_BinaryOp_Arith_Decimal("-") {
     override fun evaluate(left: BigDecimal, right: BigDecimal) = Lib_DecimalMath.subtract(left, right)
 }
 
 object R_BinaryOp_Mul_Integer: R_BinaryOp_Arith_Integer("*") {
     override fun evaluate(left: Long, right: Long) = LongMath.checkedMultiply(left, right)
+}
+
+object R_BinaryOp_Mul_BigInteger: R_BinaryOp_Arith_BigInteger("*") {
+    override fun evaluate(left: BigInteger, right: BigInteger) = Lib_BigIntegerMath.multiply(left, right)
 }
 
 object R_BinaryOp_Mul_Decimal: R_BinaryOp_Arith_Decimal("*") {
@@ -266,6 +300,15 @@ object R_BinaryOp_Div_Integer: R_BinaryOp_Arith_Integer("/") {
             throw Rt_Exception.common("expr:/:div0:$left", "Division by zero: $left / $right")
         }
         return left / right
+    }
+}
+
+object R_BinaryOp_Div_BigInteger: R_BinaryOp_Arith_BigInteger("/") {
+    override fun evaluate(left: BigInteger, right: BigInteger): BigInteger {
+        if (right.signum() == 0) {
+            throw Rt_Exception.common("expr:/:div0:$left", "Division by zero: $left / $right")
+        }
+        return Lib_BigIntegerMath.divide(left, right)
     }
 }
 
@@ -284,6 +327,15 @@ object R_BinaryOp_Mod_Integer: R_BinaryOp_Arith_Integer("%") {
             throw Rt_Exception.common("expr:%:div0:$left", "Division by zero: $left % $right")
         }
         return left % right
+    }
+}
+
+object R_BinaryOp_Mod_BigInteger: R_BinaryOp_Arith_BigInteger("%") {
+    override fun evaluate(left: BigInteger, right: BigInteger): BigInteger {
+        if (right.signum() == 0) {
+            throw Rt_Exception.common("expr:%:div0", "Division by zero: %")
+        }
+        return Lib_BigIntegerMath.remainder(left, right)
     }
 }
 
@@ -358,6 +410,10 @@ object R_BinaryOp_In_Range: R_BinaryOp("in") {
 
 private fun errIntOverflow(op: String, left: Long, right: Long): Rt_Exception {
     return Rt_Exception.common("expr:$op:overflow:$left:$right", "Integer overflow: $left $op $right")
+}
+
+private fun errBigIntOverflow(op: String): Rt_Exception {
+    return Rt_BigIntegerValue.errOverflow("expr:$op:overflow", "Big integer overflow: operator '$op'")
 }
 
 private fun errDecOverflow(op: String): Rt_Exception {

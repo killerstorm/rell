@@ -85,6 +85,8 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNameConflict() {
+        tst.ideDefIdConflictError = false
+
         chkCompile("namespace foo {} namespace foo {}", "OK")
 
         chkCompile("namespace foo {} entity foo {}", """ct_err:
@@ -121,6 +123,8 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testNameConflictMultipart() {
+        tst.ideDefIdConflictError = false
+
         chkCompile("namespace a { function f(): integer = 123; } namespace a { function f(): integer = 123; }", """ct_err:
             [name_conflict:user:f:FUNCTION:main.rell(1:69)]
             [name_conflict:user:f:FUNCTION:main.rell(1:24)]
@@ -246,6 +250,8 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testMultipleNamespacesWithSameName3() {
+        tst.ideDefIdConflictError = false
+
         val code = """
             namespace foo { namespace bar { function f(): integer = 123; }}
             namespace foo { namespace bar {    function f(): integer = 123; }}
@@ -258,6 +264,8 @@ class NamespaceTest: BaseRellTest() {
     }
 
     @Test fun testAnonymousNamespace() {
+        tst.ideDefIdConflictError = false
+
         chkFull("namespace { query q() = 123; }", "int[123]")
         chkFull("namespace { function f(): integer = 123; } query q() = f();", "int[123]")
         chkFull("namespace { function f(): integer = g(); } query q() = f(); namespace { function g(): integer = 123; }", "int[123]")

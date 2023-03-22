@@ -15,6 +15,7 @@ import net.postchain.rell.compiler.vexpr.V_LocalVarExpr
 import net.postchain.rell.compiler.vexpr.V_SmartNullableExpr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.*
+import net.postchain.rell.tools.api.IdeLocalSymbolLink
 import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.*
@@ -131,9 +132,11 @@ class C_BlockEntry_Var(
     }
 }
 
-class C_BlockEntry_AtEntity(val atEntity: C_AtEntity): C_BlockEntry() {
+class C_BlockEntry_AtEntity(private val atEntity: C_AtEntity): C_BlockEntry() {
+    private val ideInfo = IdeSymbolInfo(IdeSymbolKind.LOC_AT_ALIAS, link = IdeLocalSymbolLink(atEntity.aliasPos))
+
     override fun toLocalVarOpt() = null
-    override fun ideSymbolInfo() = IdeSymbolInfo(IdeSymbolKind.LOC_AT_ALIAS)
+    override fun ideSymbolInfo() = ideInfo
 
     override fun compile(ctx: C_ExprContext, pos: S_Pos, ambiguous: Boolean): V_Expr {
         return atEntity.toVExpr(ctx, pos, ambiguous)
@@ -474,8 +477,9 @@ class C_OwnerBlockContext(
 
 class C_LambdaBlock(
         val rLambda: R_LambdaBlock,
+        private val exprCtx: C_ExprContext,
         private val localVar: C_LocalVar,
-        val blockUid: R_FrameBlockUid
+        private val blockUid: R_FrameBlockUid
 ) {
     fun compileVarRExpr(blockUid: R_FrameBlockUid = this.blockUid): R_Expr {
         val varRef = localVar.toRef(blockUid)
@@ -487,6 +491,11 @@ class C_LambdaBlock(
         return Db_InterpretedExpr(rVarExpr)
     }
 
+    fun compileVarExpr(pos: S_Pos, blockUid: R_FrameBlockUid = this.blockUid): V_Expr {
+        val varRef = localVar.toRef(blockUid)
+        return V_LocalVarExpr(exprCtx, pos, varRef)
+    }
+
     companion object {
         fun builder(ctx: C_ExprContext, varType: R_Type) = C_LambdaBlockBuilder(ctx, varType)
     }
@@ -495,12 +504,13 @@ class C_LambdaBlock(
 class C_LambdaBlockBuilder(ctx: C_ExprContext, private val varType: R_Type) {
     val innerBlkCtx = ctx.blkCtx.createSubContext("<lambda>")
     val innerExprCtx = ctx.update(blkCtx = innerBlkCtx)
-    val localVar = innerBlkCtx.newLocalVar("<lambda>", null, varType, false, null)
+
+    private val localVar = innerBlkCtx.newLocalVar("<lambda>", null, varType, false, null)
 
     fun build(): C_LambdaBlock {
         val cBlock = innerBlkCtx.buildBlock()
         val varRef = localVar.toRef(innerBlkCtx.blockUid)
         val rLambda = R_LambdaBlock(cBlock.rBlock, varRef.ptr, varType)
-        return C_LambdaBlock(rLambda, localVar, innerBlkCtx.blockUid)
+        return C_LambdaBlock(rLambda, innerExprCtx, localVar, innerBlkCtx.blockUid)
     }
 }

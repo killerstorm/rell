@@ -6,15 +6,16 @@ package net.postchain.rell.compiler.vexpr
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_LocalVarRef
-import net.postchain.rell.compiler.base.core.C_QualifiedName
-import net.postchain.rell.compiler.base.expr.*
+import net.postchain.rell.compiler.base.expr.C_AssignOp
+import net.postchain.rell.compiler.base.expr.C_Destination
+import net.postchain.rell.compiler.base.expr.C_ExprContext
+import net.postchain.rell.compiler.base.expr.C_VarFact
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.compiler.base.utils.C_Error
-import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.model.R_Attribute
-import net.postchain.rell.model.R_ObjectDefinition
 import net.postchain.rell.model.R_Type
-import net.postchain.rell.model.expr.*
+import net.postchain.rell.model.expr.R_AssignExpr
+import net.postchain.rell.model.expr.R_Expr
+import net.postchain.rell.model.expr.R_NotNullExpr
 import net.postchain.rell.model.stmt.R_AssignStatement
 import net.postchain.rell.model.stmt.R_Statement
 import net.postchain.rell.utils.immListOf
@@ -34,7 +35,7 @@ class V_LocalVarExpr(
     override fun varId() = varRef.target.uid
 
     override fun isAtExprItem() = varRef.target.atExprId != null
-    override fun implicitAtWhereAttrName() = varRef.target.rName
+    override fun implicitTargetAttrName() = varRef.target.rName
 
     override fun toRExpr0(): R_Expr {
         checkInitialized()
@@ -99,6 +100,7 @@ class V_SmartNullableExpr(
     override fun varId() = subExpr.varId()
 
     override fun isAtExprItem() = subExpr.isAtExprItem()
+    override fun implicitTargetAttrName() = subExpr.implicitTargetAttrName()
     override fun implicitAtWhereAttrName() = subExpr.implicitAtWhereAttrName()
 
     override fun toRExpr0(): R_Expr {
@@ -137,61 +139,6 @@ class V_SmartNullableExpr(
 
         override fun compileAssignStatement(ctx: C_ExprContext, srcExpr: R_Expr, op: C_AssignOp?): R_Statement {
             return destination.compileAssignStatement(ctx, srcExpr, op)
-        }
-    }
-}
-
-class V_ObjectExpr(
-        exprCtx: C_ExprContext,
-        qName: C_QualifiedName,
-        private val rObject: R_ObjectDefinition
-): V_Expr(exprCtx, qName.pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(rObject.type)
-    override fun globalConstantRestriction() = V_GlobalConstantRestriction("object", null)
-    override fun toRExpr0() = R_ObjectExpr(rObject.type)
-}
-
-class V_ObjectAttrExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        private val rObject: R_ObjectDefinition,
-        private val attr: R_Attribute
-): V_Expr(exprCtx, pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(attr.type)
-
-    override fun globalConstantRestriction() = V_GlobalConstantRestriction("object_attr", null)
-
-    override fun toRExpr0() = createAccessExpr()
-    override fun toDbExpr0() = C_ExprUtils.toDbExpr(exprCtx.msgCtx, pos, toRExpr())
-
-    override fun destination(): C_Destination {
-        if (!attr.mutable) {
-            throw C_Errors.errAttrNotMutable(pos, attr.name)
-        }
-        exprCtx.checkDbUpdateAllowed(pos)
-        return C_Destination_ObjectAttr(rObject, attr)
-    }
-
-    private fun createAccessExpr(): R_Expr {
-        val rEntity = rObject.rEntity
-        val atEntity = exprCtx.makeAtEntity(rEntity, exprCtx.appCtx.nextAtExprId())
-        val whatExpr = Db_AttrExpr(Db_EntityExpr(atEntity), attr)
-        val whatValue = Db_AtWhatValue_DbExpr(whatExpr, whatExpr.type)
-        val whatField = Db_AtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
-        return createRExpr(rObject, atEntity, whatField, attr.type)
-    }
-
-    companion object {
-        fun createRExpr(
-                rObject: R_ObjectDefinition,
-                atEntity: R_DbAtEntity,
-                whatField: Db_AtWhatField,
-                resType: R_Type
-        ): R_Expr {
-            val from = listOf(atEntity)
-            val what = listOf(whatField)
-            val atBase = Db_AtExprBase(from, what, null)
-            return R_ObjectAttrExpr(resType, rObject, atBase)
         }
     }
 }

@@ -104,6 +104,8 @@ class ModuleTest: BaseRellTest(false) {
 
         chkCompile("import a.foo;", "OK")
 
+        tst.ideDefIdConflictError = false
+
         chkCompile("import a.foo; import b.foo;", """ct_err:
             [name_conflict:user:foo:IMPORT:main.rell(1:24)]
             [name_conflict:user:foo:IMPORT:main.rell(1:10)]
@@ -376,6 +378,7 @@ class ModuleTest: BaseRellTest(false) {
 
     @Test fun testNameConflictMount() {
         tst.errMsgPos = true
+        tst.ideDefIdConflictError = false
         val code = """
             entity user {}
             entity user {}

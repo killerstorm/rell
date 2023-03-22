@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.stmt
@@ -11,6 +11,8 @@ import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.immListOf
+import net.postchain.rell.utils.toImmList
 
 sealed class R_UpdateTarget {
     abstract fun entity(): R_DbAtEntity
@@ -53,13 +55,17 @@ class R_UpdateTarget_Simple(
 }
 
 sealed class R_UpdateTarget_Expr(
-        private val entity: R_DbAtEntity,
-        private val where: Db_Expr,
-        private val expr: R_Expr,
-        private val lambda: R_LambdaBlock
+    private val entity: R_DbAtEntity,
+    extraEntities: List<R_DbAtEntity>,
+    private val where: Db_Expr,
+    private val expr: R_Expr,
+    private val lambda: R_LambdaBlock,
 ): R_UpdateTarget() {
+    private val extraEntities: List<R_DbAtEntity> = extraEntities.toImmList()
+    private val allEntities = (immListOf(entity) + this.extraEntities).toImmList()
+
     final override fun entity() = entity
-    final override fun extraEntities() = listOf<R_DbAtEntity>()
+    final override fun extraEntities() = extraEntities
     final override fun where() = where
 
     protected abstract fun execute0(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame, value: Rt_Value)
@@ -71,13 +77,13 @@ sealed class R_UpdateTarget_Expr(
 
     fun executeStmt(frame: Rt_CallFrame, stmt: R_BaseUpdateStatement, value: Rt_Value) {
         lambda.execute(frame, value) {
-            stmt.executeSql(frame, listOf(entity))
+            stmt.executeSql(frame, allEntities)
         }
     }
 }
 
-class R_UpdateTarget_Expr_One(entity: R_DbAtEntity, where: Db_Expr, expr: R_Expr, lambda: R_LambdaBlock)
-: R_UpdateTarget_Expr(entity, where, expr, lambda) {
+class R_UpdateTarget_Expr_One(entity: R_DbAtEntity, extraEntities: List<R_DbAtEntity>, where: Db_Expr, expr: R_Expr, lambda: R_LambdaBlock)
+: R_UpdateTarget_Expr(entity, extraEntities, where, expr, lambda) {
     override fun execute0(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame, value: Rt_Value) {
         if (value != Rt_NullValue) {
             executeStmt(frame, stmt, value)
@@ -92,7 +98,7 @@ class R_UpdateTarget_Expr_Many(
         lambda: R_LambdaBlock,
         private val set: Boolean,
         private val listType: R_Type
-): R_UpdateTarget_Expr(entity, where, expr, lambda) {
+): R_UpdateTarget_Expr(entity, immListOf(), where, expr, lambda) {
     override fun execute0(stmt: R_BaseUpdateStatement, frame: Rt_CallFrame, value: Rt_Value) {
         val lst = if (set) {
             value.asSet().toMutableList()
@@ -124,7 +130,7 @@ class R_UpdateTarget_Object(private val entity: R_DbAtEntity): R_UpdateTarget() 
     }
 }
 
-class R_UpdateStatementWhat(val attr: R_Attribute, val expr: Db_Expr, val op: Db_BinaryOp?)
+class R_UpdateStatementWhat(val attr: R_Attribute, val expr: Db_Expr)
 
 sealed class R_BaseUpdateStatement(val target: R_UpdateTarget, val fromBlock: R_FrameBlock): R_Statement() {
     protected abstract fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql
@@ -281,18 +287,14 @@ class R_UpdateStatement(
 
     private fun translateWhat(ctx: SqlGenContext, redWhat: List<RedDb_Expr>): ParameterizedSql {
         val b = SqlBuilder()
+
         b.append(redWhat.withIndex(), ", ") { (i, redExpr) ->
             val whatExpr = what[i]
             b.appendName(whatExpr.attr.sqlMapping)
             b.append(" = ")
-            if (whatExpr.op != null) {
-                b.appendName(whatExpr.attr.sqlMapping)
-                b.append(" ")
-                b.append(whatExpr.op.sql)
-                b.append(" ")
-            }
             redExpr.toSql(ctx, b, false)
         }
+
         return b.build()
     }
 }

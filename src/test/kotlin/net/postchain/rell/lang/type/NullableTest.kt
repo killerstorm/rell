@@ -581,7 +581,7 @@ class NullableTest: BaseRellTest(false) {
     @Test fun testMemberAccess() {
         chkEx("{ var x: text?; return x.size(); }", "ct_err:[expr_var_uninit:x][expr_mem_null:size]")
         chkEx("{ var x: (a:integer)?; return x.a; }", "ct_err:[expr_var_uninit:x][expr_mem_null:a]")
-        chkEx("{ var x: (a:integer)?; return x.b; }", "ct_err:unknown_member:[(a:integer)]:b")
+        chkEx("{ var x: (a:integer)?; return x.b; }", "ct_err:[expr_mem_null:b][unknown_member:[(a:integer)]:b]")
         chkEx("{ var x: (a:integer); return x.a; }", "ct_err:expr_var_uninit:x")
         chkEx("{ var x: list<integer>? = _nullable([1]); return x[0]; }", "ct_err:expr_subscript_null")
         chkEx("{ var x: integer? = _nullable(123); val y = [1, 2, 3]; return y[x]; }",
@@ -681,17 +681,21 @@ class NullableTest: BaseRellTest(false) {
     @Test fun testSpecOpSafeCall() {
         chkEx("{ val x: integer? = _nullable(123); return x.to_hex(); }", "ct_err:expr_mem_null:to_hex")
         chkEx("{ val x: integer? = _nullable(123); return x?.to_hex(); }", "text[7b]")
+        chkEx("{ val x: integer? = _nullable(123); return _type_of(x?.to_hex()); }", "text[text?]")
         chkEx("{ val x: integer? = null; return x?.to_hex(); }", "null")
         chkEx("{ val x: integer = 123; return x?.to_hex(); }", "ct_err:expr_safemem_type:[integer]")
 
         chkEx("{ val x: text? = _nullable('Hello'); return x.upper_case(); }", "ct_err:expr_mem_null:upper_case")
         chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case(); }", "text[HELLO]")
+        chkEx("{ val x: text? = _nullable('Hello'); return _type_of(x?.upper_case()); }", "text[text?]")
         chkEx("{ val x: text? = null; return x?.upper_case(); }", "null")
         chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case().lower_case(); }", "ct_err:expr_mem_null:lower_case")
         chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case()?.lower_case(); }", "text[hello]")
+        chkEx("{ val x: text? = _nullable('Hello'); return _type_of(x?.upper_case()?.lower_case()); }", "text[text?]")
         chkEx("{ val x: text? = null; return x?.upper_case()?.lower_case(); }", "null")
         chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case()?.lower_case().size(); }", "ct_err:expr_mem_null:size")
         chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case()?.lower_case()?.size(); }", "int[5]")
+        chkEx("{ val x: text? = _nullable('Hello'); return _type_of(x?.upper_case()?.lower_case()?.size()); }", "text[integer?]")
 
         chkEx("{ val x: (a:integer?)? = _nullable((a=123)); return x?.a?.to_hex(); }", "text[7b]")
         chkEx("{ val x: (a:integer?)? = _nullable((a=null)); return x?.a?.to_hex(); }", "null")

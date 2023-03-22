@@ -20,10 +20,7 @@ import net.postchain.rell.compiler.base.utils.C_StringQualifiedName
 import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_FunctionExtension
-import net.postchain.rell.tools.api.IdeOutlineNodeType
-import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
-import net.postchain.rell.tools.api.IdeSymbolInfo
-import net.postchain.rell.tools.api.IdeSymbolKind
+import net.postchain.rell.tools.api.*
 import net.postchain.rell.utils.toImmList
 import kotlin.math.min
 
@@ -63,22 +60,19 @@ class S_FunctionDefinition(
         val deprecated = modDeprecated.value()
 
         val cDefBase = definitionBase(ctx, cQualifiedName)
-        val base = C_FunctionCompilerBase(this, cDefBase, cQualifiedNameHand, cQualifiedName, deprecated)
+        val ideId = cDefBase.ideId(C_DefinitionType.FUNCTION)
 
-        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.FUNCTION, cDefBase.defId)
+        val base = C_FunctionCompilerBase(this, cDefBase, cQualifiedNameHand, cQualifiedName, deprecated, ideId)
 
-        val compiler = if (abstract) {
-            C_FunctionCompiler_Abstract(base)
-        } else if (override) {
-            C_FunctionCompiler_Override(base)
-        } else if (extendable) {
-            C_FunctionCompiler_Extendable(base)
-        } else if (extend != null) {
-            C_FunctionCompiler_Extend(base, extend)
-        } else {
-            C_FunctionCompiler_Regular(base)
+        val compiler = when {
+            abstract -> C_FunctionCompiler_Abstract(base)
+            override -> C_FunctionCompiler_Override(base)
+            extendable -> C_FunctionCompiler_Extendable(base)
+            extend != null -> C_FunctionCompiler_Extend(base, extend)
+            else -> C_FunctionCompiler_Regular(base)
         }
 
+        val defCtx = C_DefinitionContext(ctx, C_DefinitionType.FUNCTION, cDefBase.defId, cDefBase.defName, ideId)
         compiler.compile(defCtx)
     }
 
@@ -107,9 +101,8 @@ private class C_FunctionCompilerBase(
     val qualifiedNameHand: C_QualifiedNameHandle?,
     val qualifiedName: C_QualifiedName?,
     val deprecated: C_Deprecated?,
-) {
-    fun nsMemBase(ideInfo: IdeSymbolInfo) = C_NamespaceMemberBase(cDefBase.cDefName, ideInfo, deprecated)
-}
+    val ideId: IdeSymbolId,
+)
 
 private abstract class C_FunctionCompiler(protected val base: C_FunctionCompilerBase) {
     protected val sFn = base.sFn
@@ -120,6 +113,14 @@ private abstract class C_FunctionCompiler(protected val base: C_FunctionCompiler
     abstract fun compile(defCtx: C_DefinitionContext)
 
     protected fun nameErrCode() = cDefBase.appLevelName
+
+    protected fun defBaseEx(ideKind: IdeSymbolKind): C_DefinitionBaseEx {
+        return cDefBase.baseEx(fnPos, C_DefinitionType.FUNCTION, ideKind, base.ideId)
+    }
+
+    protected fun nsMemBase(cDefBaseEx: C_DefinitionBaseEx): C_NamespaceMemberBase {
+        return cDefBaseEx.nsMemBase(deprecated = base.deprecated)
+    }
 
     protected fun compileHeader0(defCtx: C_DefinitionContext): C_UserFunctionHeader {
         return C_FunctionUtils.compileFunctionHeader(defCtx, fnPos, cDefBase.defName, sFn.params, sFn.retType, sFn.body)
@@ -182,16 +183,16 @@ private class C_FunctionCompiler_Regular(base: C_FunctionCompilerBase): C_Functi
         checkHasBody(defCtx.msgCtx)
         val simpleNameHand = checkSimpleName(defCtx.msgCtx)
 
-        val defBase = cDefBase.rBase(defCtx.initFrameGetter)
+        val cDefBaseEx = defBaseEx(IdeSymbolKind.DEF_FUNCTION)
+        val defBase = cDefBaseEx.rBase(defCtx.initFrameGetter)
         val rFnBase = R_FunctionBase()
         val rFn = R_FunctionDefinition(defBase, rFnBase)
 
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_FUNCTION_REGULAR)
-        val cFn = C_RegularUserGlobalFunction(rFn, null, ideInfo)
+        val cFn = C_RegularUserGlobalFunction(rFn, null)
 
         if (simpleNameHand != null) {
-            simpleNameHand.setIdeInfo(ideInfo)
-            defCtx.mntCtx.nsBuilder.addFunction(base.nsMemBase(cFn.ideInfo), simpleNameHand.name, cFn)
+            simpleNameHand.setIdeInfo(cDefBaseEx.ideDefInfo)
+            defCtx.mntCtx.nsBuilder.addFunction(nsMemBase(cDefBaseEx), simpleNameHand.name, cFn)
         }
 
         defCtx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -214,17 +215,17 @@ private class C_FunctionCompiler_Abstract(base: C_FunctionCompilerBase): C_Funct
                     "Abstract function can be defined only in abstract module")
         }
 
-        val defBase = cDefBase.rBase(defCtx.initFrameGetter)
+        val cDefBaseEx = defBaseEx(IdeSymbolKind.DEF_FUNCTION_ABSTRACT)
+        val defBase = cDefBaseEx.rBase(defCtx.initFrameGetter)
         val rFnBase = R_FunctionBase()
         val rFn = R_FunctionDefinition(defBase, rFnBase)
 
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_FUNCTION_ABSTRACT)
-        val cFn = C_AbstractUserGlobalFunction(fnPos, rFn, sFn.body != null, rFnBase, ideInfo)
+        val cFn = C_AbstractUserGlobalFunction(fnPos, rFn, sFn.body != null, rFnBase)
         defCtx.mntCtx.fileCtx.addAbstractFunction(cFn.descriptor)
 
         if (simpleNameHand != null) {
-            simpleNameHand.setIdeInfo(ideInfo)
-            defCtx.mntCtx.nsBuilder.addFunction(base.nsMemBase(cFn.ideInfo), simpleNameHand.name, cFn)
+            simpleNameHand.setIdeInfo(cDefBaseEx.ideDefInfo)
+            defCtx.mntCtx.nsBuilder.addFunction(nsMemBase(cDefBaseEx), simpleNameHand.name, cFn)
         }
 
         defCtx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -368,19 +369,19 @@ private class C_FunctionCompiler_Extendable(base: C_FunctionCompilerBase): C_Fun
     override fun compile(defCtx: C_DefinitionContext) {
         val simpleNameHand = checkSimpleName(defCtx.msgCtx)
 
-        val defBase = cDefBase.rBase(defCtx.initFrameGetter)
+        val cDefBaseEx = defBaseEx(IdeSymbolKind.DEF_FUNCTION_EXTENDABLE)
+        val defBase = cDefBaseEx.rBase(defCtx.initFrameGetter)
         val rFnBase = R_FunctionBase()
         val rFn = R_FunctionDefinition(defBase, rFnBase)
 
         val baseExt = if (sFn.body == null) null else R_FunctionExtension(rFnBase)
         val extFnUid = defCtx.appCtx.extendableFunctionCompiler.addExtendableFunction(cDefBase.appLevelName, baseExt)
 
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_FUNCTION_EXTENDABLE)
-        val cFn = C_ExtendableUserGlobalFunction(defCtx.appCtx, rFn, extFnUid, typePos, ideInfo)
+        val cFn = C_ExtendableUserGlobalFunction(defCtx.appCtx, rFn, extFnUid, typePos)
 
         if (simpleNameHand != null) {
-            simpleNameHand.setIdeInfo(ideInfo)
-            defCtx.mntCtx.nsBuilder.addFunction(base.nsMemBase(cFn.ideInfo), simpleNameHand.name, cFn)
+            simpleNameHand.setIdeInfo(cDefBaseEx.ideDefInfo)
+            defCtx.mntCtx.nsBuilder.addFunction(nsMemBase(cDefBaseEx), simpleNameHand.name, cFn)
         }
 
         defCtx.executor.onPass(C_CompilerPass.MEMBERS) {
@@ -413,16 +414,16 @@ private class C_FunctionCompiler_Extend(
         val simpleNameHand = if (base.qualifiedName == null) null else checkSimpleName(defCtx.msgCtx)
         checkHasBody(defCtx.msgCtx)
 
-        val defBase = cDefBase.rBase(defCtx.initFrameGetter)
+        val cDefBaseEx = defBaseEx(IdeSymbolKind.DEF_FUNCTION_EXTEND)
+        val defBase = cDefBaseEx.rBase(defCtx.initFrameGetter)
         val rFnBase = R_FunctionBase()
         val rFn = R_FunctionDefinition(defBase, rFnBase)
 
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_FUNCTION_EXTEND)
-        val cFn = C_RegularUserGlobalFunction(rFn, null, ideInfo)
+        val cFn = C_RegularUserGlobalFunction(rFn, null)
 
         if (simpleNameHand != null) {
-            simpleNameHand.setIdeInfo(ideInfo)
-            defCtx.mntCtx.nsBuilder.addFunction(base.nsMemBase(cFn.ideInfo), simpleNameHand.name, cFn)
+            simpleNameHand.setIdeInfo(cDefBaseEx.ideDefInfo)
+            defCtx.mntCtx.nsBuilder.addFunction(nsMemBase(cDefBaseEx), simpleNameHand.name, cFn)
         }
 
         defCtx.executor.onPass(C_CompilerPass.MEMBERS) {

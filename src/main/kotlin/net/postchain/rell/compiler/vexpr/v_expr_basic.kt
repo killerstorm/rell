@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
@@ -191,6 +191,7 @@ class V_StructExpr(
 class V_GlobalConstantExpr(
         exprCtx: C_ExprContext,
         pos: S_Pos,
+        private val name: R_Name,
         private val resType: R_Type,
         private val varId: C_VarUid,
         private val constId: R_GlobalConstantId,
@@ -207,6 +208,8 @@ class V_GlobalConstantExpr(
 
     override fun varId() = varId
     override fun globalConstantId() = constId
+
+    override fun implicitTargetAttrName() = name
 }
 
 class V_ParameterDefaultValueExpr(

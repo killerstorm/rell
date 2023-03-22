@@ -68,19 +68,19 @@ private class C_NsRes_InternalMaker {
     }
 
     private fun makeDef(directDef: C_NsImp_Def?, importDefs: Collection<C_NsImp_Def>): C_NamespaceEntry {
-        val directElem = if (directDef == null) null else makeDef0(directDef)
-        val importElems = importDefs.map { makeDef0(it) }
-        return C_NamespaceEntry(immListOfNotNull(directElem), importElems)
+        val directItem = if (directDef == null) null else makeItem0(directDef)
+        val importItems = importDefs.map { makeItem0(it) }
+        return C_NamespaceEntry(immListOfNotNull(directItem), importItems)
     }
 
-    private fun makeDef0(def: C_NsImp_Def): C_NamespaceMember {
+    private fun makeItem0(def: C_NsImp_Def): C_NamespaceItem {
         return when (def) {
-            is C_NsImp_Def_Simple -> def.member
+            is C_NsImp_Def_Simple -> def.item
             is C_NsImp_Def_Namespace -> {
                 val impNs = def.ns()
                 val ns = makeNamespace(impNs)
                 val base = C_NamespaceMemberBase(def.defName, def.ideInfo, def.deprecated)
-                C_NamespaceMember_UserNamespace(base, ns)
+                C_NamespaceItem(C_NamespaceMember_UserNamespace(base, ns), def.ideInfo)
             }
         }
     }

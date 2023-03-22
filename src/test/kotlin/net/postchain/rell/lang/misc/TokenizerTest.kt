@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.misc
@@ -89,6 +89,10 @@ class TokenizerTest: BaseRellTest(false) {
         chk("\n1E-B", "ct_err:main.rell(2:4):lex:number:no_digit_after_exp")
         chk("\n1E+10F", "ct_err:main.rell(2:6):lex:number_end")
         chk("\n1E-10g", "ct_err:main.rell(2:6):lex:number_end")
+
+        chk("\n0x123.0", "ct_err:main.rell(2:6):syntax")
+        chk("\n0x123.456", "ct_err:main.rell(2:6):syntax")
+        chk("\n0x.123", "ct_err:main.rell(2:1):lex:int:invalid:0x")
     }
 
     @Test fun testStringLiteral() {

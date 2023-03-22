@@ -253,7 +253,7 @@ class AtExprComplexWhatTest: BaseRellTest() {
         def("function g(x: integer): integer = x * x;")
         initData()
 
-        chk("data @* { [.t].empty() }", "ct_err:expr_call_nosql:list<text>.empty")
+        chk("data @* { [.t].empty() }", "ct_err:expr_sqlnotallowed")
         chk("data @* { [123].empty() }", "list<data>[]")
         chk("data @* { f(.i) }", "ct_err:expr_sqlnotallowed")
         chk("data @* { g(.i) > 0 }", "ct_err:expr_sqlnotallowed")
@@ -425,7 +425,7 @@ class AtExprComplexWhatTest: BaseRellTest() {
     @Test fun testMemberValueEntityAttr() {
         initData()
         def("function f(c: city) = c;")
-        chk("city @* {} ( f($).name )", "ct_err:expr_sqlnotallowed") //TODO support
+        chk("city @* {} ( f($).name )", "list<text>[text[Berlin],text[Paris],text[Madrid]]")
     }
 
     @Test fun testMemberValueStructAttr() {

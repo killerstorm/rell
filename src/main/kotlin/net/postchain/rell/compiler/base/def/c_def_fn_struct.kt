@@ -1,11 +1,10 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
 
 import net.postchain.rell.compiler.ast.S_CallArgument
-import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_CompilerPass
 import net.postchain.rell.compiler.base.core.C_TypeHint
 import net.postchain.rell.compiler.base.expr.C_AttributeResolver
@@ -13,14 +12,18 @@ import net.postchain.rell.compiler.base.expr.C_CallArgument
 import net.postchain.rell.compiler.base.expr.C_CreateContext
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.utils.C_CodeMsg
-import net.postchain.rell.compiler.vexpr.V_Expr
+import net.postchain.rell.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.compiler.vexpr.V_StructExpr
 import net.postchain.rell.model.R_Struct
-import net.postchain.rell.tools.api.IdeSymbolInfo
 import net.postchain.rell.utils.LazyPosString
 
-class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction(struct.ideInfo) {
-    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
+class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
+    override fun compileCall(
+        ctx: C_ExprContext,
+        name: LazyPosString,
+        args: List<S_CallArgument>,
+        resTypeHint: C_TypeHint,
+    ): V_GlobalFunctionCall {
         val fnPos = name.pos
         val createCtx = C_CreateContext(ctx, struct.initFrameGetter, fnPos.toFilePos())
 
@@ -41,6 +44,7 @@ class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction(str
             }
         }
 
-        return V_StructExpr(ctx, fnPos, struct, attrs.explicitAttrs, attrs.implicitAttrs)
+        val vExpr = V_StructExpr(ctx, fnPos, struct, attrs.explicitAttrs, attrs.implicitAttrs)
+        return V_GlobalFunctionCall(vExpr)
     }
 }

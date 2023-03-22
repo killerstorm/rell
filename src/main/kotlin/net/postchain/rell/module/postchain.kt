@@ -36,7 +36,7 @@ import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 object RellVersions {
-    const val VERSION_STR = "0.11.0"
+    const val VERSION_STR = "0.12.0"
     val VERSION = R_LangVersion.of(VERSION_STR)
 
     val SUPPORTED_VERSIONS =
@@ -44,6 +44,7 @@ object RellVersions {
                 "0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6", "0.10.7", "0.10.8", "0.10.9",
                 "0.10.10", "0.10.11",
                 "0.11.0",
+                "0.12.0",
             )
             .map { R_LangVersion.of(it) }
             .toImmSet()
@@ -317,7 +318,7 @@ private class RellPostchainModule(
         gtvArgs is GtvDictionary
         val params = rQuery.params()
 
-        val argMap = gtvArgs.asDict().filterKeys { it != "type" }
+        val argMap = gtvArgs.asDict()
         val actArgNames = argMap.keys
         val expArgNames = params.map { it.name.str }.toSet()
         if (actArgNames != expArgNames) {

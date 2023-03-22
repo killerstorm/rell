@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -84,6 +84,34 @@ class MountTest: BaseRellTest() {
         chkOp("state.value = 456;")
         chkDataRaw("c0.foo.bar(0,456)")
         chk("state.value", "int[456]")
+    }
+
+    @Test fun testNameTooLongEntityObject() {
+        val name60 = "a".repeat(60)
+        val name61 = "b".repeat(61)
+
+        chkCompile("entity $name60 {}", "OK")
+        chkCompile("entity $name61 {}", "ct_err:mount:too_long:entity:60:61:$name61")
+        chkCompile("object $name60 {}", "OK")
+        chkCompile("object $name61 {}", "ct_err:mount:too_long:entity:60:61:$name61")
+
+        chkCompile("@mount('data') entity $name61 {}", "OK")
+        chkCompile("@mount('$name61') entity data {}", "ct_err:mount:too_long:entity:60:61:$name61")
+        chkCompile("@mount('data') object $name61 {}", "OK")
+        chkCompile("@mount('$name61') object data {}", "ct_err:mount:too_long:entity:60:61:$name61")
+    }
+
+    @Test fun testNameTooLongAttr() {
+        val name63 = "a".repeat(63)
+        val name64 = "b".repeat(64)
+
+        chkCompile("entity data { $name63: integer; }", "OK")
+        chkCompile("entity data { $name64: integer; }", "ct_err:mount:too_long:attr:63:64:$name64")
+        chkCompile("object data { $name63: integer = 0; }", "OK")
+        chkCompile("object data { $name64: integer = 0; }", "ct_err:mount:too_long:attr:63:64:$name64")
+
+        chkCompile("struct data { $name63: integer; }", "OK")
+        chkCompile("struct data { $name64: integer; }", "OK")
     }
 
     @Test fun testOperation() {
@@ -259,6 +287,7 @@ class MountTest: BaseRellTest() {
     @Test fun testConflictFileLevel() {
         chkConflictGeneric("main.rell", "main.rell") { foo, bar, exp ->
             val t = RellCodeTester(tstCtx)
+            t.ideDefIdConflictError = false
             t.errMsgPos = true
             t.chkCompile("$foo\n$bar", exp)
         }
