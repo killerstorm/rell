@@ -1,4 +1,4 @@
-RELEASE NOTES 0.12.0 (202?-??-??)
+RELEASE NOTES 0.12.0 (2023-03-22)
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 1. Language: big_integer type
@@ -121,7 +121,7 @@ Gtv conversion:
         New variants supporting big_integer.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-2. Maximum length of entity and attribute name
+2. Maximum length of entity, object and attribute names
 
 Maximum table or column name length in Postgres is 63 characters. In Rell, following limits were added for entities
 and objects:
