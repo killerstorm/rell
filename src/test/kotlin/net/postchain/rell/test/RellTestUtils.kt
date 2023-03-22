@@ -23,7 +23,7 @@ import net.postchain.rell.utils.CommonUtils
 object RellTestUtils {
     const val MAIN_FILE = "main.rell"
 
-    const val RELL_VER = "0.12.0"
+    const val RELL_VER = "0.13.0"
 
     val DEFAULT_COMPILER_OPTIONS = C_CompilerOptions.builder().hiddenLib(true).build()
 

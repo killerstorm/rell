@@ -9,13 +9,13 @@
 
     <groupId>net.postchain.rell</groupId>
     <artifactId>rell</artifactId>
-    <version>0.12.0</version>
+    <version>0.13.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>rell</name>
 
     <properties>
-        <postchain.version>3.9.0</postchain.version>
+        <postchain.version>3.10.0-SNAPSHOT</postchain.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.build.outputTimestamp>10</project.build.outputTimestamp>
         <kotlin.version>1.8.10</kotlin.version>
