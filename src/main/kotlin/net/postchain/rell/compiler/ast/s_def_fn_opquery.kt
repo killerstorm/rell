@@ -57,7 +57,7 @@ class S_OperationDefinition(
 
         ctx.appCtx.defsAdder.addOperation(rOperation)
         ctx.nsBuilder.addOperation(cDefBase.nsMemBase(modDeprecated), cName, cOperation)
-        ctx.mntBuilder.addOperation(name, rOperation)
+        ctx.mntBuilder.addOperation(cName, rOperation)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
             val header = compileHeader(defCtx, cOperation, mirrorStructs)
@@ -167,7 +167,7 @@ class S_QueryDefinition(
 
         ctx.appCtx.defsAdder.addQuery(rQuery)
         ctx.nsBuilder.addQuery(cDefBase.nsMemBase(modDeprecated), cName, cQuery)
-        ctx.mntBuilder.addQuery(name, rQuery)
+        ctx.mntBuilder.addQuery(cName, rQuery)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
             val header = compileHeader(defCtx, cQuery)

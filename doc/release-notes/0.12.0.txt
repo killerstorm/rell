@@ -119,3 +119,12 @@ Gtv conversion:
     min(big_integer, big_integer): big_integer
 
         New variants supporting big_integer.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Maximum length of entity and attribute name
+
+Maximum table or column name length in Postgres is 63 characters. In Rell, following limits were added for entities
+and objects:
+
+- maximum mount name length is 60 characters (assuming there will be a chain prefix, e.g. "c0.")
+- maximum attribute name length is 63 characters

@@ -243,6 +243,8 @@ class S_EntityDefinition(
             R_EntitySqlMapping_External(mountName, extChainRef)
         }
 
+        checkEntityMountNameLen(ctx.msgCtx, cName, mountName)
+
         val defCtx = cDefBase.defCtx(ctx)
         val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
@@ -261,7 +263,7 @@ class S_EntityDefinition(
 
         ctx.appCtx.defsAdder.addEntity(C_Entity(cName.pos, rEntity))
         ctx.nsBuilder.addEntity(cDefBase.nsMemBase(modDeprecated), cName, rEntity)
-        ctx.mntBuilder.addEntity(cName.pos, rEntity)
+        ctx.mntBuilder.addEntity(cName, rEntity)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
             membersPass(defCtx, cName, extChain, rEntity, body)
@@ -407,6 +409,26 @@ class S_EntityDefinition(
                 C_Constants.BLOCK_ENTITY to { sysDefs: C_SystemDefs -> sysDefs.blockEntity },
                 C_Constants.TRANSACTION_ENTITY to { sysDefs: C_SystemDefs -> sysDefs.transactionEntity }
         )
+
+        private const val MAX_ENTITY_MOUNT_NAME_LEN = 60 // Postgres allows 63, minimal prefix is "c0.", i. e. 3 characters.
+        private const val MAX_ATTR_NAME_LEN = 63
+
+        fun checkEntityMountNameLen(msgCtx: C_MessageContext, name: C_Name, mountName: R_MountName) {
+            val s = mountName.str()
+            val n = s.length
+            val max = MAX_ENTITY_MOUNT_NAME_LEN
+            if (n > max) {
+                msgCtx.error(name.pos, "mount:too_long:entity:$max:$n:$s", "Mount name '$s' is too long: $n (max $max)")
+            }
+        }
+
+        fun checkAttrNameLen(msgCtx: C_MessageContext, name: C_Name) {
+            val n = name.str.length
+            val max = MAX_ATTR_NAME_LEN
+            if (n > max) {
+                msgCtx.error(name.pos, "mount:too_long:attr:$max:$n:$name", "Attribute name '$name' is too long: $n (max $max)")
+            }
+        }
     }
 }
 
@@ -442,6 +464,7 @@ class S_ObjectDefinition(
 
         val mountName = ctx.mountName(modMount, cName)
         val sqlMapping = R_EntitySqlMapping_Regular(mountName)
+        S_EntityDefinition.checkEntityMountNameLen(ctx.msgCtx, cName, mountName)
 
         val defCtx = cDefBase.defCtx(ctx)
         val defBase = cDefBase.rBase(defCtx.initFrameGetter)
@@ -461,7 +484,7 @@ class S_ObjectDefinition(
 
         ctx.appCtx.defsAdder.addObject(rObject)
         ctx.nsBuilder.addObject(cDefBase.nsMemBase(modDeprecated), cName, rObject)
-        ctx.mntBuilder.addObject(name, rObject)
+        ctx.mntBuilder.addObject(cName, rObject)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
             membersPass(defCtx, cName, rObject)

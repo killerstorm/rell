@@ -5,6 +5,7 @@
 package net.postchain.rell.compiler.base.def
 
 import net.postchain.rell.compiler.ast.S_AttributeDefinition
+import net.postchain.rell.compiler.ast.S_EntityDefinition
 import net.postchain.rell.compiler.ast.S_Expr
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
@@ -56,6 +57,10 @@ private class C_EntityAttributeClause(
 
         checkAttrType(mainDef, type)
         processOtherDefs(conflictDefs, otherDefs, type, ideKind, mainHeader.ideInfo)
+
+        if (defCtx.definitionType.isEntityLike()) {
+            S_EntityDefinition.checkAttrNameLen(msgCtx, mainDef.name)
+        }
 
         val exprGetter = processAttrExpr(mainDef.name, mainDef.attrDef.expr, type)
 

@@ -114,7 +114,7 @@ class C_SystemDefs private constructor(
             val testNs = testNsProto.toNamespace()
 
             val mntBuilder = C_MountTablesBuilder(stamp)
-            for (entity in sysEntities) mntBuilder.addEntity(null, entity)
+            for (entity in sysEntities) mntBuilder.addSysEntity(entity)
             for (query in queries) mntBuilder.addQuery(query)
             val mntTables = mntBuilder.build()
 
