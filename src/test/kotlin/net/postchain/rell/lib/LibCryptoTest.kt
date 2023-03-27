@@ -5,9 +5,11 @@
 package net.postchain.rell.lib
 
 import com.google.common.io.Resources
+import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
+import net.postchain.crypto.KeyPair
+import net.postchain.crypto.Secp256K1CryptoSystem
 import net.postchain.crypto.secp256k1_derivePubKey
-import net.postchain.crypto.secp256k1_sign
 import net.postchain.gtv.Gtv
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.utils.CommonUtils
@@ -21,9 +23,10 @@ class LibCryptoTest: BaseRellTest(false) {
     @Test fun testVerifySignature() {
         val privKeyBytes = ByteArray(32) { it.toByte() }
         val pubKey = CommonUtils.bytesToHex(secp256k1_derivePubKey(privKeyBytes))
+        val keyPair = KeyPair(pubKey.hexStringToByteArray(), privKeyBytes)
 
-        val sign1 = calcSignature("DEADBEEF", privKeyBytes)
-        val sign2 = calcSignature("DEADBEFF", privKeyBytes)
+        val sign1 = calcSignature("DEADBEEF", keyPair)
+        val sign2 = calcSignature("DEADBEFF", keyPair)
 
         chk("verify_signature(x'DEADBEEF', x'$pubKey', x'$sign1')", "boolean[true]")
         chk("verify_signature(x'DEADBEEF', x'$pubKey', x'$sign2')", "boolean[false]")
@@ -147,8 +150,9 @@ class LibCryptoTest: BaseRellTest(false) {
         chk("verify_signature(x'0123', x'4567', x'89AB')", "rt_err:verify_signature")
     }
 
-    private fun calcSignature(messageHex: String, privKeyBytes: ByteArray): String {
-        return CommonUtils.bytesToHex(secp256k1_sign(CommonUtils.hexToBytes(messageHex), privKeyBytes))
+    private fun calcSignature(messageHex: String, keyPair: KeyPair): String {
+        val sigMaker = Secp256K1CryptoSystem().buildSigMaker(keyPair)
+        return CommonUtils.bytesToHex(sigMaker.signDigest(CommonUtils.hexToBytes(messageHex)).data)
     }
 
     @Test fun testHashStruct() {
