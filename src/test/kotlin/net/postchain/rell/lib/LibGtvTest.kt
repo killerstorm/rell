@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -15,6 +15,32 @@ import java.math.BigInteger
 import kotlin.test.assertEquals
 
 class LibGtvTest: BaseRellTest(false) {
+    @Test fun testFromBytes() {
+        chkToGtv("gtv.from_bytes(x'a30302017b')", gtv(123))
+        chkToGtv("gtv.from_bytes(x'a60302017b')", gtv(BigInteger.valueOf(123)))
+        chkToGtv("gtv.from_bytes(x'a2070c0548656c6c6f')", gtv("Hello"))
+        chkToGtv("gtv.from_bytes(x'a511300fa303020101a303020102a303020103')", gtv(gtv(1), gtv(2), gtv(3)))
+        chkToGtv("gtv.from_bytes(x'a410300e300c0c0548656c6c6fa30302017b')", gtv("Hello" to gtv(123)))
+    }
+
+    @Test fun testFromBytesOrNull() {
+        chkToGtv("gtv.from_bytes_or_null(x'a30302017b')", gtv(123))
+        chkToGtv("gtv.from_bytes_or_null(x'a60302017b')", gtv(BigInteger.valueOf(123)))
+        chkToGtv("gtv.from_bytes_or_null(x'a2070c0548656c6c6f')", gtv("Hello"))
+        chkToGtv("gtv.from_bytes_or_null(x'a511300fa303020101a303020102a303020103')", gtv(gtv(1), gtv(2), gtv(3)))
+        chkToGtv("gtv.from_bytes_or_null(x'a410300e300c0c0548656c6c6fa30302017b')", gtv("Hello" to gtv(123)))
+
+        chk("gtv.from_bytes_or_null(x'')", "null")
+        chk("gtv.from_bytes_or_null(x'00')", "null")
+        chk("gtv.from_bytes_or_null(x'1234')", "null")
+        chk("gtv.from_bytes_or_null(x'ffff')", "null")
+
+        chk("gtv.from_bytes(x'')", "rt_err:fn:gtv.from_bytes")
+        chk("gtv.from_bytes(x'00')", "rt_err:fn:gtv.from_bytes")
+        chk("gtv.from_bytes(x'1234')", "rt_err:fn:gtv.from_bytes")
+        chk("gtv.from_bytes(x'ffff')", "rt_err:fn:gtv.from_bytes")
+    }
+
     @Test fun testToFromGtvBigInteger() {
         chkToGtv("(0L).to_gtv()", gtv(BigInteger.valueOf(0)))
         chkToGtv("(123L).to_gtv()", gtv(BigInteger.valueOf(123)))

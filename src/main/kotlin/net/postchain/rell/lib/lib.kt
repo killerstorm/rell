@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -36,6 +36,7 @@ private object C_SystemLibrary {
         C_Lib_Print.bind(b)
         C_Lib_ChainContext.bind(b)
         C_Lib_OpContext.bind(b, cfg.testLib)
+        C_Lib_TryCall.bind(b)
 
         if (cfg.hiddenLib) {
             C_Lib_Hidden.bind(b)
