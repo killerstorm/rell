@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.fn
@@ -245,7 +245,7 @@ class C_RegularSysGlobalFunction(
 }
 
 abstract class C_SpecialSysGlobalFunction: C_GlobalFunction() {
-    protected open fun paramCount(): Int? = null
+    protected open fun paramCount(): IntRange? = null
     protected abstract fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_GlobalFunctionCall
 
     final override fun compileCall(
@@ -269,18 +269,21 @@ abstract class C_SpecialSysGlobalFunction: C_GlobalFunction() {
         val argExprs = argExprsZ.filterNotNull()
         if (argExprs.size != argExprsZ.size) return C_ExprUtils.errorVGlobalCall(ctx, name.pos)
 
-        val argName = args.mapNotNull { it.name }.firstOrNull()
+        val argName = args.firstNotNullOfOrNull { it.name }
         if (argName != null) {
             C_Errors.errSysFunctionNamedArg(ctx.msgCtx, name.str, argName)
             argExprs.forEach { it.compileSafe(ctx) }
             return C_ExprUtils.errorVGlobalCall(ctx, name.pos)
         }
 
-        val paramCount = paramCount()
+        val paramCountRange = paramCount()
         val argCount = argExprs.size
-        if (argCount != paramCount) {
-            ctx.msgCtx.error(name.pos, "fn:sys:wrong_arg_count:$paramCount:$argCount",
-                    "Wrong number of arguments for function '$name': $argCount instead of $paramCount")
+        if (paramCountRange != null && argCount !in paramCountRange) {
+            val paramsMin = paramCountRange.first
+            val paramsMax = paramCountRange.last
+            val paramCountMsg = if (paramsMin == paramsMax) "$paramsMin" else "$paramsMin .. $paramsMax"
+            ctx.msgCtx.error(name.pos, "fn:sys:wrong_arg_count:$paramsMin:$paramsMax:$argCount",
+                    "Wrong number of arguments for function '$name': $argCount instead of $paramCountMsg")
             argExprs.forEach { it.compileSafe(ctx) }
             return C_ExprUtils.errorVGlobalCall(ctx, name.pos, R_BooleanType)
         }

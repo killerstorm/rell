@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -37,7 +37,7 @@ object C_Lib_Exists {
 }
 
 private class C_SysFn_Exists(private val not: Boolean): C_SpecialSysGlobalFunction() {
-    override fun paramCount() = 1
+    override fun paramCount() = 1 .. 1
 
     override fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_GlobalFunctionCall {
         checkEquals(1, args.size)

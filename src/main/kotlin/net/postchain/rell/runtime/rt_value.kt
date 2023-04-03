@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime
@@ -169,6 +169,11 @@ class Rt_BooleanValue(val value: Boolean): Rt_Value() {
     override fun str() = "" + value
     override fun equals(other: Any?) = other is Rt_BooleanValue && value == other.value
     override fun hashCode() = java.lang.Boolean.hashCode(value)
+
+    companion object {
+        val TRUE = Rt_BooleanValue(true)
+        val FALSE = Rt_BooleanValue(false)
+    }
 }
 
 class Rt_IntValue(val value: Long): Rt_Value() {
