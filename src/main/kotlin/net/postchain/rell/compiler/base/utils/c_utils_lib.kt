@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.utils
@@ -398,6 +398,17 @@ sealed class C_FuncBuilder<BuilderT, CaseCtxT: C_FuncCaseCtx, FuncT, ExprT>(
             cFn: C_SysFunction,
             deprecated: C_Deprecated? = null
     ): BuilderT = addEx(name, result, C_ArgsTypesMatcher_Fixed(params), cFn, deprecated = deprecated)
+
+    fun addEx(
+            name: String,
+            result: R_Type,
+            matcher: C_ArgsTypesMatcher,
+            rFn: R_SysFunction,
+            deprecated: C_Deprecated? = null,
+    ): BuilderT {
+        val cFn = C_SysFunction.direct(rFn)
+        return addEx(name, result, matcher, cFn, deprecated)
+    }
 
     private fun addEx(
             name: String,

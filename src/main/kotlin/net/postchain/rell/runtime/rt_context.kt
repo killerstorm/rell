@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime
@@ -13,8 +13,8 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtx.data.OpData
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.toCodeMsg
+import net.postchain.rell.lib.test.Rt_UnitTestBlockRunnerContext
 import net.postchain.rell.model.*
-import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.runtime.utils.Rt_Messages
 import net.postchain.rell.runtime.utils.Rt_Utils
@@ -22,13 +22,13 @@ import net.postchain.rell.sql.*
 import net.postchain.rell.utils.*
 
 class Rt_GlobalContext(
-        val compilerOptions: C_CompilerOptions,
-        val outPrinter: Rt_Printer,
-        val logPrinter: Rt_Printer,
-        val pcModuleEnv: RellPostchainModuleEnvironment,
-        val logSqlErrors: Boolean = false,
-        val sqlUpdatePortionSize: Int = 1000, // Experimental maximum is 2^15
-        val typeCheck: Boolean = false
+    val compilerOptions: C_CompilerOptions,
+    val outPrinter: Rt_Printer,
+    val logPrinter: Rt_Printer,
+    val logSqlErrors: Boolean = false,
+    val sqlUpdatePortionSize: Int = 1000, // Experimental maximum is 2^15
+    val typeCheck: Boolean = false,
+    val testBlockRunnerCtx: Rt_UnitTestBlockRunnerContext = Rt_UnitTestBlockRunnerContext(),
 ) {
     private val rellVersion = Rt_RellVersion.getInstance()
 
@@ -454,9 +454,19 @@ abstract class Rt_TxContext {
     abstract fun emitEvent(type: String, data: Gtv)
 }
 
-class Rt_PostchainTxContext(private val txCtx: TxEContext): Rt_TxContext() {
-    override fun emitEvent(type: String, data: Gtv) {
-        txCtx.emitEvent(type, data)
+abstract class Rt_PostchainTxContextFactory {
+    abstract fun createTxContext(eContext: TxEContext): Rt_TxContext
+}
+
+object Rt_DefaultPostchainTxContextFactory: Rt_PostchainTxContextFactory() {
+    override fun createTxContext(eContext: TxEContext): Rt_TxContext {
+        return Rt_PostchainTxContext(eContext)
+    }
+
+    private class Rt_PostchainTxContext(private val txCtx: TxEContext): Rt_TxContext() {
+        override fun emitEvent(type: String, data: Gtv) {
+            txCtx.emitEvent(type, data)
+        }
     }
 }
 

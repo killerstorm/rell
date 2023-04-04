@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.test
@@ -16,6 +16,7 @@ import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.lib.type.C_Lib_Type
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_BinaryOp
+import net.postchain.rell.model.expr.R_BinaryOp_Eq
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.module.GtvRtConversion
 import net.postchain.rell.module.GtvRtConversion_None
@@ -55,6 +56,14 @@ object C_Lib_Test_Assert {
     }
 
     fun failureValue(message: String): Rt_Value = Rt_TestFailureValue(message)
+
+    fun assertEquals(fn: String, expected: Rt_Value, actual: Rt_Value, op: R_BinaryOp = R_BinaryOp_Eq) {
+        val equalsValue = op.evaluate(actual, expected)
+        if (!equalsValue.asBoolean()) {
+            val code = "$fn:${actual.strCode()}:${expected.strCode()}"
+            throw Rt_AssertError.exception(code, "expected <${expected.str()}> but was <${actual.str()}>")
+        }
+    }
 }
 
 private object R_Fns {
@@ -270,11 +279,7 @@ private class R_AssertEqualsExpr(
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val actualValue = actual.evaluate(frame)
         val expectedValue = expected.evaluate(frame)
-        val equalsValue = op.evaluate(actualValue, expectedValue)
-        if (!equalsValue.asBoolean()) {
-            val code = "assert_equals:${actualValue.strCode()}:${expectedValue.strCode()}"
-            throw Rt_AssertError.exception(code, "expected <${expectedValue.str()}> but was <${actualValue.str()}>")
-        }
+        C_Lib_Test_Assert.assertEquals("assert_equals", expectedValue, actualValue, op)
         return Rt_UnitValue
     }
 }

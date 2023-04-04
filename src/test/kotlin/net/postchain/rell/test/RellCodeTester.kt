@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -18,10 +18,10 @@ import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.base.utils.C_MessageType
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
+import net.postchain.rell.lib.test.Rt_UnitTestBlockRunnerContext
 import net.postchain.rell.lib.test.UnitTestBlockRunner
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
-import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.sql.SqlExecutor
@@ -89,7 +89,6 @@ class RellCodeTester(
                 Rt_FailingPrinter,
                 logSqlErrors = true,
                 typeCheck = true,
-                pcModuleEnv = RellPostchainModuleEnvironment.DEFAULT
         )
     }
 
@@ -387,25 +386,23 @@ class RellCodeTester(
         }
     }
 
-    fun createGlobalCtx(): Rt_GlobalContext {
+    private fun createGlobalCtx(): Rt_GlobalContext {
         val compilerOptions = compilerOptions()
 
-        val pcModuleEnv = RellPostchainModuleEnvironment(
-                outPrinter = outPrinter,
-                logPrinter = logPrinter,
+        val testBlockCtx = Rt_UnitTestBlockRunnerContext(
                 wrapCtErrors = false,
                 wrapRtErrors = false,
-                forceTypeCheck = true
+                forceTypeCheck = true,
         )
 
         return Rt_GlobalContext(
                 compilerOptions,
                 outPrinter,
                 logPrinter,
-                pcModuleEnv = pcModuleEnv,
                 logSqlErrors = true,
                 sqlUpdatePortionSize = sqlUpdatePortionSize,
-                typeCheck = true
+                typeCheck = true,
+                testBlockRunnerCtx = testBlockCtx,
         )
     }
 

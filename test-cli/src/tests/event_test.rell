@@ -1,0 +1,16 @@
+@test module;
+
+import tests.event;
+
+function test_event() {
+    assert_equals(rell.test.get_events(), list<(text,gtv)>());
+    assert_events();
+
+    rell.test.tx(event.event_op(123)).run();
+    assert_equals(rell.test.get_events(), [('foo',(123).to_gtv())]);
+    assert_events(('foo',(123).to_gtv()));
+
+    rell.test.tx(event.event_op(456), event.event_op(789)).run();
+    assert_equals(rell.test.get_events(), [('foo',(456).to_gtv()), ('foo',(789).to_gtv())]);
+    assert_events(('foo',(456).to_gtv()), ('foo',(789).to_gtv()));
+}

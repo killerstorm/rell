@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.test
@@ -47,6 +47,7 @@ object C_Lib_Test {
 
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
         C_Lib_Test_Assert.bind(nsBuilder)
+        C_Lib_Test_Events.bindGlobal(nsBuilder)
     }
 
     fun bindRell(nsBuilder: C_SysNsProtoBuilder) {
@@ -59,6 +60,7 @@ object C_Lib_Test {
 
         C_Lib_Test_KeyPairs.bind(b)
         C_Lib_Test_Assert.bind(b)
+        C_Lib_Test_Events.bindRellTest(b)
 
         bindFunctions(b)
 
@@ -72,6 +74,7 @@ object C_Lib_Test {
         )
 
         C_Lib_Nop.bindGlobal(fb)
+
         C_LibUtils.bindFunctions(b, fb.build())
     }
 
@@ -104,7 +107,7 @@ object R_TestOpType: R_BasicType(C_Lib_Test.OP_TYPE_QNAME.str(), typeDefName(C_L
 }
 
 private class BlockCommonFunctions(
-        private val typeQName: String,
+        typeQName: String,
         private val blockGetter: (ctx: Rt_CallContext, self: Rt_Value) -> Rt_TestBlockValue
 ) {
     private val runSimpleName = "run"

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.misc
@@ -26,23 +26,23 @@ class PostchainTest: BaseResourcefulTest() {
         sqlAccess().initializeApp(con, PostchainUtils.DATABASE_VERSION)
 
         chkTables(con,
-                "blockchain_replicas(blockchain_rid:text,node:text)",
+                "blockchain_replicas(blockchain_rid:bytea,node:bytea)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "peerinfos(host:text,port:int4,pub_key:bytea,timestamp:timestamp)"
         )
 
         sqlAccess().initializeApp(con, PostchainUtils.DATABASE_VERSION)
 
         chkTables(con,
-                "blockchain_replicas(blockchain_rid:text,node:text)",
+                "blockchain_replicas(blockchain_rid:bytea,node:bytea)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "peerinfos(host:text,port:int4,pub_key:bytea,timestamp:timestamp)"
         )
     }
 
@@ -53,19 +53,19 @@ class PostchainTest: BaseResourcefulTest() {
         sa.initializeApp(con, PostchainUtils.DATABASE_VERSION)
 
         chkTables(con,
-                "blockchain_replicas(blockchain_rid:text,node:text)",
+                "blockchain_replicas(blockchain_rid:bytea,node:bytea)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "peerinfos(host:text,port:int4,pub_key:bytea,timestamp:timestamp)"
         )
 
         val bcRid1 = RellTestUtils.strToBlockchainRid("CEED")
         sa.initializeBlockchain(BaseEContext(con, 123L, sa), bcRid1)
 
         chkTables(con,
-                "blockchain_replicas(blockchain_rid:text,node:text)",
+                "blockchain_replicas(blockchain_rid:bytea,node:bytea)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,height:int8)",
@@ -73,13 +73,13 @@ class PostchainTest: BaseResourcefulTest() {
                 "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "peerinfos(host:text,port:int4,pub_key:bytea,timestamp:timestamp)"
         )
 
         sa.initializeApp(con, PostchainUtils.DATABASE_VERSION)
 
         chkTables(con,
-                "blockchain_replicas(blockchain_rid:text,node:text)",
+                "blockchain_replicas(blockchain_rid:bytea,node:bytea)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,height:int8)",
@@ -87,14 +87,14 @@ class PostchainTest: BaseResourcefulTest() {
                 "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "peerinfos(host:text,port:int4,pub_key:bytea,timestamp:timestamp)"
         )
 
         val bcRid2 = RellTestUtils.strToBlockchainRid("FEED")
         sa.initializeBlockchain(BaseEContext(con, 456L, sa), bcRid2)
 
         chkTables(con,
-                "blockchain_replicas(blockchain_rid:text,node:text)",
+                "blockchain_replicas(blockchain_rid:bytea,node:bytea)",
                 "blockchains(blockchain_rid:bytea,chain_iid:int8)",
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,height:int8)",
@@ -105,7 +105,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
                 "must_sync_until(block_height:int8,chain_iid:int8)",
-                "peerinfos(host:text,port:int4,pub_key:text,timestamp:timestamp)"
+                "peerinfos(host:text,port:int4,pub_key:bytea,timestamp:timestamp)"
         )
     }
 
