@@ -5,18 +5,18 @@ RELEASE NOTES 0.13.0 (2023-??-??)
 
 Function "try_call" catches exceptions thrown by a function and returns a fallback value.
 
-try_call(f: ()->T): T?
+    try_call(f: ()->T): T?
 
-    Calls the function, returns the result on success, or "null" on failure.
+Calls the function, returns the result on success, or "null" on failure.
 
-try_call(f: ()->unit): boolean
+    try_call(f: ()->unit): boolean
 
-    Same as the previous, but for functions that return unit: returns "true" on success or "false" on failure.
+Same as the previous, but for functions that return unit: returns "true" on success or "false" on failure.
 
-try_call(f: ()->T, fallback: T): T
+    try_call(f: ()->T, fallback: T): T
 
-    Calls the function, returns the result on success or the fallback value on failure. The fallback expression is
-    evaluated only when the function fails.
+Calls the function, returns the result on success or the fallback value on failure. The fallback expression is
+evaluated only when the function fails.
 
 Examples:
 
@@ -27,7 +27,25 @@ Examples:
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 2. Library: function gtv.from_bytes_or_null()
 
-gtv.from_bytes_or_null(byte_array): gtv?
+New function:
 
-    Same as gtv.from_bytes(byte_array), but returns null if the byte array is not a valid gtv, instead of throwing an
-    exception.
+    gtv.from_bytes_or_null(byte_array): gtv?
+
+Same as gtv.from_bytes(byte_array), but returns null if the byte array is not a valid gtv, instead of throwing an
+exception.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+3. Library: functions assert_events() and rell.test.get_events() for unit tests
+
+New functions to test the op_context.emit_event() function:
+
+    rell.test.get_events(): list<(text,gtv)>
+
+Returns the list of events emitted during the last block execution.
+
+    assert_events(expected: (text,gtv)...)
+    rell.test.assert_events(expected: (text,gtv)...)
+
+Checks that the list of events emitted during the last block execution is the same as the expected list. Example:
+
+    assert_events(('Foo', (123).to_gtv()), ('Bar', (456).to_gtv()));

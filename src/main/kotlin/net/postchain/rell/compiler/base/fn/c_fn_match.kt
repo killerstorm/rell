@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.fn
@@ -19,6 +19,7 @@ import net.postchain.rell.model.expr.Db_Expr
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 
 abstract class C_ArgsTypesMatcher {
@@ -76,6 +77,12 @@ class C_ArgsTypesMatcher_VarArg(
         }
 
         return C_ArgsTypesMatch(res)
+    }
+
+    companion object {
+        fun make(type: R_Type, allowZero: Boolean = true): C_ArgsTypesMatcher {
+            return C_ArgsTypesMatcher_VarArg(immListOf(), C_ArgTypeMatcher_Simple(type), allowZero)
+        }
     }
 }
 

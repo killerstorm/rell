@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.module
@@ -174,9 +174,10 @@ private class RellGTXOperation(
     override fun apply(ctx: TxEContext): Boolean {
         handleError {
             val blockHeight = DatabaseAccess.of(ctx).getLastBlockHeight(ctx)
+            val txCtx = module.env.txContextFactory.createTxContext(ctx)
 
             val opCtx = Rt_OpContext(
-                    txCtx = Rt_PostchainTxContext(ctx),
+                    txCtx = txCtx,
                     lastBlockTime = ctx.timestamp,
                     transactionIid = ctx.txIID,
                     blockHeight = blockHeight,
@@ -218,14 +219,14 @@ private class RellModuleConfig(
 )
 
 private class RellPostchainModule(
-        env: RellPostchainModuleEnvironment,
+        val env: RellPostchainModuleEnvironment,
         private val rApp: R_App,
         chainCtx: Rt_ChainContext,
         private val chainDeps: Map<String, ByteArray>,
         outPrinter: Rt_Printer,
         logPrinter: Rt_Printer,
         private val errorHandler: ErrorHandler,
-        val config: RellModuleConfig
+        val config: RellModuleConfig,
 ) : GTXModule {
     private val operationNames = rApp.operations.keys.map { it.str() }.toImmSet()
     private val queryNames = rApp.queries.keys.map { it.str() }.toImmSet()
@@ -234,8 +235,7 @@ private class RellPostchainModule(
             compilerOptions = config.compilerOptions,
             outPrinter = outPrinter,
             logPrinter = logPrinter,
-            pcModuleEnv = env,
-            typeCheck = config.typeCheck
+            typeCheck = config.typeCheck,
     )
 
     private val appCtx = Rt_AppContext(
@@ -245,7 +245,7 @@ private class RellPostchainModule(
             repl = false,
             test = false,
             replOut = null,
-            blockRunnerStrategy = Rt_UnsupportedBlockRunnerStrategy
+            blockRunnerStrategy = Rt_UnsupportedBlockRunnerStrategy,
     )
 
     override fun getOperations(): Set<String> {
@@ -342,14 +342,15 @@ private class RellPostchainModule(
 }
 
 class RellPostchainModuleEnvironment(
-        val outPrinter: Rt_Printer = Rt_OutPrinter,
-        val logPrinter: Rt_Printer = Rt_LogPrinter(),
-        val wrapCtErrors: Boolean = true,
-        val wrapRtErrors: Boolean = true,
-        val forceTypeCheck: Boolean = false,
-        val dbInitLogLevel: Int = DEFAULT_DB_INIT_LOG_LEVEL,
-        val hiddenLib: Boolean = false,
-        val sqlLog: Boolean = false,
+    val outPrinter: Rt_Printer = Rt_OutPrinter,
+    val logPrinter: Rt_Printer = Rt_LogPrinter(),
+    val wrapCtErrors: Boolean = true,
+    val wrapRtErrors: Boolean = true,
+    val forceTypeCheck: Boolean = false,
+    val dbInitLogLevel: Int = DEFAULT_DB_INIT_LOG_LEVEL,
+    val hiddenLib: Boolean = false,
+    val sqlLog: Boolean = false,
+    val txContextFactory: Rt_PostchainTxContextFactory = Rt_DefaultPostchainTxContextFactory,
 ) {
     companion object {
         val DEFAULT = RellPostchainModuleEnvironment()

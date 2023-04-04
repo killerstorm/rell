@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.utils
@@ -26,7 +26,7 @@ import net.postchain.rell.runtime.Rt_ChainContext
 import net.postchain.rell.runtime.Rt_Value
 
 object PostchainUtils {
-    val DATABASE_VERSION = 4
+    val DATABASE_VERSION = 5
 
     val cryptoSystem: CryptoSystem = Secp256K1CryptoSystem()
 

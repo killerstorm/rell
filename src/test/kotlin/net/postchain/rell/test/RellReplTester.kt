@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
 
 import net.postchain.rell.compiler.base.utils.C_Message
 import net.postchain.rell.compiler.base.utils.C_SourceDir
+import net.postchain.rell.lib.test.Rt_UnitTestBlockRunnerContext
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.repl.ReplInterpreter
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.repl.ReplValueFormat
@@ -31,22 +31,20 @@ class RellReplTester(
 
     private val outChannel = TestReplOutputChannel()
 
-    private val pcModuleEnv = RellPostchainModuleEnvironment(
-            outPrinter = outChannel.outPrinter,
-            logPrinter = outChannel.logPrinter,
+    private val testBlockCtx = Rt_UnitTestBlockRunnerContext(
             wrapCtErrors = false,
             wrapRtErrors = false,
-            forceTypeCheck = true
+            forceTypeCheck = true,
     )
 
     private val replGlobalCtx = Rt_GlobalContext(
             globalCtx.compilerOptions,
             outChannel.outPrinter,
             outChannel.logPrinter,
-            pcModuleEnv = pcModuleEnv,
             logSqlErrors = globalCtx.logSqlErrors,
             sqlUpdatePortionSize = globalCtx.sqlUpdatePortionSize,
-            typeCheck = globalCtx.typeCheck
+            typeCheck = globalCtx.typeCheck,
+            testBlockRunnerCtx = testBlockCtx,
     )
 
     private var repl: ReplInterpreter? = null

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.utils
@@ -15,6 +15,7 @@ import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_MessageType
 import net.postchain.rell.compiler.base.utils.C_SourceDir
+import net.postchain.rell.lib.test.Rt_UnitTestBlockRunnerContext
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
@@ -148,9 +149,7 @@ object RellCliUtils: KLogging() {
             else -> RellPostchainModuleEnvironment.DEFAULT_DB_INIT_LOG_LEVEL
         }
 
-        val pcModuleEnv = RellPostchainModuleEnvironment(
-                outPrinter = Rt_OutPrinter,
-                logPrinter = Rt_LogPrinter(),
+        val testBlockCtx = Rt_UnitTestBlockRunnerContext(
                 forceTypeCheck = typeCheck,
                 dbInitLogLevel = dbInitLogLevel,
                 sqlLog = sqlLog,
@@ -161,7 +160,7 @@ object RellCliUtils: KLogging() {
                 outPrinter = Rt_OutPrinter,
                 logPrinter = Rt_LogPrinter(),
                 typeCheck = typeCheck,
-                pcModuleEnv = pcModuleEnv
+                testBlockRunnerCtx = testBlockCtx,
         )
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.expr
@@ -9,7 +9,6 @@ import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_EntityType
-import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
 import net.postchain.rell.sql.NoConnSqlExecutor
 import net.postchain.rell.test.RellTestUtils
@@ -42,7 +41,6 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
                 Rt_FailingPrinter,
                 Rt_FailingPrinter,
                 typeCheck = true,
-                pcModuleEnv = RellPostchainModuleEnvironment.DEFAULT
         )
 
         val chainCtx = Rt_ChainContext(GtvNull, mapOf(), BlockchainRid.ZERO_RID)

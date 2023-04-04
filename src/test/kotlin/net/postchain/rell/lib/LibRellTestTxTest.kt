@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -7,6 +7,8 @@ package net.postchain.rell.lib
 import net.postchain.common.exception.TransactionIncorrect
 import net.postchain.common.exception.UserMistake
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.RellCodeTester
+import net.postchain.rell.test.RellTestContext
 import org.junit.Test
 
 class LibRellTestTxTest: BaseRellTest(false) {
@@ -460,13 +462,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
     }
 
     private fun initTxChain() {
-        tstCtx.useSql = true
-        val chainId = 0L
-        val chainRid = "DeadBeef".repeat(8)
-        tst.replModule = ""
-        tst.chainId = chainId
-        tst.chainRid = chainRid
-        tstCtx.blockchain(chainId, chainRid)
+        initTxChain(tstCtx, tst)
         repl.outPlainValues = true
     }
 
@@ -509,4 +505,16 @@ class LibRellTestTxTest: BaseRellTest(false) {
     }
 
     private fun chkFromGtv(gtv: String, expr: String, expected: String) = LibGtvTest.chkFromGtv(tst, gtv, expr, expected)
+
+    companion object {
+        fun initTxChain(tstCtx: RellTestContext, tst: RellCodeTester) {
+            tstCtx.useSql = true
+            val chainId = 0L
+            val chainRid = "DeadBeef".repeat(8)
+            tst.replModule = ""
+            tst.chainId = chainId
+            tst.chainRid = chainRid
+            tstCtx.blockchain(chainId, chainRid)
+        }
+    }
 }
