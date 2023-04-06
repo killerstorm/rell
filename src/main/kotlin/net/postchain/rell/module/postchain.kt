@@ -154,12 +154,12 @@ private class RellGTXOperation(
     private val gtvToRtCtx = LateInit<GtvToRtContext>()
     private val args = LateInit<List<Rt_Value>>()
 
-    override fun isCorrect(): Boolean {
+    override fun checkCorrectness() {
         handleError {
             val params = rOperation.params()
             if (data.args.size != params.size) {
                 throw Rt_Exception.common("operation:[${rOperation.appLevelName}]:arg_count:${data.args.size}:${params.size}",
-                    "Wrong argument count: ${data.args.size} instead of ${params.size}")
+                                    "Wrong argument count: ${data.args.size} instead of ${params.size}")
             }
             if (!gtvToRtCtx.isSet()) {
                 gtvToRtCtx.set(GtvToRtContext.make(GTV_OPERATION_PRETTY))
@@ -168,7 +168,6 @@ private class RellGTXOperation(
                 args.set(convertArgs(gtvToRtCtx.get(), params, data.args.toList()))
             }
         }
-        return true
     }
 
     override fun apply(ctx: TxEContext): Boolean {

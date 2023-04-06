@@ -151,10 +151,9 @@ class RellGtxTester(
                 val opData = ExtOpData(name, 0, args.toTypedArray(), bcRid, arrayOf(), arrayOf())
                 val transactor = module.makeTransactor(opData)
 
-                val correct = eval.wrapRt {
-                    transactor.isCorrect()
+                eval.wrapRt {
+                    transactor.checkCorrectness()
                 }
-                check(correct)
 
                 val tx = TransactorTransaction(transactor)
                 val txCtx = BaseTxEContext(blkCtx, 0, tx)
@@ -257,7 +256,7 @@ class RellGtxTester(
 
     private class TransactorTransaction(val transactor: Transactor): Transaction {
         override fun apply(ctx: TxEContext): Boolean = transactor.apply(ctx)
-        override fun isCorrect(): Boolean = transactor.isCorrect()
+        override fun checkCorrectness() { transactor.checkCorrectness() }
         override fun isSpecial(): Boolean = transactor.isSpecial()
 
         // TODO To properly support following methods, test transactions execution shall be done in a different way.
