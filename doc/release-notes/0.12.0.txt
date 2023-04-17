@@ -40,7 +40,7 @@ Gtv conversion:
     big_integer(text): big_integer
 
         Creates a big_integer from a decimal string representation, possibly with a sign.
-        Fails is the string is not a valid decimal number.
+        Fails if the string is not a valid decimal number.
 
 (c) Conversions:
 

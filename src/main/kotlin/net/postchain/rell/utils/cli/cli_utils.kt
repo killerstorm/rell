@@ -2,11 +2,14 @@
  * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
-package net.postchain.rell.utils
+package net.postchain.rell.utils.cli
 
 import mu.KLogging
+import net.postchain.StorageBuilder
 import net.postchain.common.BlockchainRid
 import net.postchain.common.hexStringToByteArray
+import net.postchain.config.app.AppConfig
+import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.base.core.C_CompilationResult
 import net.postchain.rell.compiler.base.core.C_Compiler
@@ -15,19 +18,27 @@ import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_MessageType
 import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.lib.test.Rt_UnitTestBlockRunnerContext
+import net.postchain.rell.lib.test.Rt_BlockRunnerStrategy
+import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
+import net.postchain.rell.lib.test.UnitTestBlockRunner
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.SqlInitLogging
+import net.postchain.rell.runtime.utils.Rt_SqlManager
+import net.postchain.rell.sql.*
 import net.postchain.rell.tools.RellJavaLoggingInit
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.immMapOf
+import net.postchain.rell.utils.toImmList
+import net.postchain.rell.utils.toImmMap
 import picocli.CommandLine
 import java.io.File
 import java.io.OutputStream
 import java.io.PrintStream
+import java.sql.DriverManager
+import java.util.*
 import kotlin.system.exitProcess
 
 object RellCliUtils: KLogging() {
@@ -59,11 +70,11 @@ object RellCliUtils: KLogging() {
     }
 
     fun compile(
-            cliEnv: RellCliEnv,
-            sourceDir: C_SourceDir,
-            modSel: C_CompilerModuleSelection,
-            quiet: Boolean,
-            compilerOptions: C_CompilerOptions
+        cliEnv: RellCliEnv,
+        sourceDir: C_SourceDir,
+        modSel: C_CompilerModuleSelection,
+        quiet: Boolean,
+        compilerOptions: C_CompilerOptions
     ): C_CompilationResult {
         val res = compile0(compilerOptions, cliEnv, sourceDir, modSel)
         handleCompilationResult(cliEnv, res, quiet)
@@ -71,46 +82,48 @@ object RellCliUtils: KLogging() {
     }
 
     private fun compile0(
-            compilerOptions: C_CompilerOptions,
-            cliEnv: RellCliEnv,
-            sourceDir: C_SourceDir,
-            modSel: C_CompilerModuleSelection
+        compilerOptions: C_CompilerOptions,
+        cliEnv: RellCliEnv,
+        sourceDir: C_SourceDir,
+        modSel: C_CompilerModuleSelection
     ): C_CompilationResult {
         try {
             val res = C_Compiler.compile(sourceDir, modSel, compilerOptions)
             return res
         } catch (e: C_CommonError) {
-            cliEnv.print(errMsg(e.msg), true)
-            cliEnv.exit(1)
+            cliEnv.error(errMsg(e.msg))
+            throw RellCliExitException(1)
         }
     }
 
-    private fun handleCompilationResult(cliEnv: RellCliEnv, res: C_CompilationResult, quiet: Boolean) {
+    fun handleCompilationResult(cliEnv: RellCliEnv, res: C_CompilationResult, quiet: Boolean): R_App {
         val warnCnt = res.warnings.size
         val errCnt = res.errors.size
 
         val haveImportantMessages = res.app == null || res.messages.any { !it.type.ignorable }
 
-        if (haveImportantMessages || (!quiet && !res.messages.isEmpty())) {
+        if (haveImportantMessages || (!quiet && res.messages.isNotEmpty())) {
             // Print all messages only if not quiet or if compilation failed, so warnings are not suppressed by the
             // quiet flag if there is an error.
             for (message in res.messages) {
-                cliEnv.print(message.toString(), true)
+                cliEnv.error(message.toString())
             }
             if (errCnt > 0 || warnCnt > 0) {
-                cliEnv.print("Errors: $errCnt Warnings: $warnCnt", true)
+                cliEnv.error("Errors: $errCnt Warnings: $warnCnt")
             }
         }
 
         val app = res.app
         if (app == null) {
             if (errCnt == 0) {
-                cliEnv.print(errMsg("Compilation failed"), true)
+                cliEnv.error(errMsg("Compilation failed"))
             }
-            cliEnv.exit(1)
+            throw RellCliExitException(1)
         } else if (errCnt > 0) {
-            cliEnv.exit(1)
+            throw RellCliExitException(1)
         }
+
+        return app
     }
 
     fun errMsg(msg: String) = "${C_MessageType.ERROR.text}: $msg"
@@ -122,13 +135,15 @@ object RellCliUtils: KLogging() {
         return RellCliTarget(sourcePath, cSourceDir, listOf(moduleName))
     }
 
-    fun <T> runCli(args: Array<String>, argsObj: T, body: (T) -> Unit) {
+    fun <T: RellCliArgs> runCli(args: Array<String>, argsObj: T) {
         CommonUtils.failIfUnitTest() // Make sure unit test check works
 
-        val argsEx = parseCliArgs(args, argsObj)
+        parseCliArgs(args, argsObj)
         try {
-            body(argsEx)
-        } catch (e: RellCliErr) {
+            argsObj.execute()
+        } catch (e: RellCliExitException) {
+            exitProcess(e.code)
+        } catch (e: RellCliException) {
             System.err.println("ERROR: ${e.message}")
             exitProcess(2)
         } catch (e: Throwable) {
@@ -137,39 +152,92 @@ object RellCliUtils: KLogging() {
         }
     }
 
+    fun <T> runWithSqlManager(
+        dbUrl: String?,
+        dbProperties: String?,
+        sqlLog: Boolean,
+        sqlErrorLog: Boolean,
+        code: (SqlManager) -> T,
+    ): T {
+        return if (dbUrl != null) {
+            val schema = SqlUtils.extractDatabaseSchema(dbUrl)
+            val jdbcProperties = Properties()
+            jdbcProperties.setProperty("binaryTransfer", "false")
+            DriverManager.getConnection(dbUrl, jdbcProperties).use { con ->
+                con.autoCommit = true
+                val sqlMgr = ConnectionSqlManager(con, sqlLog)
+                runWithSqlManager(schema, sqlMgr, sqlErrorLog, code)
+            }
+        } else if (dbProperties != null) {
+            val appCfg = AppConfig.fromPropertiesFile(dbProperties)
+            val storage = StorageBuilder.buildStorage(appCfg)
+            val sqlMgr = PostchainStorageSqlManager(storage, sqlLog)
+            runWithSqlManager(appCfg.databaseSchema, sqlMgr, sqlErrorLog, code)
+        } else {
+            code(NoConnSqlManager)
+        }
+    }
+
+    private fun <T> runWithSqlManager(
+        schema: String?,
+        sqlMgr: SqlManager,
+        logSqlErrors: Boolean,
+        code: (SqlManager) -> T,
+    ): T {
+        val sqlMgr2 = Rt_SqlManager(sqlMgr, logSqlErrors)
+        if (schema != null) {
+            sqlMgr2.transaction { sqlExec ->
+                sqlExec.connection { con ->
+                    SqlUtils.prepareSchema(con, schema)
+                }
+            }
+        }
+        return code(sqlMgr2)
+    }
+
     fun createGlobalContext(
             compilerOptions: C_CompilerOptions,
             typeCheck: Boolean,
-            runXmlTest: Boolean,
-            sqlLog: Boolean,
+            outPrinter: Rt_Printer = Rt_OutPrinter,
+            logPrinter: Rt_Printer = Rt_LogPrinter(),
     ): Rt_GlobalContext {
-        // There was a request to suppress SqlInit logging for unit tests (when run from Eclipse).
-        val dbInitLogLevel = when {
-            runXmlTest -> SqlInitLogging.LOG_NONE
-            else -> RellPostchainModuleEnvironment.DEFAULT_DB_INIT_LOG_LEVEL
-        }
-
-        val testBlockCtx = Rt_UnitTestBlockRunnerContext(
-                forceTypeCheck = typeCheck,
-                dbInitLogLevel = dbInitLogLevel,
-                sqlLog = sqlLog,
-        )
-
         return Rt_GlobalContext(
                 compilerOptions = compilerOptions,
-                outPrinter = Rt_OutPrinter,
-                logPrinter = Rt_LogPrinter(),
+                outPrinter = outPrinter,
+                logPrinter = logPrinter,
                 typeCheck = typeCheck,
-                testBlockRunnerCtx = testBlockCtx,
         )
     }
 
-    fun createChainContext(): Rt_ChainContext {
+    fun createChainContext(moduleArgs: Map<R_ModuleName, Rt_Value> = immMapOf()): Rt_ChainContext {
         val bcRid = BlockchainRid(ByteArray(32))
-        return Rt_ChainContext(GtvNull, immMapOf(), bcRid)
+        return Rt_ChainContext(GtvNull, moduleArgs, bcRid)
     }
 
-    private fun <T> parseCliArgs(args: Array<String>, argsObj: T): T {
+    fun createSqlContext(app: R_App): Rt_SqlContext {
+        val mapping = Rt_ChainSqlMapping(0)
+        return Rt_RegularSqlContext.createNoExternalChains(app, mapping)
+    }
+
+    fun createBlockRunnerStrategy(
+        sourceDir: C_SourceDir,
+        app: R_App,
+        moduleArgs: Map<R_ModuleName, Gtv>,
+    ): Rt_BlockRunnerStrategy {
+        val keyPair = UnitTestBlockRunner.getTestKeyPair()
+        val blockRunnerModules = getMainModules(app)
+        val compileConfig = RellCliCompileConfig.Builder()
+            .cliEnv(NullRellCliEnv)
+            .moduleArgs0(moduleArgs)
+            .build()
+        return Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, blockRunnerModules, compileConfig)
+    }
+
+    fun getMainModules(app: R_App): List<R_ModuleName> {
+        return app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
+    }
+
+    private fun <T> parseCliArgs(args: Array<String>, argsObj: T) {
         val cl = CommandLine(argsObj)
         try {
             cl.parse(*args)
@@ -178,7 +246,6 @@ object RellCliUtils: KLogging() {
             cl.usage(System.err)
             exitProcess(1)
         }
-        return argsObj
     }
 
     fun parseHex(s: String, sizeBytes: Int, msg: String): ByteArray {
@@ -194,7 +261,7 @@ object RellCliUtils: KLogging() {
     fun check(b: Boolean, msgCode: () -> String) {
         if (!b) {
             val msg = msgCode()
-            throw RellCliErr(msg)
+            throw RellCliBasicException(msg)
         }
     }
 
@@ -212,7 +279,7 @@ object RellCliUtils: KLogging() {
 
     fun checkModule(s: String): R_ModuleName {
         val res = R_ModuleName.ofOpt(s)
-        return res ?: throw RellCliErr("Invalid module name: '$s'")
+        return res ?: throw RellCliBasicException("Invalid module name: '$s'")
     }
 
     fun checkVersion(s: String?): R_LangVersion {
@@ -220,10 +287,10 @@ object RellCliUtils: KLogging() {
         val ver = try {
             R_LangVersion.of(s)
         } catch (e: IllegalArgumentException) {
-            throw RellCliErr("Invalid source version: '$s'")
+            throw RellCliBasicException("Invalid source version: '$s'")
         }
         if (ver !in RellVersions.SUPPORTED_VERSIONS) {
-            throw RellCliErr("Source version not supported: $ver")
+            throw RellCliBasicException("Source version not supported: $ver")
         }
         return ver
     }
@@ -235,7 +302,7 @@ object RellCliUtils: KLogging() {
         } catch (e: Throwable) {
             if (errType.isInstance(e)) {
                 val s = msg()
-                throw RellCliErr(s)
+                throw RellCliBasicException(s)
             }
             throw e
         }
@@ -304,7 +371,9 @@ object RellCliLogUtils {
     }
 }
 
-class RellCliErr(msg: String): RuntimeException(msg)
+abstract class RellCliException(msg: String): RuntimeException(msg)
+class RellCliBasicException(msg: String): RellCliException(msg)
+class RellCliExitException(val code: Int, msg: String = "exit $code"): RellCliException(msg)
 
 class RellModuleSources(modules: List<String>, files: Map<String, String>) {
     val modules = modules.toImmList()
@@ -314,22 +383,39 @@ class RellModuleSources(modules: List<String>, files: Map<String, String>) {
 class RellCliTarget(val sourcePath: File, val sourceDir: C_SourceDir, val modules: List<R_ModuleName>)
 
 abstract class RellCliEnv {
-    abstract fun print(msg: String, err: Boolean = false)
-    abstract fun exit(status: Int): Nothing
+    abstract fun print(msg: String)
+    abstract fun error(msg: String)
+}
+
+object NullRellCliEnv: RellCliEnv() {
+    override fun print(msg: String) {
+    }
+
+    override fun error(msg: String) {
+    }
 }
 
 object MainRellCliEnv: RellCliEnv() {
-    override fun print(msg: String, err: Boolean) {
-        val out = if (err) System.err else System.out
-        out.println(msg)
+    override fun print(msg: String) {
+        println(msg)
     }
 
-    override fun exit(status: Int): Nothing {
-        exitProcess(status)
+    override fun error(msg: String) {
+        System.err.println(msg)
     }
 }
 
-abstract class RellBaseCliArgs {
+class Rt_CliEnvPrinter(private val cliEnv: RellCliEnv): Rt_Printer {
+    override fun print(str: String) {
+        cliEnv.print(str)
+    }
+}
+
+abstract class RellCliArgs {
+    abstract fun execute()
+}
+
+abstract class RellBaseCliArgs: RellCliArgs() {
     @CommandLine.Option(names = ["-d", "--source-dir"], paramLabel = "SOURCE_DIR",
             description = ["Rell source code directory (default: current directory)"])
     var sourceDir: String? = null

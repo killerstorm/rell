@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.misc
@@ -82,7 +82,7 @@ class TestMatcherTest {
     }
 
     private fun chkMatchFunction(pat: String, name: String, exp: Boolean) {
-        val m = TestMatcher.make(pat)
+        val m = TestMatcher.make(listOf(pat))
         val rDefNames = parseFunctionName(name)
         assertEquals(exp, m.matchFunction(rDefNames))
     }

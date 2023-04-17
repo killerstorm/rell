@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.api
@@ -56,8 +56,9 @@ class IdeCodeSnippet(
         val opts = options.toPojoMap()
 
         val modulesObj = mapOf(
-                "modules" to modules.modules.map { it.str() },
-                "test_root_modules" to modules.testRootModules.map { it.str() }
+                "modules" to modules.appModules?.map { it.str() },
+                "test_root_modules" to modules.testModules.map { it.str() },
+                "test_sub_modules" to modules.testSubModules,
         )
 
         val messagesObj = messages.map { it.serialize() }
@@ -89,8 +90,9 @@ class IdeCodeSnippet(
             val modulesRaw = obj.getValue("modules") as Map<Any, Any>
             val modulesMap = modulesRaw.map { (k, v) -> k as String to v }.toMap()
             val modules = C_CompilerModuleSelection(
-                    modules = (modulesMap.getValue("modules") as List<Any>).map { R_ModuleName.of(it as String) },
-                    testRootModules = (modulesMap.getValue("test_root_modules") as List<Any>).map { R_ModuleName.of(it as String) }
+                    appModules = (modulesMap.getValue("modules") as List<Any>?)?.map { R_ModuleName.of(it as String) },
+                    testModules = (modulesMap.getValue("test_root_modules") as List<Any>).map { R_ModuleName.of(it as String) },
+                    testSubModules = (modulesMap["test_sub_modules"] as Boolean?) ?: true,
             )
 
             val optionsRaw = obj.getValue("options") as Map<Any, Any>

@@ -1,11 +1,10 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model
 
-import net.postchain.rell.compiler.base.core.C_CompilerPass
-import net.postchain.rell.compiler.base.utils.C_LateInit
+import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.runtime.*
 
 data class R_VarPtr(val name: String, val blockUid: R_FrameBlockUid, val offset: Int) {
@@ -23,7 +22,7 @@ class R_CallFrame(val defId: R_DefinitionId, val size: Int, val rootBlock: R_Fra
         private val ERROR_BLOCK = R_FrameBlock(null, R_Utils.ERROR_BLOCK_UID, -1, -1)
         val ERROR = R_CallFrame(R_DefinitionId.ERROR, 0, ERROR_BLOCK, false)
 
-        val NONE_INIT_FRAME_GETTER = C_LateInit(C_CompilerPass.FRAMES, ERROR).getter
+        val NONE_INIT_FRAME_GETTER = C_LateGetter.const(ERROR)
     }
 }
 

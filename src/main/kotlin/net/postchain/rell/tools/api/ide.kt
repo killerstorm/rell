@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.api
@@ -18,7 +18,7 @@ import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.runtime.Rt_RellVersionProperty
-import net.postchain.rell.utils.RellCliEnv
+import net.postchain.rell.utils.cli.RellCliEnv
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.configuration2.PropertiesConfiguration
@@ -67,8 +67,8 @@ object IdeApi {
     }
 
     private object IdeRellCliEnv: RellCliEnv() {
-        override fun print(msg: String, err: Boolean) = println(msg)
-        override fun exit(status: Int): Nothing = throw IllegalStateException("$status")
+        override fun print(msg: String) = println(msg)
+        override fun error(msg: String) = println(msg)
     }
 
     @JvmStatic fun getAppFiles(sourceDir: C_SourceDir, modules: List<R_ModuleName>): Map<String, String> {

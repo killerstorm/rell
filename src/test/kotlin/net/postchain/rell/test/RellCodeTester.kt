@@ -17,18 +17,19 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.base.utils.C_MessageType
 import net.postchain.rell.compiler.base.utils.C_SourceDir
+import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
+import net.postchain.rell.lib.test.Rt_BlockRunnerStrategy
 import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
-import net.postchain.rell.lib.test.Rt_UnitTestBlockRunnerContext
 import net.postchain.rell.lib.test.UnitTestBlockRunner
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.runtime.*
-import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.utils.*
+import net.postchain.rell.utils.cli.RellCliCompileConfig
 import org.junit.Assert
 import kotlin.test.assertEquals
 
@@ -302,7 +303,7 @@ class RellCodeTester(
         val globalCtx = createGlobalCtx()
 
         val sqlMgr = tstCtx.sqlMgr()
-        return RellReplTester(globalCtx, sourceDir, sqlMgr, module, tstCtx.useSql)
+        return RellReplTester(globalCtx, sourceDir, sqlMgr, module)
     }
 
     private fun processWithExeCtx(code: String, tx: Boolean, processor: (Rt_ExecutionContext) -> String): String {
@@ -341,7 +342,7 @@ class RellCodeTester(
     private fun runTests(): String {
         val res = processWithTestRunnerCtx { testRunnerCtx ->
             val testFns = TestRunner.getTestFunctions(testRunnerCtx.app, TestMatcher.ANY)
-                    .map { TestRunnerCase(TestRunnerChain("foo", 123), it) }
+                    .map { TestCase(TestRunnerChain("foo", 123), it) }
                     .toImmList()
 
             val testRes = TestRunnerResults()
@@ -369,17 +370,18 @@ class RellCodeTester(
                 createSqlCtx(app, sqlExec)
             }
 
-            val chainCtx = createChainContext(app)
             val sourceDir = createSourceDir(moduleCode)
             val blkRunStrategy = createBlockRunnerStrategy(app, sourceDir)
 
             val testRunnerCtx = TestRunnerContext(
                     sqlCtx = sqlCtx,
+                    cliEnv = TestRellCliEnv(),
                     sqlMgr = tstCtx.sqlMgr(),
                     globalCtx = globalCtx,
-                    chainCtx = chainCtx,
+                    chainCtx = createChainContext(app),
+                    blockRunnerConfig = createBlockRunnerConfig(),
                     blockRunnerStrategy = blkRunStrategy,
-                    app = app
+                    app = app,
             )
 
             processor(testRunnerCtx)
@@ -389,12 +391,6 @@ class RellCodeTester(
     private fun createGlobalCtx(): Rt_GlobalContext {
         val compilerOptions = compilerOptions()
 
-        val testBlockCtx = Rt_UnitTestBlockRunnerContext(
-                wrapCtErrors = false,
-                wrapRtErrors = false,
-                forceTypeCheck = true,
-        )
-
         return Rt_GlobalContext(
                 compilerOptions,
                 outPrinter,
@@ -402,7 +398,6 @@ class RellCodeTester(
                 logSqlErrors = true,
                 sqlUpdatePortionSize = sqlUpdatePortionSize,
                 typeCheck = true,
-                testBlockRunnerCtx = testBlockCtx,
         )
     }
 
@@ -432,7 +427,9 @@ class RellCodeTester(
             test: Boolean
     ): Rt_AppContext {
         val chainCtx = createChainContext(app, GtvNull)
-        val blkRunStrategy = createBlockRunnerStrategy(app, sourceDir)
+
+        val testBlkRunCfg = createBlockRunnerConfig()
+        val testBlkRunStrategy = createBlockRunnerStrategy(app, sourceDir)
 
         return Rt_AppContext(
                 globalCtx,
@@ -441,7 +438,16 @@ class RellCodeTester(
                 repl = false,
                 test = test,
                 replOut = null,
-                blockRunnerStrategy = blkRunStrategy
+                blockRunnerConfig = testBlkRunCfg,
+                blockRunnerStrategy = testBlkRunStrategy,
+        )
+    }
+
+    private fun createBlockRunnerConfig(): Rt_BlockRunnerConfig {
+        return Rt_BlockRunnerConfig(
+            wrapCtErrors = false,
+            wrapRtErrors = false,
+            forceTypeCheck = true,
         )
     }
 
@@ -449,8 +455,9 @@ class RellCodeTester(
         val modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
         val keyPair = UnitTestBlockRunner.getTestKeyPair()
         val modArgs = getModuleArgs()
-        val s = Rt_DynamicBlockRunnerStrategy(sourceDir, modules, keyPair)
-        return Rt_TestBlockRunnerStrategy(s, modArgs)
+        val modArgsGtv = RellGtxTester.moduleArgsToMap(modArgs).mapKeys { R_ModuleName.of(it.key) }
+        val compileConfig = RellCliCompileConfig.Builder().moduleArgs0(modArgsGtv).build()
+        return Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, modules, compileConfig)
     }
 
     fun createExeCtx(
@@ -484,26 +491,5 @@ class RellCodeTester(
             val height = map[rid]
             return height
         }
-    }
-
-    private class Rt_TestBlockRunnerStrategy(
-            private val s: Rt_BlockRunnerStrategy,
-            modArgs: Map<String, String>
-    ): Rt_BlockRunnerStrategy() {
-        private val modArgs = modArgs.toImmMap()
-
-        override fun createGtvConfig(): Gtv {
-            val gtv = s.createGtvConfig()
-            val gtv2 = mapOf(
-                    "gtx" to mapOf(
-                            "rell" to mapOf(
-                                    "moduleArgs" to RellGtxTester.moduleArgsToGtv(modArgs)
-                            ).toGtv()
-                    ).toGtv()
-            ).toGtv()
-            return GtvTestUtils.merge(gtv, gtv2)
-        }
-
-        override fun getKeyPair() = s.getKeyPair()
     }
 }

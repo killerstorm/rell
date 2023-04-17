@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -56,8 +56,10 @@ private class C_MountConflictsProcessor(private val chain: String?, private val 
             return
         }
 
-        val error = C_Errors.errMountConflict(chain, entry.mountName, entry.def, entry.pos!!, otherEntry)
-        msgCtx.error(error)
+        if (msgCtx.globalCtx.compilerOptions.mountConflictError) {
+            val error = C_Errors.errMountConflict(chain, entry.mountName, entry.def, entry.pos!!, otherEntry)
+            msgCtx.error(error)
+        }
     }
 }
 
@@ -99,10 +101,12 @@ class C_MntEntry(
         }
 
         private fun processSystemMountConflicts(msgCtx: C_MessageContext, stamp: R_AppUid, mntTable: C_MntTable): C_MntTable {
+            val errEnabled = msgCtx.globalCtx.compilerOptions.mountConflictError
             val b = C_MntTableBuilder(stamp)
 
             for (entry in mntTable.entries) {
-                if (entry.pos != null && (entry.mountName in SYSTEM_MOUNT_NAMES || entry.mountName.startsWith(SYSTEM_MOUNT_PREFIX))) {
+                val isConflict = entry.mountName in SYSTEM_MOUNT_NAMES || entry.mountName.startsWith(SYSTEM_MOUNT_PREFIX)
+                if (entry.pos != null && isConflict && errEnabled) {
                     msgCtx.error(C_Errors.errMountConflictSystem(entry.mountName, entry.def, entry.pos))
                 } else {
                     b.add(entry)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -27,6 +27,7 @@ import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellPostchainModuleFactory
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.toImmMap
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -274,7 +275,14 @@ class RellGtxTester(
 
     companion object {
         fun moduleArgsToGtv(moduleArgs: Map<String, String>): Gtv {
-            return GtvFactory.gtv(moduleArgs.mapValues { (_, v) -> GtvTestUtils.decodeGtvStr(v) })
+            val map = moduleArgsToMap(moduleArgs)
+            return GtvFactory.gtv(map)
+        }
+
+        fun moduleArgsToMap(moduleArgs: Map<String, String>): Map<String, Gtv> {
+            return moduleArgs
+                .mapValues { (_, v) -> GtvTestUtils.decodeGtvStr(v) }
+                .toImmMap()
         }
     }
 }

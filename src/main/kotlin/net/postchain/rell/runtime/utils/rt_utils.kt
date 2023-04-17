@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime.utils
@@ -129,7 +129,7 @@ class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Bo
             return res
         } catch (e: SQLException) {
             if (logErrors) {
-                System.err.println("SQL: " + sql)
+                System.err.println("SQL: $sql")
                 e.printStackTrace()
             }
             throw Rt_Exception.common("sqlerr:${e.errorCode}", "SQL Error: ${e.message}")

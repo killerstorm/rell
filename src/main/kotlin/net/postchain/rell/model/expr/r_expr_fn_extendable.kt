@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model.expr
@@ -16,13 +16,17 @@ class R_ExtendableFunctionUid(val id: Int, private val name: String) {
     override fun toString() = "$id:$name"
 }
 
-class R_FunctionExtension(val fnBase: R_FunctionBase)
+class R_FunctionExtension(val fnBase: R_FunctionBase) {
+    override fun toString() = fnBase.toString()
+}
 
 class R_FunctionExtensions(
         val uid: R_ExtendableFunctionUid,
-        extensions: List<R_FunctionExtension>
+        extensions: List<R_FunctionExtension>,
 ) {
     val extensions = extensions.toImmList()
+
+    override fun toString() = uid.toString()
 }
 
 class R_FunctionExtensionsTable(list: List<R_FunctionExtensions>) {

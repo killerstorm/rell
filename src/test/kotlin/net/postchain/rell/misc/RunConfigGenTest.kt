@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.misc
@@ -7,10 +7,18 @@ package net.postchain.rell.misc
 import net.postchain.gtv.GtvDecoder
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.module.RellVersions
-import net.postchain.rell.test.*
+import net.postchain.rell.test.GtvTestUtils
+import net.postchain.rell.test.RellTestUtils
+import net.postchain.rell.test.TestRellCliEnv
+import net.postchain.rell.test.unwrap
 import net.postchain.rell.tools.runcfg.RellRunConfigGenerator
 import net.postchain.rell.tools.runcfg.RellRunConfigParams
-import net.postchain.rell.utils.*
+import net.postchain.rell.utils.BinaryDirFile
+import net.postchain.rell.utils.DirFile
+import net.postchain.rell.utils.MapGeneralDir
+import net.postchain.rell.utils.TextDirFile
+import net.postchain.rell.utils.cli.RellCliBasicException
+import net.postchain.rell.utils.cli.RellCliExitException
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -332,10 +340,10 @@ class RunConfigGenTest {
                 }""".unwrap()
         )
 
-        assertEquals(setOf<String>(), files.keys)
+        assertEquals(setOf(), files.keys)
     }
 
-    @Test(expected = TestRellCliEnvExitException::class)
+    @Test(expected = RellCliBasicException::class)
     fun testModuleNotFound() {
         generate(mapOf(), mapOf(), """
             <run>
@@ -371,7 +379,7 @@ class RunConfigGenTest {
             </run>
         """
 
-        var e = assertFailsWith<RellCliErr> {
+        var e = assertFailsWith<RellCliBasicException> {
             generate(sourceFiles, mapOf(), tpl.format("""<app module="app"/>"""))
         }
         assertEquals("Missing module_args for module(s): app", e.message)
@@ -417,7 +425,7 @@ class RunConfigGenTest {
         """))
     }
 
-    @Test(expected = TestRellCliEnvExitException::class)
+    @Test(expected = RellCliExitException::class)
     fun testCompilationError() {
         val sourceFiles = mapOf(
                 "app.rell" to "module; struct foo { x: unknown; }"
@@ -439,7 +447,7 @@ class RunConfigGenTest {
         """)
     }
 
-    @Test(expected = TestRellCliEnvExitException::class)
+    @Test(expected = RellCliBasicException::class)
     fun testTestModuleAsMainModule() {
         val sourceFiles = mapOf(
                 "app.rell" to "@test module; struct foo { x: integer; }"
@@ -535,7 +543,7 @@ class RunConfigGenTest {
         assertEquals(setOf<String>(), files.keys)
     }
 
-    @Test(expected = RellCliErr::class)
+    @Test(expected = RellCliBasicException::class)
     fun testDependencyWithGreaterIid() {
         generate(mapOf(), mapOf(), """
             <run>
@@ -1003,7 +1011,7 @@ class RunConfigGenTest {
         val sourceDir = C_SourceDir.mapDirOf(sourceFiles)
         val configDir = MapGeneralDir(configFiles)
         val params = RellRunConfigParams(sourceDir, configDir, RellVersions.VERSION, unitTest = false)
-        val conf = RellRunConfigGenerator.generate(TestRellCliEnv, params, "run.xml", confText.trimIndent())
+        val conf = RellRunConfigGenerator.generate(TestRellCliEnv(), params, "run.xml", confText.trimIndent())
         val files = RellRunConfigGenerator.buildFiles(conf).toMutableMap()
         return files
     }

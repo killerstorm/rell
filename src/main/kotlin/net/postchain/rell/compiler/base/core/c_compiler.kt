@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.core
@@ -153,19 +153,23 @@ enum class C_AtAttrShadowing {
 
 // Instantiated in Eclipse IDE, change parameters carefully.
 class C_CompilerOptions(
-        val compatibility: R_LangVersion?,
-        val gtv: Boolean,
-        val deprecatedError: Boolean,
-        val ide: Boolean,
-        val blockCheck: Boolean,
-        val atAttrShadowing: C_AtAttrShadowing,
-        val testLib: Boolean,
-        val hiddenLib: Boolean,
-        val allowDbModificationsInObjectExprs: Boolean,
-        val symbolInfoFile: C_SourcePath?,
-        val complexWhatEnabled: Boolean,
-        val ideDefIdConflictError: Boolean,
+    val compatibility: R_LangVersion?,
+    val gtv: Boolean,
+    val deprecatedError: Boolean,
+    val ide: Boolean,
+    val blockCheck: Boolean,
+    val atAttrShadowing: C_AtAttrShadowing,
+    val testLib: Boolean,
+    val hiddenLib: Boolean,
+    val allowDbModificationsInObjectExprs: Boolean,
+    val symbolInfoFile: C_SourcePath?,
+    val complexWhatEnabled: Boolean,
+    val ideDefIdConflictError: Boolean,
+    val mountConflictError: Boolean,
+    val appModuleInTestsError: Boolean,
 ) {
+    fun toBuilder() = Builder(this)
+
     fun toPojoMap(): Map<String, Any> {
         val map = mutableMapOf(
                 "gtv"  to gtv,
@@ -176,6 +180,8 @@ class C_CompilerOptions(
                 "hiddenLib" to hiddenLib,
                 "allowDbModificationsInObjectExprs" to allowDbModificationsInObjectExprs,
                 "complexWhatEnabled" to complexWhatEnabled,
+                "mountConflictError" to mountConflictError,
+                "appModuleInTestsError" to appModuleInTestsError,
         )
         if (symbolInfoFile != null) map["symbolInfoFile"] = symbolInfoFile.str()
         if (ideDefIdConflictError != DEFAULT.ideDefIdConflictError) map["ideDefIdConflictError"] = ideDefIdConflictError
@@ -197,6 +203,8 @@ class C_CompilerOptions(
                 symbolInfoFile = null,
                 complexWhatEnabled = true,
                 ideDefIdConflictError = false,
+                mountConflictError = true,
+                appModuleInTestsError = false,
         )
 
         @JvmStatic fun builder() = Builder()
@@ -219,6 +227,8 @@ class C_CompilerOptions(
                     symbolInfoFile = (map["symbolInfoFile"] as String?)?.let { C_SourcePath.parse(it) },
                     complexWhatEnabled = getBoolOpt(map, "complexWhatEnabled", DEFAULT.complexWhatEnabled),
                     ideDefIdConflictError = getBoolOpt(map, "ideDefIdConflictError", DEFAULT.ideDefIdConflictError),
+                    mountConflictError = getBoolOpt(map, "mountConflictError", DEFAULT.mountConflictError),
+                    appModuleInTestsError = getBoolOpt(map, "appModuleInTestsError", DEFAULT.appModuleInTestsError),
             )
         }
 
@@ -242,61 +252,22 @@ class C_CompilerOptions(
         private var symbolInfoFile = proto.symbolInfoFile
         private var complexWhatEnabled = proto.complexWhatEnabled
         private var ideDefIdConflictError = proto.ideDefIdConflictError
+        private var mountConflictError = proto.mountConflictError
+        private var appModuleInTestsError = proto.appModuleInTestsError
 
-        @Suppress("UNUSED") fun compatibility(v: R_LangVersion): Builder {
-            compatibility = v
-            return this
-        }
-
-        @Suppress("UNUSED") fun gtv(v: Boolean): Builder {
-            gtv = v
-            return this
-        }
-
-        @Suppress("UNUSED") fun deprecatedError(v: Boolean): Builder {
-            deprecatedError = v
-            return this
-        }
-
-        @Suppress("UNUSED") fun ide(v: Boolean): Builder {
-            ide = v
-            return this
-        }
-
-        @Suppress("UNUSED") fun blockCheck(v: Boolean): Builder {
-            blockCheck = v
-            return this
-        }
-
-        @Suppress("UNUSED") fun atAttrShadowing(v: C_AtAttrShadowing): Builder {
-            atAttrShadowing = v
-            return this
-        }
-
-        @Suppress("UNUSED") fun hiddenLib(v: Boolean): Builder {
-            hiddenLib = v
-            return this
-        }
-
-        @Suppress("UNUSED") fun allowDbModificationsInObjectExprs(v: Boolean): Builder {
-            allowDbModificationsInObjectExprs = v
-            return this
-        }
-
-        @Suppress("UNUSED") fun symbolInfoFile(v: C_SourcePath?): Builder {
-            symbolInfoFile = v
-            return this
-        }
-
-        @Suppress("UNUSED") fun complexWhatEnabled(v: Boolean): Builder {
-            complexWhatEnabled = v
-            return this
-        }
-
-        @Suppress("UNUSED") fun ideDefIdConflictError(v: Boolean): Builder {
-            ideDefIdConflictError = v
-            return this
-        }
+        @Suppress("UNUSED") fun compatibility(v: R_LangVersion) = apply { compatibility = v }
+        @Suppress("UNUSED") fun gtv(v: Boolean) = apply { gtv = v }
+        @Suppress("UNUSED") fun deprecatedError(v: Boolean) = apply { deprecatedError = v }
+        @Suppress("UNUSED") fun ide(v: Boolean) = apply { ide = v }
+        @Suppress("UNUSED") fun blockCheck(v: Boolean) = apply { blockCheck = v }
+        @Suppress("UNUSED") fun atAttrShadowing(v: C_AtAttrShadowing) = apply { atAttrShadowing = v }
+        @Suppress("UNUSED") fun hiddenLib(v: Boolean) = apply { hiddenLib = v }
+        @Suppress("UNUSED") fun allowDbModificationsInObjectExprs(v: Boolean) = apply { allowDbModificationsInObjectExprs = v }
+        @Suppress("UNUSED") fun symbolInfoFile(v: C_SourcePath?) = apply { symbolInfoFile = v }
+        @Suppress("UNUSED") fun complexWhatEnabled(v: Boolean) = apply { complexWhatEnabled = v }
+        @Suppress("UNUSED") fun ideDefIdConflictError(v: Boolean) = apply { ideDefIdConflictError = v }
+        @Suppress("UNUSED") fun mountConflictError(v: Boolean) = apply { mountConflictError = v }
+        @Suppress("UNUSED") fun appModuleInTestsError(v: Boolean) = apply { appModuleInTestsError = v }
 
         fun build() = C_CompilerOptions(
                 compatibility = compatibility,
@@ -311,16 +282,19 @@ class C_CompilerOptions(
                 symbolInfoFile = symbolInfoFile,
                 complexWhatEnabled = complexWhatEnabled,
                 ideDefIdConflictError = ideDefIdConflictError,
+                mountConflictError = mountConflictError,
+                appModuleInTestsError = appModuleInTestsError,
         )
     }
 }
 
 class C_CompilerModuleSelection(
-        modules: List<R_ModuleName>,
-        testRootModules: List<R_ModuleName> = listOf()
+    appModules: List<R_ModuleName>?,
+    testModules: List<R_ModuleName> = listOf(),
+    val testSubModules: Boolean = true,
 ) {
-    val modules = modules.toImmList()
-    val testRootModules = testRootModules.toImmList()
+    val appModules = appModules?.toImmList()
+    val testModules = testModules.toImmList()
 }
 
 object C_Compiler {
@@ -393,12 +367,11 @@ object C_Compiler {
 
         checkMainModules(msgCtx, modSel, midModules)
 
-        val testModules = midModules.filter { it.header != null && it.header.test && it.isSelected }
-        val selModules = (modSel.modules + testModules.map { it.moduleName })
+        val selModules = midModules.filter { it.isSelected }
 
         val midCompiler = C_MidModuleCompiler(msgCtx, midModules)
-        for (moduleName in selModules) {
-            midCompiler.compileModule(moduleName, null)
+        for (selModule in selModules) {
+            midCompiler.compileModule(selModule.moduleName, null)
         }
 
         return midCompiler.getExtModules()
@@ -412,12 +385,16 @@ object C_Compiler {
     ): List<C_MidModule> {
         val modLdr = C_ModuleLoader(msgCtx, symCtxProvider, sourceDir, immSetOf())
 
-        for (moduleName in modSel.modules) {
-            modLdr.loadModule(moduleName)
+        if (modSel.appModules == null) {
+            modLdr.loadAllModules()
+        } else {
+            for (moduleName in modSel.appModules) {
+                modLdr.loadModule(moduleName)
+            }
         }
 
-        for (moduleName in modSel.testRootModules) {
-            modLdr.loadTestModules(moduleName)
+        for (moduleName in modSel.testModules) {
+            modLdr.loadTestModule(moduleName, modSel.testSubModules)
         }
 
         return modLdr.finish()
@@ -428,18 +405,57 @@ object C_Compiler {
             modSel: C_CompilerModuleSelection,
             midModules: List<C_MidModule>
     ) {
+        val options = msgCtx.globalCtx.compilerOptions
+
         val midModulesMap = midModules.associateBy { it.moduleName }
 
-        for (moduleName in modSel.modules) {
+        for (moduleName in modSel.appModules ?: listOf()) {
             val midModule = midModulesMap[moduleName]
             midModule ?: throw C_CommonError(C_Errors.msgModuleNotFound(moduleName))
 
             val absPos = midModule.header?.abstract
-            if (absPos != null && !msgCtx.globalCtx.compilerOptions.ide) {
+            if (absPos != null && !options.ide) {
                 msgCtx.error(absPos, "module:main_abstract:$moduleName",
                         "Module '${moduleName.str()}' is abstract, cannot be used as a main module")
             }
+
+            if (midModule.isTest && !options.ide && options.appModuleInTestsError) {
+                throw C_CommonError(C_CodeMsg("module:main_test:$moduleName", "Module '$moduleName' is a test module"))
+            }
         }
+
+        if (modSel.testSubModules) {
+            val parentsOfTestModules = mutableSetOf<R_ModuleName>()
+            for (midModule in midModules) {
+                if (midModule.isTest) {
+                    val path = CommonUtils.chainToList(midModule.moduleName) { it.parentOrNull() }
+                    parentsOfTestModules.addAll(path)
+                }
+            }
+            for (moduleName in modSel.testModules) {
+                if (moduleName !in parentsOfTestModules) {
+                    if (moduleName in midModulesMap) {
+                        if (options.appModuleInTestsError) {
+                            throw C_CommonError(msgModuleNotTest(moduleName))
+                        }
+                    } else {
+                        throw C_CommonError(C_Errors.msgModuleNotFound(moduleName))
+                    }
+                }
+            }
+        } else {
+            for (moduleName in modSel.testModules) {
+                val midModule = midModulesMap[moduleName]
+                midModule ?: throw C_CommonError(C_Errors.msgModuleNotFound(moduleName))
+                if (!midModule.isTest && options.appModuleInTestsError) {
+                    throw C_CommonError(msgModuleNotTest(moduleName))
+                }
+            }
+        }
+    }
+
+    private fun msgModuleNotTest(moduleName: R_ModuleName): C_CodeMsg {
+        return "module:not_test:$moduleName" toCodeMsg "Module '$moduleName' is not a test module"
     }
 }
 

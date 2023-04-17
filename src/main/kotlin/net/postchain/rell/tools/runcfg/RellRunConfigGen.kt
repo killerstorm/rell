@@ -1,21 +1,19 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.rell.utils.DirFile
-import net.postchain.rell.utils.RellBaseCliArgs
-import net.postchain.rell.utils.RellCliLogUtils
-import net.postchain.rell.utils.RellCliUtils
+import net.postchain.rell.utils.cli.RellBaseCliArgs
+import net.postchain.rell.utils.cli.RellCliLogUtils
+import net.postchain.rell.utils.cli.RellCliUtils
 import picocli.CommandLine
 import java.io.File
 
 fun main(args: Array<String>) {
     RellCliLogUtils.initLogging()
-    RellCliUtils.runCli(args, RellRunConfigGenCliArgs()) {
-        main0(it)
-    }
+    RellCliUtils.runCli(args, RellRunConfigGenCliArgs())
 }
 
 private fun main0(args: RellRunConfigGenCliArgs) {
@@ -68,10 +66,14 @@ abstract class RellRunConfigCliArgs: RellBaseCliArgs() {
 }
 
 @CommandLine.Command(name = "RellRunConfigGen", description = ["Generate blockchain config from a run.xml config"])
-private class RellRunConfigGenCliArgs: RellRunConfigCliArgs() {
+class RellRunConfigGenCliArgs: RellRunConfigCliArgs() {
     @CommandLine.Option(names = ["-o", "--output-dir"], paramLabel = "OUTPUT_DIR", description = ["Output directory"])
     var outputDir: String? = null
 
     @CommandLine.Option(names = ["--dry-run"], description = ["Do not create files"])
     var dryRun: Boolean = false
+
+    override fun execute() {
+        main0(this)
+    }
 }

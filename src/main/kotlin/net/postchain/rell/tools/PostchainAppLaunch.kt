@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools
@@ -22,15 +22,16 @@ import net.postchain.metrics.BLOCKCHAIN_RID_TAG
 import net.postchain.metrics.CHAIN_IID_TAG
 import net.postchain.metrics.NODE_PUBKEY_TAG
 import net.postchain.rell.RellConfigGen
+import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_LogPrinter
 import net.postchain.rell.runtime.Rt_PrinterFactory
 import net.postchain.rell.sql.SqlInitLogging
-import net.postchain.rell.utils.MainRellCliEnv
-import net.postchain.rell.utils.RellBaseCliArgs
-import net.postchain.rell.utils.RellCliLogUtils
-import net.postchain.rell.utils.RellCliUtils
 import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.cli.MainRellCliEnv
+import net.postchain.rell.utils.cli.RellBaseCliArgs
+import net.postchain.rell.utils.cli.RellCliLogUtils
+import net.postchain.rell.utils.cli.RellCliUtils
 import picocli.CommandLine
 import java.io.File
 import java.util.logging.LogManager
@@ -41,9 +42,7 @@ private val log = run {
 }
 
 fun main(args: Array<String>) {
-    RellCliUtils.runCli(args, RunPostchainAppArgs()) {
-        main0(it)
-    }
+    RellCliUtils.runCli(args, RunPostchainAppArgs())
 }
 
 private fun main0(args: RunPostchainAppArgs) {
@@ -61,50 +60,61 @@ private fun main0(args: RunPostchainAppArgs) {
     val configGen = RellConfigGen.create(MainRellCliEnv, target)
 
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
-    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeAppConf.pubKeyByteArray, args.sqlLog)
+    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeAppConf.pubKeyByteArray)
     val bcConf = configGen.makeConfig(template)
 
     val node = PostchainNode(nodeAppConf, true)
     val chainId = 0L
     val brid = GtvToBlockchainRidFactory.calculateBlockchainRid(bcConf, node.postchainContext.cryptoSystem)
+
+    val pcEnv = RellPostchainModuleEnvironment(
+        combinedPrinter = Rt_LogPrinter(),
+        copyOutputToPrinter = false,
+        sqlLog = args.sqlLog,
+        dbInitLogLevel = SqlInitLogging.LOG_STEP_COMPLEX,
+    )
+
     withLoggingContext(
         NODE_PUBKEY_TAG to nodeAppConf.pubKey,
         CHAIN_IID_TAG to chainId.toString(),
         BLOCKCHAIN_RID_TAG to brid.toHex()
     ) {
-        withReadWriteConnection(node.postchainContext.storage, chainId) { eContext: EContext ->
-            BlockchainApi.initializeBlockchain(eContext, brid, override = true, bcConf)
+        RellPostchainModuleEnvironment.set(pcEnv) {
+            withReadWriteConnection(node.postchainContext.storage, chainId) { eContext: EContext ->
+                BlockchainApi.initializeBlockchain(eContext, brid, override = true, bcConf)
+            }
+
+            node.startBlockchain(chainId)
+
+            log.info("")
+            log.info("POSTCHAIN APP STARTED")
+            log.info("    REST API port:  ${RestApiConfig.fromAppConfig(nodeAppConf).port}")
+            log.info("    blockchain RID: ${brid.toHex()}")
+            log.info("")
         }
-
-        node.startBlockchain(chainId)
-
-        log.info("")
-        log.info("POSTCHAIN APP STARTED")
-        log.info("    REST API port:  ${RestApiConfig.fromAppConfig(nodeAppConf).port}")
-        log.info("    blockchain RID: ${brid.toHex()}")
-        log.info("")
     }
 }
 
 object RunPostchainApp {
-    fun genBlockchainConfigTemplate(pubKey: ByteArray, sqlLog: Boolean, sqlInitLog: Int = SqlInitLogging.LOG_STEP_COMPLEX): Gtv {
+    fun genBlockchainConfigTemplate(pubKey: ByteArray): Gtv {
+        val template0 = genBlockchainConfigTemplateNoRell(pubKey)
+        val rell = gtv(
+            "version" to gtv(RellVersions.VERSION_STR),
+        )
+        return RellConfigGen.makeConfig(template0, rell)
+    }
+
+    fun genBlockchainConfigTemplateNoRell(pubKey: ByteArray): Gtv {
         return gtv(
-                "blockstrategy" to gtv("name" to gtv("net.postchain.base.BaseBlockBuildingStrategy")),
-                "configurationfactory" to gtv("net.postchain.gtx.GTXBlockchainConfigurationFactory"),
-                "signers" to gtv(listOf(gtv(pubKey))),
-                "gtx" to gtv(
-                        "modules" to gtv(
-                                gtv("net.postchain.rell.module.RellPostchainModuleFactory"),
-                                gtv("net.postchain.gtx.StandardOpsGTXModule")
-                        ),
-                        "rell" to gtv(
-                                "version" to gtv(RellVersions.VERSION_STR),
-                                "dbInitLogLevel" to gtv(sqlInitLog.toLong()),
-                                "sqlLog" to gtv(sqlLog),
-                                "combinedPrinterFactoryClass" to gtv(Rt_RellAppPrinterFactory::class.java.name),
-                                "copyOutputToCombinedPrinter" to gtv(false)
-                        )
-                )
+            "blockstrategy" to gtv("name" to gtv("net.postchain.base.BaseBlockBuildingStrategy")),
+            "configurationfactory" to gtv("net.postchain.gtx.GTXBlockchainConfigurationFactory"),
+            "signers" to gtv(listOf(gtv(pubKey))),
+            "gtx" to gtv(
+                "modules" to gtv(
+                    gtv("net.postchain.rell.module.RellPostchainModuleFactory"),
+                    gtv("net.postchain.gtx.StandardOpsGTXModule"),
+                ),
+            )
         )
     }
 
@@ -130,7 +140,7 @@ class Rt_RellAppPrinterFactory: Rt_PrinterFactory {
 }
 
 @CommandLine.Command(name = "PostchainAppLaunch", description = ["Runs a Rell Postchain app"])
-private class RunPostchainAppArgs: RellBaseCliArgs() {
+class RunPostchainAppArgs: RellBaseCliArgs() {
     @CommandLine.Option(names = ["--node-config"], paramLabel = "NODE_CONFIG_FILE", required = true,
             description = ["Node configuration (.properties)"])
     var nodeConfigFile: String = ""
@@ -140,4 +150,8 @@ private class RunPostchainAppArgs: RellBaseCliArgs() {
 
     @CommandLine.Option(names = ["--sqllog"], description = ["Enable SQL logging"])
     var sqlLog = false
+
+    override fun execute() {
+        main0(this)
+    }
 }

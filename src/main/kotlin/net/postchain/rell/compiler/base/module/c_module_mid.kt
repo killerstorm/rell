@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.module
@@ -63,6 +63,7 @@ class C_MidModule(
     private val files = files.toImmList()
 
     val startPos = header?.pos ?: files.firstOrNull()?.startPos
+    val isTest = header?.test ?: false
 
     fun filePaths() = files.map { it.path }.toImmList()
 

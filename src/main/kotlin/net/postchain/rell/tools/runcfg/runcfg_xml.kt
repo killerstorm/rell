@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.rell.utils.GeneralDir
-import net.postchain.rell.utils.RellCliErr
 import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.cli.RellCliBasicException
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.w3c.dom.Node
@@ -208,7 +208,7 @@ class RellXmlElement(
         val parentPath = parentTreePath()
         val path = if (parentPath.isEmpty()) "document root" else "path: " + parentPath.joinToString(" -> ")
         val fullMsg = "$file: element '$tag': $msg [$path]"
-        throw RellCliErr(fullMsg)
+        throw RellCliBasicException(fullMsg)
     }
 
     fun printTree(lev: Int = 0) {

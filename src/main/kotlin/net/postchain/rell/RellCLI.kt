@@ -1,48 +1,42 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell
 
-import net.postchain.StorageBuilder
-import net.postchain.config.app.AppConfig
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.core.C_AtAttrShadowing
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
-import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
-import net.postchain.rell.lib.test.UnitTestBlockRunner
+import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
+import net.postchain.rell.module.RellPostchainModuleEnvironment
+import net.postchain.rell.repl.ReplInputChannelFactory
+import net.postchain.rell.repl.ReplOutputChannelFactory
 import net.postchain.rell.repl.ReplShell
 import net.postchain.rell.runtime.*
-import net.postchain.rell.runtime.utils.Rt_SqlManager
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.*
 import net.postchain.rell.utils.*
+import net.postchain.rell.utils.cli.*
 import picocli.CommandLine
-import java.sql.DriverManager
-import java.util.Properties
-import kotlin.system.exitProcess
+import java.util.*
 
 @Suppress("unused")
 private val INIT = run {
     RellCliLogUtils.initLogging()
 }
 
-private val SQL_MAPPER = Rt_ChainSqlMapping(0)
-
 fun main(args: Array<String>) {
-    RellCliUtils.runCli(args, RellCliArgs()) {
-        main0(it)
-    }
+    RellCliUtils.runCli(args, RellInterpreterCliArgs())
 }
 
-private fun main0(args: RellCliArgs) {
+private fun main0(args: RellInterpreterCliArgs) {
     if (args.version) {
         val ver = Rt_RellVersion.getInstance()?.buildDescriptor ?: "Version unknown"
         println(ver)
-        exitProcess(0)
+        throw RellCliExitException(0)
     }
 
     val extraOptions = args.extraOptions.map { parseExtraOptionCli(it) }.toImmList()
@@ -50,18 +44,18 @@ private fun main0(args: RellCliArgs) {
     val argsEx = RellCliArgsEx(args, compilerOptions)
 
     if (args.dbUrl != null && args.dbProperties != null) {
-        throw RellCliErr("Both database URL and properties specified")
+        throw RellCliBasicException("Both database URL and properties specified")
     }
 
     val dbSpecified = args.dbUrl != null || args.dbProperties != null
 
     if (args.resetdb && !dbSpecified) {
-        throw RellCliErr("Database connection URL not specified")
+        throw RellCliBasicException("Database connection URL not specified")
     }
 
     val testModules = args.test
     if (testModules != null && args.module != null) {
-        throw RellCliErr("Main module must not be specified when $ARG_TEST argument is used")
+        throw RellCliBasicException("Main module must not be specified when $ARG_TEST argument is used")
     }
 
     if (args.resetdb && args.module == null && args.batch && testModules == null) {
@@ -106,12 +100,12 @@ private fun getCompilerOptions(extraOpts: List<ExtraOption>): C_CompilerOptions 
 }
 
 private fun runApp(
-        globalCtx: Rt_GlobalContext,
-        args: RellCliArgs,
-        dbSpecified: Boolean,
-        entryModule: R_ModuleName?,
-        entryRoutine: R_QualifiedName?,
-        app: R_App
+    globalCtx: Rt_GlobalContext,
+    args: RellInterpreterCliArgs,
+    dbSpecified: Boolean,
+    entryModule: R_ModuleName?,
+    entryRoutine: R_QualifiedName?,
+    app: R_App
 ) {
     val launcher = getAppLauncher(args, app, entryModule, entryRoutine)
     if (launcher == null && !args.resetdb) {
@@ -121,7 +115,7 @@ private fun runApp(
     val appCtx = createRegularAppContext(globalCtx, app)
 
     runWithSqlManager(args, true) { sqlMgr ->
-        val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(app, SQL_MAPPER)
+        val sqlCtx = RellCliUtils.createSqlContext(app)
         if (dbSpecified) {
             initDatabase(appCtx, args, sqlMgr, sqlCtx)
         }
@@ -139,7 +133,7 @@ private fun runMultiModuleTests(args: RellCliArgsEx, modules: List<String>) {
     val rModules = if (modules.isEmpty()) {
         listOf(R_ModuleName.EMPTY)
     } else {
-        modules.map { R_ModuleName.ofOpt(it) ?: throw RellCliErr("Invalid module name: '$it'") }
+        modules.map { R_ModuleName.ofOpt(it) ?: throw RellCliBasicException("Invalid module name: '$it'") }
     }
 
     val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
@@ -151,27 +145,34 @@ private fun runMultiModuleTests(args: RellCliArgsEx, modules: List<String>) {
 }
 
 private fun runTests(args: RellCliArgsEx, app: R_App, fns: List<R_FunctionDefinition>) {
+    val cliEnv: RellCliEnv = MainRellCliEnv
+
     val globalCtx = createGlobalCtx(args)
     val chainCtx = RellCliUtils.createChainContext()
+    val sqlCtx = RellCliUtils.createSqlContext(app)
 
-    val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(app, SQL_MAPPER)
-
+    val blockRunnerConfig = createBlockRunnerCfg(args)
     val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
-    val keyPair = UnitTestBlockRunner.getTestKeyPair()
+    val blockRunnerStrategy = RellCliUtils.createBlockRunnerStrategy(sourceDir, app, immMapOf())
 
-    val blockRunnerModules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
-    val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, blockRunnerModules, keyPair)
+    val allOk = runWithSqlManager(args.raw, true) { sqlMgr ->
+        val testCtx = TestRunnerContext(
+            app,
+            cliEnv,
+            sqlCtx,
+            sqlMgr,
+            globalCtx,
+            chainCtx,
+            blockRunnerConfig,
+            blockRunnerStrategy,
+        )
 
-    var allOk = false
-
-    runWithSqlManager(args.raw, true) { sqlMgr ->
-        val testCtx = TestRunnerContext(sqlCtx, sqlMgr, globalCtx, chainCtx, blockRunnerStrategy, app)
-        val cases = fns.map { TestRunnerCase(null, it) }
-        allOk = TestRunner.runTests(testCtx, cases)
+        val cases = fns.map { TestCase(null, it) }
+        TestRunner.runTests(testCtx, cases)
     }
 
     if (!allOk) {
-        exitProcess(1)
+        throw RellCliExitException(1)
     }
 }
 
@@ -185,11 +186,23 @@ private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Bool
 
         val globalCtx = createGlobalCtx(args)
         val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
-        ReplShell.start(sourceDir, moduleName, globalCtx, sqlMgr, useSql, args.compilerOptions)
+        val testRunnerCfg = Rt_BlockRunnerConfig()
+
+        ReplShell.start(
+            sourceDir,
+            moduleName,
+            globalCtx,
+            sqlMgr,
+            args.compilerOptions,
+            testRunnerCfg,
+            ReplInputChannelFactory.DEFAULT,
+            ReplOutputChannelFactory.DEFAULT,
+            historyEnabled = !args.raw.noHistory,
+        )
     }
 }
 
-private fun resetDatabase(args: RellCliArgs) {
+private fun resetDatabase(args: RellInterpreterCliArgs) {
     runWithSqlManager(args, true) { sqlMgr ->
         sqlMgr.transaction { sqlExec ->
             SqlUtils.dropAll(sqlExec, true)
@@ -199,15 +212,15 @@ private fun resetDatabase(args: RellCliArgs) {
 }
 
 private fun initDatabase(
-        appCtx: Rt_AppContext,
-        args: RellCliArgs,
-        sqlMgr: SqlManager,
-        sqlCtx: Rt_SqlContext
+    appCtx: Rt_AppContext,
+    args: RellInterpreterCliArgs,
+    sqlMgr: SqlManager,
+    sqlCtx: Rt_SqlContext
 ) {
     SqlUtils.initDatabase(appCtx, sqlCtx, sqlMgr, args.resetdb, args.sqlInitLog)
 }
 
-private fun parseEntryPoint(args: RellCliArgs): Pair<R_ModuleName?, R_QualifiedName?> {
+private fun parseEntryPoint(args: RellInterpreterCliArgs): Pair<R_ModuleName?, R_QualifiedName?> {
     val m = args.module
     val e = args.entry
 
@@ -216,72 +229,36 @@ private fun parseEntryPoint(args: RellCliArgs): Pair<R_ModuleName?, R_QualifiedN
     }
 
     val moduleName = R_ModuleName.ofOpt(m)
-    if (moduleName == null) throw RellCliErr("Invalid module name: '$m'")
+    if (moduleName == null) throw RellCliBasicException("Invalid module name: '$m'")
 
     var routineName: R_QualifiedName? = null
     if (e != null) {
         routineName = R_QualifiedName.ofOpt(e)
-        if (routineName == null || routineName.isEmpty()) throw RellCliErr("Invalid entry point name: '$e'")
+        if (routineName == null || routineName.isEmpty()) throw RellCliBasicException("Invalid entry point name: '$e'")
     }
 
     return Pair(moduleName, routineName)
 }
 
 private fun getAppLauncher(
-        args: RellCliArgs,
-        app: R_App,
-        entryModule: R_ModuleName?,
-        entryRoutine: R_QualifiedName?
+    args: RellInterpreterCliArgs,
+    app: R_App,
+    entryModule: R_ModuleName?,
+    entryRoutine: R_QualifiedName?
 ): RellAppLauncher? {
     if (entryModule == null || entryRoutine == null) return null
     val entryPoint = findEntryPoint(app, entryModule, entryRoutine)
     return RellAppLauncher(args, entryPoint)
 }
 
-private fun runWithSqlManager(args: RellCliArgs, logSqlErrors: Boolean, code: (SqlManager) -> Unit) {
-    val dbUrl = args.dbUrl
-    val dbProperties = args.dbProperties
-
-    if (dbUrl != null) {
-        val schema = SqlUtils.extractDatabaseSchema(dbUrl)
-        val jdbcProperties = Properties()
-        jdbcProperties.setProperty("binaryTransfer", "false")
-        DriverManager.getConnection(dbUrl, jdbcProperties).use { con ->
-            con.autoCommit = true
-            val sqlMgr = ConnectionSqlManager(con, args.sqlLog)
-            runWithSqlManager(schema, sqlMgr, logSqlErrors, code)
-        }
-    } else if (dbProperties != null) {
-        val appCfg = AppConfig.fromPropertiesFile(dbProperties)
-        val storage = StorageBuilder.buildStorage(appCfg)
-        val sqlMgr = PostchainStorageSqlManager(storage, args.sqlLog)
-        runWithSqlManager(appCfg.databaseSchema, sqlMgr, logSqlErrors, code)
-    } else {
-        code(NoConnSqlManager)
-    }
-}
-
-private fun runWithSqlManager(
-        schema: String?,
-        sqlMgr: SqlManager,
-        logSqlErrors: Boolean,
-        code: (SqlManager) -> Unit
-) {
-    val sqlMgr2 = Rt_SqlManager(sqlMgr, logSqlErrors)
-    if (schema != null) {
-        sqlMgr2.transaction { sqlExec ->
-            sqlExec.connection { con ->
-                SqlUtils.prepareSchema(con, schema)
-            }
-        }
-    }
-    code(sqlMgr2)
+private fun <T> runWithSqlManager(args: RellInterpreterCliArgs, sqlErrorLog: Boolean, code: (SqlManager) -> T): T {
+    return RellCliUtils.runWithSqlManager(args.dbUrl, args.dbProperties, args.sqlLog, sqlErrorLog, code)
 }
 
 private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_QualifiedName): RellEntryPoint {
     val module = app.modules.find { it.name == moduleName }
     if (module == null) {
-        throw RellCliErr("Module not found: '$moduleName'")
+        throw RellCliBasicException("Module not found: '$moduleName'")
     }
 
     val name = routineName.str()
@@ -310,9 +287,9 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
     if (f != null) eps.add(RellEntryPoint_Function(f))
 
     if (eps.isEmpty()) {
-        throw RellCliErr("Found no operation, query or function with name '$name'")
+        throw RellCliBasicException("Found no operation, query or function with name '$name'")
     } else if (eps.size > 1) {
-        throw RellCliErr("Found more than one definition with name '$name': ${eps.joinToString { it.kind }}")
+        throw RellCliBasicException("Found more than one definition with name '$name': ${eps.joinToString { it.kind }}")
     }
 
     val ep = eps[0]
@@ -328,7 +305,6 @@ private fun createRegularAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt
             repl = false,
             test = false,
             replOut = null,
-            blockRunnerStrategy = Rt_UnsupportedBlockRunnerStrategy
     )
 }
 
@@ -336,8 +312,14 @@ private fun createGlobalCtx(args: RellCliArgsEx): Rt_GlobalContext {
     return RellCliUtils.createGlobalContext(
         args.compilerOptions,
         typeCheck = args.raw.typeCheck,
-        runXmlTest = false,
+    )
+}
+
+private fun createBlockRunnerCfg(args: RellCliArgsEx): Rt_BlockRunnerConfig {
+    return Rt_BlockRunnerConfig(
+        forceTypeCheck = args.raw.typeCheck,
         sqlLog = args.raw.sqlLog,
+        dbInitLogLevel = RellPostchainModuleEnvironment.DEFAULT_DB_INIT_LOG_LEVEL,
     )
 }
 
@@ -345,7 +327,7 @@ private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: 
     val params = entryPoint.routine().params()
     if (args.size != params.size) {
         System.err.println("Wrong number of arguments: ${args.size} instead of ${params.size}")
-        exitProcess(1)
+        throw RellCliExitException(1)
     }
     return args.withIndex().map { (idx, arg) -> parseArg(gtvCtx, params[idx], arg, json) }
 }
@@ -355,7 +337,7 @@ private fun parseArg(gtvCtx: GtvToRtContext, param: R_Param, arg: String, json: 
 
     if (json) {
         if (!type.completeFlags().gtv.fromGtv) {
-            throw RellCliErr("Parameter '${param.name}' of type ${type.strCode()} cannot be converted from Gtv")
+            throw RellCliBasicException("Parameter '${param.name}' of type ${type.strCode()} cannot be converted from Gtv")
         }
         val gtv = PostchainUtils.jsonToGtv(arg)
         return type.gtvToRt(gtvCtx, gtv)
@@ -364,9 +346,9 @@ private fun parseArg(gtvCtx: GtvToRtContext, param: R_Param, arg: String, json: 
     try {
         return type.fromCli(arg)
     } catch (e: UnsupportedOperationException) {
-        throw RellCliErr("Parameter '${param.name}' has unsupported type: ${type.strCode()}")
+        throw RellCliBasicException("Parameter '${param.name}' has unsupported type: ${type.strCode()}")
     } catch (e: Exception) {
-        throw RellCliErr("Invalid value for type ${type.strCode()}: '$arg'")
+        throw RellCliBasicException("Invalid value for type ${type.strCode()}: '$arg'")
     }
 }
 
@@ -374,7 +356,7 @@ private fun resultToString(res: Rt_Value, json: Boolean): String {
     return if (json) {
         val type = res.type()
         if (!type.completeFlags().gtv.toGtv) {
-            throw RellCliErr("Result of type '${type.strCode()}' cannot be converted to Gtv")
+            throw RellCliBasicException("Result of type '${type.strCode()}' cannot be converted to Gtv")
         }
         val gtv = type.rtToGtv(res, true)
         PostchainUtils.gtvToJson(gtv)
@@ -387,7 +369,7 @@ private fun parseExtraOptionCli(s: String): ExtraOption {
     return try {
         parseExtraOption(s)
     } catch (e: Throwable) {
-        throw RellCliErr("Invalid extra option value: '$s'")
+        throw RellCliBasicException("Invalid extra option value: '$s'")
     }
 }
 
@@ -429,8 +411,8 @@ private object ExtraOption_HiddenLib: ExtraOption() {
 }
 
 private class RellAppLauncher(
-        private val args: RellCliArgs,
-        private val entryPoint: RellEntryPoint
+    private val args: RellInterpreterCliArgs,
+    private val entryPoint: RellEntryPoint
 ) {
     fun launch(appCtx: Rt_AppContext, sqlMgr: SqlManager, sqlCtx: Rt_SqlContext) {
         val opCtx = entryPoint.opContext()
@@ -457,7 +439,7 @@ private class RellAppLauncher(
         } catch (e: Rt_Exception) {
             val msg = Rt_Utils.appendStackTrace("ERROR ${e.message}", e.info.stack)
             System.err.println(msg)
-            exitProcess(1)
+            throw RellCliExitException(1)
         }
         return res
     }
@@ -513,10 +495,10 @@ private class RellEntryPoint_Query(private val q: R_QueryDefinition): RellEntryP
 
 private const val ARG_TEST = "--test"
 
-private class RellCliArgsEx(val raw: RellCliArgs, val compilerOptions: C_CompilerOptions)
+private class RellCliArgsEx(val raw: RellInterpreterCliArgs, val compilerOptions: C_CompilerOptions)
 
 @CommandLine.Command(name = "rell", description = ["Executes a rell program"])
-private class RellCliArgs: RellBaseCliArgs() {
+class RellInterpreterCliArgs: RellBaseCliArgs() {
     @CommandLine.Option(names = ["--db-url"], paramLabel = "DB_URL",
             description = ["Database JDBC URL, e. g. jdbc:postgresql://localhost/relltestdb?user=relltestuser&password=1234"])
     var dbUrl: String? = null
@@ -559,6 +541,9 @@ private class RellCliArgs: RellBaseCliArgs() {
     @CommandLine.Option(names = ["--batch"], description = ["Run in non-interactive mode (do not start shell)"])
     var batch = false
 
+    @CommandLine.Option(names = ["--no-history"], description = ["Disable REPL command history"])
+    var noHistory = false
+
     @CommandLine.Option(names = ["-X"], paramLabel = "OPTION", description = ["Extra compiler/interpreter option"])
     var extraOptions: List<String> = ArrayList()
 
@@ -571,4 +556,8 @@ private class RellCliArgs: RellBaseCliArgs() {
 
     @CommandLine.Parameters(index = "2..*", paramLabel = "ARGS", description = ["Entry point arguments"])
     var args: List<String>? = null
+
+    override fun execute() {
+        main0(this)
+    }
 }
