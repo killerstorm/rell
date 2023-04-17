@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -8,7 +8,7 @@ import net.postchain.rell.compiler.ast.S_AttrHeader
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.utils.C_Errors
-import net.postchain.rell.compiler.base.utils.C_LateInit
+import net.postchain.rell.compiler.base.utils.C_LateGetter
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.tools.api.*
@@ -153,7 +153,7 @@ class C_SysAttribute(
 
     fun compile(index: Int, persistent: Boolean): R_Attribute {
         val defaultValue = if (expr == null) null else R_DefaultValue(expr, false)
-        val exprGetter = if (defaultValue == null) null else C_LateInit(C_CompilerPass.EXPRESSIONS, defaultValue).getter
+        val exprGetter = if (defaultValue == null) null else C_LateGetter.const(defaultValue)
 
         val keyIndexKind = if (isKey) R_KeyIndexKind.KEY else null
         val ideKind = C_AttrUtils.getIdeSymbolKind(persistent, mutable, keyIndexKind)

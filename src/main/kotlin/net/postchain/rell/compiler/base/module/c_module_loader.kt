@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.module
@@ -7,7 +7,6 @@ package net.postchain.rell.compiler.base.module
 import net.postchain.rell.compiler.base.core.C_MessageContext
 import net.postchain.rell.compiler.base.core.C_SymbolContextProvider
 import net.postchain.rell.compiler.base.utils.C_CommonError
-import net.postchain.rell.compiler.base.utils.C_Errors
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.tools.api.IdeFilePath
@@ -37,8 +36,6 @@ class C_ModuleLoader(
     val readerCtx = C_ModuleReaderContext(S_AppContext(msgCtx, symCtxProvider, C_ImportModuleLoaderImpl()))
     private val moduleReader = C_ModuleReader(readerCtx, sourceDir)
 
-    private val testLoader = C_TestModuleLoader(moduleReader, this::loadTestModule)
-
     private val loadedModules = mutableMapOf<R_ModuleName, C_ModuleState>()
     private val moduleQueue = queueOf<C_ModuleState>()
     private val selectedModules = mutableSetOf<R_ModuleName>()
@@ -54,7 +51,13 @@ class C_ModuleLoader(
         return midModules.toImmList()
     }
 
+    fun loadAllModules() {
+        discoverModulesTree(R_ModuleName.EMPTY, false)
+        loadQueuedModules()
+    }
+
     fun loadModule(name: R_ModuleName): Boolean {
+        check(!loadingTestDependencies)
         return loadModule0(name, true)
     }
 
@@ -84,20 +87,15 @@ class C_ModuleLoader(
         moduleQueue.add(state)
     }
 
-    fun loadTestModules(rootModule: R_ModuleName) {
+    fun loadTestModule(moduleName: R_ModuleName, subModules: Boolean) {
         check(!done)
         loadingTestDependencies = true
-        testLoader.compileTestModules(rootModule)
-        loadQueuedModules()
-    }
 
-    private fun loadTestModule(source: C_ModuleSource) {
-        val moduleName = source.moduleName
-        val header = source.compileHeader()
-
-        if (header != null && header.test) {
-            selectedModules.add(moduleName)
-            addModule(moduleName, source)
+        if (subModules) {
+            discoverModulesTree(moduleName, true)
+            loadQueuedModules()
+        } else {
+            loadModule0(moduleName, true)
         }
     }
 
@@ -146,6 +144,61 @@ class C_ModuleLoader(
         } else {
             val state = loadedModules[name]
             if (state == null) null else C_ModuleInfo(state.idePath)
+        }
+    }
+
+    private fun discoverModulesTree(rootModule: R_ModuleName, test: Boolean) {
+        val handler = C_ModulesTreeHandler(rootModule, test)
+
+        val source = moduleReader.readModuleSource(rootModule)
+        if (source != null) {
+            handler.handle(source)
+        }
+
+        when (source) {
+            is C_FileModuleSource -> {}
+            null, is C_DirModuleSource -> {
+                discoverModulesTree0(rootModule, handler)
+            }
+        }
+    }
+
+    private fun discoverModulesTree0(moduleName: R_ModuleName, handler: C_ModulesTreeHandler) {
+        val fileSources = moduleReader.fileSubModules(moduleName)
+
+        for (source in fileSources) {
+            handler.handle(source)
+        }
+
+        val dirSubModules = moduleReader.dirSubModules(moduleName)
+
+        for (subModuleName in dirSubModules) {
+            val source = moduleReader.readModuleSource(subModuleName)
+            if (source != null) {
+                handler.handle(source)
+            }
+            discoverModulesTree0(subModuleName, handler)
+        }
+    }
+
+    private inner class C_ModulesTreeHandler(
+        private val rootModule: R_ModuleName,
+        private val targetIsTest: Boolean,
+    ) {
+        fun handle(source: C_ModuleSource) {
+            val name = source.moduleName
+            val isTest = source.compileHeader()?.test == true
+
+            val match = isTest == targetIsTest
+            if (match) {
+                selectedModules.add(name)
+            }
+
+            if (match || name == rootModule) {
+                if (!isModuleLoaded(name)) {
+                    addModule(name, source)
+                }
+            }
         }
     }
 
@@ -231,55 +284,5 @@ class C_ModuleLoader(
                 isSelected = isSelected,
             )
         }
-    }
-}
-
-private class C_TestModuleLoader(
-        private val moduleReader: C_ModuleReader,
-        private val callback: (C_ModuleSource) -> Unit
-) {
-    fun compileTestModules(rootModule: R_ModuleName) {
-        val source = moduleReader.readModuleSource(rootModule)
-
-        if (source == null) {
-            if (!moduleReader.dirExists(rootModule)) {
-                throw C_CommonError(C_Errors.msgModuleNotFound(rootModule))
-            }
-            compileTestModulesTree(rootModule)
-            return
-        }
-
-        compileTestModule(source)
-
-        return when (source) {
-            is C_FileModuleSource -> {
-                // Do nothing.
-            }
-            is C_DirModuleSource -> {
-                compileTestModulesTree(rootModule)
-            }
-        }
-    }
-
-    private fun compileTestModulesTree(moduleName: R_ModuleName) {
-        val fileSources = moduleReader.fileSubModules(moduleName)
-
-        for (source in fileSources) {
-            compileTestModule(source)
-        }
-
-        val dirSubModules = moduleReader.dirSubModules(moduleName)
-
-        for (subModuleName in dirSubModules) {
-            val source = moduleReader.readModuleSource(subModuleName)
-            if (source != null) {
-                compileTestModule(source)
-            }
-            compileTestModulesTree(subModuleName)
-        }
-    }
-
-    private fun compileTestModule(source: C_ModuleSource) {
-        callback(source)
     }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.def
@@ -34,7 +34,7 @@ class C_AbstractUserGlobalFunction(
 ): C_UserGlobalFunction(rFunction) {
     val descriptor = C_AbstractFunctionDescriptor(fnPos, rFunction, hasDefaultBody, headerGetter)
 
-    private val rOverrideLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBase())
+    private val rOverrideLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBase(rFunction.defName))
 
     override fun getAbstractDescriptor() = descriptor
 

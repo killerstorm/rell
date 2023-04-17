@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model
@@ -209,7 +209,7 @@ class R_FunctionBody(
     }
 }
 
-class R_FunctionBase {
+class R_FunctionBase(private val defName: R_DefinitionName) {
     private val headerLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionHeader.ERROR)
     private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_FunctionBody.ERROR)
 
@@ -246,6 +246,8 @@ class R_FunctionBase {
         val retVal = if (res is R_StatementResult_Return) res.value else null
         return retVal ?: Rt_UnitValue
     }
+
+    override fun toString() = defName.appLevelName
 
     companion object {
         fun createCallFrame(callCtx: Rt_CallContext, targetFrame: R_CallFrame): Rt_CallFrame {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
@@ -9,11 +9,9 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvNull
 import net.postchain.gtv.GtvType
-import net.postchain.gtv.gtvml.GtvMLParser
 import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
-import java.math.BigInteger
 
 enum class Rcfg_Gtv_ArrayMerge {
     REPLACE,

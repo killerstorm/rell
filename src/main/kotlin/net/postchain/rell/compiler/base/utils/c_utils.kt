@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.utils
@@ -612,6 +612,14 @@ sealed class C_LateGetter<T> {
     abstract fun get(): T
 
     fun <R> transform(transformer: (T) -> R): C_LateGetter<R> = C_TransformingLateGetter(this, transformer)
+
+    companion object {
+        fun <T> const(value: T): C_LateGetter<T> = C_ConstLateGetter(value)
+    }
+}
+
+private class C_ConstLateGetter<T>(private val value: T): C_LateGetter<T>() {
+    override fun get() = value
 }
 
 private class C_DirectLateGetter<T>(private val init: C_LateInit<T>): C_LateGetter<T>() {

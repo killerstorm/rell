@@ -1,13 +1,14 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools
 
 import net.postchain.rell.compiler.parser.S_Grammar
-import net.postchain.rell.utils.RellCliLogUtils
-import net.postchain.rell.utils.RellCliUtils
 import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.cli.RellCliArgs
+import net.postchain.rell.utils.cli.RellCliLogUtils
+import net.postchain.rell.utils.cli.RellCliUtils
 import picocli.CommandLine
 import java.io.File
 import java.nio.file.Files
@@ -45,12 +46,10 @@ private val MIGRATION_MAP = mapOf(
 
 fun main(args: Array<String>) {
     RellCliLogUtils.initLogging()
-    RellCliUtils.runCli(args, MigratorArgs()) {
-        main0(it)
-    }
+    RellCliUtils.runCli(args, RellMigratorCliArgs())
 }
 
-private fun main0(args: MigratorArgs) {
+private fun main0(args: RellMigratorCliArgs) {
     val dir = RellCliUtils.checkDir(args.directory)
 
     var totalFileCount = 0
@@ -122,10 +121,14 @@ private class TokenReplace(val pos: Int, val oldStr: String, val newStr: String)
         name = "migrator",
         description = ["Replaces deprecated keywords and names in all .rell files in the directory (recursively)"]
 )
-private class MigratorArgs {
+private class RellMigratorCliArgs: RellCliArgs() {
     @CommandLine.Option(names = ["--dry-run"], description = ["Do not modify files, only print replace counts"])
     var dryRun = false
 
     @CommandLine.Parameters(index = "0", paramLabel = "DIRECTORY", description = ["Directory"])
     var directory: String = ""
+
+    override fun execute() {
+        main0(this)
+    }
 }

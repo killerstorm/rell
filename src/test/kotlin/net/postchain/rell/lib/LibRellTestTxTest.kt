@@ -376,7 +376,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chk("rell.test.nop(x'beef')", """op[nop("BEEF")]""")
 
         repl.chk("rell.test.nop()", "RES:op[nop(0)]")
-        repl.chk("rell.test.nop()", "RES:op[nop(0)]")
+        repl.chk("rell.test.nop()", "RES:op[nop(1)]")
     }
 
     @Test fun testNopRun() {
@@ -397,6 +397,14 @@ class LibRellTestTxTest: BaseRellTest(false) {
         repl.chk("rell.test.tx(foo(321), rell.test.op('nop', 'Hello'.to_gtv())).run();", "OUT:321", "null")
         repl.chk("rell.test.tx(foo(321), rell.test.op('nop', x'beef'.to_gtv())).run();", "OUT:321", "null")
         repl.chk("rell.test.tx(foo(321), rell.test.op('nop', (5).to_gtv(), (7).to_gtv())).run();", err)
+    }
+
+    @Test fun testNopRunRepeat() {
+        file("module.rell", "operation foo(x: integer) { print(x); }")
+        initTxChain()
+        repl.chk("rell.test.tx(rell.test.nop(), foo(123)).run()", "OUT:123", "null")
+        repl.chk("rell.test.tx(rell.test.nop(), foo(123)).run()", "OUT:123", "null")
+        repl.chk("rell.test.tx(rell.test.nop(), foo(123)).run()", "OUT:123", "null")
     }
 
     @Test fun testRunMustFail() {

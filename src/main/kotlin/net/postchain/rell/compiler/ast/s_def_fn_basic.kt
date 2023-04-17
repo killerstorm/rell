@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -185,7 +185,7 @@ private class C_FunctionCompiler_Regular(base: C_FunctionCompilerBase): C_Functi
 
         val cDefBaseEx = defBaseEx(IdeSymbolKind.DEF_FUNCTION)
         val defBase = cDefBaseEx.rBase(defCtx.initFrameGetter)
-        val rFnBase = R_FunctionBase()
+        val rFnBase = R_FunctionBase(defBase.defName)
         val rFn = R_FunctionDefinition(defBase, rFnBase)
 
         val cFn = C_RegularUserGlobalFunction(rFn, null)
@@ -217,7 +217,7 @@ private class C_FunctionCompiler_Abstract(base: C_FunctionCompilerBase): C_Funct
 
         val cDefBaseEx = defBaseEx(IdeSymbolKind.DEF_FUNCTION_ABSTRACT)
         val defBase = cDefBaseEx.rBase(defCtx.initFrameGetter)
-        val rFnBase = R_FunctionBase()
+        val rFnBase = R_FunctionBase(defBase.defName)
         val rFn = R_FunctionDefinition(defBase, rFnBase)
 
         val cFn = C_AbstractUserGlobalFunction(fnPos, rFn, sFn.body != null, rFnBase)
@@ -246,7 +246,7 @@ private class C_FunctionCompiler_Override(base: C_FunctionCompilerBase): C_Funct
             defCtx.msgCtx.error(fnPos, "fn:override:repl", "Cannot override a function in REPL")
         }
 
-        val rFnBase = R_FunctionBase()
+        val rFnBase = R_FunctionBase(defCtx.defName)
         val descriptor = C_OverrideFunctionDescriptor(fnPos, rFnBase)
         defCtx.mntCtx.fileCtx.addOverrideFunction(descriptor)
 
@@ -371,7 +371,7 @@ private class C_FunctionCompiler_Extendable(base: C_FunctionCompilerBase): C_Fun
 
         val cDefBaseEx = defBaseEx(IdeSymbolKind.DEF_FUNCTION_EXTENDABLE)
         val defBase = cDefBaseEx.rBase(defCtx.initFrameGetter)
-        val rFnBase = R_FunctionBase()
+        val rFnBase = R_FunctionBase(defBase.defName)
         val rFn = R_FunctionDefinition(defBase, rFnBase)
 
         val baseExt = if (sFn.body == null) null else R_FunctionExtension(rFnBase)
@@ -416,7 +416,7 @@ private class C_FunctionCompiler_Extend(
 
         val cDefBaseEx = defBaseEx(IdeSymbolKind.DEF_FUNCTION_EXTEND)
         val defBase = cDefBaseEx.rBase(defCtx.initFrameGetter)
-        val rFnBase = R_FunctionBase()
+        val rFnBase = R_FunctionBase(defBase.defName)
         val rFn = R_FunctionDefinition(defBase, rFnBase)
 
         val cFn = C_RegularUserGlobalFunction(rFn, null)

@@ -18,14 +18,19 @@ import net.postchain.gtx.GTXBlockchainConfigurationFactory
 import net.postchain.gtx.GtxBuilder
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.compiler.base.utils.toCodeMsg
 import net.postchain.rell.model.*
+import net.postchain.rell.module.RellPostchainModuleApp
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
-import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.tools.RunPostchainApp
-import net.postchain.rell.utils.*
+import net.postchain.rell.utils.BytesKeyPair
+import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.cli.RellCliCompileConfig
+import net.postchain.rell.utils.cli.RellCliException
+import net.postchain.rell.utils.cli.RellCliInternalApi
+import net.postchain.rell.utils.immListOf
+import net.postchain.rell.utils.toImmList
 import java.sql.Connection
 
 object UnitTestBlockRunner {
@@ -37,19 +42,17 @@ object UnitTestBlockRunner {
 
     fun runBlock(ctx: Rt_CallContext, block: Rt_TestBlockValue) {
         val strategy = ctx.appCtx.blockRunnerStrategy
-
-        val gtvConfig = strategy.createGtvConfig()
+        val gtvConfig = strategy.getGtvConfig()
         val bcData = GtvObjectMapper.fromGtv(gtvConfig, BlockchainConfigurationData::class)
-
-        val blockRunnerCtx = Rt_Utils.checkNotNull(ctx.globalCtx.testBlockRunnerCtx) {
-            "block.run:no_text_ctx" toCodeMsg "Block execution not allowed"
-        }
 
         val bcCtx = getBlockchainContext(ctx)
         val bcConfigFactory: BlockchainConfigurationFactory = GTXBlockchainConfigurationFactory()
         val sigMaker = makeSigMaker(strategy)
 
-        val pcEnv = blockRunnerCtx.makePostchainModuleEnvironment(ctx.globalCtx)
+        val blockRunnerCfg = ctx.appCtx.blockRunnerConfig
+        val txContextFactory = Rt_UnitTestTxContextFactory()
+        val precompiledApp = strategy.getPrecompiledApp()
+        val pcEnv = blockRunnerCfg.makePostchainModuleEnvironment(ctx.globalCtx, txContextFactory, precompiledApp)
 
         try {
             RellPostchainModuleEnvironment.set(pcEnv) {
@@ -62,7 +65,8 @@ object UnitTestBlockRunner {
                 }
             }
         } finally {
-            blockRunnerCtx.commitEvents()
+            val events = txContextFactory.getEvents()
+            ctx.exeCtx.emittedEvents = events
         }
     }
 
@@ -143,13 +147,6 @@ object UnitTestBlockRunner {
         return BaseBlockchainContext(chainId, bcRid, nodeId, nodeRid)
     }
 
-    fun makeGtvConfig(cliEnv: RellCliEnv, sourceDir: C_SourceDir, modules: List<R_ModuleName>, pubKey: Bytes33): Gtv {
-        val configGen = RellConfigGen.create(cliEnv, sourceDir, modules)
-        val pubKey0 = pubKey.toByteArray()
-        val configTemplate = RunPostchainApp.genBlockchainConfigTemplate(pubKey0, false, SqlInitLogging.LOG_NONE)
-        return configGen.makeConfig(configTemplate)
-    }
-
     private fun createEContext(con: Connection, bcCtx: BlockchainContext): EContext {
         val dbAccess: DatabaseAccess = PostgreSQLDatabaseAccess()
         return BaseEContext(con, bcCtx.chainID, dbAccess)
@@ -160,82 +157,120 @@ object UnitTestBlockRunner {
     }
 }
 
+abstract class Rt_BlockRunnerStrategy {
+    abstract fun getKeyPair(): BytesKeyPair
+    abstract fun getGtvConfig(): Gtv
+    abstract fun getPrecompiledApp(): RellPostchainModuleApp?
+}
+
+class Rt_StaticBlockRunnerStrategy(
+    private val gtvConfig: Gtv,
+    private val keyPair: BytesKeyPair
+): Rt_BlockRunnerStrategy() {
+    override fun getGtvConfig() = gtvConfig
+    override fun getKeyPair() = keyPair
+    override fun getPrecompiledApp() = null
+}
+
+object Rt_UnsupportedBlockRunnerStrategy: Rt_BlockRunnerStrategy() {
+    private const val errMsg = "Block execution not supported"
+    override fun getGtvConfig() = throw Rt_Utils.errNotSupported(errMsg)
+    override fun getKeyPair() = throw Rt_Utils.errNotSupported(errMsg)
+    override fun getPrecompiledApp() = throw Rt_Utils.errNotSupported(errMsg)
+}
+
 class Rt_DynamicBlockRunnerStrategy(
         private val sourceDir: C_SourceDir,
-        modules: List<R_ModuleName>,
         private val keyPair: BytesKeyPair,
+        modules: List<R_ModuleName>?,
+        private val compileConfig: RellCliCompileConfig,
 ): Rt_BlockRunnerStrategy() {
-    private val modules = modules.toImmList()
+    private val modules = modules?.toImmList()
 
-    override fun createGtvConfig(): Gtv {
-        return UnitTestBlockRunner.makeGtvConfig(BlockRunnerRellCliEnv, sourceDir, modules, keyPair.pub)
+    private val lazyConfig: Pair<Gtv, RellPostchainModuleApp> by lazy {
+        try {
+            createConfig()
+        } catch (e: RellCliException) {
+            var msg = "Gtv config generation failed"
+            e.message?.let { msg = "msg: $it" }
+            throw Rt_Exception.common("block_runner", msg)
+        }
     }
 
     override fun getKeyPair() = keyPair
 
-    private object BlockRunnerRellCliEnv: RellCliEnv() {
-        override fun print(msg: String, err: Boolean) {
-            // TODO output the message somewhere
-        }
+    override fun getGtvConfig(): Gtv {
+        return lazyConfig.first
+    }
 
-        override fun exit(status: Int): Nothing {
-            throw Rt_Exception.common("block_runner", "Gtv config generation failed")
-        }
+    override fun getPrecompiledApp(): RellPostchainModuleApp {
+        return lazyConfig.second
+    }
+
+    private fun createConfig(): Pair<Gtv, RellPostchainModuleApp> {
+        val pubKey0 = keyPair.pub.toByteArray()
+        val template = RunPostchainApp.genBlockchainConfigTemplateNoRell(pubKey0)
+        val (rellNode, modApp) = RellCliInternalApi.compileGtvEx(compileConfig, sourceDir, modules)
+        val resNode = RellConfigGen.makeConfig(template, rellNode)
+        return resNode to modApp
     }
 }
 
-class Rt_UnitTestBlockRunnerContext(
+class Rt_BlockRunnerConfig(
     private val wrapCtErrors: Boolean = DEFENV.wrapCtErrors,
     private val wrapRtErrors: Boolean = DEFENV.wrapRtErrors,
     private val forceTypeCheck: Boolean = DEFENV.forceTypeCheck,
     private val sqlLog: Boolean = DEFENV.sqlLog,
     private val dbInitLogLevel: Int = DEFENV.dbInitLogLevel,
 ) {
-    private val txContextFactory: Rt_PostchainTxContextFactory = Rt_UnitTestTxContextFactory()
-
-    private var currentEvents: MutableList<Rt_Value> = mutableListOf()
-    private var lastEvents: List<Rt_Value> = immListOf()
-
-    fun makePostchainModuleEnvironment(globalCtx: Rt_GlobalContext): RellPostchainModuleEnvironment {
+    fun makePostchainModuleEnvironment(
+        globalCtx: Rt_GlobalContext,
+        txContextFactory: Rt_PostchainTxContextFactory,
+        precompiledApp: RellPostchainModuleApp?,
+    ): RellPostchainModuleEnvironment {
         return RellPostchainModuleEnvironment(
             outPrinter = globalCtx.outPrinter,
             logPrinter = globalCtx.logPrinter,
+            combinedPrinter = Rt_LogPrinter(),
+            copyOutputToPrinter = false,
             wrapCtErrors = wrapCtErrors,
             wrapRtErrors = wrapRtErrors,
             forceTypeCheck = forceTypeCheck,
+            dbInitEnabled = false, // Database must be initialized once, at start, when running unit tests.
             dbInitLogLevel = dbInitLogLevel,
             sqlLog = sqlLog,
+            fallbackModules = immListOf(),
+            precompiledApp = precompiledApp,
             txContextFactory = txContextFactory,
         )
     }
 
-    fun commitEvents() {
-        lastEvents = currentEvents.toImmList()
-        currentEvents = mutableListOf()
+    companion object {
+        private val DEFENV = RellPostchainModuleEnvironment.DEFAULT
+
+        val EVENT_TYPE: R_Type = Rt_UnitTestTxContextFactory.EVENT_TUPLE_TYPE
+    }
+}
+
+private class Rt_UnitTestTxContextFactory: Rt_PostchainTxContextFactory() {
+    private val events = mutableListOf<Rt_Value>()
+
+    override fun createTxContext(eContext: TxEContext): Rt_TxContext {
+        return Rt_UnitTestTxContext()
     }
 
-    fun getEvents(): List<Rt_Value> = lastEvents
-
-    private inner class Rt_UnitTestTxContextFactory: Rt_PostchainTxContextFactory() {
-        override fun createTxContext(eContext: TxEContext): Rt_TxContext {
-            return Rt_UnitTestTxContext()
-        }
-    }
+    fun getEvents() = events.toImmList()
 
     private inner class Rt_UnitTestTxContext: Rt_TxContext() {
         override fun emitEvent(type: String, data: Gtv) {
             val rtType = Rt_TextValue(type)
             val rtData = Rt_GtvValue(data)
             val v = Rt_TupleValue(EVENT_TUPLE_TYPE, immListOf(rtType, rtData))
-            currentEvents.add(v)
+            events.add(v)
         }
     }
 
     companion object {
-        private val EVENT_TUPLE_TYPE = R_TupleType.create(R_TextType, R_GtvType)
-
-        val EVENT_TYPE: R_Type = EVENT_TUPLE_TYPE
-
-        private val DEFENV = RellPostchainModuleEnvironment.DEFAULT
+        val EVENT_TUPLE_TYPE = R_TupleType.create(R_TextType, R_GtvType)
     }
 }

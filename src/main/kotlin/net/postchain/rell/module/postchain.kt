@@ -226,7 +226,7 @@ private class RellPostchainModule(
         logPrinter: Rt_Printer,
         private val errorHandler: ErrorHandler,
         val config: RellModuleConfig,
-) : GTXModule {
+): GTXModule {
     private val operationNames = rApp.operations.keys.map { it.str() }.toImmSet()
     private val queryNames = rApp.queries.keys.map { it.str() }.toImmSet()
 
@@ -244,7 +244,6 @@ private class RellPostchainModule(
             repl = false,
             test = false,
             replOut = null,
-            blockRunnerStrategy = Rt_UnsupportedBlockRunnerStrategy,
     )
 
     override fun getOperations(): Set<String> {
@@ -256,6 +255,10 @@ private class RellPostchainModule(
     }
 
     override fun initializeDB(ctx: EContext) {
+        if (!env.dbInitEnabled) {
+            return
+        }
+
         errorHandler.handleError({ "Database initialization failed" }) {
             val heightProvider = Rt_ConstantChainHeightProvider(-1)
             val exeCtx = createExecutionContext(ctx, null, heightProvider)
@@ -340,15 +343,22 @@ private class RellPostchainModule(
     override fun makeBlockBuilderExtensions(): List<BaseBlockBuilderExtension> = immListOf()
 }
 
+class RellPostchainModuleApp(val app: R_App, val compilerOptions: C_CompilerOptions)
+
 class RellPostchainModuleEnvironment(
     val outPrinter: Rt_Printer = Rt_OutPrinter,
     val logPrinter: Rt_Printer = Rt_LogPrinter(),
+    val combinedPrinter: Rt_Printer? = null,
+    val copyOutputToPrinter: Boolean = false,
     val wrapCtErrors: Boolean = true,
     val wrapRtErrors: Boolean = true,
     val forceTypeCheck: Boolean = false,
+    val dbInitEnabled: Boolean = true,
     val dbInitLogLevel: Int = DEFAULT_DB_INIT_LOG_LEVEL,
     val hiddenLib: Boolean = false,
     val sqlLog: Boolean = false,
+    val fallbackModules: List<R_ModuleName> = immListOf(R_ModuleName.EMPTY),
+    val precompiledApp: RellPostchainModuleApp? = null,
     val txContextFactory: Rt_PostchainTxContextFactory = Rt_DefaultPostchainTxContextFactory,
 ) {
     companion object {
@@ -380,14 +390,8 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
         val errorHandler = ErrorHandler(combinedPrinter, env.wrapCtErrors, env.wrapRtErrors)
 
         return errorHandler.handleError({ "Module initialization failed" }) {
-            val sourceCfg = SourceCodeConfig(rellNode)
-            val sourceDir = sourceCfg.dir
-
-            val modules = getModuleNames(rellNode)
-            val compilerOptions = getCompilerOptions(sourceCfg.version)
-            val app = compileApp(sourceDir, modules, compilerOptions, errorHandler, copyOutput)
-
-            val chainCtx = PostchainUtils.createChainContext(config, app, blockchainRID)
+            val modApp = getApp(rellNode, errorHandler, copyOutput)
+            val chainCtx = PostchainUtils.createChainContext(config, modApp.app, blockchainRID)
             val chainDeps = getGtxChainDependencies(config)
 
             val modLogPrinter = getModulePrinter(env.logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
@@ -400,12 +404,12 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
                     sqlLogging = env.sqlLog,
                     typeCheck = typeCheck,
                     dbInitLogLevel = dbInitLogLevel,
-                    compilerOptions = compilerOptions,
+                    compilerOptions = modApp.compilerOptions,
             )
 
             RellPostchainModule(
                     env,
-                    app,
+                    modApp.app,
                     chainCtx,
                     chainDeps,
                     logPrinter = modLogPrinter,
@@ -414,6 +418,23 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
                     config = moduleConfig
             )
         }
+    }
+
+    private fun getApp(
+        rellNode: Map<String, Gtv>,
+        errorHandler: ErrorHandler,
+        copyOutput: Boolean,
+    ): RellPostchainModuleApp {
+        if (env.precompiledApp != null) {
+            return env.precompiledApp
+        }
+
+        val sourceCfg = SourceCodeConfig(rellNode)
+        val sourceDir = sourceCfg.dir
+        val modules = getModuleNames(rellNode)
+        val compilerOptions = getCompilerOptions(sourceCfg.version)
+        val app = compileApp(sourceDir, modules, compilerOptions, errorHandler, copyOutput)
+        return RellPostchainModuleApp(app, compilerOptions)
     }
 
     private fun getCompilerOptions(langVersion: R_LangVersion): C_CompilerOptions {
@@ -428,16 +449,16 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
     private fun getCombinedPrinter(rellNode: Map<String, Gtv>): Pair<Rt_Printer, Boolean> {
         val className = rellNode["combinedPrinterFactoryClass"]?.asString()
         val copyOutput = rellNode["copyOutputToCombinedPrinter"]?.asBoolean() ?: true
-        className ?: return Pair(env.logPrinter, false)
+        className ?: return Pair(env.combinedPrinter ?: env.logPrinter, env.copyOutputToPrinter)
 
-        try {
+        return try {
             val cls = Class.forName(className)
             val factory = cls.newInstance() as Rt_PrinterFactory
             val printer = factory.newPrinter()
-            return Pair(printer, copyOutput)
+            Pair(printer, copyOutput)
         } catch (e: Throwable) {
             logger.error(e) { "Combined printer creation failed" }
-            return Pair(Rt_NopPrinter, false)
+            Pair(Rt_NopPrinter, false)
         }
     }
 
@@ -517,7 +538,7 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
             R_ModuleName.ofOpt(s) ?: throw UserMistake("Invalid module name: '$s'")
         }
 
-        return if (names.isNotEmpty()) names else listOf(R_ModuleName.EMPTY)
+        return names.ifEmpty { env.fallbackModules }
     }
 
     private fun getGtxChainDependencies(data: Gtv): Map<String, ByteArray> {

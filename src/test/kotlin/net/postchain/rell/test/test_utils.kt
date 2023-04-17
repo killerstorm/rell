@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -19,6 +19,7 @@ import net.postchain.rell.model.R_StackPos
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
+import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.SqlConstants
 import net.postchain.rell.sql.SqlExecutor
@@ -26,7 +27,11 @@ import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.tools.api.IdeCodeSnippet
 import net.postchain.rell.tools.api.IdeSnippetMessage
-import net.postchain.rell.utils.*
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.cli.RellCliEnv
+import net.postchain.rell.utils.toImmMap
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.apache.commons.configuration2.builder.FileBasedConfigurationBuilder
 import org.apache.commons.configuration2.builder.fluent.Parameters
@@ -41,6 +46,7 @@ import java.sql.ResultSet
 import java.util.*
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import kotlin.test.assertEquals
 
 fun String.unwrap(): String = this.replace(Regex("\\n\\s*"), "")
 
@@ -49,16 +55,13 @@ class T_App(val rApp: R_App, val messages: List<C_Message>)
 object SqlTestUtils {
     fun createSqlConnection(schema: String? = null): Connection {
         val prop = readDbProperties()
-
-        var url = prop.url
-        if (schema != null) {
-            url += (if ("?" in url) "&" else "?") + "currentSchema=$schema"
-        }
+        val url = getDbUrl0(prop, schema)
 
         val jdbcProperties = Properties()
         jdbcProperties.setProperty("user", prop.user)
         jdbcProperties.setProperty("password", prop.password)
         jdbcProperties.setProperty("binaryTransfer", "false")
+
         val con = DriverManager.getConnection(url, jdbcProperties)
         var resource: AutoCloseable? = con
         try {
@@ -69,6 +72,28 @@ object SqlTestUtils {
         }
 
         return con
+    }
+
+    fun getDbUrl(schema: String? = null): String {
+        val prop = readDbProperties()
+        var url = getDbUrl0(prop, schema)
+        url = appendUrlParam(url, "user", prop.user)
+        url = appendUrlParam(url, "password", prop.password)
+        url = appendUrlParam(url, "binaryTransfer", "false")
+        return url
+    }
+
+    private fun getDbUrl0(props: DbConnProps, schema: String?): String {
+        var url = props.url
+        if (schema != null) {
+            url = appendUrlParam(url, "currentSchema", schema)
+        }
+        return url
+    }
+
+    private fun appendUrlParam(url: String, name: String, value: String): String {
+        val sep = if ("?" in url) "&" else "?"
+        return "$url$sep$name=$value"
     }
 
     private fun readDbProperties(): DbConnProps {
@@ -411,17 +436,30 @@ object TestSnippetsRecorder {
     }
 }
 
-object TestRellCliEnv: RellCliEnv() {
-    override fun print(msg: String, err: Boolean) {
+class TestRellCliEnv: RellCliEnv() {
+    override fun print(msg: String) {
         println(msg)
     }
 
-    override fun exit(status: Int): Nothing {
-        throw TestRellCliEnvExitException()
+    override fun error(msg: String) {
+        println(msg)
     }
 }
 
-class TestRellCliEnvExitException: java.lang.RuntimeException()
+class Rt_TestPrinter: Rt_Printer {
+    private val queue = LinkedList<String>()
+
+    override fun print(str: String) {
+        queue.add(str)
+    }
+
+    fun chk(vararg expected: String) {
+        val expectedList = expected.toList()
+        val actualList = queue.toList()
+        assertEquals(expectedList, actualList)
+        queue.clear()
+    }
+}
 
 class RellTestEval {
     private var wrapping = false

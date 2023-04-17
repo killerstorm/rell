@@ -20,6 +20,8 @@ function test_add_user() {
 
     val user = users[0];
     assert_equals(user.name, 'Bob');
+    assert_equals(user.app, generic.get_app_name());
+    assert_true(user.app in ['A', 'B']);
 
     log('user', user, 'name', user.name, 'app', user.app);
 }

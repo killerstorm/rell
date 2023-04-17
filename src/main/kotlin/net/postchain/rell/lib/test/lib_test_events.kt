@@ -15,7 +15,7 @@ import net.postchain.rell.runtime.Rt_UnitValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.immListOf
 
-private val EVENT_TYPE = Rt_UnitTestBlockRunnerContext.EVENT_TYPE
+private val EVENT_TYPE = Rt_BlockRunnerConfig.EVENT_TYPE
 private val EVENT_LIST_TYPE: R_Type = R_ListType(EVENT_TYPE)
 
 object C_Lib_Test_Events {
@@ -39,14 +39,14 @@ object C_Lib_Test_Events {
 
 private object R_SysFn_GetEvents: R_SysFunctionEx_0() {
     override fun call(ctx: Rt_CallContext): Rt_Value {
-        val events = ctx.globalCtx.testBlockRunnerCtx.getEvents()
+        val events = ctx.exeCtx.emittedEvents
         return Rt_ListValue(EVENT_LIST_TYPE, events.toMutableList())
     }
 }
 
 private object R_SysFn_AssertEvents: R_SysFunction {
     override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-        val events = ctx.globalCtx.testBlockRunnerCtx.getEvents()
+        val events = ctx.exeCtx.emittedEvents
         val actual: Rt_Value = Rt_ListValue(EVENT_LIST_TYPE, events.toMutableList())
         val expected: Rt_Value = Rt_ListValue(EVENT_LIST_TYPE, args.toMutableList())
         C_Lib_Test_Assert.assertEquals("assert_events", expected, actual)

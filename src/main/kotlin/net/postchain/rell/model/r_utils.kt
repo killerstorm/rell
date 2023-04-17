@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.model
@@ -101,8 +101,12 @@ class R_ModuleName private constructor(parts: List<R_Name>): R_GenericQualifiedN
     override fun create(parts: List<R_Name>) = of(parts)
 
     fun parent(): R_ModuleName {
-        check(parts.isNotEmpty()) { "Trying to get a parent name of an empty name" }
-        return R_ModuleName(parts.subList(0, parts.size - 1))
+        val res = parentOrNull()
+        return checkNotNull(res) { "Trying to get a parent name of an empty name" }
+    }
+
+    fun parentOrNull(): R_ModuleName? {
+        return if (parts.isEmpty()) null else of(parts.subList(0, parts.size - 1))
     }
 
     companion object {

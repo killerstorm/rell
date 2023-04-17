@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell
@@ -8,9 +8,7 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvString
 import net.postchain.gtv.GtvType
-import net.postchain.rell.compiler.base.core.C_CompilationResult
-import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
-import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_Error
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.compiler.base.utils.C_SourcePath
@@ -19,7 +17,11 @@ import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.ConfigConstants
 import net.postchain.rell.module.RellVersions
-import net.postchain.rell.utils.*
+import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.cli.*
+import net.postchain.rell.utils.immListOf
+import net.postchain.rell.utils.toImmMap
 import picocli.CommandLine
 import java.io.File
 import java.io.FileOutputStream
@@ -27,12 +29,10 @@ import java.io.OutputStream
 
 fun main(args: Array<String>) {
     RellCliLogUtils.initLogging()
-    RellCliUtils.runCli(args, RellCfgCliArgs()) {
-        main0(it)
-    }
+    RellCliUtils.runCli(args, RellConfigGenCliArgs())
 }
 
-private fun main0(args: RellCfgCliArgs) {
+private fun main0(args: RellConfigGenCliArgs) {
     val target = RellCliUtils.getTarget(args.sourceDir, args.module)
 
     val template = if (args.configTemplateFile == null) null else {
@@ -53,7 +53,7 @@ private fun main0(args: RellCfgCliArgs) {
     }
 }
 
-private fun writeResult(args: RellCfgCliArgs, os: OutputStream, config: Gtv) {
+private fun writeResult(args: RellConfigGenCliArgs, os: OutputStream, config: Gtv) {
     val bytes = if (args.binaryOutput) {
         PostchainUtils.gtvToBytes(config)
     } else {
@@ -70,7 +70,7 @@ private fun readFile(file: File): String {
 
 private fun verifyCfg(b: Boolean, msg: String) {
     if (!b) {
-        throw RellCliErr(msg)
+        throw RellCliBasicException(msg)
     }
 }
 
@@ -79,13 +79,8 @@ class RellConfigGen(
         private val sourceVersion: R_LangVersion,
         private val modules: List<R_ModuleName>,
         private val moduleFiles: List<C_SourcePath>,
-        private val app: R_App?,
+        val app: R_App,
 ) {
-    fun makeConfig(): Gtv {
-        val template = GtvFactory.gtv(mapOf())
-        return makeConfig(template)
-    }
-
     fun makeConfig(templateXml: String?): Gtv {
         val template = getConfigTemplate(templateXml)
         return makeConfig(template)
@@ -103,11 +98,10 @@ class RellConfigGen(
 
     private fun getConfigTemplate(template: String?): Gtv {
         if (template == null) return GtvFactory.gtv(mapOf())
-
         try {
             return PostchainUtils.xmlToGtv(template)
         } catch (e: Exception) {
-            throw RellCliErr("Failed to parse template XML: ${e.message}")
+            throw RellCliBasicException("Failed to parse template XML: ${e.message}")
         }
     }
 
@@ -135,81 +129,11 @@ class RellConfigGen(
         rellDict.remove(ConfigConstants.RELL_FILES_KEY)
     }
 
-    private fun getDictByKey(dict: DictGtvNode, key: String): DictGtvNode {
-        val node = dict.get(key)
-        return if (node == null) {
-            dict.putDict(key)
-        } else {
-            asDictNode(node)
-        }
-    }
-
-    private fun getArrayByKey(dict: DictGtvNode, key: String): ArrayGtvNode {
-        val node = dict.get(key)
-        return if (node == null) {
-            dict.putArray(key)
-        } else {
-            asArrayNode(node)
-        }
-    }
-
-    private fun asDictNode(node: GtvNode): DictGtvNode {
-        return node as? DictGtvNode ?: throw nodeTypeErr(node, GtvType.DICT)
-    }
-
-    private fun asArrayNode(node: GtvNode): ArrayGtvNode {
-        return node as? ArrayGtvNode ?: throw nodeTypeErr(node, GtvType.ARRAY)
-    }
-
-    private fun nodeTypeErr(node: GtvNode, expected: GtvType): RuntimeException {
-        val pathStr = if (node.path == null) "<root>" else node.path
-        val type = node.type()
-        return RellCliErr("Found $type instead of ${expected} ($pathStr)")
-    }
-
     fun getModuleSources(): RellModuleSources {
-        val files = mutableMapOf<String, String>()
-
-        try {
-            for (path in moduleFiles) {
-                val file = sourceDir.file(path)
-                file ?: throw RellCliErr("File not found: $path")
-                val text = file.readText()
-                files[path.str()] = text
-            }
-        } catch (e: C_Error) {
-            throw RellCliErr(e.message!!)
-        } catch (e: Exception) {
-            throw RellCliErr(e.message ?: "unknown")
-        }
-
-        val modules2 = modules.map { it.str() }
-
-        return RellModuleSources(modules2, files)
-    }
-
-    fun checkModuleArgs(actualArgs: Map<R_ModuleName, Gtv>) {
-        app ?: return
-
-        val expectedArgs = app.moduleMap
-            .filterValues { it.moduleArgs != null }
-            .mapValues { it.value.moduleArgs!! }
-            .toImmMap()
-
-        val missingModules = expectedArgs.keys.filter { it !in actualArgs }.sorted().toImmList()
-        if (missingModules.isNotEmpty()) {
-            val modulesStr = missingModules.joinToString(", ") { it.displayStr() }
-            throw RellCliErr("Missing module_args for module(s): $modulesStr")
-        }
-
-        for (module in expectedArgs.keys.sorted()) {
-            val expected = expectedArgs.getValue(module)
-            val actual = actualArgs.getValue(module)
-            try {
-                PostchainUtils.moduleArgsGtvToRt(expected, actual)
-            } catch (e: Throwable) {
-                throw RellCliErr("Bad module_args for module '${module.str()}': ${e.message}")
-            }
+        return RellCliInternalApi.catchCommonError {
+            val fileMap = getModuleFiles(sourceDir, moduleFiles)
+            val strModules = modules.map { it.str() }
+            RellModuleSources(strModules, fileMap)
         }
     }
 
@@ -218,37 +142,91 @@ class RellConfigGen(
             return create(cliEnv, target.sourceDir, target.modules)
         }
 
-        fun create(cliEnv: RellCliEnv, sourceDir: C_SourceDir, modules: List<R_ModuleName>): RellConfigGen {
-            val modSel = C_CompilerModuleSelection(modules)
-            val cRes = RellCliUtils.compile(cliEnv, sourceDir, modSel, true, C_CompilerOptions.DEFAULT)
-            checkCompilationResult(cliEnv, cRes, modules)
-            return RellConfigGen(sourceDir, RellVersions.VERSION, modules, cRes.files, cRes.app)
-        }
+        fun create(
+            cliEnv: RellCliEnv,
+            sourceDir: C_SourceDir,
+            modules: List<R_ModuleName>,
+            sourceVersion: R_LangVersion = RellVersions.VERSION,
+        ): RellConfigGen {
+            val config = RellCliCompileConfig.Builder()
+                .cliEnv(cliEnv)
+                .version(sourceVersion)
+                .moduleArgsMissingError(false)
+                .build()
 
-        private fun checkCompilationResult(cliEnv: RellCliEnv, cRes: C_CompilationResult, modules: List<R_ModuleName>) {
-            val rApp = cRes.app
-            rApp ?: return
-
-            var error = false
-
-            for (moduleName in modules) {
-                val rModule = rApp.moduleMap[moduleName]
-                if (rModule != null) {
-                    if (rModule.test) {
-                        cliEnv.print(RellCliUtils.errMsg("Test module '$moduleName' is specified as a main module"), true)
-                        error = true
-                    }
-                }
-            }
-
-            if (error) {
-                cliEnv.exit(1)
-            }
+            val options = RellCliInternalApi.makeCompilerOptions(config)
+            val (apiRes, rApp) = RellCliInternalApi.compileApp(config, options, sourceDir, modules, immListOf())
+            return RellConfigGen(sourceDir, sourceVersion, modules, apiRes.cRes.files, rApp)
         }
 
         fun configToText(gtvConfig: Gtv): String {
             val xml = PostchainUtils.gtvToXml(gtvConfig)
             return xml
+        }
+
+        fun getModuleFiles(
+            sourceDir: C_SourceDir,
+            files: List<C_SourcePath>,
+        ): Map<String, String> {
+            val fileMap = mutableMapOf<String, String>()
+
+            try {
+                for (path in files) {
+                    val file = sourceDir.file(path)
+                    file ?: throw C_CommonError("file_not_found:$path", "File not found: $path")
+                    val text = file.readText()
+                    fileMap[path.str()] = text
+                }
+            } catch (e: C_Error) {
+                throw C_CommonError(e.code, e.errMsg)
+            } catch (e: Exception) {
+                throw C_CommonError("unexpected:${e.javaClass.canonicalName}", e.message ?: "unknown")
+            }
+
+            return fileMap.toImmMap()
+        }
+
+        fun makeConfig(template: Gtv, rell: Gtv): Gtv {
+            val rootNode = GtvNode.create(null, template)
+            val rootDict = asDictNode(rootNode)
+            val gtxDict = getDictByKey(rootDict, "gtx")
+
+            checkEquals(gtxDict.get("rell"), null)
+            gtxDict.put("rell", rell)
+
+            return rootNode.toValue()
+        }
+
+        private fun getDictByKey(dict: DictGtvNode, key: String): DictGtvNode {
+            val node = dict.get(key)
+            return if (node == null) {
+                dict.putDict(key)
+            } else {
+                asDictNode(node)
+            }
+        }
+
+        private fun getArrayByKey(dict: DictGtvNode, key: String): ArrayGtvNode {
+            val node = dict.get(key)
+            return if (node == null) {
+                dict.putArray(key)
+            } else {
+                asArrayNode(node)
+            }
+        }
+
+        private fun asDictNode(node: GtvNode): DictGtvNode {
+            return node as? DictGtvNode ?: throw nodeTypeErr(node, GtvType.DICT)
+        }
+
+        private fun asArrayNode(node: GtvNode): ArrayGtvNode {
+            return node as? ArrayGtvNode ?: throw nodeTypeErr(node, GtvType.ARRAY)
+        }
+
+        private fun nodeTypeErr(node: GtvNode, expected: GtvType): RuntimeException {
+            val pathStr = if (node.path == null) "<root>" else node.path
+            val type = node.type()
+            return RellCliBasicException("Found $type instead of ${expected} ($pathStr)")
         }
     }
 }
@@ -333,7 +311,7 @@ private class ArrayGtvNode(path: String?, list: List<GtvNode>): GtvNode(path) {
 }
 
 @CommandLine.Command(name = "RellConfigGen", description = ["Generates Rell Postchain configuration"])
-private class RellCfgCliArgs: RellBaseCliArgs() {
+class RellConfigGenCliArgs: RellBaseCliArgs() {
     @CommandLine.Parameters(index = "0", paramLabel = "MODULE", description = ["Module name"])
     var module: String = ""
 
@@ -345,4 +323,8 @@ private class RellCfgCliArgs: RellBaseCliArgs() {
 
     @CommandLine.Option(names = ["--binary-output"], paramLabel = "BINARY_OUTPUT", description = ["Write output as binary"])
     var binaryOutput: Boolean = false
+
+    override fun execute() {
+        main0(this)
+    }
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
@@ -18,7 +18,6 @@ import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
-import java.util.*
 import kotlin.test.assertEquals
 
 abstract class RellBaseTester(
@@ -64,8 +63,8 @@ abstract class RellBaseTester(
 
     private val files = mutableMapOf<String, String>()
 
-    private val outPrinter0 = Rt_TesterPrinter()
-    private val logPrinter0 = Rt_TesterPrinter()
+    private val outPrinter0 = Rt_TestPrinter()
+    private val logPrinter0 = Rt_TestPrinter()
 
     val outPrinter: Rt_Printer = outPrinter0
     val logPrinter: Rt_Printer = logPrinter0
@@ -132,6 +131,8 @@ abstract class RellBaseTester(
             symbolInfoFile = C_SourcePath.parse(RellTestUtils.MAIN_FILE),
             complexWhatEnabled = complexWhatEnabled,
             ideDefIdConflictError = ideDefIdConflictError,
+            mountConflictError = true,
+            appModuleInTestsError = false,
     )
 
     fun def(defs: List<String>) {
@@ -329,21 +330,6 @@ abstract class RellBaseTester(
 
     protected fun createChainSqlMapping(): Rt_ChainSqlMapping {
         return Rt_ChainSqlMapping(chainId)
-    }
-
-    private class Rt_TesterPrinter: Rt_Printer {
-        private val queue = LinkedList<String>()
-
-        override fun print(str: String) {
-            queue.add(str)
-        }
-
-        fun chk(vararg expected: String) {
-            val expectedList = expected.toList()
-            val actualList = queue.toList()
-            assertEquals(expectedList, actualList)
-            queue.clear()
-        }
     }
 
     companion object {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.base.module
@@ -327,7 +327,7 @@ private class C_ModuleDirTree(
 
         private fun calcAst(): S_RellFile? {
             return try {
-                sourceFile?.readAst()
+                sourceFile.readAst()
             } catch (e: C_Error) {
                 readerCtx.msgCtx.error(e)
                 null

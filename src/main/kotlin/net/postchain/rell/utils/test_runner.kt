@@ -1,9 +1,12 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.utils
 
+import com.google.common.base.Throwables
+import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
+import net.postchain.rell.lib.test.Rt_BlockRunnerStrategy
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_DefinitionName
 import net.postchain.rell.model.R_FunctionDefinition
@@ -12,39 +15,53 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.sql.SqlUtils
+import net.postchain.rell.utils.cli.RellCliEnv
+import net.postchain.rell.utils.cli.Rt_CliEnvPrinter
 import org.apache.commons.lang3.StringUtils
 import java.util.regex.Pattern
 
 private val PRINT_SEPARATOR = "-".repeat(72)
 
 class TestResult(val error: Throwable?) {
-    override fun toString() = if (error == null) "OK" else "FAILED"
+    val isOk = error == null
+    override fun toString() = if (isOk) "OK" else "FAILED"
 }
 
 class TestRunnerContext(
-        val sqlCtx: Rt_SqlContext,
-        val sqlMgr: SqlManager,
-        private val globalCtx: Rt_GlobalContext,
-        private val chainCtx: Rt_ChainContext,
-        private val blockRunnerStrategy: Rt_BlockRunnerStrategy,
-        val app: R_App
+    val app: R_App,
+    val cliEnv: RellCliEnv,
+    val sqlCtx: Rt_SqlContext,
+    val sqlMgr: SqlManager,
+    private val globalCtx: Rt_GlobalContext,
+    private val chainCtx: Rt_ChainContext,
+    private val blockRunnerConfig: Rt_BlockRunnerConfig,
+    private val blockRunnerStrategy: Rt_BlockRunnerStrategy,
+    val printTestCases: Boolean = true,
+    val stopOnError: Boolean = false,
+    val onTestCaseStart: (TestCase) -> Unit = {},
+    val onTestCaseFinished: (TestCaseResult) -> Unit = {},
 ) {
-    fun createAppContext(): Rt_AppContext = Rt_AppContext(
+    val casePrinter: Rt_Printer = if (printTestCases) Rt_CliEnvPrinter(cliEnv) else Rt_NopPrinter
+
+    fun createAppContext(): Rt_AppContext {
+        return Rt_AppContext(
             globalCtx,
             chainCtx,
             app,
             repl = false,
             test = true,
             replOut = null,
-            blockRunnerStrategy = blockRunnerStrategy
-    )
+            blockRunnerConfig = blockRunnerConfig,
+            blockRunnerStrategy = blockRunnerStrategy,
+        )
+    }
 }
 
 class TestRunnerChain(val name: String, val iid: Long) {
     override fun toString() = "$name[$iid]"
 }
 
-class TestRunnerCase(chain: TestRunnerChain?, val fn: R_FunctionDefinition) {
+class TestCase(chain: TestRunnerChain?, val fn: R_FunctionDefinition) {
     val name = let {
         val f = fn.appLevelName
         if (chain == null) f else "$chain:$f"
@@ -55,55 +72,59 @@ class TestRunnerCase(chain: TestRunnerChain?, val fn: R_FunctionDefinition) {
     }
 }
 
-class TestCaseResult(val case: TestRunnerCase, val res: TestResult)
+class TestCaseResult(val case: TestCase, val res: TestResult) {
+    override fun toString() = "$case:$res"
+}
 
 class TestRunnerResults {
     private val results = mutableListOf<TestCaseResult>()
 
-    fun add(case: TestRunnerCase, value: TestResult) {
-        results.add(TestCaseResult(case, value))
+    fun add(res: TestCaseResult) {
+        results.add(res)
     }
 
     fun getResults() = results.toImmList()
 
-    fun print(): Boolean {
+    fun print(env: RellCliEnv): Boolean {
         val (okTests, failedTests) = results.partition { it.res.error == null }
 
+        val printer = Rt_CliEnvPrinter(env)
+
         if (failedTests.isNotEmpty()) {
-            println()
-            println(PRINT_SEPARATOR)
-            println("FAILED TESTS:")
+            printer.print("")
+            printer.print(PRINT_SEPARATOR)
+            printer.print("FAILED TESTS:")
             for (r in failedTests) {
-                println()
-                println(r.case.name)
-                printException(r.res.error!!)
+                printer.print("")
+                printer.print(r.case.name)
+                printException(printer, r.res.error!!)
             }
         }
 
-        println()
-        println(PRINT_SEPARATOR)
-        println("TEST RESULTS:")
+        printer.print("")
+        printer.print(PRINT_SEPARATOR)
+        printer.print("TEST RESULTS:")
 
-        printResults(okTests)
-        printResults(failedTests)
+        printResults(printer, okTests)
+        printResults(printer, failedTests)
 
         val nTests = results.size
         val nOk = okTests.size
         val nFailed = failedTests.size
 
-        println("\nSUMMARY: $nFailed FAILED / $nOk PASSED / $nTests TOTAL\n")
+        printer.print("\nSUMMARY: $nFailed FAILED / $nOk PASSED / $nTests TOTAL\n")
 
         val allOk = nFailed == 0
-        println("\n***** ${if (allOk) "OK" else "FAILED"} *****")
+        printer.print("\n***** ${if (allOk) "OK" else "FAILED"} *****")
 
         return allOk
     }
 
-    private fun printResults(list: List<TestCaseResult>) {
+    private fun printResults(printer: Rt_Printer, list: List<TestCaseResult>) {
         if (list.isNotEmpty()) {
-            println()
+            printer.print("")
             for (r in list) {
-                println("${r.res} ${r.case}")
+                printer.print("${r.res} ${r.case}")
             }
         }
     }
@@ -126,24 +147,34 @@ object TestRunner {
             .filter { matcher.matchFunction(it.defName) }
     }
 
-    fun runTests(testCtx: TestRunnerContext, cases: List<TestRunnerCase>): Boolean {
+    fun runTests(testCtx: TestRunnerContext, cases: List<TestCase>): Boolean {
         val testRes = TestRunnerResults()
         runTests(testCtx, cases, testRes)
-        return testRes.print()
+        return testRes.print(testCtx.cliEnv)
     }
 
-    fun runTests(testCtx: TestRunnerContext, cases: List<TestRunnerCase>, testRes: TestRunnerResults) {
+    fun runTests(testCtx: TestRunnerContext, cases: List<TestCase>, testRes: TestRunnerResults) {
         for (case in cases) {
+            testCtx.onTestCaseStart(case)
+
             val v = runTestCase(testCtx, case)
-            testRes.add(case, v)
+            val caseRes = TestCaseResult(case, v)
+
+            testCtx.onTestCaseFinished(caseRes)
+            testRes.add(caseRes)
+
+            if (!v.isOk && testCtx.stopOnError) {
+                break
+            }
         }
     }
 
-    private fun runTestCase(testCtx: TestRunnerContext, case: TestRunnerCase): TestResult {
+    private fun runTestCase(testCtx: TestRunnerContext, case: TestCase): TestResult {
         val caseName = case.name
 
-        println(PRINT_SEPARATOR)
-        println("TEST $caseName")
+        val printer = testCtx.casePrinter
+        printer.print(PRINT_SEPARATOR)
+        printer.print("TEST $caseName")
 
         val appCtx = testCtx.createAppContext()
 
@@ -155,25 +186,26 @@ object TestRunner {
             val exeCtx = Rt_ExecutionContext(appCtx, null, testCtx.sqlCtx, sqlExec)
             try {
                 case.fn.callTop(exeCtx, listOf())
-                println("OK $caseName")
+                printer.print("OK $caseName")
                 TestResult(null)
             } catch (e: Throwable) {
-                printException(e)
-                println("FAILED ${case.name}")
+                printException(printer, e)
+                printer.print("FAILED ${case.name}")
                 TestResult(e)
             }
         }
     }
 }
 
-private fun printException(e: Throwable) {
+private fun printException(printer: Rt_Printer, e: Throwable) {
     when (e) {
         is Rt_Exception -> {
             val msg = Rt_Utils.appendStackTrace("Error: ${e.message}", e.info.stack)
-            println(msg)
+            printer.print(msg)
         }
         else -> {
-            e.printStackTrace(System.out)
+            val s = Throwables.getStackTraceAsString(e)
+            printer.print(s)
         }
     }
 }
@@ -197,11 +229,10 @@ class TestMatcher private constructor(private val patterns: List<Pattern>) {
     }
 
     companion object {
-        val ANY = make("*")
+        val ANY = make(listOf("*"))
 
-        fun make(patterns: String): TestMatcher {
-            val list = patterns.split(",")
-            val patterns2 = list.map { globToPattern(it) }.toImmList()
+        fun make(patterns: List<String>): TestMatcher {
+            val patterns2 = patterns.map { globToPattern(it) }.toImmList()
             return TestMatcher(patterns2)
         }
 

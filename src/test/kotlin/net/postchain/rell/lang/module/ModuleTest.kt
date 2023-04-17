@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.module
@@ -418,7 +418,7 @@ class ModuleTest: BaseRellTest(false) {
                 "nested/deeper/module.rell" to "query deeper() = 0;",
                 "nested/deeper/deeper_test.rell" to "@test module;",
                 "noparent/tests/foo_test.rell" to "@test module;",
-                "noparent/tests/bar_test.rell" to "@test module;"
+                "noparent/tests/bar_test.rell" to "@test module;",
         )
 
         chkCompileTestModules(sourceDir, listOf(), listOf(), "[]")
@@ -440,20 +440,15 @@ class ModuleTest: BaseRellTest(false) {
     }
 
     @Test fun testCompileTestModulesEmptyDir() {
-        val sourceDir = C_SourceDir.mapDirOf(
-                "empty/blank/none.txt" to ""
-        )
+        val sourceDir = C_SourceDir.mapDirOf("empty/blank/none.txt" to "")
         chkCompileTestModules(sourceDir, listOf("empty"), listOf(), "cm_err:import:not_found:empty")
         chkCompileTestModules(sourceDir, listOf("empty.blank"), listOf(), "cm_err:import:not_found:empty.blank")
-        chkCompileTestModules(sourceDir, listOf(), listOf("empty"), "[]")
-        chkCompileTestModules(sourceDir, listOf(), listOf("empty.blank"), "[]")
+        chkCompileTestModules(sourceDir, listOf(), listOf("empty"), "cm_err:import:not_found:empty")
+        chkCompileTestModules(sourceDir, listOf(), listOf("empty.blank"), "cm_err:import:not_found:empty.blank")
     }
 
     @Test fun testCompileTestModulesUnknownModule() {
-        val sourceDir = C_SourceDir.mapDirOf(
-                "module.rell" to "query root() = 0;"
-        )
-
+        val sourceDir = C_SourceDir.mapDirOf("module.rell" to "query root() = 0;")
         chkCompileTestModules(sourceDir, listOf("unknown"), listOf(), "cm_err:import:not_found:unknown")
         chkCompileTestModules(sourceDir, listOf(), listOf("unknown"), "cm_err:import:not_found:unknown")
         chkCompileTestModules(sourceDir, listOf(), listOf("single.unknown"), "cm_err:import:not_found:single.unknown")
@@ -465,7 +460,7 @@ class ModuleTest: BaseRellTest(false) {
     @Test fun testCompileTestModulesFileDirConflict() {
         val sourceDir = C_SourceDir.mapDirOf(
                 "trouble/conflict/module.rell" to "module;",
-                "trouble/conflict.rell" to "module;"
+                "trouble/conflict.rell" to "module;",
         )
         chkCompileTestModules(sourceDir, listOf("trouble.conflict"), listOf(), "cm_err:import:file_dir:trouble.conflict")
         chkCompileTestModules(sourceDir, listOf(), listOf("trouble.conflict"), "cm_err:import:file_dir:trouble.conflict")
@@ -478,7 +473,7 @@ class ModuleTest: BaseRellTest(false) {
                 "app/other-strange.name.rell" to "function bar() = 456;",
                 "app/not_a_rell_file.txt" to "Hi!",
                 "app/tests/tests1.rell" to "@test module; import app; function test() { app.foo(); }",
-                "app/tests/tests2.rell" to "@test module; import app; function test() { app.bar(); }"
+                "app/tests/tests2.rell" to "@test module; import app; function test() { app.bar(); }",
         )
         chkCompileTestModules(sourceDir, listOf(""), listOf(""), "cm_err:import:not_found:")
         chkCompileTestModules(sourceDir, listOf(), listOf(""), "[[app],[*app.tests.tests1],[*app.tests.tests2]]")

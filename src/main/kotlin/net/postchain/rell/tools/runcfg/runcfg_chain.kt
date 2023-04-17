@@ -1,15 +1,17 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
-import net.postchain.rell.RellConfigGen
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.ConfigConstants
+import net.postchain.rell.module.RellVersions
 import net.postchain.rell.utils.*
+import net.postchain.rell.utils.cli.RellCliCompileConfig
+import net.postchain.rell.utils.cli.RellCliEnv
+import net.postchain.rell.utils.cli.RellCliInternalApi
 
 class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv, params: RellRunConfigParams) {
     private val sourceDir = params.sourceDir
@@ -18,10 +20,10 @@ class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv
 
     companion object {
         fun generateChainsConfigs(
-                cliEnv: RellCliEnv,
-                params: RellRunConfigParams,
-                runConfig: Rcfg_Run,
-                replaceSigners: Collection<Bytes33>?
+            cliEnv: RellCliEnv,
+            params: RellRunConfigParams,
+            runConfig: Rcfg_Run,
+            replaceSigners: Collection<Bytes33>?
         ): List<RellPostAppChain> {
             val generator = RunConfigChainConfigGen(cliEnv, params)
             val commonTestModules = runConfig.tests.map { it.module }.toSet()
@@ -94,7 +96,7 @@ class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv
         }
         b.update(signersGtv, "signers")
 
-        if (config.addDependencies && !config.dependencies.isEmpty()) {
+        if (config.addDependencies && config.dependencies.isNotEmpty()) {
             val deps = config.dependencies.map { (k, v) ->
                 val depBrid = if (v.chain != null) brids.getValue(v.chain).toByteArray() else v.brid!!.toByteArray()
                 gtv(gtv(k), gtv(depBrid))
@@ -121,25 +123,20 @@ class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv
             b.update(modulesGtv, "gtx", "modules")
         }
 
-        val configGen = RellConfigGen.create(cliEnv, sourceDir, listOf(app.module))
-        val sources = configGen.getModuleSources()
-
-        val srcGtv = gtv(
-                "modules" to gtv(listOf(gtv(app.module.str()))),
-                ConfigConstants.RELL_SOURCES_KEY to gtv(sources.files.mapValues { (_, v) -> gtv(v) }),
-                ConfigConstants.RELL_VERSION_KEY to gtv(sourceVersion.str())
-        )
-        b.update(srcGtv, "gtx", "rell")
-
-        configGen.checkModuleArgs(app.args)
-
-        if (app.args.isNotEmpty()) {
-            val argsGtv = gtv(app.args.mapKeys{ (k, _) -> k.str() })
-            b.update(argsGtv, "gtx", "rell", "moduleArgs")
-        }
+        val gtxRellGtv = genGtxRellConfig(app)
+        b.update(gtxRellGtv, "gtx", "rell")
 
         val gtv = b.build()
         return Pair(gtv, app.module)
+    }
+
+    private fun genGtxRellConfig(app: Rcfg_App): Gtv {
+        val config = RellCliCompileConfig.Builder()
+            .cliEnv(cliEnv)
+            .moduleArgs0(app.args)
+            .version(RellVersions.VERSION)
+            .build()
+        return RellCliInternalApi.compileGtv(config, sourceDir, immListOf(app.module))
     }
 
     private fun genChainGtv(chainGtv: Rcfg_ChainConfigGtv): Rcfg_Gtv {

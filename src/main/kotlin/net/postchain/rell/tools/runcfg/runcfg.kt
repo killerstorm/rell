@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
@@ -10,6 +10,8 @@ import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.utils.*
+import net.postchain.rell.utils.cli.MainRellCliEnv
+import net.postchain.rell.utils.cli.RellCliEnv
 import java.io.File
 
 class RellPostAppCliConfig(val sourceDir: C_SourceDir, val configDir: File, val config: RellPostAppConfig)
@@ -101,10 +103,10 @@ object RellRunConfigGenerator {
     }
 
     fun generate(
-            cliEnv: RellCliEnv,
-            params: RellRunConfigParams,
-            confPath: String,
-            confText: String
+        cliEnv: RellCliEnv,
+        params: RellRunConfigParams,
+        confPath: String,
+        confText: String
     ): RellPostAppConfig {
         val parserOpts = RunConfigParserOptions(unitTest = params.unitTest)
         val rcfg = readConfig(params.configDir, confPath, confText, parserOpts)

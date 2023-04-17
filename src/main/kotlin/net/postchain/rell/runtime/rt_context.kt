@@ -13,7 +13,9 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtx.data.OpData
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.toCodeMsg
-import net.postchain.rell.lib.test.Rt_UnitTestBlockRunnerContext
+import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
+import net.postchain.rell.lib.test.Rt_BlockRunnerStrategy
+import net.postchain.rell.lib.test.Rt_UnsupportedBlockRunnerStrategy
 import net.postchain.rell.model.*
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.runtime.utils.Rt_Messages
@@ -28,7 +30,6 @@ class Rt_GlobalContext(
     val logSqlErrors: Boolean = false,
     val sqlUpdatePortionSize: Int = 1000, // Experimental maximum is 2^15
     val typeCheck: Boolean = false,
-    val testBlockRunnerCtx: Rt_UnitTestBlockRunnerContext = Rt_UnitTestBlockRunnerContext(),
 ) {
     private val rellVersion = Rt_RellVersion.getInstance()
 
@@ -274,14 +275,15 @@ class Rt_RegularSqlContext private constructor(
 }
 
 class Rt_AppContext(
-        val globalCtx: Rt_GlobalContext,
-        val chainCtx: Rt_ChainContext,
-        val app: R_App,
-        val repl: Boolean,
-        val test: Boolean,
-        val replOut: ReplOutputChannel?,
-        val blockRunnerStrategy: Rt_BlockRunnerStrategy,
-        globalConstantStates: List<Rt_GlobalConstantState> = immListOf()
+    val globalCtx: Rt_GlobalContext,
+    val chainCtx: Rt_ChainContext,
+    val app: R_App,
+    val repl: Boolean,
+    val test: Boolean,
+    val replOut: ReplOutputChannel?,
+    val blockRunnerConfig: Rt_BlockRunnerConfig = Rt_BlockRunnerConfig(),
+    val blockRunnerStrategy: Rt_BlockRunnerStrategy = Rt_UnsupportedBlockRunnerStrategy,
+    globalConstantStates: List<Rt_GlobalConstantState> = immListOf(),
 ) {
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false
@@ -411,16 +413,27 @@ class Rt_ExecutionContext(
         val appCtx: Rt_AppContext,
         val opCtx: Rt_OpContext?,
         val sqlCtx: Rt_SqlContext,
-        val sqlExec: SqlExecutor
+        val sqlExec: SqlExecutor,
+        state: State? = null,
 ) {
     val globalCtx = appCtx.globalCtx
 
-    private var nextNopNonce = 0L
+    private var nextNopNonce: Long = state?.nextNopNonce ?: 0L
 
     fun nextNopNonce(): Long {
         val r = nextNopNonce
         ++nextNopNonce
         return r
+    }
+
+    var emittedEvents: List<Rt_Value> = state?.emittedEvents ?: immListOf()
+        set(value) { field = value.toImmList() }
+
+    fun toState() = State(this)
+
+    class State(ctx: Rt_ExecutionContext) {
+        val nextNopNonce = ctx.nextNopNonce
+        val emittedEvents = ctx.emittedEvents
     }
 }
 
@@ -483,25 +496,10 @@ class Rt_OpContext(
     val allOperations = allOperations.toImmList()
 }
 
-abstract class Rt_BlockRunnerStrategy {
-    abstract fun createGtvConfig(): Gtv
-    abstract fun getKeyPair(): BytesKeyPair
-}
-
-class Rt_StaticBlockRunnerStrategy(
-        private val gtvConfig: Gtv,
-        private val keyPair: BytesKeyPair
-): Rt_BlockRunnerStrategy() {
-    override fun createGtvConfig() = gtvConfig
-    override fun getKeyPair() = keyPair
-}
-
-object Rt_UnsupportedBlockRunnerStrategy: Rt_BlockRunnerStrategy() {
-    private const val errMsg = "Block execution not supported"
-    override fun createGtvConfig() = throw Rt_Utils.errNotSupported(errMsg)
-    override fun getKeyPair() = throw Rt_Utils.errNotSupported(errMsg)
-}
-
-class Rt_ChainContext(val rawConfig: Gtv, moduleArgs: Map<R_ModuleName, Rt_Value>, val blockchainRid: BlockchainRid) {
+class Rt_ChainContext(
+    val rawConfig: Gtv,
+    moduleArgs: Map<R_ModuleName, Rt_Value>,
+    val blockchainRid: BlockchainRid,
+) {
     val moduleArgs = moduleArgs.toImmMap()
 }

@@ -49,7 +49,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
             val ctx = ValCtx(app)
             val rtArgs = args2.map { it.rt(ctx) }
             val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
-            val appCtx = Rt_AppContext(globalCtx, chainCtx, app, false, false, null, Rt_UnsupportedBlockRunnerStrategy)
+            val appCtx = Rt_AppContext(globalCtx, chainCtx, app, repl = false, test = false, null)
             val exeCtx = Rt_ExecutionContext(appCtx, null, sqlCtx, NoConnSqlExecutor)
             RellTestUtils.callQuery(exeCtx, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
         }
