@@ -188,6 +188,8 @@ private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Bool
         val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
         val testRunnerCfg = Rt_BlockRunnerConfig()
 
+        val historyFile = if (args.raw.noHistory) null else RellCliInternalApi.getDefaultReplHistoryFile()
+
         ReplShell.start(
             sourceDir,
             moduleName,
@@ -197,7 +199,7 @@ private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Bool
             testRunnerCfg,
             ReplInputChannelFactory.DEFAULT,
             ReplOutputChannelFactory.DEFAULT,
-            historyEnabled = !args.raw.noHistory,
+            historyFile = historyFile,
         )
     }
 }

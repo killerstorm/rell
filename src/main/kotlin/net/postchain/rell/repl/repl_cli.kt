@@ -13,6 +13,7 @@ import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.runtime.Rt_RellVersionProperty
 import net.postchain.rell.sql.SqlManager
 import org.apache.commons.lang3.StringUtils
+import java.io.File
 
 object ReplShell {
     fun start(
@@ -24,7 +25,7 @@ object ReplShell {
         testBlockRunnerCfg: Rt_BlockRunnerConfig,
         inChannelFactory: ReplInputChannelFactory,
         outChannelFactory: ReplOutputChannelFactory,
-        historyEnabled: Boolean = true,
+        historyFile: File?,
     ) {
         val outChannel = outChannelFactory.createOutputChannel()
 
@@ -44,7 +45,7 @@ object ReplShell {
 
         printIntro(repl, module)
 
-        val inChannel = inChannelFactory.createInputChannel(historyEnabled)
+        val inChannel = inChannelFactory.createInputChannel(historyFile)
 
         while (!repl.mustQuit()) {
             val line = inChannel.readLine(">>> ")

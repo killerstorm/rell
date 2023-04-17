@@ -264,8 +264,8 @@ class RellCliRunShellConfig(
     val outPrinter: Rt_Printer,
     /** Printer used for Rell `log()` calls. */
     val logPrinter: Rt_Printer,
-    /** Enable shell commands history (in a file in the home directory). */
-    val historyEnabled: Boolean,
+    /** Shell commands history file, `null` means no history; default: `.rell_history` in the user's home directory. */
+    val historyFile: File?,
     /** Input channel factory (used to read commands). */
     val inputChannelFactory: ReplInputChannelFactory,
     /** Output channel factory (used to print command execution results). */
@@ -281,7 +281,7 @@ class RellCliRunShellConfig(
             sqlErrorLog = false,
             outPrinter = Rt_OutPrinter,
             logPrinter = Rt_LogPrinter(),
-            historyEnabled = true,
+            historyFile = RellCliInternalApi.getDefaultReplHistoryFile(),
             inputChannelFactory = ReplInputChannelFactory.DEFAULT,
             outputChannelFactory = ReplOutputChannelFactory.DEFAULT,
         )
@@ -294,7 +294,7 @@ class RellCliRunShellConfig(
         private var sqlErrorLog = proto.sqlErrorLog
         private var outPrinter = proto.outPrinter
         private var logPrinter = proto.logPrinter
-        private var historyEnabled = proto.historyEnabled
+        private var historyFile = proto.historyFile
         private var inputChannelFactory = proto.inputChannelFactory
         private var outputChannelFactory = proto.outputChannelFactory
 
@@ -316,8 +316,8 @@ class RellCliRunShellConfig(
         /** @see [RellCliRunShellConfig.logPrinter] */
         fun logPrinter(v: Rt_Printer) = apply { logPrinter = v }
 
-        /** @see [RellCliRunShellConfig.historyEnabled] */
-        fun historyEnabled(v: Boolean) = apply { historyEnabled = v }
+        /** @see [RellCliRunShellConfig.historyFile] */
+        fun historyFile(v: File?) = apply { historyFile = v }
 
         /** @see [RellCliRunShellConfig.inputChannelFactory] */
         fun inputChannelFactory(v: ReplInputChannelFactory) = apply { inputChannelFactory = v }
@@ -333,7 +333,7 @@ class RellCliRunShellConfig(
                 sqlErrorLog = sqlErrorLog,
                 outPrinter = outPrinter,
                 logPrinter = logPrinter,
-                historyEnabled = historyEnabled,
+                historyFile = historyFile,
                 inputChannelFactory = inputChannelFactory,
                 outputChannelFactory = outputChannelFactory,
             )
@@ -642,7 +642,7 @@ internal object RellCliInternalApi {
                 blockRunnerCfg,
                 config.inputChannelFactory,
                 config.outputChannelFactory,
-                historyEnabled = config.historyEnabled,
+                historyFile = config.historyFile,
             )
         }
     }
@@ -714,5 +714,10 @@ internal object RellCliInternalApi {
         } catch (e: C_CommonError) {
             throw RellCliBasicException(e.msg)
         }
+    }
+
+    fun getDefaultReplHistoryFile(): File? {
+        val homeDir = CommonUtils.getHomeDir()
+        return if (homeDir == null) null else File(homeDir, ".rell_history")
     }
 }
