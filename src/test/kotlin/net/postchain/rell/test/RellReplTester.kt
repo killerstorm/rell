@@ -14,6 +14,7 @@ import net.postchain.rell.runtime.Rt_GlobalContext
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.SqlManager
+import java.io.File
 import java.util.*
 import kotlin.test.assertEquals
 
@@ -74,7 +75,7 @@ class RellReplTester(
 
         constructor(vararg input: String): this(input.toList())
 
-        override fun createInputChannel(history: Boolean): ReplInputChannel {
+        override fun createInputChannel(historyFile: File?): ReplInputChannel {
             return TestReplInputChannel()
         }
 

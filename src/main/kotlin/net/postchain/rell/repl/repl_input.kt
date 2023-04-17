@@ -6,14 +6,13 @@ package net.postchain.rell.repl
 
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.utils.C_Parser
-import net.postchain.rell.utils.CommonUtils
 import org.apache.commons.lang3.StringUtils
 import org.jline.reader.*
 import org.jline.terminal.TerminalBuilder
 import java.io.File
 
 abstract class ReplInputChannelFactory {
-    abstract fun createInputChannel(history: Boolean): ReplInputChannel
+    abstract fun createInputChannel(historyFile: File?): ReplInputChannel
 
     companion object {
         val DEFAULT: ReplInputChannelFactory = JlineReplInputChannelFactory
@@ -25,7 +24,7 @@ interface ReplInputChannel {
 }
 
 private object JlineReplInputChannelFactory: ReplInputChannelFactory() {
-    override fun createInputChannel(history: Boolean): ReplInputChannel {
+    override fun createInputChannel(historyFile: File?): ReplInputChannel {
         val terminal = TerminalBuilder.builder()
             .dumb(true) // Suppress "dump terminal" warning, but use normal terminal if possible.
             .build()
@@ -38,15 +37,13 @@ private object JlineReplInputChannelFactory: ReplInputChannelFactory() {
             .variable(LineReader.BLINK_MATCHING_PAREN, 0)
             .option(LineReader.Option.DISABLE_EVENT_EXPANSION, true)
 
-        val homeDir = CommonUtils.getHomeDir()
-        if (homeDir != null) {
-            readerBuilder.variable(LineReader.SECONDARY_PROMPT_PATTERN, "... ")
-            if (history) {
-                val historyFile = File(homeDir, ".rell_history")
-                readerBuilder.variable(LineReader.HISTORY_FILE, historyFile)
-                    .variable(LineReader.HISTORY_SIZE, 1000)
-                    .variable(LineReader.HISTORY_FILE_SIZE, 100 * 1024)
-            }
+        readerBuilder.variable(LineReader.SECONDARY_PROMPT_PATTERN, "... ")
+
+        if (historyFile != null) {
+            readerBuilder
+                .variable(LineReader.HISTORY_FILE, historyFile)
+                .variable(LineReader.HISTORY_SIZE, 1000)
+                .variable(LineReader.HISTORY_FILE_SIZE, 1000 * 200)
         }
 
         val reader = readerBuilder.build()
