@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+  ~ Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
   -->
 
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
@@ -9,7 +9,7 @@
 
     <groupId>net.postchain.rell</groupId>
     <artifactId>rell</artifactId>
-    <version>0.12.0</version>
+    <version>0.12.1</version>
     <packaging>jar</packaging>
 
     <name>rell</name>

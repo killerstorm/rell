@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.module
@@ -36,7 +36,7 @@ import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
 object RellVersions {
-    const val VERSION_STR = "0.12.0"
+    const val VERSION_STR = "0.12.1"
     val VERSION = R_LangVersion.of(VERSION_STR)
 
     val SUPPORTED_VERSIONS =
@@ -44,7 +44,7 @@ object RellVersions {
                 "0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6", "0.10.7", "0.10.8", "0.10.9",
                 "0.10.10", "0.10.11",
                 "0.11.0",
-                "0.12.0",
+                "0.12.0", "0.12.1",
             )
             .map { R_LangVersion.of(it) }
             .toImmSet()
