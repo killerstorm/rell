@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
@@ -131,13 +131,13 @@ class GtxTest : BaseGtxTest() {
         val two63 = "9223372036854775808"
         val ten25 = "10000000000000000000000000"
 
-        chkCallQuery("qint", mapOf("x" to GtvBigInteger(123)), "123")
-        chkCallQuery("qint", mapOf("x" to GtvBigInteger(Long.MAX_VALUE)), "9223372036854775807")
+        chkCallQuery("qint", mapOf("x" to GtvBigInteger(BigInteger.valueOf(123))), "123")
+        chkCallQuery("qint", mapOf("x" to GtvBigInteger(BigInteger.valueOf(Long.MAX_VALUE))), "9223372036854775807")
         chkCallQuery("qint", mapOf("x" to GtvBigInteger(BigInteger(two63))), "gtv_err:type:[integer]:out_of_range:$two63:param:x")
         chkCallQuery("qint", mapOf("x" to GtvBigInteger(BigInteger(ten25))), "gtv_err:type:[integer]:out_of_range:$ten25:param:x")
 
-        chkCallQuery("qdec", mapOf("x" to GtvBigInteger(123)), "'123'")
-        chkCallQuery("qdec", mapOf("x" to GtvBigInteger(Long.MAX_VALUE)), "'9223372036854775807'")
+        chkCallQuery("qdec", mapOf("x" to GtvBigInteger(BigInteger.valueOf(123))), "'123'")
+        chkCallQuery("qdec", mapOf("x" to GtvBigInteger(BigInteger.valueOf(Long.MAX_VALUE))), "'9223372036854775807'")
         chkCallQuery("qdec", mapOf("x" to GtvBigInteger(BigInteger(two63))), "'$two63'")
         chkCallQuery("qdec", mapOf("x" to GtvBigInteger(BigInteger(ten25))), "'$ten25'")
 

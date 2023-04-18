@@ -84,6 +84,11 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("1", "boolean.from_gtv_pretty(g)", "boolean[true]")
         chkFromGtv("-1", "boolean.from_gtv_pretty(g)", "gtv_err:type:[boolean]:bad_value:-1")
         chkFromGtv("2", "boolean.from_gtv_pretty(g)", "gtv_err:type:[boolean]:bad_value:2")
+
+        chk("boolean.from_gtv((0L).to_gtv())", "gtv_err:type:[boolean]:INTEGER:BIGINTEGER")
+        chk("boolean.from_gtv((1L).to_gtv())", "gtv_err:type:[boolean]:INTEGER:BIGINTEGER")
+        chk("boolean.from_gtv((0).to_gtv())", "boolean[false]")
+        chk("boolean.from_gtv((1).to_gtv())", "boolean[true]")
     }
 
     @Test fun testToFromGtvInteger() {
