@@ -20,7 +20,7 @@ deploy:
   only:
     - master
     - dev
-    - /^v0..*/
+    - /^version-[0-9]+[.][0-9]+([.][0-9]+)?$/
   script:
     - mvn $MAVEN_CLI_OPTS source:jar deploy
 
@@ -30,7 +30,7 @@ build:
   except:
     - master
     - dev
-    - /^v0..*/
+    - /^version-[0-9]+[.][0-9]+([.][0-9]+)?$/
   script:
     - mvn $MAVEN_CLI_OPTS verify
 
