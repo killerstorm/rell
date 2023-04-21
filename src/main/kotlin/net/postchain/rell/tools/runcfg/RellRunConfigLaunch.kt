@@ -17,9 +17,9 @@ import net.postchain.common.exception.UserMistake
 import net.postchain.config.app.AppConfig
 import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
-import net.postchain.metrics.BLOCKCHAIN_RID_TAG
-import net.postchain.metrics.CHAIN_IID_TAG
-import net.postchain.metrics.NODE_PUBKEY_TAG
+import net.postchain.logging.BLOCKCHAIN_RID_TAG
+import net.postchain.logging.CHAIN_IID_TAG
+import net.postchain.logging.NODE_PUBKEY_TAG
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.lib.test.Rt_BlockRunnerConfig

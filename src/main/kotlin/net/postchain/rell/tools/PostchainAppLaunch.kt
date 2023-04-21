@@ -18,9 +18,9 @@ import net.postchain.core.EContext
 import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
-import net.postchain.metrics.BLOCKCHAIN_RID_TAG
-import net.postchain.metrics.CHAIN_IID_TAG
-import net.postchain.metrics.NODE_PUBKEY_TAG
+import net.postchain.logging.BLOCKCHAIN_RID_TAG
+import net.postchain.logging.CHAIN_IID_TAG
+import net.postchain.logging.NODE_PUBKEY_TAG
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellVersions
