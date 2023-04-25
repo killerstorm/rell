@@ -92,7 +92,7 @@ object RellCliUtils: KLogging() {
             return res
         } catch (e: C_CommonError) {
             cliEnv.error(errMsg(e.msg))
-            throw RellCliExitException(1)
+            throw RellCliExitException(1, e.msg)
         }
     }
 
@@ -118,9 +118,9 @@ object RellCliUtils: KLogging() {
             if (errCnt == 0) {
                 cliEnv.error(errMsg("Compilation failed"))
             }
-            throw RellCliExitException(1)
+            throw RellCliExitException(1, "Compilation failed")
         } else if (errCnt > 0) {
-            throw RellCliExitException(1)
+            throw RellCliExitException(1, "Compilation failed")
         }
 
         return app
