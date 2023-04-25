@@ -758,7 +758,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
 
         val res = mutableListOf<String>()
         for (table in map.keys) {
-            if (table in listOf("c0.rowid_gen", "c0.blocks", "c0.transactions", "c0.configurations")) continue
+            if (table in listOf("c0.rowid_gen", "c0.blocks", "c0.transactions", "c0.configurations", "c0.sys.faulty_configuration")) continue
             if (!meta && (table == "c0.sys.attributes" || table == "c0.sys.classes")) continue
             val attrs = map.getValue(table).map { (name, type) -> "$name:$type" } .joinToString(",")
             res.add(if (columns) "$table($attrs)" else table)

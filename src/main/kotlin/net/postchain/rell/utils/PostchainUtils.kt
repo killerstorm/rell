@@ -26,7 +26,7 @@ import net.postchain.rell.runtime.Rt_ChainContext
 import net.postchain.rell.runtime.Rt_Value
 
 object PostchainUtils {
-    val DATABASE_VERSION = 5
+    val DATABASE_VERSION = 6
 
     val cryptoSystem: CryptoSystem = Secp256K1CryptoSystem()
 
