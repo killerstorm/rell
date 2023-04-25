@@ -16,6 +16,7 @@
 
     <properties>
         <postchain.version>3.9.0</postchain.version>
+        <postchain.eif.version>1.0.0-SNAPSHOT</postchain.eif.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.build.outputTimestamp>10</project.build.outputTimestamp>
         <kotlin.version>1.8.10</kotlin.version>
@@ -111,7 +112,8 @@
     <dependencies>
         <dependency>
             <groupId>net.postchain</groupId>
-            <artifactId>postchain-base</artifactId>
+            <artifactId>postchain-eif-core</artifactId>
+            <version>${postchain.eif.version}</version>
         </dependency>
         <dependency>
             <groupId>net.postchain</groupId>
