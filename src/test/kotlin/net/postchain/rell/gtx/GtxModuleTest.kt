@@ -5,6 +5,8 @@
 package net.postchain.rell.gtx
 
 import net.postchain.common.exception.UserMistake
+import net.postchain.gtv.GtvInteger
+import net.postchain.gtx.NON_STRICT_QUERY_ARGUMENT
 import net.postchain.rell.test.BaseGtxTest
 import net.postchain.rell.test.RellGtxTester
 import net.postchain.rell.test.SqlTestUtils
@@ -178,5 +180,13 @@ class GtxModuleTest: BaseGtxTest() {
         assertFailsWith<UserMistake> {
             chk("123", "123")
         }
+    }
+
+    @Test fun testNonStrictQuery() {
+        tst.wrapRtErrors = false
+        def("query q(x: integer) = x;")
+
+        chkCallQuery("q", mapOf("x" to GtvInteger(123)), "123")
+        chkCallQuery("q", mapOf("x" to GtvInteger(123), NON_STRICT_QUERY_ARGUMENT to GtvInteger(1)), "123")
     }
 }

@@ -19,6 +19,7 @@ import net.postchain.gtv.GtvDictionary
 import net.postchain.gtx.GTXModule
 import net.postchain.gtx.GTXModuleFactory
 import net.postchain.gtx.GTXOperation
+import net.postchain.gtx.NON_STRICT_QUERY_ARGUMENT
 import net.postchain.gtx.data.ExtOpData
 import net.postchain.gtx.special.GTXSpecialTxExtension
 import net.postchain.rell.compiler.base.core.C_CompilationResult
@@ -322,7 +323,7 @@ private class RellPostchainModule(
         val params = rQuery.params()
 
         val argMap = gtvArgs.asDict()
-        val actArgNames = argMap.keys
+        val actArgNames = argMap.keys.filterNot { it == NON_STRICT_QUERY_ARGUMENT }.toSet() // TODO RELL-121 enable non-strict parsing
         val expArgNames = params.map { it.name.str }.toSet()
         if (actArgNames != expArgNames) {
             val exp = expArgNames.joinToString(",")
