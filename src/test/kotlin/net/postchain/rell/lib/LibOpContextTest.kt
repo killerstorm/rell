@@ -1,15 +1,17 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
 
-import net.postchain.common.hexStringToByteArray
-import net.postchain.gtx.data.OpData
+import net.postchain.gtv.Gtv
+import net.postchain.rell.runtime.Rt_NullOpContext
 import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.GtvTestUtils
-import net.postchain.rell.test.RellTestUtils
+import net.postchain.rell.test.Rt_TestOpContext
+import net.postchain.rell.utils.hexStringToBytes
+import net.postchain.rell.utils.toImmList
 import org.junit.Test
 
 class LibOpContextTest: BaseRellTest(false) {
@@ -26,10 +28,10 @@ class LibOpContextTest: BaseRellTest(false) {
         chkOpFull("function f(): timestamp = op_context.last_block_time; operation o() { print(f()); }")
         chkOut("12345")
 
-        tst.opContext = null
+        tst.opContext = Rt_NullOpContext
         chk("op_context.last_block_time", "ct_err:op_ctx_noop")
         chkFull("function f(): timestamp = op_context.last_block_time; query q() = f();", listOf(),
-                "rt_err:fn:op_context.last_block_time:noop")
+                "rt_err:op_context:noop")
 
         chk("op_context", "ct_err:expr_novalue:namespace:[op_context]")
     }
@@ -180,11 +182,11 @@ class LibOpContextTest: BaseRellTest(false) {
         chkFn("= op_context.exists;", "boolean[true]")
         chkFn("= op_context.last_block_time;", "int[12345]")
 
-        tst.opContext = null
+        tst.opContext = Rt_NullOpContext
         chk("op_context.exists", "boolean[false]")
         chk("op_context.last_block_time", "ct_err:op_ctx_noop")
         chkFn("= op_context.exists;", "boolean[false]")
-        chkFn("= op_context.last_block_time;", "rt_err:fn:op_context.last_block_time:noop")
+        chkFn("= op_context.last_block_time;", "rt_err:op_context:noop")
     }
 
     companion object {
@@ -196,24 +198,23 @@ class LibOpContextTest: BaseRellTest(false) {
                 signers: List<String> = listOf(),
                 ops: List<String> = listOf()
         ): Rt_OpContext {
-            val signers2 = signers.map { it.hexStringToByteArray() }
+            val signers2 = signers.map { it.hexStringToBytes() }
             val ops2 = ops.map { parseOperation(it) }
-            return Rt_OpContext(
-                    txCtx = RellTestUtils.Rt_TestTxContext,
+            return Rt_TestOpContext(
                     lastBlockTime = lastBlockTime,
                     transactionIid = transactionIid,
                     blockHeight = blockHeight,
                     opIndex = opIndex,
                     signers = signers2,
-                    allOperations = ops2
+                    allOperations = ops2,
             )
         }
 
-        private fun parseOperation(s: String): OpData {
+        private fun parseOperation(s: String): Pair<String, List<Gtv>> {
             val i = s.indexOf("[")
             val name = s.substring(0, i)
-            val args = GtvTestUtils.strToGtv(s.substring(i)).asArray().toList().toTypedArray()
-            return OpData(name, args)
+            val args = GtvTestUtils.strToGtv(s.substring(i)).asArray().toImmList()
+            return name to args
         }
     }
 }

@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.expr.atexpr
 
-import net.postchain.rell.lang.type.VirtualTest
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.GtvTestUtils
+import net.postchain.rell.test.VirtualTestUtils
 import org.junit.Test
 
 class AtExprCollectionAttrTest: BaseRellTest(false) {
@@ -185,7 +185,7 @@ class AtExprCollectionAttrTest: BaseRellTest(false) {
 
     private fun initVirtualTuple(fields: String, paths: String, values: List<String>) {
         val data = values.map {
-            val json = GtvTestUtils.encodeGtvStr(VirtualTest.argToGtv(it, paths))
+            val json = GtvTestUtils.encodeGtvStr(VirtualTestUtils.argToGtv(it, paths))
             "virtual<($fields)>.from_gtv(gtv.from_json('$json'))"
         }.joinToString()
         def("function data() = [$data];")
@@ -214,7 +214,7 @@ class AtExprCollectionAttrTest: BaseRellTest(false) {
     private fun initVirtualStruct(fields: String, paths: String, values: List<String>) {
         def("struct rec { $fields }")
         val data = values.map {
-            val json = GtvTestUtils.encodeGtvStr(VirtualTest.argToGtv(it, paths))
+            val json = GtvTestUtils.encodeGtvStr(VirtualTestUtils.argToGtv(it, paths))
             "virtual<rec>.from_gtv(gtv.from_json('$json'))"
         }.joinToString()
         def("function data() = [$data];")

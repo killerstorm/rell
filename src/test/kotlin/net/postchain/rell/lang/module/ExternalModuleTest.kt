@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.module
@@ -420,7 +420,7 @@ class ExternalModuleTest: BaseRellTest() {
         chk("ext.user @* {} ( user, .name )", "[(ext:user[100],name=Bob)]")
         chkDataRaw("c0.user(100,Bob,720)")
 
-        chkOp("{ create ext.user(name = 'Alice'); }", "rt_err:fn:op_context.transaction:noop")
+        chkOp("{ create ext.user(name = 'Alice'); }", "rt_err:op_context:noop")
         chkOp("{ delete ext.user @ {}; }", "ct_err:stmt_delete_cant:user")
     }
 
@@ -523,7 +523,7 @@ class ExternalModuleTest: BaseRellTest() {
         var iTx = 0
         for (iBlock in 0 until nBlocks) {
             val blockIid = calcBlockId(iChain, iBlock)
-            b.block(blockIid, iBlock.toLong(), "$blockIid", "FEED$chainId", 1500000000000 + 1000000 * iBlock)
+            b.block(blockIid, iBlock.toLong(), "$blockIid", 1500000000000 + 1000000 * iBlock)
             for (k in 0 until nTxPerBlock) {
                 val txIid = calcTxId(iChain, iTx++)
                 val sTx = "%02d".format(iTx)
@@ -534,12 +534,12 @@ class ExternalModuleTest: BaseRellTest() {
     }
 
     companion object {
-        fun initExternalChain(tst: RellCodeTester, chainId: Long, inserts: List<String>) {
+        fun initExternalChain(tst: RellCodeTester, chainId: Long, inserts: List<String>, dropTables: Boolean = false) {
             val t = RellCodeTester(tst.tstCtx)
             for ((path, code) in tst.files()) t.file(path, code)
             for ((alias, chain) in tst.chainDependencies()) t.chainDependency(alias, chain.first.toHex(), chain.second)
             t.chainId = chainId
-            t.dropTables = false
+            t.dropTables = dropTables
             t.insert(inserts)
             t.init()
         }

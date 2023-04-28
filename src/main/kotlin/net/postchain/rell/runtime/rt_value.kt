@@ -18,7 +18,7 @@ import net.postchain.rell.model.expr.R_PartialArgMapping
 import net.postchain.rell.model.expr.R_PartialCallMapping
 import net.postchain.rell.runtime.utils.Rt_ValueRecursionDetector
 import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.PostchainGtvUtils
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmList
 import java.math.BigDecimal
@@ -907,7 +907,7 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
     companion object {
         fun toString(value: Gtv): String {
             return try {
-                PostchainUtils.gtvToJson(value)
+                PostchainGtvUtils.gtvToJson(value)
             } catch (e: Exception) {
                 value.toString() // Fallback, just in case (did not happen).
             }

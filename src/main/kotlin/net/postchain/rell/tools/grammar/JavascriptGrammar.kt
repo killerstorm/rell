@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.grammar
@@ -8,7 +8,7 @@ import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.ParserReference
 import net.postchain.rell.compiler.parser.RellToken
 import net.postchain.rell.compiler.parser.S_Grammar
-import net.postchain.rell.module.RellVersions
+import net.postchain.rell.utils.RellVersions
 import org.apache.commons.collections4.MapUtils
 
 fun main() {

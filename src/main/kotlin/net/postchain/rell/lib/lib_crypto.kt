@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -18,7 +18,7 @@ import net.postchain.rell.model.R_IntegerType
 import net.postchain.rell.model.R_TupleType
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.PostchainGtvUtils
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.etherjar.PrivateKey
 import net.postchain.rell.utils.etherjar.Signer
@@ -78,7 +78,7 @@ private object CryptoFns {
         val digest = a.asByteArray()
         val res = try {
             val signature = Signature(b.asByteArray(), c.asByteArray())
-            PostchainUtils.cryptoSystem.verifyDigest(digest, signature)
+            PostchainGtvUtils.cryptoSystem.verifyDigest(digest, signature)
         } catch (e: Exception) {
             throw Rt_Exception.common("verify_signature", e.message ?: "Signature verification crashed")
         }

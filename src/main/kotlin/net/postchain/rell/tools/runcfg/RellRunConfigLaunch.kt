@@ -12,7 +12,6 @@ import net.postchain.api.internal.BlockchainApi
 import net.postchain.api.rest.infra.RestApiConfig
 import net.postchain.base.gtv.GtvToBlockchainRidFactory
 import net.postchain.base.withReadWriteConnection
-import net.postchain.common.BlockchainRid
 import net.postchain.common.exception.UserMistake
 import net.postchain.config.app.AppConfig
 import net.postchain.core.EContext
@@ -23,16 +22,23 @@ import net.postchain.logging.NODE_PUBKEY_TAG
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
+import net.postchain.rell.lib.test.Rt_PostchainUnitTestBlockRunner
 import net.postchain.rell.lib.test.Rt_StaticBlockRunnerStrategy
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.Rt_ChainSqlMapping
+import net.postchain.rell.runtime.Rt_OutPrinter
+import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.runtime.Rt_RegularSqlContext
+import net.postchain.rell.sql.PostchainSqlInitProjExt
 import net.postchain.rell.sql.PostchainStorageSqlManager
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.utils.*
-import net.postchain.rell.utils.cli.*
+import net.postchain.rell.utils.cli.RellCliBasicException
+import net.postchain.rell.utils.cli.RellCliExitException
+import net.postchain.rell.utils.cli.RellCliLogUtils
+import net.postchain.rell.utils.cli.RellCliUtils
 import org.apache.commons.configuration2.PropertiesConfiguration
 import picocli.CommandLine
 import java.io.File
@@ -57,9 +63,9 @@ private fun main0(args: RellRunConfigLaunchCliArgs) {
     if (args.test) {
         val filter = args.testFilter
         val targetChains = args.getTargetChains()
-        val matcher = if (filter == null) TestMatcher.ANY else {
+        val matcher = if (filter == null) UnitTestMatcher.ANY else {
             val patterns = filter.split(",")
-            TestMatcher.make(patterns)
+            UnitTestMatcher.make(patterns)
         }
         runTests(commonArgs, matcher, targetChains)
     } else {
@@ -143,7 +149,7 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): AppConfig {
     return nodeAppConf
 }
 
-private fun runTests(args: CommonArgs, matcher: TestMatcher, targetChains: Collection<String>?) {
+private fun runTests(args: CommonArgs, matcher: UnitTestMatcher, targetChains: Collection<String>?) {
     val compilerOptions = C_CompilerOptions.forLangVersion(args.sourceVer)
 
     val rellAppConf = generateRunConfig(args, true)
@@ -170,52 +176,56 @@ private fun runTests(args: CommonArgs, matcher: TestMatcher, targetChains: Colle
         }
     }
 
-    val cliEnv: RellCliEnv = MainRellCliEnv
-    val testRes = TestRunnerResults()
+    val printer: Rt_Printer = Rt_OutPrinter
+    val testRes = UnitTestRunnerResults()
 
     StorageBuilder.buildStorage(nodeAppConf).use { storage ->
         val sqlMgr = PostchainStorageSqlManager(storage, args.sqlLog)
 
         for (tChain in tChains) {
-            val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(tChain.rApp, Rt_ChainSqlMapping(tChain.chain.iid))
-
-            val blockRunnerStrategy = Rt_StaticBlockRunnerStrategy(tChain.gtvConfig, keyPair)
-
-            val blockRunnerConfig = Rt_BlockRunnerConfig(
-                forceTypeCheck = true,
-                sqlLog = args.sqlLog,
-                dbInitLogLevel = SqlInitLogging.LOG_NONE,
-            )
-
             val globalCtx = RellCliUtils.createGlobalContext(compilerOptions, typeCheck = true)
+            val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(tChain.rApp, Rt_ChainSqlMapping(tChain.chain.iid))
+            val chainCtx = PostchainBaseUtils.createChainContext(tChain.gtvConfig, tChain.rApp, tChain.chain.brid)
 
-            val chainRid = BlockchainRid(tChain.chain.brid.toByteArray())
-            val chainCtx = PostchainUtils.createChainContext(tChain.gtvConfig, tChain.rApp, chainRid)
+            val blockRunner = createBlockRunner(args, keyPair, tChain.gtvConfig)
 
-            val fns = TestRunner.getTestFunctions(tChain.rApp, matcher)
+            val fns = UnitTestRunner.getTestFunctions(tChain.rApp, matcher)
+            val tc = UnitTestRunnerChain(tChain.chain.name, tChain.chain.iid)
+            val cases = fns.map { UnitTestCase(tc, it) }
 
-            val tc = TestRunnerChain(tChain.chain.name, tChain.chain.iid)
-            val cases = fns.map { TestCase(tc, it) }
-
-            val testCtx = TestRunnerContext(
+            val testCtx = UnitTestRunnerContext(
                 tChain.rApp,
-                cliEnv,
+                printer,
                 sqlCtx,
                 sqlMgr,
+                PostchainSqlInitProjExt,
                 globalCtx,
                 chainCtx,
-                blockRunnerConfig,
-                blockRunnerStrategy,
+                blockRunner,
             )
 
-            TestRunner.runTests(testCtx, cases, testRes)
+            UnitTestRunner.runTests(testCtx, cases, testRes)
         }
     }
 
-    val ok = testRes.print(cliEnv)
+    val ok = testRes.print(printer)
     if (!ok) {
         throw RellCliExitException(1)
     }
+}
+
+private fun createBlockRunner(
+    args: CommonArgs,
+    keyPair: BytesKeyPair,
+    gtvConfig: Gtv,
+): Rt_UnitTestBlockRunner {
+    val blockRunnerConfig = Rt_BlockRunnerConfig(
+        forceTypeCheck = true,
+        sqlLog = args.sqlLog,
+        dbInitLogLevel = SqlInitLogging.LOG_NONE,
+    )
+    val blockRunnerStrategy = Rt_StaticBlockRunnerStrategy(gtvConfig)
+    return Rt_PostchainUnitTestBlockRunner(keyPair, blockRunnerConfig, blockRunnerStrategy)
 }
 
 private fun generateRunConfig(args: CommonArgs, test: Boolean): RellPostAppCliConfig {

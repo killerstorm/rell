@@ -9,10 +9,10 @@ import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.base.core.C_Compiler
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.RellVersions
 import net.postchain.rell.test.GtvTestUtils
 import net.postchain.rell.test.RellTestUtils
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.PostchainGtvUtils
+import net.postchain.rell.utils.RellVersions
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -113,7 +113,7 @@ class RellConfigGenTest {
         val rApp = cRes.app
         checkNotNull(rApp)
 
-        val templateGtv = if (templateXml == null) GtvFactory.gtv(mapOf()) else PostchainUtils.xmlToGtv(templateXml)
+        val templateGtv = if (templateXml == null) GtvFactory.gtv(mapOf()) else PostchainGtvUtils.xmlToGtv(templateXml)
         val configGen = RellConfigGen(sourceDir, RellVersions.VERSION, modules, cRes.files, rApp)
 
         val actualGtv = configGen.makeConfig(templateGtv)
@@ -123,12 +123,12 @@ class RellConfigGenTest {
     }
 
     private fun xmlToJson(xml: String): String {
-        val gtv = PostchainUtils.xmlToGtv(xml)
+        val gtv = PostchainGtvUtils.xmlToGtv(xml)
         return GtvTestUtils.gtvToStr(gtv)
     }
 
     private fun jsonToXml(json: String): String {
         val gtv = GtvTestUtils.strToGtv(json)
-        return PostchainUtils.gtvToXml(gtv)
+        return PostchainGtvUtils.gtvToXml(gtv)
     }
 }

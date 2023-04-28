@@ -4,7 +4,6 @@
 
 package net.postchain.rell.tools.api
 
-import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.ast.S_RellFile
 import net.postchain.rell.compiler.base.core.C_Compiler
@@ -15,10 +14,9 @@ import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.compiler.base.utils.C_SourceFile
 import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_RellVersion
 import net.postchain.rell.runtime.Rt_RellVersionProperty
-import net.postchain.rell.utils.cli.RellCliEnv
+import net.postchain.rell.utils.RellVersions
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 import org.apache.commons.configuration2.PropertiesConfiguration
@@ -64,17 +62,6 @@ object IdeApi {
 
     @JvmStatic fun getModuleInfo(path: C_SourcePath, ast: S_RellFile): IdeModuleInfo? {
         return ast.ideModuleInfo(path)
-    }
-
-    private object IdeRellCliEnv: RellCliEnv() {
-        override fun print(msg: String) = println(msg)
-        override fun error(msg: String) = println(msg)
-    }
-
-    @JvmStatic fun getAppFiles(sourceDir: C_SourceDir, modules: List<R_ModuleName>): Map<String, String> {
-        val configGen = RellConfigGen.create(IdeRellCliEnv, sourceDir, modules)
-        val ms = configGen.getModuleSources()
-        return ms.files
     }
 
     @JvmStatic fun buildOutlineTree(b: IdeOutlineTreeBuilder, ast: S_RellFile) {

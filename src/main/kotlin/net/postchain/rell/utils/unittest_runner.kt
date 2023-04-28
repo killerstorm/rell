@@ -5,43 +5,40 @@
 package net.postchain.rell.utils
 
 import com.google.common.base.Throwables
-import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
-import net.postchain.rell.lib.test.Rt_BlockRunnerStrategy
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_DefinitionName
 import net.postchain.rell.model.R_FunctionDefinition
 import net.postchain.rell.model.R_Module
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
+import net.postchain.rell.sql.SqlInitProjExt
 import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.sql.SqlUtils
-import net.postchain.rell.utils.cli.RellCliEnv
-import net.postchain.rell.utils.cli.Rt_CliEnvPrinter
 import org.apache.commons.lang3.StringUtils
 import java.util.regex.Pattern
 
 private val PRINT_SEPARATOR = "-".repeat(72)
 
-class TestResult(val error: Throwable?) {
+class UnitTestResult(val error: Throwable?) {
     val isOk = error == null
     override fun toString() = if (isOk) "OK" else "FAILED"
 }
 
-class TestRunnerContext(
+class UnitTestRunnerContext(
     val app: R_App,
-    val cliEnv: RellCliEnv,
+    val printer: Rt_Printer,
     val sqlCtx: Rt_SqlContext,
     val sqlMgr: SqlManager,
+    val sqlInitProjExt: SqlInitProjExt,
     private val globalCtx: Rt_GlobalContext,
     private val chainCtx: Rt_ChainContext,
-    private val blockRunnerConfig: Rt_BlockRunnerConfig,
-    private val blockRunnerStrategy: Rt_BlockRunnerStrategy,
+    private val blockRunner: Rt_UnitTestBlockRunner,
     val printTestCases: Boolean = true,
     val stopOnError: Boolean = false,
-    val onTestCaseStart: (TestCase) -> Unit = {},
-    val onTestCaseFinished: (TestCaseResult) -> Unit = {},
+    val onTestCaseStart: (UnitTestCase) -> Unit = {},
+    val onTestCaseFinished: (UnitTestCaseResult) -> Unit = {},
 ) {
-    val casePrinter: Rt_Printer = if (printTestCases) Rt_CliEnvPrinter(cliEnv) else Rt_NopPrinter
+    val casePrinter: Rt_Printer = if (printTestCases) printer else Rt_NopPrinter
 
     fun createAppContext(): Rt_AppContext {
         return Rt_AppContext(
@@ -51,17 +48,16 @@ class TestRunnerContext(
             repl = false,
             test = true,
             replOut = null,
-            blockRunnerConfig = blockRunnerConfig,
-            blockRunnerStrategy = blockRunnerStrategy,
+            blockRunner = blockRunner,
         )
     }
 }
 
-class TestRunnerChain(val name: String, val iid: Long) {
+class UnitTestRunnerChain(val name: String, val iid: Long) {
     override fun toString() = "$name[$iid]"
 }
 
-class TestCase(chain: TestRunnerChain?, val fn: R_FunctionDefinition) {
+class UnitTestCase(chain: UnitTestRunnerChain?, val fn: R_FunctionDefinition) {
     val name = let {
         val f = fn.appLevelName
         if (chain == null) f else "$chain:$f"
@@ -72,23 +68,21 @@ class TestCase(chain: TestRunnerChain?, val fn: R_FunctionDefinition) {
     }
 }
 
-class TestCaseResult(val case: TestCase, val res: TestResult) {
+class UnitTestCaseResult(val case: UnitTestCase, val res: UnitTestResult) {
     override fun toString() = "$case:$res"
 }
 
-class TestRunnerResults {
-    private val results = mutableListOf<TestCaseResult>()
+class UnitTestRunnerResults {
+    private val results = mutableListOf<UnitTestCaseResult>()
 
-    fun add(res: TestCaseResult) {
+    fun add(res: UnitTestCaseResult) {
         results.add(res)
     }
 
     fun getResults() = results.toImmList()
 
-    fun print(env: RellCliEnv): Boolean {
+    fun print(printer: Rt_Printer): Boolean {
         val (okTests, failedTests) = results.partition { it.res.error == null }
-
-        val printer = Rt_CliEnvPrinter(env)
 
         if (failedTests.isNotEmpty()) {
             printer.print("")
@@ -120,7 +114,7 @@ class TestRunnerResults {
         return allOk
     }
 
-    private fun printResults(printer: Rt_Printer, list: List<TestCaseResult>) {
+    private fun printResults(printer: Rt_Printer, list: List<UnitTestCaseResult>) {
         if (list.isNotEmpty()) {
             printer.print("")
             for (r in list) {
@@ -130,8 +124,8 @@ class TestRunnerResults {
     }
 }
 
-object TestRunner {
-    fun getTestFunctions(app: R_App, matcher: TestMatcher): List<R_FunctionDefinition> {
+object UnitTestRunner {
+    fun getTestFunctions(app: R_App, matcher: UnitTestMatcher): List<R_FunctionDefinition> {
         val modules = app.modules
             .filter { it.test && it.selected }
             .sortedBy { it.name }
@@ -140,25 +134,25 @@ object TestRunner {
         return fns
     }
 
-    fun getTestFunctions(module: R_Module, matcher: TestMatcher): List<R_FunctionDefinition> {
+    fun getTestFunctions(module: R_Module, matcher: UnitTestMatcher): List<R_FunctionDefinition> {
         return module.functions.values
             .filter { it.moduleLevelName == "test" || it.moduleLevelName.startsWith("test_") }
             .filter { it.params().isEmpty() }
             .filter { matcher.matchFunction(it.defName) }
     }
 
-    fun runTests(testCtx: TestRunnerContext, cases: List<TestCase>): Boolean {
-        val testRes = TestRunnerResults()
+    fun runTests(testCtx: UnitTestRunnerContext, cases: List<UnitTestCase>): Boolean {
+        val testRes = UnitTestRunnerResults()
         runTests(testCtx, cases, testRes)
-        return testRes.print(testCtx.cliEnv)
+        return testRes.print(testCtx.printer)
     }
 
-    fun runTests(testCtx: TestRunnerContext, cases: List<TestCase>, testRes: TestRunnerResults) {
+    fun runTests(testCtx: UnitTestRunnerContext, cases: List<UnitTestCase>, testRes: UnitTestRunnerResults) {
         for (case in cases) {
             testCtx.onTestCaseStart(case)
 
             val v = runTestCase(testCtx, case)
-            val caseRes = TestCaseResult(case, v)
+            val caseRes = UnitTestCaseResult(case, v)
 
             testCtx.onTestCaseFinished(caseRes)
             testRes.add(caseRes)
@@ -169,7 +163,7 @@ object TestRunner {
         }
     }
 
-    private fun runTestCase(testCtx: TestRunnerContext, case: TestCase): TestResult {
+    private fun runTestCase(testCtx: UnitTestRunnerContext, case: UnitTestCase): UnitTestResult {
         val caseName = case.name
 
         val printer = testCtx.casePrinter
@@ -179,19 +173,26 @@ object TestRunner {
         val appCtx = testCtx.createAppContext()
 
         if (testCtx.sqlMgr.hasConnection) {
-            SqlUtils.initDatabase(appCtx, testCtx.sqlCtx, testCtx.sqlMgr, dropTables = true, sqlInitLog = false)
+            SqlUtils.initDatabase(
+                appCtx,
+                testCtx.sqlCtx,
+                testCtx.sqlMgr,
+                adapter = testCtx.sqlInitProjExt,
+                dropTables = true,
+                sqlInitLog = false,
+            )
         }
 
         return testCtx.sqlMgr.transaction { sqlExec ->
-            val exeCtx = Rt_ExecutionContext(appCtx, null, testCtx.sqlCtx, sqlExec)
+            val exeCtx = Rt_ExecutionContext(appCtx, Rt_NullOpContext, testCtx.sqlCtx, sqlExec)
             try {
                 case.fn.callTop(exeCtx, listOf())
                 printer.print("OK $caseName")
-                TestResult(null)
+                UnitTestResult(null)
             } catch (e: Throwable) {
                 printException(printer, e)
                 printer.print("FAILED ${case.name}")
-                TestResult(e)
+                UnitTestResult(e)
             }
         }
     }
@@ -210,7 +211,7 @@ private fun printException(printer: Rt_Printer, e: Throwable) {
     }
 }
 
-class TestMatcher private constructor(private val patterns: List<Pattern>) {
+class UnitTestMatcher private constructor(private val patterns: List<Pattern>) {
     fun matchFunction(defName: R_DefinitionName): Boolean {
         if (match(defName.simpleName) || match(defName.qualifiedName) || match(defName.module)) {
             return true
@@ -231,9 +232,9 @@ class TestMatcher private constructor(private val patterns: List<Pattern>) {
     companion object {
         val ANY = make(listOf("*"))
 
-        fun make(patterns: List<String>): TestMatcher {
+        fun make(patterns: List<String>): UnitTestMatcher {
             val patterns2 = patterns.map { globToPattern(it) }.toImmList()
-            return TestMatcher(patterns2)
+            return UnitTestMatcher(patterns2)
         }
 
         fun globToPattern(s: String): Pattern {

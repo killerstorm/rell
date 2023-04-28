@@ -11,7 +11,7 @@ import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.*
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.PostchainGtvUtils
 import net.postchain.rell.utils.cli.*
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
@@ -311,7 +311,7 @@ class RellCliApiTest {
         if (ctErr != null) return ctErr
 
         val gtv = RellCliInternalApi.compileGtv0(config, sourceDir, immListOf(rModuleName), cRes.files)
-        return PostchainUtils.gtvToJson(gtv)
+        return PostchainGtvUtils.gtvToJson(gtv)
     }
 
     @Test fun testRunTestsBasic() {

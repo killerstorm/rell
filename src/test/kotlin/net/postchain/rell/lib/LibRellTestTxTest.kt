@@ -7,11 +7,14 @@ package net.postchain.rell.lib
 import net.postchain.common.exception.TransactionIncorrect
 import net.postchain.common.exception.UserMistake
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.PostchainRellTestProjExt
 import net.postchain.rell.test.RellCodeTester
 import net.postchain.rell.test.RellTestContext
 import org.junit.Test
 
 class LibRellTestTxTest: BaseRellTest(false) {
+    override fun getProjExt() = PostchainRellTestProjExt
+
     init {
         tst.testLib = true
     }
@@ -521,7 +524,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
             val chainRid = "DeadBeef".repeat(8)
             tst.replModule = ""
             tst.chainId = chainId
-            tst.chainRid = chainRid
+            tst.blockchainRid = chainRid
             tstCtx.blockchain(chainId, chainRid)
         }
     }

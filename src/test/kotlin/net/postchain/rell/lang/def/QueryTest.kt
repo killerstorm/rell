@@ -1,14 +1,14 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
 
-import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_BooleanValue
 import net.postchain.rell.runtime.Rt_IntValue
 import net.postchain.rell.runtime.Rt_TextValue
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.utils.RellVersions
 import org.junit.Test
 
 class QueryTest: BaseRellTest() {

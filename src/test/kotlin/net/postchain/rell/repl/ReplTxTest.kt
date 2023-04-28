@@ -1,20 +1,37 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.repl
 
 import net.postchain.rell.test.BaseRellTest
+import net.postchain.rell.test.PostchainRellTestProjExt
 import org.junit.Test
 
 class ReplTxTest: BaseRellTest(true) {
+    override fun getProjExt() = PostchainRellTestProjExt
+
     private fun initStuff() {
         val chainId = 0L
         val chainRid = "DeadBeef".repeat(8)
         tst.replModule = ""
         tst.chainId = chainId
-        tst.chainRid = chainRid
+        tst.blockchainRid = chainRid
         tstCtx.blockchain(chainId, chainRid)
+    }
+
+    @Test fun testSysEntities() {
+        repl.chk("_type_of(transaction@{})", "RES:text[transaction]")
+        repl.chk("_type_of(block@{})", "RES:text[block]")
+        repl.chk("transaction @* {}", "RES:list<transaction>[]")
+        repl.chk("block @* {}", "RES:list<block>[]")
+    }
+
+    @Test fun testSysEntitiesCompatibility() {
+        repl.chk("var b = block @? {};")
+        repl.chk("b = block @? {};")
+        repl.chk("_type_of(b)", "RES:text[block?]")
+        repl.chk("b", "RES:null")
     }
 
     @Test fun testTxRun() {

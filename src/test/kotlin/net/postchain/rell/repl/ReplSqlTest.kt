@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.repl
@@ -68,20 +68,6 @@ class ReplSqlTest: BaseRellTest(true) {
         repl.chk("import t;")
         repl.chk("t.etats.y", "RES:int[456]")
         repl.chk("t.etats.y = 789;", "CTE:<console>:no_db_update:repl")
-    }
-
-    @Test fun testSysEntities() {
-        repl.chk("_type_of(transaction@{})", "RES:text[transaction]")
-        repl.chk("_type_of(block@{})", "RES:text[block]")
-        repl.chk("transaction @* {}", "RES:list<transaction>[]")
-        repl.chk("block @* {}", "RES:list<block>[]")
-    }
-
-    @Test fun testSysEntitiesCompatibility() {
-        repl.chk("var b = block @? {};")
-        repl.chk("b = block @? {};")
-        repl.chk("_type_of(b)", "RES:text[block?]")
-        repl.chk("b", "RES:null")
     }
 
     @Test fun testSqlInitError() {

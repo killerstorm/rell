@@ -6,10 +6,8 @@ package net.postchain.rell.utils.cli
 
 import mu.KLogging
 import net.postchain.StorageBuilder
-import net.postchain.common.BlockchainRid
 import net.postchain.common.hexStringToByteArray
 import net.postchain.config.app.AppConfig
-import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.base.core.C_CompilationResult
 import net.postchain.rell.compiler.base.core.C_Compiler
@@ -18,27 +16,20 @@ import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_MessageType
 import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.lib.test.Rt_BlockRunnerStrategy
-import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
-import net.postchain.rell.lib.test.UnitTestBlockRunner
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_SqlManager
 import net.postchain.rell.sql.*
-import net.postchain.rell.tools.RellJavaLoggingInit
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.immMapOf
-import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.*
 import picocli.CommandLine
 import java.io.File
 import java.io.OutputStream
 import java.io.PrintStream
 import java.sql.DriverManager
 import java.util.*
+import java.util.logging.LogManager
 import kotlin.system.exitProcess
 
 object RellCliUtils: KLogging() {
@@ -210,27 +201,12 @@ object RellCliUtils: KLogging() {
     }
 
     fun createChainContext(moduleArgs: Map<R_ModuleName, Rt_Value> = immMapOf()): Rt_ChainContext {
-        val bcRid = BlockchainRid(ByteArray(32))
-        return Rt_ChainContext(GtvNull, moduleArgs, bcRid)
+        return Rt_ChainContext(GtvNull, moduleArgs, Rt_ChainContext.ZERO_BLOCKCHAIN_RID)
     }
 
     fun createSqlContext(app: R_App): Rt_SqlContext {
         val mapping = Rt_ChainSqlMapping(0)
         return Rt_RegularSqlContext.createNoExternalChains(app, mapping)
-    }
-
-    fun createBlockRunnerStrategy(
-        sourceDir: C_SourceDir,
-        app: R_App,
-        moduleArgs: Map<R_ModuleName, Gtv>,
-    ): Rt_BlockRunnerStrategy {
-        val keyPair = UnitTestBlockRunner.getTestKeyPair()
-        val blockRunnerModules = getMainModules(app)
-        val compileConfig = RellCliCompileConfig.Builder()
-            .cliEnv(NullRellCliEnv)
-            .moduleArgs0(moduleArgs)
-            .build()
-        return Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, blockRunnerModules, compileConfig)
     }
 
     fun getMainModules(app: R_App): List<R_ModuleName> {
@@ -367,6 +343,14 @@ object RellCliLogUtils {
             unsafe.putObjectVolatile(loggerClass, unsafe.staticFieldOffset(loggerField), null)
         } catch (e: Throwable) {
             // ignore
+        }
+    }
+}
+
+class RellJavaLoggingInit {
+    init {
+        javaClass.getResourceAsStream("/rell_logging.properties")?.use { ins ->
+            LogManager.getLogManager().readConfiguration(ins)
         }
     }
 }

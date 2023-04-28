@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -28,6 +28,7 @@ import net.postchain.rell.tools.api.IdeSymbolKind
 import net.postchain.rell.utils.LazyString
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.immListOf
+import net.postchain.rell.utils.toBytes
 
 private val GTX_OPERATION_STRUCT = C_Utils.createSysStruct(
     "gtx_operation",
@@ -59,6 +60,9 @@ object C_Lib_OpContext {
     val GLOBAL_STRUCTS = immListOf(GTX_OPERATION_STRUCT, GTX_TRANSACTION_BODY_STRUCT, GTX_TRANSACTION_STRUCT)
 
     private val DEF_PATH = C_DefinitionPath.ROOT.subPath(NAMESPACE_NAME)
+
+    val LIST_OF_GTV_TYPE = R_ListType(R_GtvType)
+    val GTX_OPERATION_STRUCT_TYPE = GTX_OPERATION_STRUCT.type
 
     private val NAMESPACE_FNS = C_GlobalFuncBuilder(DEF_PATH)
             .add("get_signers", GET_SIGNERS_RETURN_TYPE, listOf(), wrapFn(OpCtxFns.GetSigners))
@@ -150,43 +154,41 @@ object C_Lib_OpContext {
 }
 
 private object OpCtxFns {
-    abstract class BaseFn(private val name: String): R_SysFunction {
+    abstract class BaseFn: R_SysFunction {
         abstract fun call(opCtx: Rt_OpContext): Rt_Value
 
         final override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
-            val opCtx = getOpContext(ctx, name)
-            return call(opCtx)
+            return call(ctx.exeCtx.opCtx)
         }
     }
 
     object Exists: R_SysFunctionEx_0() {
         override fun call(ctx: Rt_CallContext): Rt_Value {
-            val opCtx = ctx.exeCtx.opCtx
-            return Rt_BooleanValue(opCtx != null)
+            val v = ctx.exeCtx.opCtx.exists()
+            return Rt_BooleanValue(v)
         }
     }
 
-    object LastBlockTime: BaseFn("last_block_time") {
-        override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.lastBlockTime)
+    object LastBlockTime: BaseFn() {
+        override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.lastBlockTime())
     }
 
-    class Transaction(private val type: R_EntityType): BaseFn("transaction") {
-        override fun call(opCtx: Rt_OpContext) = Rt_EntityValue(type, opCtx.transactionIid)
+    class Transaction(private val type: R_EntityType): BaseFn() {
+        override fun call(opCtx: Rt_OpContext) = Rt_EntityValue(type, opCtx.transactionIid())
     }
 
-    object BlockHeight: BaseFn("block_height") {
-        override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.blockHeight)
+    object BlockHeight: BaseFn() {
+        override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.blockHeight())
     }
 
-    object OpIndex: BaseFn("op_index") {
-        override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.opIndex.toLong())
+    object OpIndex: BaseFn() {
+        override fun call(opCtx: Rt_OpContext) = Rt_IntValue(opCtx.opIndex().toLong())
     }
 
-    object GetSigners: R_SysFunctionEx_0() {
-        override fun call(ctx: Rt_CallContext): Rt_Value {
-            val opCtx = getOpContext(ctx, "get_signers")
-            val elements = opCtx.signers.map { Rt_ByteArrayValue(it) as Rt_Value }.toMutableList()
+    object GetSigners: BaseFn() {
+        override fun call(opCtx: Rt_OpContext): Rt_Value {
+            val elements = opCtx.signers().map { Rt_ByteArrayValue(it.toByteArray()) as Rt_Value }.toMutableList()
             return Rt_ListValue(GET_SIGNERS_RETURN_TYPE, elements)
         }
     }
@@ -194,40 +196,26 @@ private object OpCtxFns {
     object IsSigner: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 1)
-            val a = args[0].asByteArray()
-            val opCtx = ctx.exeCtx.opCtx
-            val r = if (opCtx == null) false else opCtx.signers.any { it.contentEquals(a) }
+            val a = args[0].asByteArray().toBytes()
+            val r = ctx.exeCtx.opCtx.isSigner(a)
             return Rt_BooleanValue(r)
         }
     }
 
-    object GetAllOperations: R_SysFunctionEx_0() {
-        private val ARGS_LIST_TYPE = R_ListType(R_GtvType)
-
-        override fun call(ctx: Rt_CallContext): Rt_Value {
-            val opCtx = getOpContext(ctx, "get_all_operations")
-            val elements = opCtx.allOperations.map {
-                val name = Rt_TextValue(it.opName)
-                val args = Rt_ListValue(ARGS_LIST_TYPE, it.args.map { Rt_GtvValue(it) }.toMutableList())
-                Rt_StructValue(GTX_OPERATION_STRUCT.type, mutableListOf(name, args)) as Rt_Value
-            }.toMutableList()
+    object GetAllOperations: BaseFn() {
+        override fun call(opCtx: Rt_OpContext): Rt_Value {
+            val elements = opCtx.allOperations().toMutableList()
             return Rt_ListValue(GET_ALL_OPERATIONS_RETURN_TYPE, elements)
         }
     }
 
     object EmitEvent: R_SysFunctionEx_2() {
         override fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
-            val opCtx = getOpContext(ctx, "emit_event")
             val type = arg1.asString()
             val data = arg2.asGtv()
-            opCtx.txCtx.emitEvent(type, data)
+            ctx.exeCtx.opCtx.emitEvent(type, data)
             return Rt_UnitValue
         }
-    }
-
-    private fun getOpContext(ctx: Rt_CallContext, fnName: String): Rt_OpContext {
-        val opCtx = ctx.exeCtx.opCtx
-        return opCtx ?: throw Rt_Exception.common("fn:op_context.$fnName:noop", "Operation context not available")
     }
 }
 

@@ -6,16 +6,11 @@ package net.postchain.rell.runtime
 
 import com.google.common.collect.Sets
 import mu.KLogging
-import net.postchain.common.BlockchainRid
 import net.postchain.common.types.WrappedByteArray
-import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
-import net.postchain.gtx.data.OpData
+import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.toCodeMsg
-import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
-import net.postchain.rell.lib.test.Rt_BlockRunnerStrategy
-import net.postchain.rell.lib.test.Rt_UnsupportedBlockRunnerStrategy
 import net.postchain.rell.model.*
 import net.postchain.rell.repl.ReplOutputChannel
 import net.postchain.rell.runtime.utils.Rt_Messages
@@ -281,8 +276,7 @@ class Rt_AppContext(
     val repl: Boolean,
     val test: Boolean,
     val replOut: ReplOutputChannel?,
-    val blockRunnerConfig: Rt_BlockRunnerConfig = Rt_BlockRunnerConfig(),
-    val blockRunnerStrategy: Rt_BlockRunnerStrategy = Rt_UnsupportedBlockRunnerStrategy,
+    val blockRunner: Rt_UnitTestBlockRunner = Rt_NullUnitTestBlockRunner,
     globalConstantStates: List<Rt_GlobalConstantState> = immListOf(),
 ) {
     private var objsInit: SqlObjectsInit? = null
@@ -344,7 +338,7 @@ private class Rt_GlobalConstants(private val appCtx: Rt_AppContext, oldStates: L
         inited = true
 
         val sqlCtx = Rt_NullSqlContext.create(appCtx.app)
-        initExeCtx = Rt_ExecutionContext(appCtx, null, sqlCtx, NoConnSqlExecutor)
+        initExeCtx = Rt_ExecutionContext(appCtx, Rt_NullOpContext, sqlCtx, NoConnSqlExecutor)
 
         try {
             for (c in appCtx.app.constants) {
@@ -411,7 +405,7 @@ private class Rt_GlobalConstants(private val appCtx: Rt_AppContext, oldStates: L
 
 class Rt_ExecutionContext(
         val appCtx: Rt_AppContext,
-        val opCtx: Rt_OpContext?,
+        val opCtx: Rt_OpContext,
         val sqlCtx: Rt_SqlContext,
         val sqlExec: SqlExecutor,
         state: State? = null,
@@ -463,43 +457,43 @@ class Rt_DefinitionContext(val exeCtx: Rt_ExecutionContext, val dbUpdateAllowed:
     val sqlCtx = exeCtx.sqlCtx
 }
 
-abstract class Rt_TxContext {
+abstract class Rt_OpContext {
+    abstract fun exists(): Boolean
+    abstract fun lastBlockTime(): Long
+    abstract fun transactionIid(): Long
+    abstract fun blockHeight(): Long
+    abstract fun opIndex(): Int
+    abstract fun isSigner(pubKey: Bytes): Boolean
+    abstract fun signers(): List<Bytes>
+    abstract fun allOperations(): List<Rt_Value>
     abstract fun emitEvent(type: String, data: Gtv)
 }
 
-abstract class Rt_PostchainTxContextFactory {
-    abstract fun createTxContext(eContext: TxEContext): Rt_TxContext
-}
+object Rt_NullOpContext: Rt_OpContext() {
+    override fun exists() = false
+    override fun lastBlockTime() = throw errNoOp()
+    override fun transactionIid() = throw errNoOp()
+    override fun blockHeight() = throw errNoOp()
+    override fun opIndex() = throw errNoOp()
+    override fun isSigner(pubKey: Bytes) = false
+    override fun signers() = throw errNoOp()
+    override fun allOperations() = throw errNoOp()
+    override fun emitEvent(type: String, data: Gtv) = throw errNoOp()
 
-object Rt_DefaultPostchainTxContextFactory: Rt_PostchainTxContextFactory() {
-    override fun createTxContext(eContext: TxEContext): Rt_TxContext {
-        return Rt_PostchainTxContext(eContext)
+    private fun errNoOp(): Rt_Exception {
+        return Rt_Exception.common("op_context:noop", "Operation context not available")
     }
-
-    private class Rt_PostchainTxContext(private val txCtx: TxEContext): Rt_TxContext() {
-        override fun emitEvent(type: String, data: Gtv) {
-            txCtx.emitEvent(type, data)
-        }
-    }
-}
-
-class Rt_OpContext(
-        val txCtx: Rt_TxContext,
-        val lastBlockTime: Long,
-        val transactionIid: Long,
-        val blockHeight: Long,
-        val opIndex: Int,
-        signers: List<ByteArray>,
-        allOperations: List<OpData>
-) {
-    val signers = signers.toImmList()
-    val allOperations = allOperations.toImmList()
 }
 
 class Rt_ChainContext(
     val rawConfig: Gtv,
     moduleArgs: Map<R_ModuleName, Rt_Value>,
-    val blockchainRid: BlockchainRid,
+    val blockchainRid: Bytes32,
 ) {
     val moduleArgs = moduleArgs.toImmMap()
+
+    companion object {
+        val ZERO_BLOCKCHAIN_RID = Bytes32(ByteArray(32))
+        val NULL = Rt_ChainContext(GtvNull, immMapOf(), ZERO_BLOCKCHAIN_RID)
+    }
 }

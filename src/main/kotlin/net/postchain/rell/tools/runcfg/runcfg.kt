@@ -147,10 +147,10 @@ object RellRunConfigGenerator {
             dirBuilder.put("$chainPath/brid.txt", chain.brid.toHex())
 
             for ((height, config) in chain.configs) {
-                val xml = PostchainUtils.gtvToXml(config.gtvConfig)
+                val xml = PostchainGtvUtils.gtvToXml(config.gtvConfig)
                 dirBuilder.put("$chainPath/$height.xml", xml)
 
-                val bytes = Bytes.of(GtvEncoder.encodeGtv(config.gtvConfig))
+                val bytes = GtvEncoder.encodeGtv(config.gtvConfig).toBytes()
                 dirBuilder.put("$chainPath/$height.gtv", bytes)
             }
         }

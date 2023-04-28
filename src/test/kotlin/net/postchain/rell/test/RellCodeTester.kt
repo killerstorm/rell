@@ -5,31 +5,19 @@
 package net.postchain.rell.test
 
 import com.google.common.collect.Sets
-import net.postchain.base.BaseEContext
-import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.common.BlockchainRid
 import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
 import net.postchain.common.types.WrappedByteArray
-import net.postchain.core.EContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.compiler.base.utils.C_MessageType
 import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
-import net.postchain.rell.lib.test.Rt_BlockRunnerStrategy
-import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
-import net.postchain.rell.lib.test.UnitTestBlockRunner
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.sql.SqlInit
-import net.postchain.rell.sql.SqlInitLogging
-import net.postchain.rell.sql.SqlUtils
+import net.postchain.rell.sql.*
 import net.postchain.rell.utils.*
-import net.postchain.rell.utils.cli.RellCliCompileConfig
 import org.junit.Assert
 import kotlin.test.assertEquals
 
@@ -45,14 +33,15 @@ class RellCodeTester(
             field = value
         }
 
+    var gtvResultRaw = false
+
     var dropTables = true
     var createTables = true
     var wrapInit = false
     var strictToString = true
-    var opContext: Rt_OpContext? = null
+    var opContext: Rt_OpContext = Rt_NullOpContext
     var sqlUpdatePortionSize = 1000
     var replModule: String? = null
-    var chainRid: String? = null
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
     private val postInitOps = mutableListOf<String>()
@@ -68,17 +57,10 @@ class RellCodeTester(
         }
 
         if (createTables) {
-            initSqlCreateSysTables(sqlExec)
-            SqlInit.init(exeCtx, false, SqlInitLogging())
-        }
-    }
+            val chainId = exeCtx.sqlCtx.mainChainMapping().chainId
+            SqlTestUtils.createSysBlockchainTables(exeCtx.sqlExec, chainId)
 
-    private fun initSqlCreateSysTables(sqlExec: SqlExecutor) {
-        val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
-        sqlExec.connection { con ->
-            val eCtx: EContext = BaseEContext(con, chainId, sqlAccess)
-            val bcRid = BlockchainRid(blockchainRid.hexStringToByteArray())
-            sqlAccess.initializeBlockchain(eCtx, bcRid)
+            SqlInit.init(exeCtx, NullSqlInitProjExt, SqlInitLogging())
         }
     }
 
@@ -142,16 +124,22 @@ class RellCodeTester(
         checkResult(expected, actual)
     }
 
+    fun chkFullGtv(code: String, args: List<Gtv>, expected: String) {
+        val encoder = resultEncoder()
+        val actual = callQuery0(code, "q", args, GtvTestUtils::decodeGtvQueryArgs, encoder)
+        checkResult(expected, actual)
+    }
+
     fun chkQueryGtv(code: String, expected: String) {
         val queryCode = "query q() $code"
         val encoder = resultEncoder()
-        val actual = callQuery0(queryCode, "q", listOf(), GtvTestUtils::decodeGtvQueryArgs, encoder)
+        val actual = callQuery0(queryCode, "q", listOf(), GtvTestUtils::decodeGtvStrQueryArgs, encoder)
         checkResult(expected, actual)
     }
 
     fun chkQueryGtvEx(code: String, args: List<String>, expected: String) {
         val encoder = resultEncoder()
-        val actual = callQuery0(code, "q", args, GtvTestUtils::decodeGtvQueryArgs, encoder)
+        val actual = callQuery0(code, "q", args, GtvTestUtils::decodeGtvStrQueryArgs, encoder)
         checkResult(expected, actual)
     }
 
@@ -174,8 +162,13 @@ class RellCodeTester(
         checkResult(expected, actual)
     }
 
-    fun chkOpGtvEx(code: String, args: List<String>, expected: String) {
-        val actual = callOp0(code, "o", args, GtvTestUtils::decodeGtvOpArgsStr)
+    fun chkOpExGtv(code: String, args: List<Gtv>, expected: String) {
+        val actual = callOp0(code, "o", args, GtvTestUtils::decodeGtvOpArgs)
+        checkResult(expected, actual)
+    }
+
+    fun chkOpExGtvStr(code: String, args: List<String>, expected: String) {
+        val actual = callOp0(code, "o", args, GtvTestUtils::decodeGtvStrOpArgs)
         checkResult(expected, actual)
     }
 
@@ -200,14 +193,15 @@ class RellCodeTester(
     }
 
     fun callQueryGtv(code: String, name: String, args: List<Rt_Value>): Gtv {
-        val encoder = { t: R_Type, v: Rt_Value -> PostchainUtils.gtvToBytes(t.rtToGtv(v, true)).toHex() }
+        val encoder = { t: R_Type, v: Rt_Value -> PostchainGtvUtils.gtvToBytes(t.rtToGtv(v, true)).toHex() }
         val str = callQuery0(code, name, args, { _, v -> v }, encoder)
         val bytes = str.hexStringToByteArray()
-        return PostchainUtils.bytesToGtv(bytes)
+        return PostchainGtvUtils.bytesToGtv(bytes)
     }
 
     private fun resultEncoder(): (R_Type, Rt_Value) -> String {
         return when {
+            gtvResult && gtvResultRaw -> RellTestUtils.ENCODER_GTV_STRICT
             gtvResult -> RellTestUtils.ENCODER_GTV
             strictToString -> RellTestUtils.ENCODER_STRICT
             else -> RellTestUtils.ENCODER_PLAIN
@@ -248,7 +242,7 @@ class RellCodeTester(
     }
 
     fun callOpGtvStr(code: String, args: List<String>): String {
-        return callOp0(code, "o", args, GtvTestUtils::decodeGtvOpArgsStr)
+        return callOp0(code, "o", args, GtvTestUtils::decodeGtvStrOpArgs)
     }
 
     private fun <T> callOp0(code: String, name: String, args: List<T>, decoder: (List<R_Param>, List<T>) -> List<Rt_Value>): String {
@@ -303,7 +297,7 @@ class RellCodeTester(
         val globalCtx = createGlobalCtx()
 
         val sqlMgr = tstCtx.sqlMgr()
-        return RellReplTester(globalCtx, sourceDir, sqlMgr, module)
+        return RellReplTester(tstCtx.projExt, globalCtx, sourceDir, sqlMgr, module)
     }
 
     private fun processWithExeCtx(code: String, tx: Boolean, processor: (Rt_ExecutionContext) -> String): String {
@@ -341,12 +335,12 @@ class RellCodeTester(
 
     private fun runTests(): String {
         val res = processWithTestRunnerCtx { testRunnerCtx ->
-            val testFns = TestRunner.getTestFunctions(testRunnerCtx.app, TestMatcher.ANY)
-                    .map { TestCase(TestRunnerChain("foo", 123), it) }
+            val testFns = UnitTestRunner.getTestFunctions(testRunnerCtx.app, UnitTestMatcher.ANY)
+                    .map { UnitTestCase(UnitTestRunnerChain("foo", 123), it) }
                     .toImmList()
 
-            val testRes = TestRunnerResults()
-            TestRunner.runTests(testRunnerCtx, testFns, testRes)
+            val testRes = UnitTestRunnerResults()
+            UnitTestRunner.runTests(testRunnerCtx, testFns, testRes)
 
             val resList = testRes.getResults()
             val resMap = resList
@@ -361,7 +355,7 @@ class RellCodeTester(
         return res
     }
 
-    private fun processWithTestRunnerCtx(processor: (TestRunnerContext) -> String): String {
+    private fun processWithTestRunnerCtx(processor: (UnitTestRunnerContext) -> String): String {
         val globalCtx = createGlobalCtx()
         val moduleCode = moduleCode("")
 
@@ -371,16 +365,18 @@ class RellCodeTester(
             }
 
             val sourceDir = createSourceDir(moduleCode)
-            val blkRunStrategy = createBlockRunnerStrategy(app, sourceDir)
+            val modArgs = getModuleArgs()
+            val modArgsGtv = GtvTestUtils.moduleArgsToMap(modArgs).mapKeys { R_ModuleName.of(it.key) }
+            val blockRunner = tstCtx.projExt.createUnitTestBlockRunner(sourceDir, app, modArgsGtv)
 
-            val testRunnerCtx = TestRunnerContext(
+            val testRunnerCtx = UnitTestRunnerContext(
                     sqlCtx = sqlCtx,
-                    cliEnv = TestRellCliEnv(),
+                    printer = Rt_OutPrinter,
                     sqlMgr = tstCtx.sqlMgr(),
+                    sqlInitProjExt = tstCtx.projExt.getSqlInitProjExt(),
                     globalCtx = globalCtx,
                     chainCtx = createChainContext(app),
-                    blockRunnerConfig = createBlockRunnerConfig(),
-                    blockRunnerStrategy = blkRunStrategy,
+                    blockRunner = blockRunner,
                     app = app,
             )
 
@@ -402,8 +398,7 @@ class RellCodeTester(
     }
 
     private fun createChainContext(app: R_App, gtvConfig: Gtv = GtvNull): Rt_ChainContext {
-        val bcRidHex = chainRid ?: "00".repeat(32)
-        val bcRid = BlockchainRid(bcRidHex.hexStringToByteArray())
+        val bcRid = Bytes32(blockchainRid.hexStringToByteArray())
         val modArgsVals = getModuleArgsValues(app)
         return Rt_ChainContext(gtvConfig, modArgsVals, bcRid)
     }
@@ -424,12 +419,10 @@ class RellCodeTester(
             globalCtx: Rt_GlobalContext,
             app: R_App,
             sourceDir: C_SourceDir,
-            test: Boolean
+            test: Boolean,
     ): Rt_AppContext {
         val chainCtx = createChainContext(app, GtvNull)
-
-        val testBlkRunCfg = createBlockRunnerConfig()
-        val testBlkRunStrategy = createBlockRunnerStrategy(app, sourceDir)
+        val blockRunner = createBlockRunner(sourceDir, app)
 
         return Rt_AppContext(
                 globalCtx,
@@ -438,26 +431,14 @@ class RellCodeTester(
                 repl = false,
                 test = test,
                 replOut = null,
-                blockRunnerConfig = testBlkRunCfg,
-                blockRunnerStrategy = testBlkRunStrategy,
+                blockRunner = blockRunner,
         )
     }
 
-    private fun createBlockRunnerConfig(): Rt_BlockRunnerConfig {
-        return Rt_BlockRunnerConfig(
-            wrapCtErrors = false,
-            wrapRtErrors = false,
-            forceTypeCheck = true,
-        )
-    }
-
-    private fun createBlockRunnerStrategy(app: R_App, sourceDir: C_SourceDir): Rt_BlockRunnerStrategy {
-        val modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
-        val keyPair = UnitTestBlockRunner.getTestKeyPair()
+    private fun createBlockRunner(sourceDir: C_SourceDir, app: R_App): Rt_UnitTestBlockRunner {
         val modArgs = getModuleArgs()
-        val modArgsGtv = RellGtxTester.moduleArgsToMap(modArgs).mapKeys { R_ModuleName.of(it.key) }
-        val compileConfig = RellCliCompileConfig.Builder().moduleArgs0(modArgsGtv).build()
-        return Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, modules, compileConfig)
+        val modArgsGtv = GtvTestUtils.moduleArgsToMap(modArgs).mapKeys { R_ModuleName.of(it.key) }
+        return tstCtx.projExt.createUnitTestBlockRunner(sourceDir, app, modArgsGtv)
     }
 
     fun createExeCtx(

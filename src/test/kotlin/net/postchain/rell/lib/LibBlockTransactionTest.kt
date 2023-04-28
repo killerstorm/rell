@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -12,23 +12,23 @@ import org.junit.Test
 class LibBlockTransactionTest: BaseRellTest() {
     companion object {
         val BLOCK_INSERTS_0 = RellTestContext.BlockBuilder(0)
-                .block(710, 10, "BC00", "BCDA00", 1600000000000)
+                .block(710, 10, "BC00", 1600000000000)
                 .tx(720, 710, "AC00", "ACDA00", "4321")
                 .list()
 
         val BLOCK_INSERTS_333 = RellTestContext.BlockBuilder(333)
-                .block(111, 222, "DEADBEEF", "5678", 1500000000000)
+                .block(111, 222, "DEADBEEF", 1500000000000)
                 .tx(444, 111, "FADE", "EDAF", "1234")
                 .list()
 
         val BLOCK_INSERTS_555 = RellTestContext.BlockBuilder(555)
-                .block(1, 35, "FEEBDAED", "8765", 1400000000000)
+                .block(1, 35, "FEEBDAED", 1400000000000)
                 .tx(2, 1, "CEED", "FEED", "4321")
                 .list()
 
         val BLOCK_INSERTS_CURRENT = RellTestContext.BlockBuilder(333)
-                .block(101, 10, "DEADBEEF", "5678", 1500000000000)
-                .block(102, 20, null, null, null)
+                .block(101, 10, "DEADBEEF", 1500000000000)
+                .block(102, 20, null, null)
                 .tx(201, 101, "CEED", "FEED", "4321")
                 .tx(202, 102, "FADE", "EDAF", "1234")
                 .list()
@@ -263,9 +263,9 @@ class LibBlockTransactionTest: BaseRellTest() {
     @Test fun testSelectOrderByTimestamp() {
         tst.chainId = 333
         tst.inserts = RellTestContext.BlockBuilder(333)
-                .block(1, 222, "DEADBEEF", "5678", 1500000000000)
-                .block(2, 35, "FEEBDAED", "8765", 1400000000000)
-                .block(3, 46, "BADBAD", "FEDC", 0)
+                .block(1, 222, "DEADBEEF", 1500000000000)
+                .block(2, 35, "FEEBDAED", 1400000000000)
+                .block(3, 46, "BADBAD", 0)
                 .list()
         chk("block @* {} ( @sort .timestamp )", "list<integer>[int[0],int[1400000000000],int[1500000000000]]")
     }

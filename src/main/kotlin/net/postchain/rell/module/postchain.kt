@@ -31,28 +31,11 @@ import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_SqlExecutor
 import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.ConnectionSqlExecutor
+import net.postchain.rell.sql.NullSqlInitProjExt
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
-
-object RellVersions {
-    const val VERSION_STR = "0.13.0"
-    val VERSION = R_LangVersion.of(VERSION_STR)
-
-    val SUPPORTED_VERSIONS =
-            listOf(
-                "0.10.0", "0.10.1", "0.10.2", "0.10.3", "0.10.4", "0.10.5", "0.10.6", "0.10.7", "0.10.8", "0.10.9",
-                "0.10.10", "0.10.11",
-                "0.11.0",
-                "0.12.0",
-                "0.13.0",
-            )
-            .map { R_LangVersion.of(it) }
-            .toImmSet()
-
-    const val MODULE_SYSTEM_VERSION_STR = "0.10.0"
-}
 
 object ConfigConstants {
     const val RELL_VERSION_KEY = "version"
@@ -176,14 +159,14 @@ private class RellGTXOperation(
             val blockHeight = DatabaseAccess.of(ctx).getLastBlockHeight(ctx)
             val txCtx = module.env.txContextFactory.createTxContext(ctx)
 
-            val opCtx = Rt_OpContext(
+            val opCtx = Rt_PostchainOpContext(
                     txCtx = txCtx,
                     lastBlockTime = ctx.timestamp,
                     transactionIid = ctx.txIID,
                     blockHeight = blockHeight,
                     opIndex = data.opIndex,
-                    signers = data.signers.toList(),
-                    allOperations = data.operations.toList()
+                    signers = data.signers.map { it.toBytes() }.toImmList(),
+                    allOperations = data.operations.toImmList(),
             )
 
             val heightProvider = Rt_TxChainHeightProvider(ctx)
@@ -262,9 +245,11 @@ private class RellPostchainModule(
 
         errorHandler.handleError({ "Database initialization failed" }) {
             val heightProvider = Rt_ConstantChainHeightProvider(-1)
-            val exeCtx = createExecutionContext(ctx, null, heightProvider)
+            val exeCtx = createExecutionContext(ctx, Rt_NullOpContext, heightProvider)
             val initLogging = SqlInitLogging.ofLevel(config.dbInitLogLevel)
-            SqlInit.init(exeCtx, false, initLogging)
+
+            // Using the null ProjExt, because Postchain must do the initialization itself.
+            SqlInit.init(exeCtx, NullSqlInitProjExt, initLogging)
         }
     }
 
@@ -286,7 +271,7 @@ private class RellPostchainModule(
 
         val heightProvider = Rt_ConstantChainHeightProvider(Long.MAX_VALUE)
 
-        val exeCtx = createExecutionContext(ctx, null, heightProvider)
+        val exeCtx = createExecutionContext(ctx, Rt_NullOpContext, heightProvider)
         val rtArgs = translateQueryArgs(exeCtx, rQuery, args)
         val rtResult = rQuery.call(exeCtx, rtArgs)
 
@@ -305,7 +290,7 @@ private class RellPostchainModule(
 
     fun createExecutionContext(
             eCtx: EContext,
-            opCtx: Rt_OpContext?,
+            opCtx: Rt_OpContext,
             heightProvider: Rt_ChainHeightProvider
     ): Rt_ExecutionContext {
         val sqlMapping = Rt_ChainSqlMapping(eCtx.chainID)
@@ -387,12 +372,14 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
         @Suppress("UNUSED_VARIABLE") // Legacy...
         val moduleName = rellNode["moduleName"]?.asString() ?: ""
 
-        val (combinedPrinter, copyOutput) = getCombinedPrinter(rellNode)
+        val combinedPrinter = env.combinedPrinter ?: env.logPrinter
+        val copyOutput = env.copyOutputToPrinter
         val errorHandler = ErrorHandler(combinedPrinter, env.wrapCtErrors, env.wrapRtErrors)
 
         return errorHandler.handleError({ "Module initialization failed" }) {
             val modApp = getApp(rellNode, errorHandler, copyOutput)
-            val chainCtx = PostchainUtils.createChainContext(config, modApp.app, blockchainRID)
+            val bcRid = Bytes32(blockchainRID.data)
+            val chainCtx = PostchainBaseUtils.createChainContext(config, modApp.app, bcRid)
             val chainDeps = getGtxChainDependencies(config)
 
             val modLogPrinter = getModulePrinter(env.logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
@@ -445,22 +432,6 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
 
     private fun getModulePrinter(basePrinter: Rt_Printer, combinedPrinter: Rt_Printer, copy: Boolean): Rt_Printer {
         return if (copy) Rt_MultiPrinter(basePrinter, combinedPrinter) else basePrinter
-    }
-
-    private fun getCombinedPrinter(rellNode: Map<String, Gtv>): Pair<Rt_Printer, Boolean> {
-        val className = rellNode["combinedPrinterFactoryClass"]?.asString()
-        val copyOutput = rellNode["copyOutputToCombinedPrinter"]?.asBoolean() ?: true
-        className ?: return Pair(env.combinedPrinter ?: env.logPrinter, env.copyOutputToPrinter)
-
-        return try {
-            val cls = Class.forName(className)
-            val factory = cls.newInstance() as Rt_PrinterFactory
-            val printer = factory.newPrinter()
-            Pair(printer, copyOutput)
-        } catch (e: Throwable) {
-            logger.error(e) { "Combined printer creation failed" }
-            Pair(Rt_NopPrinter, false)
-        }
     }
 
     private fun compileApp(

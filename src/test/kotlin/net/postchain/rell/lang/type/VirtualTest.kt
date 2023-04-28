@@ -1,19 +1,23 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.type
 
-import net.postchain.gtv.*
-import net.postchain.gtv.merkle.GtvMerkleHashCalculator
-import net.postchain.gtv.merkle.path.GtvPathFactory
-import net.postchain.gtv.merkle.path.GtvPathSet
-import net.postchain.rell.test.BaseGtxTest
+import net.postchain.gtv.Gtv
+import net.postchain.gtv.GtvFactory
+import net.postchain.gtv.GtvNull
+import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.GtvTestUtils
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.test.VirtualTestUtils
 import org.junit.Test
 
-class VirtualTest: BaseGtxTest(false) {
+class VirtualTest: BaseRellTest(false) {
+    init {
+        tst.strictToString = false
+        tst.gtvResult = true
+    }
+
     @Test fun testAllowedTypes() {
         def("struct rec { x: integer; }")
         def("struct vir { y: virtual<rec>; }")
@@ -127,7 +131,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testStructAttrsPart() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; t: text; s: sub; }")
         def("struct sub { q: integer; p: sub2; }")
         def("struct sub2 { r: integer; }")
@@ -173,7 +176,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testStructAttrsPartNested() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; t: text; s: sub; }")
         def("struct sub { q: integer; p: sub2; }")
         def("struct sub2 { r: integer; }")
@@ -205,7 +207,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testStructToFull() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; t: text; s: sub; }")
         def("struct sub { q: integer; p: sub2; }")
         def("struct sub2 { r: integer; }")
@@ -281,7 +282,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testStructNullableValue() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; t: text; s: sub?; }")
         def("struct sub { q: integer; p: sub2; }")
         def("struct sub2 { r: integer; }")
@@ -313,7 +313,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testStructAttrType() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; l: list<integer>; }")
 
         var args = argToGtv("[123,[456,789]]", "[[0],[1]]")
@@ -354,7 +353,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testListValue() {
-        tst.wrapRtErrors = false
         val type = "virtual<list<integer>>"
 
         var args = argToGtv("[123,456]", "[[0],[1]]")
@@ -388,7 +386,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testListToFull() {
-        tst.wrapRtErrors = false
         val type = "virtual<list<integer>>"
 
         var args = argToGtv("[123,456]", "[[0],[1]]")
@@ -403,7 +400,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testListOperations() {
-        tst.wrapRtErrors = false
         val type = "virtual<list<integer>>"
         val args = argToGtv("[123,456]", "[[0],[1]]")
 
@@ -433,7 +429,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testListIterator() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; }")
 
         val type = "virtual<list<rec>>"
@@ -450,7 +445,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testListOfStruct() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; t: text; }")
 
         val type = "virtual<list<rec>>"
@@ -485,8 +479,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testListOfList() {
-        tst.wrapRtErrors = false
-
         val type = "virtual<list<list<integer>>>"
 
         var args = argToGtv("[[123,456],[654,321]]", "[[0],[1]]")
@@ -521,8 +513,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testListOfSet() {
-        tst.wrapRtErrors = false
-
         val type = "virtual<list<set<integer>>>"
 
         var args = argToGtv("[[123,456],[654,321]]", "[[0],[1]]")
@@ -557,8 +547,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testListOfMap() {
-        tst.wrapRtErrors = false
-
         val type = "virtual<list<map<text,integer>>>"
 
         var args = argToGtv("[{'Hello':123},{'Bye':456}]", "[[0],[1]]")
@@ -583,8 +571,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testListOfTuple() {
-        tst.wrapRtErrors = false
-
         val type = "virtual<list<(a:integer,b:text)>>"
 
         var args = argToGtv("[[123,'Hello'],[456,'Bye']]", "[[0],[1]]")
@@ -611,8 +597,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testListOfNullable() {
-        tst.wrapRtErrors = false
-
         val type = "virtual<list<integer?>>"
 
         var args = argToGtv("[123,null,456]", "[[0],[1],[2]]")
@@ -685,7 +669,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testSetValue() {
-        tst.wrapRtErrors = false
         val type = "virtual<set<integer>>"
 
         var args = argToGtv("[123,456]", "[[0],[1]]")
@@ -713,7 +696,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testSetToFull() {
-        tst.wrapRtErrors = false
         val type = "virtual<set<integer>>"
 
         var args = argToGtv("[123,456]", "[[0],[1]]")
@@ -728,7 +710,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testSetOperations() {
-        tst.wrapRtErrors = false
         val type = "virtual<set<integer>>"
         val args = argToGtv("[123,456]", "[[0],[1]]")
 
@@ -755,29 +736,28 @@ class VirtualTest: BaseGtxTest(false) {
         val innerType = "(integer,text)"
         val type = "virtual<set<$innerType>>"
 
-        var args = mapOf("x" to argToGtv("[[123,'A'],[456,'B']]", "[[0],[1]]"), "y" to argToGtv("[123,'A']", "[[0],[1]]"))
-        chkFull("query q(x: $type, y: $innerType) = _strict_str(y in x);", args,
+        var args = listOf(argToGtv("[[123,'A'],[456,'B']]", "[[0],[1]]"), argToGtv("[123,'A']", "[[0],[1]]"))
+        chkFullGtv("query q(x: $type, y: $innerType) = _strict_str(y in x);", args,
                 "ct_err:binop_operand_type:in:[(integer,text)]:[virtual<set<(integer,text)>>]")
 
         val code = "query q(x: $type, y: virtual<$innerType>) = _strict_str(y in x);"
-        chkFull(code, args, "'boolean[true]'")
+        chkFullGtv(code, args, "'boolean[true]'")
 
-        args = mapOf("x" to argToGtv("[[123,'A'],[456,'B']]", "[[0],[1]]"), "y" to argToGtv("[456,'B']", "[[0],[1]]"))
-        chkFull(code, args, "'boolean[true]'")
+        args = listOf(argToGtv("[[123,'A'],[456,'B']]", "[[0],[1]]"), argToGtv("[456,'B']", "[[0],[1]]"))
+        chkFullGtv(code, args, "'boolean[true]'")
 
-        args = mapOf("x" to argToGtv("[[123,'A'],[456,'B']]", "[[0]]"), "y" to argToGtv("[123,'A']", "[[0],[1]]"))
-        chkFull(code, args, "'boolean[true]'")
-        args = mapOf("x" to argToGtv("[[123,'A'],[456,'B']]", "[[0]]"), "y" to argToGtv("[456,'B']", "[[0],[1]]"))
-        chkFull(code, args, "'boolean[false]'")
+        args = listOf(argToGtv("[[123,'A'],[456,'B']]", "[[0]]"), argToGtv("[123,'A']", "[[0],[1]]"))
+        chkFullGtv(code, args, "'boolean[true]'")
+        args = listOf(argToGtv("[[123,'A'],[456,'B']]", "[[0]]"), argToGtv("[456,'B']", "[[0],[1]]"))
+        chkFullGtv(code, args, "'boolean[false]'")
 
-        args = mapOf("x" to argToGtv("[[123,'A'],[456,'B']]", "[[0],[1]]"), "y" to argToGtv("[123,'A']", "[[0]]"))
-        chkFull(code, args, "'boolean[false]'")
-        args = mapOf("x" to argToGtv("[[123,'A'],[456,'B']]", "[[0,0],[1]]"), "y" to argToGtv("[123,'A']", "[[0]]"))
-        chkFull(code, args, "'boolean[true]'")
+        args = listOf(argToGtv("[[123,'A'],[456,'B']]", "[[0],[1]]"), argToGtv("[123,'A']", "[[0]]"))
+        chkFullGtv(code, args, "'boolean[false]'")
+        args = listOf(argToGtv("[[123,'A'],[456,'B']]", "[[0,0],[1]]"), argToGtv("[123,'A']", "[[0]]"))
+        chkFullGtv(code, args, "'boolean[true]'")
     }
 
     @Test fun testSetIterator() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; }")
 
         val type = "virtual<set<rec>>"
@@ -794,8 +774,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testSetOfTuple() {
-        tst.wrapRtErrors = false
-
         val type = "virtual<set<(a:integer,b:text)>>"
 
         var args = argToGtv("[[123,'Hello'],[456,'Bye']]", "[[0],[1]]")
@@ -836,7 +814,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testMapValue() {
-        tst.wrapRtErrors = false
         val type = "virtual<map<text, integer>>"
 
         var args = argToGtv("{'Hello':123,'Bye':456}", "[['Hello'],['Bye']]")
@@ -869,7 +846,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testMapToFull() {
-        tst.wrapRtErrors = false
         val type = "virtual<map<text, integer>>"
 
         var args = argToGtv("{'Hello':123,'Bye':456}", "[['Hello'],['Bye']]")
@@ -884,7 +860,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testMapOperations() {
-        tst.wrapRtErrors = false
         val type = "virtual<map<text, integer>>"
 
         val args = argToGtv("{'Hello':123,'Bye':456}", "[['Hello'],['Bye']]")
@@ -916,7 +891,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testMapIterator() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; }")
 
         val type = "virtual<map<text, rec>>"
@@ -937,7 +911,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testMapOfStruct() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; t: text; }")
 
         val type = "virtual<map<text,rec>>"
@@ -972,7 +945,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testTupleValue() {
-        tst.wrapRtErrors = false
         val type = "virtual<(a:integer,b:text)>"
 
         var args = argToGtv("[123,'Hello']", "[[0],[1]]")
@@ -1000,7 +972,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testTupleToFull() {
-        tst.wrapRtErrors = false
         val type = "virtual<(a:integer,b:text)>"
 
         var args = argToGtv("[123,'Hello']", "[[0],[1]]")
@@ -1015,7 +986,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testTupleOfStruct() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; t: text; }")
 
         val type = "virtual<(a:integer,b:rec)>"
@@ -1044,7 +1014,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testVirtual() {
-        tst.wrapRtErrors = false
         def("struct sub { i: integer; t: text; }")
         def("struct top { k: integer; s: virtual<sub>; }")
 
@@ -1176,19 +1145,17 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testBadValue() {
-        tst.wrapRtErrors = false
-
         val expr = "_strict_str(virtual<list<integer>>.from_gtv(x))"
         chkVirtual("gtv", expr, argToGtv("[123,456]"), "gtv_err:virtual:deserialize:java.lang.IllegalStateException")
         chkVirtual("gtv", expr, argToGtv("{'A':123}"), "gtv_err:virtual:type:GtvDictionary")
         chkVirtual("gtv", expr, argToGtv("['A','B']", "[[0]]"), "gtv_err:type:[integer]:INTEGER:STRING")
 
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("[123,456]"),
-                "gtv_err:virtual:deserialize:java.lang.IllegalStateException:param:x")
+                "gtv_err:virtual:deserialize:java.lang.IllegalStateException")
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("{'A':123}"),
-                "gtv_err:virtual:type:GtvDictionary:param:x")
+                "gtv_err:virtual:type:GtvDictionary")
         chkVirtual("virtual<list<integer>>", "_strict_str(x)", argToGtv("['A','B']", "[[0]]"),
-                "gtv_err:type:[integer]:INTEGER:STRING:param:x")
+                "gtv_err:type:[integer]:INTEGER:STRING")
     }
 
     @Test fun testOperatorsErr() {
@@ -1277,8 +1244,8 @@ class VirtualTest: BaseGtxTest(false) {
     private fun chkOperator(type: String, arg1: String, paths1: String, arg2: String, paths2: String, expr: String,
                             expected: String
     ) {
-        val args = mapOf("x" to argToGtv(arg1, paths1), "y" to argToGtv(arg2, paths2))
-        chkFull("query q(x: $type, y: $type) = $expr;", args, expected)
+        val args = listOf(argToGtv(arg1, paths1), argToGtv(arg2, paths2))
+        chkFullGtv("query q(x: $type, y: $type) = $expr;", args, expected)
     }
 
     @Test fun testOperation() {
@@ -1286,13 +1253,13 @@ class VirtualTest: BaseGtxTest(false) {
 
         val code = "operation o(x: virtual<list<integer>>) { print(_strict_str(x)); }"
 
-        chkOpFull(code, listOf(argToGtv("[123,456]", "[[0],[1]]")))
+        chkOpFullGtv(code, listOf(argToGtv("[123,456]", "[[0],[1]]")))
         chkOut("virtual<list<integer>>[int[123],int[456]]")
 
-        chkOpFull(code, listOf(argToGtv("[123,456]", "[[0]]")))
+        chkOpFullGtv(code, listOf(argToGtv("[123,456]", "[[0]]")))
         chkOut("virtual<list<integer>>[int[123],null]")
 
-        chkOpFull(code, listOf(argToGtv("[123,456]", "[[1]]")))
+        chkOpFullGtv(code, listOf(argToGtv("[123,456]", "[[1]]")))
         chkOut("virtual<list<integer>>[null,int[456]]")
     }
 
@@ -1305,7 +1272,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testHash() {
-        tst.wrapRtErrors = false
         def("struct rec { i: integer; t: text; }")
 
         var t = "virtual<list<integer>>"
@@ -1340,7 +1306,6 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     @Test fun testHashNested() {
-        tst.wrapRtErrors = false
         val type = "virtual<list<list<integer>>>"
 
         chkHash(type, "x.hash()", "[[123,456],[654,321]]", "[[0],[1]]",
@@ -1390,37 +1355,12 @@ class VirtualTest: BaseGtxTest(false) {
     }
 
     private fun chkVirtualEx(type: String, body: String, arg: Gtv, expected: String) {
-        val args = mapOf("x" to arg)
-        chkFull("query q(x: $type) $body", args, expected)
+        chkFullGtv("query q(x: $type) $body", listOf(arg), expected)
     }
 
     companion object {
-        fun argToGtv(args: String) = GtvTestUtils.decodeGtvStr(args)
-
-        fun argToGtv(args: String, paths: String): Gtv {
-            val gtv = GtvTestUtils.decodeGtvStr(args)
-            return argToGtv(gtv, paths)
-        }
-
-        fun argToGtv(gtv: Gtv, paths: String): Gtv {
-            val pathsSet = GtvTestUtils.decodeGtvStr(paths).asArray()
-                    .map { t ->
-                        val ints = t.asArray()
-                                .map {
-                                    val v: Any = if (it is GtvInteger) it.asInteger().toInt() else it.asString()
-                                    v
-                                }
-                                .toTypedArray()
-                        GtvPathFactory.buildFromArrayOfPointers(ints)
-                    }
-                    .toSet()
-
-            val gtvPaths = GtvPathSet(pathsSet)
-
-            val calculator = GtvMerkleHashCalculator(PostchainUtils.cryptoSystem)
-            val merkleProofTree = gtv.generateProof(gtvPaths, calculator)
-            val proofGtv = merkleProofTree.toGtv()
-            return proofGtv
-        }
+        fun argToGtv(args: String) = VirtualTestUtils.argToGtv(args)
+        fun argToGtv(args: String, paths: String) = VirtualTestUtils.argToGtv(args, paths)
+        fun argToGtv(gtv: Gtv, paths: String) = VirtualTestUtils.argToGtv(gtv, paths)
     }
 }

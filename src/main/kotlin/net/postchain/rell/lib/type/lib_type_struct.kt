@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.type
@@ -19,7 +19,7 @@ import net.postchain.rell.model.expr.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.PostchainGtvUtils
 
 object C_Lib_Type_Struct {
     fun getValueMembers(struct: R_Struct): List<C_TypeValueMember> {
@@ -129,7 +129,7 @@ object C_Lib_Type_VirtualStruct {
 private object StructFns {
     fun ToBytes(struct: R_Struct) = C_SysFunction.simple1(pure = true) { a ->
         val gtv = struct.type.rtToGtv(a, false)
-        val bytes = PostchainUtils.gtvToBytes(gtv)
+        val bytes = PostchainGtvUtils.gtvToBytes(gtv)
         Rt_ByteArrayValue(bytes)
     }
 
@@ -144,7 +144,7 @@ private object StructFns {
     ) { ctx, a ->
         val bytes = a.asByteArray()
         Rt_Utils.wrapErr("fn:struct:from_bytes") {
-            val gtv = PostchainUtils.bytesToGtv(bytes)
+            val gtv = PostchainGtvUtils.bytesToGtv(bytes)
             val convCtx = GtvToRtContext.make(false)
             val res = struct.type.gtvToRt(convCtx, gtv)
             convCtx.finish(ctx.exeCtx)

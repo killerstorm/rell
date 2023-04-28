@@ -6,14 +6,20 @@ package net.postchain.rell.lib
 
 import net.postchain.rell.compiler.base.core.C_Types
 import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.base.fn.*
+import net.postchain.rell.compiler.base.fn.C_BasicGlobalFuncCaseMatch
+import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseCtx
+import net.postchain.rell.compiler.base.fn.C_GlobalFuncCaseMatch
+import net.postchain.rell.compiler.base.fn.C_GlobalSpecialFuncCase
 import net.postchain.rell.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.compiler.base.utils.C_GlobalFuncBuilder
 import net.postchain.rell.compiler.base.utils.C_LibUtils
 import net.postchain.rell.compiler.vexpr.V_Expr
 import net.postchain.rell.model.*
 import net.postchain.rell.model.expr.R_Expr
-import net.postchain.rell.runtime.*
+import net.postchain.rell.runtime.Rt_BooleanValue
+import net.postchain.rell.runtime.Rt_CallFrame
+import net.postchain.rell.runtime.Rt_NullValue
+import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.runtime.utils.Rt_Utils.checkEquals
 import net.postchain.rell.utils.immListOf
 

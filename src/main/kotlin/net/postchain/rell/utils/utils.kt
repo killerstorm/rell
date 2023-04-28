@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.utils
@@ -11,7 +11,6 @@ import net.postchain.gtv.GtvFactory
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_Name
 import org.apache.commons.lang3.StringUtils
-import java.util.*
 import java.util.function.Supplier
 
 typealias Getter<T> = () -> T
@@ -20,6 +19,11 @@ data class Nullable<T>(val value: T? = null)
 fun <T> Nullable<T>?.orElse(other: T?): T? = if (this != null) this.value else other
 
 data class One<T>(val value: T)
+
+/** **Project extension** - functionality provided by outer (dependent) projects, e.g. rell-postchain project may
+ * provide an extension needed by a component of the rell-base project. This common parent class for all kinds of
+ * [ProjExt]s is for the documentation purpose only. */
+abstract class ProjExt
 
 class MutableTypedKeyMap {
     private val map = mutableMapOf<TypedKey<Any>, Any>()
@@ -45,6 +49,9 @@ class TypedKeyMap(private val map: Map<TypedKey<Any>, Any> = mapOf()) {
 
 class TypedKey<V>
 
+fun ByteArray.toBytes(): Bytes = Bytes.of(this)
+fun String.hexStringToBytes(): Bytes = this.hexStringToByteArray().toBytes()
+
 class Bytes {
     private val bytes: ByteArray
 
@@ -57,13 +64,12 @@ class Bytes {
     fun toByteArray() = bytes.clone()
     fun toHex() = bytes.toHex()
 
-    override fun equals(other: Any?) = other === this || (other is Bytes && Arrays.equals(bytes, other.bytes))
+    override fun equals(other: Any?) = other === this || (other is Bytes && bytes.contentEquals(other.bytes))
     override fun hashCode() = bytes.contentHashCode()
     override fun toString() = bytes.toHex()
 
     companion object {
         fun of(bytes: ByteArray) = Bytes(bytes.clone())
-        fun of(text: String) = Bytes(text.toByteArray())
     }
 }
 
@@ -82,7 +88,7 @@ abstract class FixLenBytes(bytes: ByteArray) {
 
     override fun equals(other: Any?) = other === this
             || (other is FixLenBytes && javaClass == other.javaClass && bytes.contentEquals(other.bytes))
-    override fun hashCode() = Arrays.hashCode(bytes)
+    override fun hashCode() = bytes.contentHashCode()
     override fun toString() = bytes.toHex()
 }
 

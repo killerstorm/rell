@@ -8,22 +8,12 @@ import net.postchain.rell.compiler.base.core.*
 import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_LateInit
 import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
-import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
-import net.postchain.rell.lib.test.UnitTestBlockRunner
 import net.postchain.rell.model.*
 import net.postchain.rell.model.stmt.R_BlockStatement
 import net.postchain.rell.model.stmt.R_Statement
 import net.postchain.rell.runtime.*
-import net.postchain.rell.sql.SqlInit
-import net.postchain.rell.sql.SqlInitLogging
-import net.postchain.rell.sql.SqlManager
-import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.cli.NullRellCliEnv
-import net.postchain.rell.utils.cli.RellCliCompileConfig
-import net.postchain.rell.utils.cli.RellCliUtils
-import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.sql.*
+import net.postchain.rell.utils.*
 
 class C_ReplCodeState(
         val frameProto: C_CallFrameProto,
@@ -93,13 +83,26 @@ class R_ReplCode(private val frame: R_CallFrame, stmts: List<R_Statement>) {
     }
 }
 
+abstract class ReplInterpreterProjExt: ProjExt() {
+    abstract fun getSqlInitProjExt(): SqlInitProjExt
+    abstract fun createBlockRunner(sourceDir: C_SourceDir, modules: List<R_ModuleName>): Rt_UnitTestBlockRunner
+}
+
+object NullReplInterpreterProjExt: ReplInterpreterProjExt() {
+    override fun getSqlInitProjExt(): SqlInitProjExt = NullSqlInitProjExt
+
+    override fun createBlockRunner(sourceDir: C_SourceDir, modules: List<R_ModuleName>): Rt_UnitTestBlockRunner {
+        return Rt_NullUnitTestBlockRunner
+    }
+}
+
 class ReplInterpreter private constructor(
     compilerOptions: C_CompilerOptions,
     private val sourceDir: C_SourceDir,
     private val module: R_ModuleName?,
     private val rtGlobalCtx: Rt_GlobalContext,
-    private val testBlockRunnerCfg: Rt_BlockRunnerConfig,
     private val sqlMgr: SqlManager,
+    private val projExt: ReplInterpreterProjExt,
     private val outChannel: ReplOutputChannel,
 ) {
     private val commands = ControlCommands()
@@ -144,7 +147,7 @@ class ReplInterpreter private constructor(
             sqlUpdate(rtAppCtx, sqlCtx, forceSqlUpdate)
 
             sqlMgr.access { sqlExec ->
-                val exeCtx = Rt_ExecutionContext(rtAppCtx, null, sqlCtx, sqlExec, exeState)
+                val exeCtx = Rt_ExecutionContext(rtAppCtx, Rt_NullOpContext, sqlCtx, sqlExec, exeState)
                 codeState = success.code.execute(exeCtx)
                 defsState = success.defsState
                 exeState = exeCtx.toState()
@@ -181,21 +184,16 @@ class ReplInterpreter private constructor(
 
     private fun createRtAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
         val modules = (listOfNotNull(module).toSet() + defsState.appState.modules.keys.map { it.name }).toList()
-        val keyPair = UnitTestBlockRunner.getTestKeyPair()
-        val compileConfig = RellCliCompileConfig.Builder().cliEnv(NullRellCliEnv).build()
-        val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, modules, compileConfig)
-
-        val chainCtx = RellCliUtils.createChainContext()
+        val blockRunner = projExt.createBlockRunner(sourceDir, modules)
 
         return Rt_AppContext(
                 globalCtx,
-                chainCtx,
+                Rt_ChainContext.NULL,
                 app,
                 repl = true,
                 test = false,
                 replOut = outChannel,
-                blockRunnerConfig = testBlockRunnerCfg,
-                blockRunnerStrategy = blockRunnerStrategy,
+                blockRunner = blockRunner,
                 globalConstantStates = codeState.rtState.globalConstants,
         )
     }
@@ -211,8 +209,9 @@ class ReplInterpreter private constructor(
         if (sqlMgr.hasConnection && (lastDefs == null || !appDefs.same(lastDefs))) {
             val logging = if (force) SQL_INIT_LOGGING_FORCE else SQL_INIT_LOGGING_AUTO
             sqlMgr.transaction { sqlExec ->
-                val exeCtx = Rt_ExecutionContext(appCtx, null, sqlCtx, sqlExec)
-                SqlInit.init(exeCtx, true, logging)
+                val exeCtx = Rt_ExecutionContext(appCtx, Rt_NullOpContext, sqlCtx, sqlExec)
+                val initProjExt = projExt.getSqlInitProjExt()
+                SqlInit.init(exeCtx, initProjExt, logging)
             }
             lastUpdateSqlDefs = appDefs
         }
@@ -304,8 +303,8 @@ class ReplInterpreter private constructor(
             sourceDir: C_SourceDir,
             module: R_ModuleName?,
             rtGlobalCtx: Rt_GlobalContext,
-            blockRunnerCfg: Rt_BlockRunnerConfig,
             sqlMgr: SqlManager,
+            projExt: ReplInterpreterProjExt,
             outChannel: ReplOutputChannel,
         ): ReplInterpreter? {
             val interpreter = ReplInterpreter(
@@ -313,8 +312,8 @@ class ReplInterpreter private constructor(
                 sourceDir,
                 module,
                 rtGlobalCtx,
-                blockRunnerCfg,
                 sqlMgr,
+                projExt,
                 outChannel,
             )
             val init = interpreter.executeCode("", true) // Make sure the module can be found and has no errors.

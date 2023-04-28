@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.sql
@@ -7,11 +7,6 @@ package net.postchain.rell.sql
 import com.google.common.collect.Sets
 import mu.KLogger
 import mu.KLogging
-import net.postchain.base.BaseEContext
-import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.common.BlockchainRid
-import net.postchain.core.EContext
 import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_ObjectDefinition
 import net.postchain.rell.model.expr.R_AttributeDefaultValueExpr
@@ -23,7 +18,7 @@ import net.postchain.rell.runtime.Rt_Exception
 import net.postchain.rell.runtime.Rt_ExecutionContext
 import net.postchain.rell.runtime.utils.Rt_Messages
 import net.postchain.rell.runtime.utils.Rt_Utils
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.ProjExt
 import net.postchain.rell.utils.toImmSet
 
 private val ORD_TABLES = 0
@@ -59,18 +54,28 @@ class SqlInitLogging(
     }
 }
 
+abstract class SqlInitProjExt: ProjExt() {
+    abstract fun initExtra(exeCtx: Rt_ExecutionContext)
+}
+
+object NullSqlInitProjExt: SqlInitProjExt() {
+    override fun initExtra(exeCtx: Rt_ExecutionContext) {
+        // Do nothing.
+    }
+}
+
 class SqlInit private constructor(
-        private val exeCtx: Rt_ExecutionContext,
-        private val initPostchain: Boolean,
-        private val logging: SqlInitLogging
+    private val exeCtx: Rt_ExecutionContext,
+    private val projExt: SqlInitProjExt,
+    private val logging: SqlInitLogging
 ) {
     private val sqlCtx = exeCtx.sqlCtx
 
     private val initCtx = SqlInitCtx(logger, logging, SqlObjectsInit(exeCtx))
 
     companion object : KLogging() {
-        fun init(exeCtx: Rt_ExecutionContext, initPostchain: Boolean, logging: SqlInitLogging): List<String> {
-            val obj = SqlInit(exeCtx, initPostchain, logging)
+        fun init(exeCtx: Rt_ExecutionContext, adapter: SqlInitProjExt, logging: SqlInitLogging): List<String> {
+            val obj = SqlInit(exeCtx, adapter, logging)
             return obj.init()
         }
     }
@@ -81,9 +86,7 @@ class SqlInit private constructor(
         val dbEmpty = SqlInitPlanner.plan(exeCtx, initCtx)
         initCtx.checkErrors()
 
-        if (initPostchain) {
-            initPostchain()
-        }
+        projExt.initExtra(exeCtx)
 
         exeCtx.appCtx.objectsInitialization(initCtx.objsInit) {
             executePlan(dbEmpty)
@@ -114,18 +117,6 @@ class SqlInit private constructor(
         }
 
         log(logging.allOther, "Database initialization done")
-    }
-
-    private fun initPostchain() {
-        val chainId = exeCtx.sqlCtx.mainChainMapping().chainId
-        val bcRid: BlockchainRid = BlockchainRid.ZERO_RID
-
-        val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
-        exeCtx.sqlExec.connection { con ->
-            sqlAccess.initializeApp(con, PostchainUtils.DATABASE_VERSION)
-            val eCtx: EContext = BaseEContext(con, chainId, sqlAccess)
-            sqlAccess.initializeBlockchain(eCtx, bcRid)
-        }
     }
 
     private fun log(allowed: Boolean, s: String) {

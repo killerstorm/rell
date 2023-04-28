@@ -11,16 +11,9 @@ import org.jline.reader.*
 import org.jline.terminal.TerminalBuilder
 import java.io.File
 
-abstract class ReplInputChannelFactory {
-    abstract fun createInputChannel(historyFile: File?): ReplInputChannel
-
-    companion object {
-        val DEFAULT: ReplInputChannelFactory = JlineReplInputChannelFactory
-    }
-}
-
-interface ReplInputChannel {
-    fun readLine(prompt: String): String?
+object ReplIo {
+    val DEFAULT_INPUT_FACTORY: ReplInputChannelFactory = JlineReplInputChannelFactory
+    val DEFAULT_OUTPUT_FACTORY: ReplOutputChannelFactory = CliReplOutputChannelFactory
 }
 
 private object JlineReplInputChannelFactory: ReplInputChannelFactory() {
@@ -58,7 +51,7 @@ private class JlineReplInputChannel(private val reader: LineReader): ReplInputCh
         } catch (e: EndOfFileException) {
             null
         } catch (e: UserInterruptException) {
-            return ""
+            ""
         }
     }
 }
@@ -84,11 +77,11 @@ private class RellJLineParser: Parser {
             return null
         }
 
-        try {
+        return try {
             val err = C_Parser.checkEofErrorRepl(line)
-            return err?.pos
+            err?.pos
         } catch (e: Throwable) {
-            return null
+            null
         }
     }
 }

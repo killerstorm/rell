@@ -1,8 +1,8 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
-package net.postchain.rell.gtx
+package net.postchain.rell.lang.misc
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvByteArray
@@ -13,6 +13,10 @@ import org.junit.Test
 import kotlin.test.assertEquals
 
 class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
+    init {
+        tst.gtvResultRaw = true
+    }
+
     @Test fun testQueryResult() {
         chkQueryRes("= true;", "1")
         chkQueryRes("= 123;", "123")

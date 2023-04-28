@@ -1,13 +1,14 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
 
+import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.expr.C_CreateAttributes
 import net.postchain.rell.compiler.base.expr.C_ExprContext
-import net.postchain.rell.compiler.ast.S_Pos
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_EntityDefinition
+import net.postchain.rell.model.R_StructType
 import net.postchain.rell.model.expr.R_Expr
 import net.postchain.rell.model.expr.R_RegularCreateExpr
 import net.postchain.rell.model.expr.R_StructCreateExpr

@@ -79,6 +79,20 @@ object C_Constants {
     val BLOCK_ENTITY_RNAME = R_Name.of(BLOCK_ENTITY)
 }
 
+// Operations and queries defined in Postchain (StandardOpsGTXModule). Shall be reserved (not allowed) in Rell.
+object C_ReservedMountNames {
+    val OPERATIONS: Set<R_MountName> = listOf(
+        "__nop",
+        "nop",
+        "timeb",
+    ).map { R_MountName.of(it) }.toImmSet()
+
+    val QUERIES: Set<R_MountName> = listOf(
+        "last_block_info",
+        "tx_confirmation_time",
+    ).map { R_MountName.of(it) }.toImmSet()
+}
+
 class C_ParameterDefaultValue(
         private val pos: S_Pos,
         private val paramName: R_Name,

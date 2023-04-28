@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -64,7 +64,7 @@ private object ChainCtxFns {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
             val bcRid = ctx.chainCtx.blockchainRid
-            return Rt_ByteArrayValue(bcRid.data)
+            return Rt_ByteArrayValue(bcRid.toByteArray())
         }
     }
 

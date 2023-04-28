@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test.tools
@@ -10,7 +10,7 @@ import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.RellVersions
+import net.postchain.rell.utils.RellVersions
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.toImmMultimapKey
 import org.apache.commons.lang3.StringUtils

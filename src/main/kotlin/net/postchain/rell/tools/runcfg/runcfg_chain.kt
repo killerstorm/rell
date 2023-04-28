@@ -7,7 +7,6 @@ package net.postchain.rell.tools.runcfg
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.RellVersions
 import net.postchain.rell.utils.*
 import net.postchain.rell.utils.cli.RellCliCompileConfig
 import net.postchain.rell.utils.cli.RellCliEnv
@@ -66,7 +65,7 @@ class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv
 
     private fun calcChainBrid(configs: Map<Long, Gtv>): Bytes32 {
         val config0 = configs.getValue(0)
-        return PostchainUtils.calcBlockchainRid(config0)
+        return PostchainBaseUtils.calcBlockchainRid(config0)
     }
 
     private fun genChainConfig0(

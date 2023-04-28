@@ -34,7 +34,7 @@ class ModuleTest: BaseRellTest(false) {
             struct foo { p: integer; }
             struct bar { x: foo; }
         """
-        tst.chkOpGtvEx(code, listOf("""[123]"""), "OK")
+        tst.chkOpExGtvStr(code, listOf("""[123]"""), "OK")
         chkOut("bar[x=foo[p=int[123]]]")
     }
 

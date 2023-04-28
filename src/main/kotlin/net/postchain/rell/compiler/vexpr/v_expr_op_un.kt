@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.vexpr
@@ -10,7 +10,8 @@ import net.postchain.rell.compiler.base.expr.C_Destination
 import net.postchain.rell.compiler.base.expr.C_ExprContext
 import net.postchain.rell.compiler.base.expr.C_ExprVarFacts
 import net.postchain.rell.compiler.base.utils.C_Error
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_BooleanType
+import net.postchain.rell.model.R_Type
 import net.postchain.rell.model.expr.*
 import net.postchain.rell.runtime.Rt_Value
 

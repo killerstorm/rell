@@ -26,8 +26,8 @@ import net.postchain.rell.model.R_App
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellPostchainModuleFactory
 import net.postchain.rell.sql.SqlExecutor
-import net.postchain.rell.utils.PostchainUtils
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.CommonUtils
+import net.postchain.rell.utils.PostchainBaseUtils
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -53,7 +53,7 @@ class RellGtxTester(
 
         val gtxModule = createGtxModule(moduleCode)
 
-        val dbAccess = PostchainUtils.createDatabaseAccess()
+        val dbAccess = PostchainBaseUtils.createDatabaseAccess()
         sqlExec.connection { con ->
             val ctx = BaseEContext(con, chainId, dbAccess)
             dbAccess.initializeBlockchain(ctx, bRid)
@@ -134,6 +134,8 @@ class RellGtxTester(
         assertEquals(expected, actual)
     }
 
+    private fun hexToRid(s: String): BlockchainRid = BlockchainRid(CommonUtils.hexToBytes(s))
+
     private fun callOperation0(moduleCode: String, name: String, args: List<Gtv>): String {
         return eval.eval {
             eval.wrapRt { init() }
@@ -148,7 +150,7 @@ class RellGtxTester(
 
             val res = withEContext(true) { ctx ->
                 val blkCtx = BaseBlockEContext(ctx, 0, 0, System.currentTimeMillis(), mapOf(), dummyEventSink)
-                val bcRid = PostchainUtils.hexToRid(blockchainRid)
+                val bcRid = hexToRid(blockchainRid)
                 val opData = ExtOpData(name, 0, args.toTypedArray(), bcRid, arrayOf(), arrayOf())
                 val transactor = module.makeTransactor(opData)
 
@@ -171,7 +173,7 @@ class RellGtxTester(
         init()
         val res = tstCtx.sqlMgr().execute(tx) { sqlExec ->
             sqlExec.connection { con ->
-                val dbAccess = PostchainUtils.createDatabaseAccess()
+                val dbAccess = PostchainBaseUtils.createDatabaseAccess()
                 val ctx = BaseEContext(con, chainId, dbAccess)
                 code(ctx)
             }
@@ -202,7 +204,7 @@ class RellGtxTester(
         val factory = RellPostchainModuleFactory(env)
 
         val moduleCfg = getModuleConfig(moduleCode)
-        val bcRid = PostchainUtils.hexToRid(blockchainRid)
+        val bcRid = hexToRid(blockchainRid)
         val module = factory.makeModule(moduleCfg, bcRid)
         return module
     }
@@ -242,7 +244,7 @@ class RellGtxTester(
                         if (parts.modules == null) null else GtvFactory.gtv(parts.modules.map { GtvFactory.gtv(it) })
                     }
                     "{SOURCES}" -> GtvFactory.gtv(parts.sourceCodes.mapValues { (_, v) -> GtvString(v) })
-                    "{MODULE_ARGS}" -> moduleArgsToGtv(parts.moduleArgs)
+                    "{MODULE_ARGS}" -> GtvTestUtils.moduleArgsToGtv(parts.moduleArgs)
                     else -> tpl
                 }
             }
@@ -272,17 +274,4 @@ class RellGtxTester(
             val moduleArgs: Map<String, String>,
             val extraModuleConfig: Map<String, String>
     )
-
-    companion object {
-        fun moduleArgsToGtv(moduleArgs: Map<String, String>): Gtv {
-            val map = moduleArgsToMap(moduleArgs)
-            return GtvFactory.gtv(map)
-        }
-
-        fun moduleArgsToMap(moduleArgs: Map<String, String>): Map<String, Gtv> {
-            return moduleArgs
-                .mapValues { (_, v) -> GtvTestUtils.decodeGtvStr(v) }
-                .toImmMap()
-        }
-    }
 }

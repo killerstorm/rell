@@ -1,15 +1,12 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.sql
 
 import com.google.common.collect.HashMultimap
 import net.postchain.rell.model.R_EntityDefinition
-import net.postchain.rell.runtime.Rt_AppContext
-import net.postchain.rell.runtime.Rt_ChainSqlMapping
-import net.postchain.rell.runtime.Rt_ExecutionContext
-import net.postchain.rell.runtime.Rt_SqlContext
+import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.checkEquals
 import org.apache.http.client.utils.URLEncodedUtils
 import java.net.URI
@@ -165,28 +162,21 @@ object SqlUtils {
     }
 
     fun initDatabase(
-            appCtx: Rt_AppContext,
-            sqlCtx: Rt_SqlContext,
-            sqlMgr: SqlManager,
-            dropTables: Boolean,
-            sqlInitLog: Boolean
+        appCtx: Rt_AppContext,
+        sqlCtx: Rt_SqlContext,
+        sqlMgr: SqlManager,
+        adapter: SqlInitProjExt,
+        dropTables: Boolean,
+        sqlInitLog: Boolean,
     ) {
         sqlMgr.transaction { sqlExec ->
             if (dropTables) {
                 dropAll(sqlExec, true)
             }
 
-            val exeCtx = Rt_ExecutionContext(appCtx, null, sqlCtx, sqlExec)
+            val exeCtx = Rt_ExecutionContext(appCtx, Rt_NullOpContext, sqlCtx, sqlExec)
             val initLogging = SqlInitLogging.ofLevel(if (sqlInitLog) SqlInitLogging.LOG_ALL else SqlInitLogging.LOG_NONE)
-            SqlInit.init(exeCtx, true, initLogging)
+            SqlInit.init(exeCtx, adapter, initLogging)
         }
-    }
-}
-
-private inline fun <T:AutoCloseable, R> T.use(block: (T) -> R): R {
-    try {
-        return block(this);
-    } finally {
-        close()
     }
 }

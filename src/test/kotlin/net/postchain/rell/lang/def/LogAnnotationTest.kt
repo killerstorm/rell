@@ -1,13 +1,12 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
 
 import net.postchain.rell.lib.LibBlockTransactionTest
-import net.postchain.rell.runtime.Rt_OpContext
 import net.postchain.rell.test.BaseRellTest
-import net.postchain.rell.test.RellTestUtils
+import net.postchain.rell.test.Rt_TestOpContext
 import org.junit.Test
 
 class LogAnnotationTest: BaseRellTest() {
@@ -103,5 +102,5 @@ class LogAnnotationTest: BaseRellTest() {
         chkCompile("@log entity foo { index transaction: integer; }", "ct_err:entity:attr:type_diff:[transaction]:[integer]")
     }
 
-    private fun opContext() = Rt_OpContext(RellTestUtils.Rt_TestTxContext, -1, 444, -1, -1, listOf(), listOf())
+    private fun opContext() = Rt_TestOpContext(-1, 444, -1, -1, listOf(), listOf())
 }

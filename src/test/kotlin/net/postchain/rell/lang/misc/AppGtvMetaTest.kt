@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.misc
 
+import net.postchain.rell.lang.module.ExternalModuleTest
 import net.postchain.rell.lib.LibBlockTransactionTest
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.GtvTestUtils
-import net.postchain.rell.test.RellCodeTester
 import org.junit.Test
 
 class AppGtvMetaTest: BaseRellTest(false) {
@@ -35,13 +35,15 @@ class AppGtvMetaTest: BaseRellTest(false) {
         tstCtx.useSql = true
         tstCtx.blockchain(333, "deadbeef")
         tstCtx.blockchain(555, "beefdead")
-        tst.chainDependency("foo", "deadbeef", 1000)
-        tst.chainDependency("bar", "beefdead", 2000)
-
-        initExternalChain(333, true, LibBlockTransactionTest.BLOCK_INSERTS_333)
-        initExternalChain(555, false, LibBlockTransactionTest.BLOCK_INSERTS_555)
 
         file("lib.rell", "@external module;")
+
+        ExternalModuleTest.initExternalChain(tst, 333, LibBlockTransactionTest.BLOCK_INSERTS_333, dropTables = true)
+        ExternalModuleTest.initExternalChain(tst, 555, LibBlockTransactionTest.BLOCK_INSERTS_555, dropTables = false)
+        tst.dropTables = false
+
+        tst.chainDependency("foo", "deadbeef", 1000)
+        tst.chainDependency("bar", "beefdead", 2000)
 
         chkMeta("@external('foo') import foo_lib: lib; @external('bar') import bar_lib: lib; import lib;", """{"modules":{
             "": {"name":""},
@@ -49,17 +51,6 @@ class AppGtvMetaTest: BaseRellTest(false) {
             "lib[foo]": {"name":"lib", "external":1, "externalChain":"foo"},
             "lib[bar]": {"name":"lib", "external":1, "externalChain":"bar"}
         }}""")
-    }
-
-    private fun initExternalChain(chainId: Long, resetDatabase: Boolean, inserts: List<String> = listOf()) {
-        run {
-            val t = RellCodeTester(tst.tstCtx)
-            t.chainId = chainId
-            t.dropTables = resetDatabase
-            t.insert(inserts)
-            t.init()
-        }
-        tst.dropTables = false
     }
 
     @Test fun testDefEntity() {

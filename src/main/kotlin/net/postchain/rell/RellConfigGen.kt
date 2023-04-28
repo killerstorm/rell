@@ -16,12 +16,8 @@ import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.ConfigConstants
-import net.postchain.rell.module.RellVersions
-import net.postchain.rell.utils.PostchainUtils
-import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.utils.*
 import net.postchain.rell.utils.cli.*
-import net.postchain.rell.utils.immListOf
-import net.postchain.rell.utils.toImmMap
 import picocli.CommandLine
 import java.io.File
 import java.io.FileOutputStream
@@ -55,7 +51,7 @@ private fun main0(args: RellConfigGenCliArgs) {
 
 private fun writeResult(args: RellConfigGenCliArgs, os: OutputStream, config: Gtv) {
     val bytes = if (args.binaryOutput) {
-        PostchainUtils.gtvToBytes(config)
+        PostchainGtvUtils.gtvToBytes(config)
     } else {
         val text = RellConfigGen.configToText(config)
         text.toByteArray()
@@ -99,7 +95,7 @@ class RellConfigGen(
     private fun getConfigTemplate(template: String?): Gtv {
         if (template == null) return GtvFactory.gtv(mapOf())
         try {
-            return PostchainUtils.xmlToGtv(template)
+            return PostchainGtvUtils.xmlToGtv(template)
         } catch (e: Exception) {
             throw RellCliBasicException("Failed to parse template XML: ${e.message}")
         }
@@ -160,7 +156,7 @@ class RellConfigGen(
         }
 
         fun configToText(gtvConfig: Gtv): String {
-            val xml = PostchainUtils.gtvToXml(gtvConfig)
+            val xml = PostchainGtvUtils.gtvToXml(gtvConfig)
             return xml
         }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -16,9 +16,9 @@ import net.postchain.rell.compiler.base.utils.*
 import net.postchain.rell.compiler.vexpr.V_ConstantValueEvalContext
 import net.postchain.rell.lib.C_Lib_OpContext
 import net.postchain.rell.model.*
-import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.utils.toGtv
 import net.postchain.rell.tools.api.*
+import net.postchain.rell.utils.RellVersions
 import net.postchain.rell.utils.immListOf
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap

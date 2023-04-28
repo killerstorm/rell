@@ -9,50 +9,46 @@ import net.postchain.base.BaseEContext
 import net.postchain.base.configuration.BlockchainConfigurationData
 import net.postchain.base.data.DatabaseAccess
 import net.postchain.base.data.PostgreSQLDatabaseAccess
+import net.postchain.common.BlockchainRid
 import net.postchain.common.hexStringToByteArray
 import net.postchain.core.*
-import net.postchain.crypto.*
+import net.postchain.crypto.KeyPair
+import net.postchain.crypto.PrivKey
+import net.postchain.crypto.PubKey
+import net.postchain.crypto.SigMaker
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.mapper.GtvObjectMapper
 import net.postchain.gtx.GTXBlockchainConfigurationFactory
 import net.postchain.gtx.GtxBuilder
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.model.*
+import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellPostchainModuleApp
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
-import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.tools.RunPostchainApp
-import net.postchain.rell.utils.BytesKeyPair
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.*
 import net.postchain.rell.utils.cli.RellCliCompileConfig
 import net.postchain.rell.utils.cli.RellCliException
 import net.postchain.rell.utils.cli.RellCliInternalApi
-import net.postchain.rell.utils.immListOf
-import net.postchain.rell.utils.toImmList
 import java.sql.Connection
 
-object UnitTestBlockRunner {
-    private val TEST_KEYPAIR: BytesKeyPair = let {
-        val privKey = "42".repeat(32).hexStringToByteArray()
-        val pubKey = secp256k1_derivePubKey(privKey)
-        BytesKeyPair(privKey, pubKey)
-    }
-
-    fun runBlock(ctx: Rt_CallContext, block: Rt_TestBlockValue) {
-        val strategy = ctx.appCtx.blockRunnerStrategy
-        val gtvConfig = strategy.getGtvConfig()
+class Rt_PostchainUnitTestBlockRunner(
+    private val keyPair: BytesKeyPair,
+    private val runnerConfig: Rt_BlockRunnerConfig,
+    private val runnerStrategy: Rt_BlockRunnerStrategy,
+): Rt_UnitTestBlockRunner() {
+    override fun runBlock(ctx: Rt_CallContext, block: Rt_TestBlockValue) {
+        val gtvConfig = runnerStrategy.getGtvConfig()
         val bcData = GtvObjectMapper.fromGtv(gtvConfig, BlockchainConfigurationData::class)
 
         val bcCtx = getBlockchainContext(ctx)
         val bcConfigFactory: BlockchainConfigurationFactory = GTXBlockchainConfigurationFactory()
-        val sigMaker = makeSigMaker(strategy)
+        val sigMaker = makeSigMaker()
 
-        val blockRunnerCfg = ctx.appCtx.blockRunnerConfig
-        val txContextFactory = Rt_UnitTestTxContextFactory()
-        val precompiledApp = strategy.getPrecompiledApp()
-        val pcEnv = blockRunnerCfg.makePostchainModuleEnvironment(ctx.globalCtx, txContextFactory, precompiledApp)
+        val txContextFactory = Rt_UnitTestPostchainTxContextFactory()
+        val precompiledApp = runnerStrategy.getPrecompiledApp()
+        val pcEnv = runnerConfig.makePostchainModuleEnvironment(ctx.globalCtx, txContextFactory, precompiledApp)
 
         try {
             RellPostchainModuleEnvironment.set(pcEnv) {
@@ -70,11 +66,10 @@ object UnitTestBlockRunner {
         }
     }
 
-    private fun makeSigMaker(strategy: Rt_BlockRunnerStrategy): SigMaker {
-        val keyPair = strategy.getKeyPair()
+    private fun makeSigMaker(): SigMaker {
         val pubKey = PubKey(keyPair.pub.toByteArray())
         val privKey = PrivKey(keyPair.priv.toByteArray())
-        return PostchainUtils.cryptoSystem.buildSigMaker(KeyPair(pubKey, privKey))
+        return PostchainGtvUtils.cryptoSystem.buildSigMaker(KeyPair(pubKey, privKey))
     }
 
     private fun withSavepoint(con: Connection, code: () -> Unit) {
@@ -122,7 +117,7 @@ object UnitTestBlockRunner {
 
     private fun prepareTxBytes(bcConfig: BlockchainConfiguration, tx: RawTestTxValue): ByteArray {
         val signers = tx.signers.map { it.pub.toByteArray() }
-        val dataBuilder = GtxBuilder(bcConfig.blockchainRid, signers, PostchainUtils.cryptoSystem)
+        val dataBuilder = GtxBuilder(bcConfig.blockchainRid, signers, PostchainGtvUtils.cryptoSystem)
 
         for (op in tx.ops) {
             dataBuilder.addOperation(op.name.str(), *op.args.toTypedArray())
@@ -132,7 +127,7 @@ object UnitTestBlockRunner {
         for (keyPair in tx.signers) {
             val pubKey = keyPair.pub.toByteArray()
             val privKey = keyPair.priv.toByteArray()
-            val sigMaker = PostchainUtils.cryptoSystem.buildSigMaker(pubKey, privKey)
+            val sigMaker = PostchainGtvUtils.cryptoSystem.buildSigMaker(pubKey, privKey)
             sigBuilder.sign(sigMaker)
         }
 
@@ -140,7 +135,7 @@ object UnitTestBlockRunner {
     }
 
     private fun getBlockchainContext(ctx: Rt_CallContext): BlockchainContext {
-        val bcRid = ctx.chainCtx.blockchainRid
+        val bcRid = BlockchainRid(ctx.chainCtx.blockchainRid.toByteArray())
         val chainId = ctx.sqlCtx.mainChainMapping().chainId
         val nodeId = 0
         val nodeRid = "13".repeat(32).hexStringToByteArray()
@@ -151,32 +146,16 @@ object UnitTestBlockRunner {
         val dbAccess: DatabaseAccess = PostgreSQLDatabaseAccess()
         return BaseEContext(con, bcCtx.chainID, dbAccess)
     }
-
-    fun getTestKeyPair(): BytesKeyPair {
-        return TEST_KEYPAIR
-    }
 }
 
 abstract class Rt_BlockRunnerStrategy {
-    abstract fun getKeyPair(): BytesKeyPair
     abstract fun getGtvConfig(): Gtv
     abstract fun getPrecompiledApp(): RellPostchainModuleApp?
 }
 
-class Rt_StaticBlockRunnerStrategy(
-    private val gtvConfig: Gtv,
-    private val keyPair: BytesKeyPair
-): Rt_BlockRunnerStrategy() {
+class Rt_StaticBlockRunnerStrategy(private val gtvConfig: Gtv): Rt_BlockRunnerStrategy() {
     override fun getGtvConfig() = gtvConfig
-    override fun getKeyPair() = keyPair
     override fun getPrecompiledApp() = null
-}
-
-object Rt_UnsupportedBlockRunnerStrategy: Rt_BlockRunnerStrategy() {
-    private const val errMsg = "Block execution not supported"
-    override fun getGtvConfig() = throw Rt_Utils.errNotSupported(errMsg)
-    override fun getKeyPair() = throw Rt_Utils.errNotSupported(errMsg)
-    override fun getPrecompiledApp() = throw Rt_Utils.errNotSupported(errMsg)
 }
 
 class Rt_DynamicBlockRunnerStrategy(
@@ -196,8 +175,6 @@ class Rt_DynamicBlockRunnerStrategy(
             throw Rt_Exception.common("block_runner", msg)
         }
     }
-
-    override fun getKeyPair() = keyPair
 
     override fun getGtvConfig(): Gtv {
         return lazyConfig.first
@@ -247,30 +224,24 @@ class Rt_BlockRunnerConfig(
 
     companion object {
         private val DEFENV = RellPostchainModuleEnvironment.DEFAULT
-
-        val EVENT_TYPE: R_Type = Rt_UnitTestTxContextFactory.EVENT_TUPLE_TYPE
     }
 }
 
-private class Rt_UnitTestTxContextFactory: Rt_PostchainTxContextFactory() {
+private class Rt_UnitTestPostchainTxContextFactory: Rt_PostchainTxContextFactory() {
     private val events = mutableListOf<Rt_Value>()
 
-    override fun createTxContext(eContext: TxEContext): Rt_TxContext {
-        return Rt_UnitTestTxContext()
+    override fun createTxContext(eContext: TxEContext): Rt_PostchainTxContext {
+        return Rt_UnitTestPostchainTxContext()
     }
 
     fun getEvents() = events.toImmList()
 
-    private inner class Rt_UnitTestTxContext: Rt_TxContext() {
+    private inner class Rt_UnitTestPostchainTxContext: Rt_PostchainTxContext() {
         override fun emitEvent(type: String, data: Gtv) {
             val rtType = Rt_TextValue(type)
             val rtData = Rt_GtvValue(data)
-            val v = Rt_TupleValue(EVENT_TUPLE_TYPE, immListOf(rtType, rtData))
+            val v = Rt_TupleValue(C_Lib_Test_Events.EVENT_TUPLE_TYPE, immListOf(rtType, rtData))
             events.add(v)
         }
-    }
-
-    companion object {
-        val EVENT_TUPLE_TYPE = R_TupleType.create(R_TextType, R_GtvType)
     }
 }

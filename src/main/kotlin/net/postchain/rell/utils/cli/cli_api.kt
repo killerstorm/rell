@@ -14,24 +14,19 @@ import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_CommonError
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.compiler.base.utils.C_SourcePath
-import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
-import net.postchain.rell.lib.test.Rt_BlockRunnerStrategy
-import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
-import net.postchain.rell.lib.test.UnitTestBlockRunner
+import net.postchain.rell.lib.test.*
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.ConfigConstants
 import net.postchain.rell.module.RellPostchainModuleApp
 import net.postchain.rell.module.RellPostchainModuleEnvironment
-import net.postchain.rell.module.RellVersions
-import net.postchain.rell.repl.ReplInputChannelFactory
-import net.postchain.rell.repl.ReplOutputChannelFactory
-import net.postchain.rell.repl.ReplShell
+import net.postchain.rell.repl.*
 import net.postchain.rell.runtime.Rt_LogPrinter
 import net.postchain.rell.runtime.Rt_OutPrinter
 import net.postchain.rell.runtime.Rt_Printer
 import net.postchain.rell.runtime.Rt_Value
+import net.postchain.rell.sql.PostchainSqlInitProjExt
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.utils.*
 import java.io.File
@@ -153,9 +148,9 @@ class RellCliRunTestsConfig(
     /** Add dependencies of test modules to the active modules available during block execution (default: `true`). */
     val addTestDependenciesToBlockRunModules: Boolean,
     /** Test case start callback. */
-    val onTestCaseStart: (TestCase) -> Unit,
+    val onTestCaseStart: (UnitTestCase) -> Unit,
     /** Test case finished callback. */
-    val onTestCaseFinished: (TestCaseResult) -> Unit,
+    val onTestCaseFinished: (UnitTestCaseResult) -> Unit,
 ) {
     fun toBuilder() = Builder(this)
 
@@ -226,10 +221,10 @@ class RellCliRunTestsConfig(
         fun addTestDependenciesToBlockRunModules(v: Boolean) = apply { addTestDependenciesToBlockRunModules = v }
 
         /** @see [RellCliRunTestsConfig.onTestCaseStart] */
-        fun onTestCaseStart(v: (TestCase) -> Unit) = apply { onTestCaseStart = v }
+        fun onTestCaseStart(v: (UnitTestCase) -> Unit) = apply { onTestCaseStart = v }
 
         /** @see [RellCliRunTestsConfig.onTestCaseFinished] */
-        fun onTestCaseFinished(v: (TestCaseResult) -> Unit) = apply { onTestCaseFinished = v }
+        fun onTestCaseFinished(v: (UnitTestCaseResult) -> Unit) = apply { onTestCaseFinished = v }
 
         fun build(): RellCliRunTestsConfig {
             return RellCliRunTestsConfig(
@@ -282,8 +277,8 @@ class RellCliRunShellConfig(
             outPrinter = Rt_OutPrinter,
             logPrinter = Rt_LogPrinter(),
             historyFile = RellCliInternalApi.getDefaultReplHistoryFile(),
-            inputChannelFactory = ReplInputChannelFactory.DEFAULT,
-            outputChannelFactory = ReplOutputChannelFactory.DEFAULT,
+            inputChannelFactory = ReplIo.DEFAULT_INPUT_FACTORY,
+            outputChannelFactory = ReplIo.DEFAULT_OUTPUT_FACTORY,
         )
     }
 
@@ -411,7 +406,7 @@ object RellCliApi {
         sourceDir: File,
         appModules: List<String>?,
         testModules: List<String>,
-    ): TestRunnerResults {
+    ): UnitTestRunnerResults {
         val cSourceDir = C_SourceDir.diskDir(sourceDir)
         val rAppModules = appModules?.map { R_ModuleName.of(it) }?.toImmList()
         val rTestModules = testModules.map { R_ModuleName.of(it) }.toImmList()
@@ -468,8 +463,9 @@ internal object RellCliInternalApi {
         val modSel = makeCompilerModuleSelection(config, appModules, testModules)
         val cRes = C_Compiler.compile(sourceDir, modSel, options)
 
-        val moduleArgs = if (cRes.app != null && cRes.errors.isEmpty()) {
-            processModuleArgs(cRes.app, config.moduleArgs, config.moduleArgsMissingError)
+        val rApp = cRes.app
+        val moduleArgs = if (rApp != null && cRes.errors.isEmpty()) {
+            processModuleArgs(rApp, config.moduleArgs, config.moduleArgsMissingError)
         } else {
             immMapOf()
         }
@@ -533,7 +529,7 @@ internal object RellCliInternalApi {
         app: R_App,
         appModules: List<R_ModuleName>?,
         moduleArgsRt: Map<R_ModuleName, Rt_Value>,
-    ): TestRunnerResults {
+    ): UnitTestRunnerResults {
         val globalCtx = RellCliUtils.createGlobalContext(
             options,
             typeCheck = false,
@@ -541,19 +537,14 @@ internal object RellCliInternalApi {
             logPrinter = config.logPrinter,
         )
 
-        val blockRunnerCfg = Rt_BlockRunnerConfig(
-            forceTypeCheck = false,
-            sqlLog = config.sqlLog,
-            dbInitLogLevel = SqlInitLogging.LOG_NONE,
-        )
+        val blockRunner = createBlockRunner(config, sourceDir, app, appModules)
 
         val sqlCtx = RellCliUtils.createSqlContext(app)
         val chainCtx = RellCliUtils.createChainContext(moduleArgs = moduleArgsRt)
-        val blockRunnerStrategy = createBlockRunnerStrategy(config, sourceDir, app, appModules)
 
-        val testMatcher = if (config.testPatterns == null) TestMatcher.ANY else TestMatcher.make(config.testPatterns)
-        val testFns = TestRunner.getTestFunctions(app, testMatcher)
-        val testCases = testFns.map { TestCase(null, it) }
+        val testMatcher = if (config.testPatterns == null) UnitTestMatcher.ANY else UnitTestMatcher.make(config.testPatterns)
+        val testFns = UnitTestRunner.getTestFunctions(app, testMatcher)
+        val testCases = testFns.map { UnitTestCase(null, it) }
 
         return RellCliUtils.runWithSqlManager(
             dbUrl = config.databaseUrl,
@@ -561,40 +552,46 @@ internal object RellCliInternalApi {
             sqlLog = config.sqlLog,
             sqlErrorLog = config.sqlErrorLog,
         ) { sqlMgr ->
-            val testCtx = TestRunnerContext(
+            val testCtx = UnitTestRunnerContext(
                 app = app,
-                cliEnv = config.cliEnv,
+                printer = Rt_CliEnvPrinter(config.cliEnv),
                 sqlCtx = sqlCtx,
                 sqlMgr = sqlMgr,
+                sqlInitProjExt = PostchainSqlInitProjExt,
                 globalCtx = globalCtx,
                 chainCtx = chainCtx,
-                blockRunnerConfig = blockRunnerCfg,
-                blockRunnerStrategy = blockRunnerStrategy,
+                blockRunner = blockRunner,
                 printTestCases = config.printTestCases,
                 stopOnError = config.stopOnError,
                 onTestCaseStart = config.onTestCaseStart,
                 onTestCaseFinished = config.onTestCaseFinished,
             )
 
-            val testRes = TestRunnerResults()
-            TestRunner.runTests(testCtx, testCases, testRes)
+            val testRes = UnitTestRunnerResults()
+            UnitTestRunner.runTests(testCtx, testCases, testRes)
             testRes
         }
     }
 
-    private fun createBlockRunnerStrategy(
+    private fun createBlockRunner(
         config: RellCliRunTestsConfig,
         sourceDir: C_SourceDir,
         app: R_App,
         appModules: List<R_ModuleName>?,
-    ): Rt_BlockRunnerStrategy {
+    ): Rt_UnitTestBlockRunner {
+        val keyPair = C_Lib_Test.BLOCK_RUNNER_KEYPAIR
+
+        val blockRunnerCfg = Rt_BlockRunnerConfig(
+            forceTypeCheck = false,
+            sqlLog = config.sqlLog,
+            dbInitLogLevel = SqlInitLogging.LOG_NONE,
+        )
+
         val mainModules = when {
             appModules == null -> null
             config.addTestDependenciesToBlockRunModules -> (appModules + RellCliUtils.getMainModules(app)).toSet().toImmList()
             else -> appModules
         }
-
-        val keyPair = UnitTestBlockRunner.getTestKeyPair()
 
         val compileConfig = config.compileConfig
         val gtvCompileConfig = RellCliCompileConfig.Builder()
@@ -604,7 +601,8 @@ internal object RellCliInternalApi {
             .quiet(true)
             .build()
 
-        return Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, mainModules, gtvCompileConfig)
+        val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, mainModules, gtvCompileConfig)
+        return Rt_PostchainUnitTestBlockRunner(keyPair, blockRunnerCfg, blockRunnerStrategy)
     }
 
     fun runShell(
@@ -626,6 +624,7 @@ internal object RellCliInternalApi {
             sqlLog = config.sqlLog,
             dbInitLogLevel = RellPostchainModuleEnvironment.DEFAULT_DB_INIT_LOG_LEVEL,
         )
+        val projExt = PostchainReplInterpreterProjExt(PostchainSqlInitProjExt, blockRunnerCfg)
 
         RellCliUtils.runWithSqlManager(
             dbUrl = config.databaseUrl,
@@ -639,7 +638,7 @@ internal object RellCliInternalApi {
                 globalCtx,
                 sqlMgr,
                 options,
-                blockRunnerCfg,
+                projExt,
                 config.inputChannelFactory,
                 config.outputChannelFactory,
                 historyFile = config.historyFile,
@@ -686,7 +685,7 @@ internal object RellCliInternalApi {
                 val actual = actualArgs[module]
                 if (actual == null) null else {
                     val value = try {
-                        PostchainUtils.moduleArgsGtvToRt(expected, actual)
+                        PostchainBaseUtils.moduleArgsGtvToRt(expected, actual)
                     } catch (e: Throwable) {
                         throw C_CommonError("module_args_bad:$module", "Bad module_args for module '${module.str()}': ${e.message}")
                     }

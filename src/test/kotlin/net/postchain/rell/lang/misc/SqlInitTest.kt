@@ -1,19 +1,14 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.misc
 
-import net.postchain.base.BaseEContext
-import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.base.data.SQLDatabaseAccess
-import net.postchain.common.BlockchainRid
-import net.postchain.core.EContext
+import net.postchain.rell.sql.NullSqlInitProjExt
 import net.postchain.rell.sql.SqlInit
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.sql.SqlUtils
 import net.postchain.rell.test.*
-import net.postchain.rell.utils.PostchainUtils
 import org.junit.Test
 import kotlin.test.assertEquals
 
@@ -688,7 +683,7 @@ class SqlInitTest: BaseContextTest(useSql = true) {
                 tstCtx.sqlMgr().transaction { sqlExec ->
                     val appCtx = tst.createExeCtx(globalCtx, sqlExec, app.rApp)
                     val initLogging = SqlInitLogging.ofLevel(SqlInitLogging.LOG_ALL)
-                    val warnings = SqlInit.init(appCtx, false, initLogging)
+                    val warnings = SqlInit.init(appCtx, NullSqlInitProjExt, initLogging)
                     actualWarnings = warnings.joinToString(",")
                     "OK"
                 }
@@ -702,19 +697,14 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     private fun createSysTables(t: RellCodeTester) {
-        val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
         tstCtx.sqlMgr().transaction { sqlExec ->
-            sqlExec.connection { con ->
-                sqlAccess.initializeApp(con, PostchainUtils.DATABASE_VERSION)
-                val eCtx: EContext = BaseEContext(con, t.chainId, sqlAccess)
-                val bcRid: BlockchainRid = BlockchainRid.ZERO_RID
-                sqlAccess.initializeBlockchain(eCtx, bcRid)
-            }
+            SqlTestUtils.createSysAppTables(sqlExec)
+            SqlTestUtils.createSysBlockchainTables(sqlExec, t.chainId)
         }
     }
 
     private fun chkAll(metaEnts: String, metaAttrs: String, cols: String? = null) {
-        fun split(s: String) = s.split(" ").filter { !it.isEmpty() }.toTypedArray()
+        fun split(s: String) = s.split(" ").filter { it.isNotEmpty() }.toTypedArray()
         chkMetaEntities(*split(metaEnts))
         chkMetaAttrs(*split(metaAttrs))
         if (cols != null) chkColumns(*split(cols))

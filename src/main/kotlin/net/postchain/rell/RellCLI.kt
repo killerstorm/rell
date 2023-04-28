@@ -8,12 +8,16 @@ import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.core.C_AtAttrShadowing
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.compiler.base.utils.C_SourceDir
+import net.postchain.rell.lib.test.C_Lib_Test
 import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
+import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
+import net.postchain.rell.lib.test.Rt_PostchainUnitTestBlockRunner
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RellPostchainModuleEnvironment
-import net.postchain.rell.repl.ReplInputChannelFactory
-import net.postchain.rell.repl.ReplOutputChannelFactory
+import net.postchain.rell.repl.PostchainReplInterpreterProjExt
+import net.postchain.rell.repl.ReplIo
 import net.postchain.rell.repl.ReplShell
 import net.postchain.rell.runtime.*
 import net.postchain.rell.runtime.utils.Rt_Utils
@@ -124,7 +128,7 @@ private fun runApp(
 }
 
 private fun runSingleModuleTests(args: RellCliArgsEx, app: R_App, module: R_Module, entryRoutine: R_QualifiedName?) {
-    val fns = TestRunner.getTestFunctions(module, TestMatcher.ANY)
+    val fns = UnitTestRunner.getTestFunctions(module, UnitTestMatcher.ANY)
             .filter { entryRoutine == null || it.defName.qualifiedName == entryRoutine.str() }
     runTests(args, app, fns)
 }
@@ -140,40 +144,55 @@ private fun runMultiModuleTests(args: RellCliArgsEx, modules: List<String>) {
     val modSel = C_CompilerModuleSelection(listOf(), rModules)
     val app = RellCliUtils.compileApp(sourceDir, modSel, args.raw.quiet, C_CompilerOptions.DEFAULT)
 
-    val testFns = TestRunner.getTestFunctions(app, TestMatcher.ANY)
+    val testFns = UnitTestRunner.getTestFunctions(app, UnitTestMatcher.ANY)
     runTests(args, app, testFns)
 }
 
 private fun runTests(args: RellCliArgsEx, app: R_App, fns: List<R_FunctionDefinition>) {
-    val cliEnv: RellCliEnv = MainRellCliEnv
-
     val globalCtx = createGlobalCtx(args)
     val chainCtx = RellCliUtils.createChainContext()
     val sqlCtx = RellCliUtils.createSqlContext(app)
 
-    val blockRunnerConfig = createBlockRunnerCfg(args)
     val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
-    val blockRunnerStrategy = RellCliUtils.createBlockRunnerStrategy(sourceDir, app, immMapOf())
+    val blockRunner = createBlockRunner(args, sourceDir, app)
 
     val allOk = runWithSqlManager(args.raw, true) { sqlMgr ->
-        val testCtx = TestRunnerContext(
+        val testCtx = UnitTestRunnerContext(
             app,
-            cliEnv,
+            Rt_OutPrinter,
             sqlCtx,
             sqlMgr,
+            PostchainSqlInitProjExt,
             globalCtx,
             chainCtx,
-            blockRunnerConfig,
-            blockRunnerStrategy,
+            blockRunner,
         )
 
-        val cases = fns.map { TestCase(null, it) }
-        TestRunner.runTests(testCtx, cases)
+        val cases = fns.map { UnitTestCase(null, it) }
+        UnitTestRunner.runTests(testCtx, cases)
     }
 
     if (!allOk) {
         throw RellCliExitException(1)
     }
+}
+
+private fun createBlockRunner(args: RellCliArgsEx, sourceDir: C_SourceDir, app: R_App): Rt_UnitTestBlockRunner {
+    val keyPair = C_Lib_Test.BLOCK_RUNNER_KEYPAIR
+
+    val blockRunnerConfig = Rt_BlockRunnerConfig(
+        forceTypeCheck = args.raw.typeCheck,
+        sqlLog = args.raw.sqlLog,
+        dbInitLogLevel = RellPostchainModuleEnvironment.DEFAULT_DB_INIT_LOG_LEVEL,
+    )
+
+    val blockRunnerModules = RellCliUtils.getMainModules(app)
+    val compileConfig = RellCliCompileConfig.Builder()
+        .cliEnv(NullRellCliEnv)
+        .build()
+    val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, blockRunnerModules, compileConfig)
+
+    return Rt_PostchainUnitTestBlockRunner(keyPair, blockRunnerConfig, blockRunnerStrategy)
 }
 
 private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Boolean) {
@@ -186,7 +205,8 @@ private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Bool
 
         val globalCtx = createGlobalCtx(args)
         val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
-        val testRunnerCfg = Rt_BlockRunnerConfig()
+        val blockRunnerCfg = Rt_BlockRunnerConfig()
+        val projExt = PostchainReplInterpreterProjExt(PostchainSqlInitProjExt, blockRunnerCfg)
 
         val historyFile = if (args.raw.noHistory) null else RellCliInternalApi.getDefaultReplHistoryFile()
 
@@ -196,9 +216,9 @@ private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Bool
             globalCtx,
             sqlMgr,
             args.compilerOptions,
-            testRunnerCfg,
-            ReplInputChannelFactory.DEFAULT,
-            ReplOutputChannelFactory.DEFAULT,
+            projExt,
+            ReplIo.DEFAULT_INPUT_FACTORY,
+            ReplIo.DEFAULT_OUTPUT_FACTORY,
             historyFile = historyFile,
         )
     }
@@ -219,7 +239,7 @@ private fun initDatabase(
     sqlMgr: SqlManager,
     sqlCtx: Rt_SqlContext
 ) {
-    SqlUtils.initDatabase(appCtx, sqlCtx, sqlMgr, args.resetdb, args.sqlInitLog)
+    SqlUtils.initDatabase(appCtx, sqlCtx, sqlMgr, PostchainSqlInitProjExt, args.resetdb, args.sqlInitLog)
 }
 
 private fun parseEntryPoint(args: RellInterpreterCliArgs): Pair<R_ModuleName?, R_QualifiedName?> {
@@ -270,8 +290,8 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
     val op = module.operations[name] ?: app.operations[mountName]
     if (op != null) {
         val time = System.currentTimeMillis() / 1000
-        val opCtx = Rt_OpContext(
-                txCtx = Rt_CliTxContext,
+        val opCtx = Rt_PostchainOpContext(
+                txCtx = Rt_CliPostchainTxContext,
                 lastBlockTime = time,
                 transactionIid = -1,
                 blockHeight = -1,
@@ -317,14 +337,6 @@ private fun createGlobalCtx(args: RellCliArgsEx): Rt_GlobalContext {
     )
 }
 
-private fun createBlockRunnerCfg(args: RellCliArgsEx): Rt_BlockRunnerConfig {
-    return Rt_BlockRunnerConfig(
-        forceTypeCheck = args.raw.typeCheck,
-        sqlLog = args.raw.sqlLog,
-        dbInitLogLevel = RellPostchainModuleEnvironment.DEFAULT_DB_INIT_LOG_LEVEL,
-    )
-}
-
 private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: List<String>, json: Boolean): List<Rt_Value> {
     val params = entryPoint.routine().params()
     if (args.size != params.size) {
@@ -341,7 +353,7 @@ private fun parseArg(gtvCtx: GtvToRtContext, param: R_Param, arg: String, json: 
         if (!type.completeFlags().gtv.fromGtv) {
             throw RellCliBasicException("Parameter '${param.name}' of type ${type.strCode()} cannot be converted from Gtv")
         }
-        val gtv = PostchainUtils.jsonToGtv(arg)
+        val gtv = PostchainGtvUtils.jsonToGtv(arg)
         return type.gtvToRt(gtvCtx, gtv)
     }
 
@@ -361,7 +373,7 @@ private fun resultToString(res: Rt_Value, json: Boolean): String {
             throw RellCliBasicException("Result of type '${type.strCode()}' cannot be converted to Gtv")
         }
         val gtv = type.rtToGtv(res, true)
-        PostchainUtils.gtvToJson(gtv)
+        PostchainGtvUtils.gtvToJson(gtv)
     } else {
         res.toString()
     }
@@ -447,7 +459,7 @@ private class RellAppLauncher(
     }
 }
 
-private object Rt_CliTxContext: Rt_TxContext() {
+private object Rt_CliPostchainTxContext: Rt_PostchainTxContext() {
     override fun emitEvent(type: String, data: Gtv) {
         throw Rt_Utils.errNotSupported("Function emit_event() not supported")
     }
@@ -457,7 +469,7 @@ private sealed class RellEntryPoint {
     abstract val kind: String
     abstract val transaction: Boolean
     abstract fun routine(): R_RoutineDefinition
-    abstract fun opContext(): Rt_OpContext?
+    abstract fun opContext(): Rt_OpContext
     abstract fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value?
 }
 
@@ -465,7 +477,7 @@ private class RellEntryPoint_Function(private val f: R_FunctionDefinition): Rell
     override val kind = "function"
     override val transaction = false
     override fun routine() = f
-    override fun opContext() = null
+    override fun opContext() = Rt_NullOpContext
 
     override fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value {
         return f.callTop(exeCtx, args, true)
@@ -488,7 +500,7 @@ private class RellEntryPoint_Query(private val q: R_QueryDefinition): RellEntryP
     override val kind = "query"
     override val transaction = false
     override fun routine() = q
-    override fun opContext() = null
+    override fun opContext() = Rt_NullOpContext
 
     override fun call(exeCtx: Rt_ExecutionContext, args: List<Rt_Value>): Rt_Value {
         return q.call(exeCtx, args)

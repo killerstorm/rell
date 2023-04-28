@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.compiler.ast
@@ -15,12 +15,16 @@ import net.postchain.rell.compiler.base.modifier.C_ModifierFields
 import net.postchain.rell.compiler.base.modifier.C_ModifierTargetType
 import net.postchain.rell.compiler.base.modifier.C_ModifierValues
 import net.postchain.rell.compiler.base.namespace.C_DeclarationType
+import net.postchain.rell.compiler.base.utils.C_ReservedMountNames
 import net.postchain.rell.compiler.base.utils.C_Utils
 import net.postchain.rell.model.*
 import net.postchain.rell.tools.api.IdeOutlineNodeType
 import net.postchain.rell.tools.api.IdeOutlineTreeBuilder
 import net.postchain.rell.tools.api.IdeSymbolKind
-import net.postchain.rell.utils.*
+import net.postchain.rell.utils.MutableTypedKeyMap
+import net.postchain.rell.utils.TypedKeyMap
+import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.utils.toImmSet
 
 class S_OperationDefinition(
         pos: S_Pos,
@@ -45,7 +49,7 @@ class S_OperationDefinition(
         nameHand.setIdeInfo(cDefBase.ideDefInfo)
 
         val mountName = ctx.mountName(modMount, cName)
-        checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.OPERATION, mountName, PostchainUtils.STD_OPS)
+        checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.OPERATION, mountName, C_ReservedMountNames.OPERATIONS)
 
         val defCtx = cDefBase.defCtx(ctx)
         val defBase = cDefBase.rBase(defCtx.initFrameGetter)
@@ -157,7 +161,7 @@ class S_QueryDefinition(
         nameHand.setIdeInfo(cDefBase.ideDefInfo)
 
         val mountName = ctx.mountName(modMount, cName)
-        checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.QUERY, mountName, PostchainUtils.STD_QUERIES)
+        checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.QUERY, mountName, C_ReservedMountNames.QUERIES)
 
         val defCtx = cDefBase.defCtx(ctx)
         val defBase = cDefBase.rBase(defCtx.initFrameGetter)

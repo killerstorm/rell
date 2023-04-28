@@ -1,12 +1,12 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.runtime
 
 import com.google.common.io.Resources
-import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.utils.Rt_Utils
+import net.postchain.rell.utils.RellVersions
 import net.postchain.rell.utils.immMapOf
 import net.postchain.rell.utils.toImmMap
 import java.io.StringReader

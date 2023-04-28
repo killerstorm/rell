@@ -9,7 +9,7 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.test.RellCodeTester
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.PostchainGtvUtils
 import org.junit.Test
 import java.math.BigInteger
 import kotlin.test.assertEquals
@@ -472,7 +472,7 @@ class LibGtvTest: BaseRellTest(false) {
     private fun chkFromGtv(gtv: String, expr: String, expected: String) = chkFromGtv(tst, gtv, expr, expected)
 
     private fun chkFromGtv(gtv: Gtv, expr: String, expected: String) {
-        val bytes = PostchainUtils.gtvToBytes(gtv)
+        val bytes = PostchainGtvUtils.gtvToBytes(gtv)
         val hex = bytes.toHex()
         val code = """{ val g = gtv.from_bytes(x'$hex'); return $expr; }"""
         tst.chkEx(code, expected)

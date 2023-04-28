@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib
@@ -13,7 +13,7 @@ import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.gtv.Gtv
 import net.postchain.rell.test.BaseRellTest
 import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.PostchainGtvUtils
 import net.postchain.rell.utils.checkEquals
 import org.junit.Test
 import java.math.BigInteger
@@ -75,7 +75,7 @@ class LibCryptoTest: BaseRellTest(false) {
     @Test fun testEthEcrecoverWeb3Cases() {
         val url = Resources.getResource(javaClass, "/eth_ecrecover_testcases.json")
         val text = Resources.toString(url, Charsets.UTF_8)
-        val gtv = PostchainUtils.jsonToGtv(text)
+        val gtv = PostchainGtvUtils.jsonToGtv(text)
 
         fun getBytes(v: Gtv, k: String): String {
             val w = v.asDict().getValue(k)

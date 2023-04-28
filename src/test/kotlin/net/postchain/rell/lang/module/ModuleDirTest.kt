@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.module
@@ -31,7 +31,7 @@ class ModuleDirTest: BaseRellTest(false) {
     }
 
     private fun chkFileDirConflict(path1: String, text1: String, path2: String, text2: String, imp: String, exp: String) {
-        val c = RellTestContext(false)
+        val c = RellTestContext(useSql = false)
         val t = RellCodeTester(c)
         t.file(path1, text1)
         t.file(path2, text2)

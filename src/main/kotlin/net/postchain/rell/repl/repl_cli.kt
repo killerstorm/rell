@@ -6,7 +6,6 @@ package net.postchain.rell.repl
 
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.runtime.Rt_GlobalContext
 import net.postchain.rell.runtime.Rt_RellVersion
@@ -22,7 +21,7 @@ object ReplShell {
         globalCtx: Rt_GlobalContext,
         sqlMgr: SqlManager,
         compilerOptions: C_CompilerOptions,
-        testBlockRunnerCfg: Rt_BlockRunnerConfig,
+        projExt: ReplInterpreterProjExt,
         inChannelFactory: ReplInputChannelFactory,
         outChannelFactory: ReplOutputChannelFactory,
         historyFile: File?,
@@ -34,8 +33,8 @@ object ReplShell {
             sourceDir,
             module,
             globalCtx,
-            testBlockRunnerCfg,
             sqlMgr,
+            projExt,
             outChannel,
         )
 

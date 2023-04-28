@@ -1,9 +1,10 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
 
+import net.postchain.gtv.Gtv
 import net.postchain.rell.runtime.*
 
 abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseTesterTest(useSql) {
@@ -30,6 +31,7 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
     fun chkFull(code: String, expected: String) =  tst.chkFull(code, expected)
     fun chkFull(code: String, args: List<Rt_Value>, expected: String) = tst.chkFull(code, args, expected)
     fun chkFull(code: String, name: String, args: List<Rt_Value>, expected: String) = tst.chkFull(code, name, args, expected)
+    fun chkFullGtv(code: String, args: List<Gtv>, expected: String) = tst.chkFullGtv(code, args, expected)
 
     fun chkFull(code: String, arg: Long?, expected: String) = chkFull(code, listOf(rtVal(arg)), expected)
     fun chkFull(code: String, arg1: Long?, arg2: Long?, expected: String) = chkFull(code, listOf(rtVal(arg1), rtVal(arg2)), expected)
@@ -41,6 +43,7 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
 
     fun chkOp(code: String, expected: String = "OK") = tst.chkOp(code, expected)
     fun chkOpFull(code: String, expected: String = "OK", name: String = "o") = tst.chkOpEx(code, name, expected)
+    fun chkOpFullGtv(code: String, args: List<Gtv>, expected: String = "OK") = tst.chkOpExGtv(code, args, expected)
 
     fun chkOpOut(code: String, vararg expected: String) {
         chkOp(code, "OK")

@@ -5,7 +5,7 @@
 package net.postchain.rell.misc
 
 import net.postchain.rell.model.R_DefinitionName
-import net.postchain.rell.utils.TestMatcher
+import net.postchain.rell.utils.UnitTestMatcher
 import net.postchain.rell.utils.checkEquals
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -82,7 +82,7 @@ class TestMatcherTest {
     }
 
     private fun chkMatchFunction(pat: String, name: String, exp: Boolean) {
-        val m = TestMatcher.make(listOf(pat))
+        val m = UnitTestMatcher.make(listOf(pat))
         val rDefNames = parseFunctionName(name)
         assertEquals(exp, m.matchFunction(rDefNames))
     }
@@ -153,7 +153,7 @@ class TestMatcherTest {
     }
 
     private fun matchGlob(pat: String, s: String, exp: Boolean) {
-        val pattern = TestMatcher.globToPattern(pat)
+        val pattern = UnitTestMatcher.globToPattern(pat)
         assertEquals(exp, pattern.matcher(s).matches())
     }
 }

@@ -1,11 +1,10 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.test
 
 import net.postchain.common.BlockchainRid
-import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.ast.S_Pos
 import net.postchain.rell.compiler.base.core.C_CompilationResult
 import net.postchain.rell.compiler.base.core.C_Compiler
@@ -16,7 +15,6 @@ import net.postchain.rell.compiler.base.utils.C_Message
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.*
 import net.postchain.rell.runtime.*
-import net.postchain.rell.runtime.utils.Rt_Utils
 import net.postchain.rell.sql.SqlManager
 import net.postchain.rell.utils.CommonUtils
 
@@ -29,7 +27,8 @@ object RellTestUtils {
 
     val ENCODER_PLAIN = { _: R_Type, v: Rt_Value -> v.str() }
     val ENCODER_STRICT = { _: R_Type, v: Rt_Value -> v.strCode() }
-    val ENCODER_GTV = { t: R_Type, v: Rt_Value -> GtvTestUtils.encodeGtvStr(t.rtToGtv(v, true)) }
+    val ENCODER_GTV = { t: R_Type, v: Rt_Value -> GtvTestUtils.gtvToStr(t.rtToGtv(v, true)) }
+    val ENCODER_GTV_STRICT = { t: R_Type, v: Rt_Value -> GtvTestUtils.encodeGtvStr(t.rtToGtv(v, true)) }
 
     fun processApp(code: String, processor: (T_App) -> String): String {
         val sourceDir = C_SourceDir.mapDirOf(MAIN_FILE to code)
@@ -169,7 +168,7 @@ object RellTestUtils {
 
     fun <T> callOpGeneric(
             appCtx: Rt_AppContext,
-            opCtx: Rt_OpContext?,
+            opCtx: Rt_OpContext,
             sqlCtx: Rt_SqlContext,
             sqlMgr: SqlManager,
             name: String,
@@ -209,10 +208,4 @@ object RellTestUtils {
     fun strToBlockchainRid(s: String) = BlockchainRid(strToRidBytes(s))
 
     class TestCallResult(val res: String, val stack: List<R_StackPos>)
-
-    object Rt_TestTxContext: Rt_TxContext() {
-        override fun emitEvent(type: String, data: Gtv) {
-            throw Rt_Utils.errNotSupported("Not supported in tests")
-        }
-    }
 }

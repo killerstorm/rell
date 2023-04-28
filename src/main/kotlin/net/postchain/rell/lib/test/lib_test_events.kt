@@ -15,10 +15,12 @@ import net.postchain.rell.runtime.Rt_UnitValue
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.immListOf
 
-private val EVENT_TYPE = Rt_BlockRunnerConfig.EVENT_TYPE
-private val EVENT_LIST_TYPE: R_Type = R_ListType(EVENT_TYPE)
+private val EVENT_LIST_TYPE: R_Type = R_ListType(C_Lib_Test_Events.EVENT_TYPE)
 
 object C_Lib_Test_Events {
+    val EVENT_TUPLE_TYPE = R_TupleType.create(R_TextType, R_GtvType)
+    val EVENT_TYPE: R_Type = EVENT_TUPLE_TYPE
+
     private val GLOBAL_FUNCTIONS = C_GlobalFuncBuilder(C_Lib_Test.NAMESPACE_DEF_PATH)
         .addEx("assert_events", R_UnitType, C_ArgsTypesMatcher_VarArg.make(EVENT_TYPE), R_SysFn_AssertEvents)
         .build()

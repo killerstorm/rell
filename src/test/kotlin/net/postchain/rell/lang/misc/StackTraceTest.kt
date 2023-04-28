@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.misc
@@ -176,7 +176,7 @@ class StackTraceTest: BaseRellTest(false) {
 
         chkSpecificError("range(100, 99, 1);", 3, "rt_err:fn_range_args:100:99:1")
         chkSpecificError("json('[{(');", 3, "rt_err:fn_json_badstr")
-        chkSpecificError("val t = op_context.block_height;", 3, "rt_err:fn:op_context.block_height:noop")
+        chkSpecificError("val t = op_context.block_height;", 3, "rt_err:op_context:noop")
 
         chkSpecificError("ee.value('Hello');", 3, "rt_err:enum_badname:lib:ee:Hello")
         chkSpecificError("ee.value(123);", 3, "rt_err:enum_badvalue:lib:ee:123")

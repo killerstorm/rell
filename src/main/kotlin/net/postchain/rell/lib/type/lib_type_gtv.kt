@@ -15,7 +15,7 @@ import net.postchain.rell.runtime.Rt_GtvValue
 import net.postchain.rell.runtime.Rt_JsonValue
 import net.postchain.rell.runtime.Rt_NullValue
 import net.postchain.rell.runtime.utils.Rt_Utils
-import net.postchain.rell.utils.PostchainUtils
+import net.postchain.rell.utils.PostchainGtvUtils
 
 object C_Lib_Type_Gtv: C_Lib_Type("gtv", R_GtvType) {
     override fun bindStaticFunctions(b: C_GlobalFuncBuilder) {
@@ -43,13 +43,13 @@ object C_Lib_Type_Gtv: C_Lib_Type("gtv", R_GtvType) {
 private object GtvFns {
     val ToBytes = C_SysFunction.simple1(pure = true) { a ->
         val gtv = a.asGtv()
-        val bytes = PostchainUtils.gtvToBytes(gtv)
+        val bytes = PostchainGtvUtils.gtvToBytes(gtv)
         Rt_ByteArrayValue(bytes)
     }
 
     val ToJson = C_SysFunction.simple1(pure = true) { a ->
         val gtv = a.asGtv()
-        val json = PostchainUtils.gtvToJson(gtv)
+        val json = PostchainGtvUtils.gtvToJson(gtv)
         //TODO consider making a separate function toJSONStr() to avoid unnecessary conversion str -> json -> str.
         Rt_JsonValue.parse(json)
     }
@@ -57,7 +57,7 @@ private object GtvFns {
     val FromBytes = C_SysFunction.simple1(pure = true) { a ->
         val bytes = a.asByteArray()
         Rt_Utils.wrapErr("fn:gtv.from_bytes") {
-            val gtv = PostchainUtils.bytesToGtv(bytes)
+            val gtv = PostchainGtvUtils.bytesToGtv(bytes)
             Rt_GtvValue(gtv)
         }
     }
@@ -65,7 +65,7 @@ private object GtvFns {
     val FromBytesOrNull = C_SysFunction.simple1(pure = true) { a ->
         val bytes = a.asByteArray()
         val gtv = try {
-            PostchainUtils.bytesToGtv(bytes)
+            PostchainGtvUtils.bytesToGtv(bytes)
         } catch (e: Throwable) {
             null
         }
@@ -75,7 +75,7 @@ private object GtvFns {
     val FromJson_Text = C_SysFunction.simple1(pure = true) { a ->
         val str = a.asString()
         Rt_Utils.wrapErr("fn:gtv.from_json(text)") {
-            val gtv = PostchainUtils.jsonToGtv(str)
+            val gtv = PostchainGtvUtils.jsonToGtv(str)
             Rt_GtvValue(gtv)
         }
     }
@@ -83,7 +83,7 @@ private object GtvFns {
     val FromJson_Json = C_SysFunction.simple1(pure = true) { a ->
         val str = a.asJsonString()
         Rt_Utils.wrapErr("fn:gtv.from_json(json)") {
-            val gtv = PostchainUtils.jsonToGtv(str)
+            val gtv = PostchainGtvUtils.jsonToGtv(str)
             Rt_GtvValue(gtv)
         }
     }

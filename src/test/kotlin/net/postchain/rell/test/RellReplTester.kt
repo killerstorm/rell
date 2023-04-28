@@ -6,7 +6,6 @@ package net.postchain.rell.test
 
 import net.postchain.rell.compiler.base.utils.C_Message
 import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.repl.*
 import net.postchain.rell.runtime.Rt_Exception
@@ -19,10 +18,11 @@ import java.util.*
 import kotlin.test.assertEquals
 
 class RellReplTester(
-        private val globalCtx: Rt_GlobalContext,
-        private val sourceDir: C_SourceDir,
-        private val sqlMgr: SqlManager,
-        private val module: R_ModuleName?,
+    private val tstProjExt: RellTestProjExt,
+    private val globalCtx: Rt_GlobalContext,
+    private val sourceDir: C_SourceDir,
+    private val sqlMgr: SqlManager,
+    private val module: R_ModuleName?,
 ) {
     var outPlainValues = false
 
@@ -33,12 +33,6 @@ class RellReplTester(
     private val outChannel: ReplOutputChannel by lazy {
         outChannelFactory.createOutputChannel()
     }
-
-    private val blockRunnerCfg = Rt_BlockRunnerConfig(
-            wrapCtErrors = false,
-            wrapRtErrors = false,
-            forceTypeCheck = true,
-    )
 
     private var repl: ReplInterpreter? = null
 
@@ -53,14 +47,16 @@ class RellReplTester(
                 typeCheck = globalCtx.typeCheck,
             )
 
+            val blockRunnerFactory = tstProjExt.getReplInterpreterProjExt()
+
             val cOpts = RellTestUtils.DEFAULT_COMPILER_OPTIONS
             repl = ReplInterpreter.create(
                 cOpts,
                 sourceDir,
                 module,
                 replGlobalCtx,
-                blockRunnerCfg,
                 sqlMgr,
+                blockRunnerFactory,
                 outChannel,
             )
         }

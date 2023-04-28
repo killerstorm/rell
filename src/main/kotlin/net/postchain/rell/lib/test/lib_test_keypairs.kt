@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lib.test
@@ -57,7 +57,7 @@ object C_Lib_Test_KeyPairs {
         b.addNamespace("pubkeys", PUBKEYS_NAMESPACE)
         b.addStruct("keypair", KEYPAIR_STRUCT, IdeSymbolInfo.DEF_STRUCT)
 
-        val keyPairValue = keyPairToStruct(UnitTestBlockRunner.getTestKeyPair())
+        val keyPairValue = keyPairToStruct(C_Lib_Test.BLOCK_RUNNER_KEYPAIR)
         b.addProperty("BLOCKCHAIN_SIGNER_KEYPAIR", C_NamespaceProperty_RtValue(IdeSymbolInfo.DEF_CONSTANT, keyPairValue))
     }
 

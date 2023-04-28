@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
@@ -7,8 +7,8 @@ package net.postchain.rell.tools.runcfg
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.RellVersions
 import net.postchain.rell.utils.Bytes32
+import net.postchain.rell.utils.RellVersions
 import net.postchain.rell.utils.toImmList
 import net.postchain.rell.utils.toImmMap
 

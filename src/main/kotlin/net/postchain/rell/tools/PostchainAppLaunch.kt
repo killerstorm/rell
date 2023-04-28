@@ -23,10 +23,9 @@ import net.postchain.logging.CHAIN_IID_TAG
 import net.postchain.logging.NODE_PUBKEY_TAG
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.module.RellPostchainModuleEnvironment
-import net.postchain.rell.module.RellVersions
 import net.postchain.rell.runtime.Rt_LogPrinter
-import net.postchain.rell.runtime.Rt_PrinterFactory
 import net.postchain.rell.sql.SqlInitLogging
+import net.postchain.rell.utils.RellVersions
 import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.cli.MainRellCliEnv
 import net.postchain.rell.utils.cli.RellBaseCliArgs
@@ -34,7 +33,6 @@ import net.postchain.rell.utils.cli.RellCliLogUtils
 import net.postchain.rell.utils.cli.RellCliUtils
 import picocli.CommandLine
 import java.io.File
-import java.util.logging.LogManager
 
 private val log = run {
     RellCliLogUtils.initLogging()
@@ -125,18 +123,6 @@ object RunPostchainApp {
         return pubKeyBytes.toHex()
 
     }
-}
-
-class RellJavaLoggingInit {
-    init {
-        javaClass.getResourceAsStream("/rell_logging.properties")?.use { ins ->
-            LogManager.getLogManager().readConfiguration(ins)
-        }
-    }
-}
-
-class Rt_RellAppPrinterFactory: Rt_PrinterFactory {
-    override fun newPrinter() = Rt_LogPrinter()
 }
 
 @CommandLine.Command(name = "PostchainAppLaunch", description = ["Runs a Rell Postchain app"])

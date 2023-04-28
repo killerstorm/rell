@@ -4,7 +4,7 @@
 
 package net.postchain.rell.lib.test
 
-import net.postchain.common.BlockchainRid
+import net.postchain.common.hexStringToByteArray
 import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
@@ -44,6 +44,12 @@ object C_Lib_Test {
     val BLOCK_TYPE_QNAME_STR = BLOCK_TYPE_QNAME.str()
     val TX_TYPE_QNAME_STR = TX_TYPE_QNAME.str()
     val OP_TYPE_QNAME_STR = OP_TYPE_QNAME.str()
+
+    val BLOCK_RUNNER_KEYPAIR: BytesKeyPair = let {
+        val privKey = "42".repeat(32).hexStringToByteArray()
+        val pubKey = secp256k1_derivePubKey(privKey)
+        BytesKeyPair(privKey, pubKey)
+    }
 
     fun bind(nsBuilder: C_SysNsProtoBuilder) {
         C_Lib_Test_Assert.bind(nsBuilder)
@@ -108,7 +114,7 @@ object R_TestOpType: R_BasicType(C_Lib_Test.OP_TYPE_QNAME.str(), typeDefName(C_L
 
 private class BlockCommonFunctions(
         typeQName: String,
-        private val blockGetter: (ctx: Rt_CallContext, self: Rt_Value) -> Rt_TestBlockValue
+        private val blockGetter: (self: Rt_Value) -> Rt_TestBlockValue
 ) {
     private val runSimpleName = "run"
     private val runMustFailSimpleName = "run_must_fail"
@@ -124,7 +130,7 @@ private class BlockCommonFunctions(
     }
 
     private fun getRunBlock(ctx: Rt_CallContext, arg: Rt_Value, fnName: String): Rt_TestBlockValue {
-        val block = blockGetter(ctx, arg)
+        val block = blockGetter(arg)
         if (!ctx.appCtx.repl && !ctx.appCtx.test) {
             throw Rt_Exception.common("fn:$fnName:no_repl_test", "Block can be executed only in REPL or test")
         }
@@ -133,7 +139,7 @@ private class BlockCommonFunctions(
 
     private fun runMustFail(ctx: Rt_CallContext, block: Rt_TestBlockValue, expected: String?): Rt_Value {
         try {
-            UnitTestBlockRunner.runBlock(ctx, block)
+            ctx.appCtx.blockRunner.runBlock(ctx, block)
         } catch (e: Throwable) {
             val actual = e.message ?: ""
             if (expected != null) {
@@ -152,7 +158,7 @@ private class BlockCommonFunctions(
         override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
             val block = getRunBlock(ctx, arg, runFullName)
             try {
-                UnitTestBlockRunner.runBlock(ctx, block)
+                ctx.appCtx.blockRunner.runBlock(ctx, block)
             } catch (e: Rt_Exception) {
                 throw e
             } catch (e: Throwable) {
@@ -178,7 +184,7 @@ private class BlockCommonFunctions(
     }
 }
 
-private class TxCommonFunctions(private val txGetter: (ctx: Rt_CallContext, self: Rt_Value) -> Rt_TestTxValue) {
+private class TxCommonFunctions(private val txGetter: (self: Rt_Value) -> Rt_TestTxValue) {
     fun bind(b: C_MemberFuncBuilder) {
         b.add("sign", R_TestTxType, listOf(R_ListType(C_Lib_Test_KeyPairs.KEYPAIR_TYPE)), sign_listOfKeyPair)
         b.add("sign", R_TestTxType, listOf(R_ListType(R_ByteArrayType)), sign_listOfByteArray)
@@ -186,34 +192,34 @@ private class TxCommonFunctions(private val txGetter: (ctx: Rt_CallContext, self
         b.addOneMany("sign", R_TestTxType, listOf(), C_Lib_Test_KeyPairs.KEYPAIR_TYPE, sign_keyPairs)
     }
 
-    private val sign_listOfKeyPair = object: R_SysFunctionEx_2() {
-        override fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
-            return signByKeyPairs(ctx, arg1, arg2.asList())
+    private val sign_listOfKeyPair = object: R_SysFunction_2() {
+        override fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
+            return signByKeyPairs(arg1, arg2.asList())
         }
     }
 
-    private val sign_listOfByteArray = object: R_SysFunctionEx_2() {
-        override fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
-            return signByByteArrays(ctx, arg1, arg2.asList())
+    private val sign_listOfByteArray = object: R_SysFunction_2() {
+        override fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
+            return signByByteArrays(arg1, arg2.asList())
         }
     }
 
     private val sign_keyPairs = object: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.isNotEmpty())
-            return signByKeyPairs(ctx, args[0], args.subList(1, args.size))
+            return signByKeyPairs(args[0], args.subList(1, args.size))
         }
     }
 
     private val sign_byteArrays = object: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.size >= 1)
-            return signByByteArrays(ctx, args[0], args.subList(1, args.size))
+            return signByByteArrays(args[0], args.subList(1, args.size))
         }
     }
 
-    private fun signByKeyPairs(ctx: Rt_CallContext, self: Rt_Value, keyPairs: List<Rt_Value>): Rt_Value {
-        val tx = txGetter(ctx, self)
+    private fun signByKeyPairs(self: Rt_Value, keyPairs: List<Rt_Value>): Rt_Value {
+        val tx = txGetter(self)
         for (keyPairValue in keyPairs) {
             val keyPair = C_Lib_Test_KeyPairs.structToKeyPair(keyPairValue)
             tx.sign(keyPair)
@@ -221,8 +227,8 @@ private class TxCommonFunctions(private val txGetter: (ctx: Rt_CallContext, self
         return tx
     }
 
-    private fun signByByteArrays(ctx: Rt_CallContext, self: Rt_Value, byteArrays: List<Rt_Value>): Rt_Value {
-        val tx = txGetter(ctx, self)
+    private fun signByByteArrays(self: Rt_Value, byteArrays: List<Rt_Value>): Rt_Value {
+        val tx = txGetter(self)
         for (v in byteArrays) {
             val bs = v.asByteArray()
             val keyPair = privKeyToKeyPair(bs)
@@ -248,7 +254,7 @@ private class TxCommonFunctions(private val txGetter: (ctx: Rt_CallContext, self
 }
 
 private object C_Lib_Type_Block: C_Lib_Type(C_Lib_Test.BLOCK_SNAME, R_TestBlockType, defaultMemberFns = false) {
-    private val common = BlockCommonFunctions(C_Lib_Test.BLOCK_TYPE_QNAME_STR) { _, v -> asTestBlock(v) }
+    private val common = BlockCommonFunctions(C_Lib_Test.BLOCK_TYPE_QNAME_STR) { asTestBlock(it) }
 
     override fun bindConstructors(b: C_GlobalFuncBuilder) {
         val name = typeName.str
@@ -276,17 +282,17 @@ private object C_Lib_Type_Block: C_Lib_Type(C_Lib_Test.BLOCK_SNAME, R_TestBlockT
         override fun call(args: List<Rt_Value>) = Rt_TestBlockValue(args.map { asTestTx(it).toRaw() })
     }
 
-    private object New_ListOfOps: R_SysFunctionEx_1() {
-        override fun call(ctx: Rt_CallContext, arg: Rt_Value) = newOps(ctx, arg.asList())
+    private object New_ListOfOps: R_SysFunction_1() {
+        override fun call(arg: Rt_Value) = newOps(arg.asList())
     }
 
     private object New_Ops: R_SysFunction {
-        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>) = newOps(ctx, args)
+        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>) = newOps(args)
     }
 
-    private fun newOps(ctx: Rt_CallContext, ops: List<Rt_Value>): Rt_Value {
+    private fun newOps(ops: List<Rt_Value>): Rt_Value {
         val rawOps = ops.map { asTestOp(it).toRaw() }
-        val tx = RawTestTxValue(ctx.chainCtx.blockchainRid, rawOps, listOf())
+        val tx = RawTestTxValue(rawOps, listOf())
         return Rt_TestBlockValue(listOf(tx))
     }
 
@@ -309,23 +315,23 @@ private object C_Lib_Type_Block: C_Lib_Type(C_Lib_Test.BLOCK_SNAME, R_TestBlockT
         return self
     }
 
-    private object Tx_ListOfOps: R_SysFunctionEx_2() {
-        override fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
-            return addOps(ctx, arg1, arg2.asList())
+    private object Tx_ListOfOps: R_SysFunction_2() {
+        override fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
+            return addOps(arg1, arg2.asList())
         }
     }
 
     private object Tx_Ops: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             check(args.isNotEmpty())
-            return addOps(ctx, args[0], args.subList(1, args.size))
+            return addOps(args[0], args.subList(1, args.size))
         }
     }
 
-    private fun addOps(ctx: Rt_CallContext, self: Rt_Value, ops: List<Rt_Value>): Rt_Value {
+    private fun addOps(self: Rt_Value, ops: List<Rt_Value>): Rt_Value {
         val block = asTestBlock(self)
         val rawOps = ops.map { asTestOp(it).toRaw() }
-        val tx = RawTestTxValue(ctx.chainCtx.blockchainRid, rawOps, listOf())
+        val tx = RawTestTxValue(rawOps, listOf())
         block.addTx(tx)
         return self
     }
@@ -339,11 +345,11 @@ private object C_Lib_Type_Block: C_Lib_Type(C_Lib_Test.BLOCK_SNAME, R_TestBlockT
 }
 
 private object C_Lib_Type_Tx: C_Lib_Type(C_Lib_Test.TX_SNAME, R_TestTxType, defaultMemberFns = false) {
-    private val block = BlockCommonFunctions(C_Lib_Test.TX_TYPE_QNAME_STR) { _, v ->
-        Rt_TestBlockValue(listOf(asTestTx(v).toRaw()))
+    private val block = BlockCommonFunctions(C_Lib_Test.TX_TYPE_QNAME_STR) {
+        Rt_TestBlockValue(listOf(asTestTx(it).toRaw()))
     }
 
-    private val tx = TxCommonFunctions { _, v -> asTestTx(v) }
+    private val tx = TxCommonFunctions { asTestTx(it) }
 
     override fun bindConstructors(b: C_GlobalFuncBuilder) {
         val name = typeName.str
@@ -373,35 +379,34 @@ private object C_Lib_Type_Tx: C_Lib_Type(C_Lib_Test.TX_SNAME, R_TestTxType, defa
     private object New_Ops: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             val ops = args.map { asTestOp(it).toRaw() }
-            return newTx(ctx, ops)
+            return newTx(ops)
         }
     }
 
-    private object New_ListOfOps: R_SysFunctionEx_1() {
-        override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+    private object New_ListOfOps: R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_Value {
             val ops = arg.asList().map { asTestOp(it).toRaw() }
-            return newTx(ctx, ops)
+            return newTx(ops)
         }
     }
 
     private object New_Structs: R_SysFunction {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             val ops = args.map { structToOp(it) }
-            return newTx(ctx, ops)
+            return newTx(ops)
         }
     }
 
-    private object New_ListOfStructs: R_SysFunctionEx_1() {
-        override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+    private object New_ListOfStructs: R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_Value {
             val list = arg.asList()
             val ops = list.map { structToOp(it) }
-            return newTx(ctx, ops)
+            return newTx(ops)
         }
     }
 
-    private fun newTx(ctx: Rt_CallContext, ops: List<RawTestOpValue>): Rt_Value {
-        val blockchainRid = ctx.chainCtx.blockchainRid
-        return Rt_TestTxValue(blockchainRid, ops, listOf())
+    private fun newTx(ops: List<RawTestOpValue>): Rt_Value {
+        return Rt_TestTxValue(ops, listOf())
     }
 
     private object Op_Ops: R_SysFunction_N() {
@@ -451,8 +456,8 @@ private object C_Lib_Type_Tx: C_Lib_Type(C_Lib_Test.TX_SNAME, R_TestTxType, defa
         }
     }
 
-    private object Nop_OneArg: R_SysFunctionEx_2() {
-        override fun call(ctx: Rt_CallContext, arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
+    private object Nop_OneArg: R_SysFunction_2() {
+        override fun call(arg1: Rt_Value, arg2: Rt_Value): Rt_Value {
             val tx = asTestTx(arg1)
             val op = C_Lib_Nop.callOneArg(arg2)
             tx.addOp(op.toRaw())
@@ -471,14 +476,14 @@ private object C_Lib_Type_Tx: C_Lib_Type(C_Lib_Test.TX_SNAME, R_TestTxType, defa
 }
 
 private object C_Lib_Type_Op: C_Lib_Type(C_Lib_Test.OP_SNAME, R_TestOpType, defaultMemberFns = false) {
-    private val block = BlockCommonFunctions(C_Lib_Test.OP_TYPE_QNAME_STR) { ctx, v ->
-        Rt_TestBlockValue(listOf(selfToTx(ctx, v).toRaw()))
+    private val block = BlockCommonFunctions(C_Lib_Test.OP_TYPE_QNAME_STR) {
+        Rt_TestBlockValue(listOf(selfToTx(it).toRaw()))
     }
 
     private val tx = TxCommonFunctions(this::selfToTx)
 
-    private fun selfToTx(ctx: Rt_CallContext, self: Rt_Value): Rt_TestTxValue {
-        return Rt_TestTxValue(ctx.chainCtx.blockchainRid, listOf(asTestOp(self).toRaw()), listOf())
+    private fun selfToTx(self: Rt_Value): Rt_TestTxValue {
+        return Rt_TestTxValue(listOf(asTestOp(self).toRaw()), listOf())
     }
 
     override fun bindConstructors(b: C_GlobalFuncBuilder) {
@@ -521,10 +526,10 @@ private object C_Lib_Type_Op: C_Lib_Type(C_Lib_Test.OP_SNAME, R_TestOpType, defa
         return Rt_TestOpValue(name, args)
     }
 
-    private object ToTx: R_SysFunctionEx_1() {
-        override fun call(ctx: Rt_CallContext, arg: Rt_Value): Rt_Value {
+    private object ToTx: R_SysFunction_1() {
+        override fun call(arg: Rt_Value): Rt_Value {
             val op = asTestOp(arg).toRaw()
-            return Rt_TestTxValue(ctx.chainCtx.blockchainRid, listOf(op), listOf())
+            return Rt_TestTxValue(listOf(op), listOf())
         }
     }
 }
@@ -591,7 +596,6 @@ class Rt_TestBlockValue(txs: List<RawTestTxValue>): Rt_Value() {
 }
 
 class Rt_TestTxValue(
-        private val blockchainRid: BlockchainRid,
         ops: List<RawTestOpValue>,
         signers: List<BytesKeyPair>
 ): Rt_Value() {
@@ -616,9 +620,9 @@ class Rt_TestTxValue(
         signers.add(keyPair)
     }
 
-    fun copy() = Rt_TestTxValue(blockchainRid, ops, signers)
+    fun copy() = Rt_TestTxValue(ops, signers)
 
-    fun toRaw() = RawTestTxValue(blockchainRid, ops, signers)
+    fun toRaw() = RawTestTxValue(ops, signers)
 
     companion object {
         private val VALUE_TYPE = Rt_LibValueType.of("TEST_TX")
@@ -668,7 +672,6 @@ class Rt_TestOpValue(private val name: R_MountName, args: List<Gtv>): Rt_Value()
 }
 
 class RawTestTxValue(
-        val blockchainRid: BlockchainRid,
         ops: List<RawTestOpValue>,
         signers: List<BytesKeyPair>
 ) {

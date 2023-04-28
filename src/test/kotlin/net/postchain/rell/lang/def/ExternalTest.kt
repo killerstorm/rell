@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.lang.def
@@ -14,11 +14,11 @@ import org.junit.Test
 class ExternalTest: BaseRellTest() {
     companion object {
         val BLOCK_INSERTS_123 = RellTestContext.BlockBuilder(123)
-            .block(1001, 1, "DEAD01", "1001", 1510000000000)
-            .block(1002, 2, "DEAD02", "1002", 1520000000000)
-            .block(1003, 3, "DEAD03", "1003", 1530000000000)
-            .block(1004, 4, "DEAD04", "1004", 1540000000000)
-            .block(1005, 5, "DEAD05", "1005", 1550000000000)
+            .block(1001, 1, "DEAD01", 1510000000000)
+            .block(1002, 2, "DEAD02", 1520000000000)
+            .block(1003, 3, "DEAD03", 1530000000000)
+            .block(1004, 4, "DEAD04", 1540000000000)
+            .block(1005, 5, "DEAD05", 1550000000000)
             .tx(2001, 1001, "BEEF01", "2001", "1234")
             .tx(2002, 1002, "BEEF02", "2002", "1234")
             .tx(2003, 1003, "BEEF03", "2003", "1234")

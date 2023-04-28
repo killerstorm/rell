@@ -4,8 +4,6 @@
 
 package net.postchain.rell.lang.expr.expr
 
-import net.postchain.common.BlockchainRid
-import net.postchain.gtv.GtvNull
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.model.R_EntityType
@@ -43,14 +41,12 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
                 typeCheck = true,
         )
 
-        val chainCtx = Rt_ChainContext(GtvNull, mapOf(), BlockchainRid.ZERO_RID)
-
         val res = processExpr0(expr2, types) { app ->
             val ctx = ValCtx(app)
             val rtArgs = args2.map { it.rt(ctx) }
             val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(app, Rt_ChainSqlMapping(0))
-            val appCtx = Rt_AppContext(globalCtx, chainCtx, app, repl = false, test = false, null)
-            val exeCtx = Rt_ExecutionContext(appCtx, null, sqlCtx, NoConnSqlExecutor)
+            val appCtx = Rt_AppContext(globalCtx, Rt_ChainContext.NULL, app, repl = false, test = false, null)
+            val exeCtx = Rt_ExecutionContext(appCtx, Rt_NullOpContext, sqlCtx, NoConnSqlExecutor)
             RellTestUtils.callQuery(exeCtx, "q", rtArgs, RellTestUtils.ENCODER_STRICT)
         }
 
