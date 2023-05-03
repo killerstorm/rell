@@ -43,7 +43,7 @@ u.user @* {}
 -->
 Run-time error: SQL Error: ERROR: relation "c0.user" does not exist
   Position: 25
-  Location: File: parse_relation.c, Routine: parserOpenTable, Line: 1180
+  Location: File: parse_relation.c, Routine: parserOpenTable, Line: 1381
   Server SQLState: 42P01
 	at !<console>(<console>:1)
 

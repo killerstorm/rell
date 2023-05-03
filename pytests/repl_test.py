@@ -92,7 +92,7 @@ def test__company_user__no_tables():
         app.check_output([
             'Run-time error: SQL Error: ERROR: relation "c0.user" does not exist',
             '  Position: 25',
-            '  Location: File: parse_relation.c, Routine: parserOpenTable, Line: 1180',
+            '<RE>  Location: File: parse_relation.c, Routine: parserOpenTable, Line: [0-9]+',
             '  Server SQLState: 42P01',
             '	at :<console>(<console>:1)',
             '>>> ',
