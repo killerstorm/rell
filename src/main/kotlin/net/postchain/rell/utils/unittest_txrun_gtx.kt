@@ -2,7 +2,7 @@
  * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
-package net.postchain.rell.lib.test
+package net.postchain.rell.utils
 
 import net.postchain.base.BaseBlockchainContext
 import net.postchain.base.BaseEContext
@@ -22,15 +22,16 @@ import net.postchain.gtx.GTXBlockchainConfigurationFactory
 import net.postchain.gtx.GtxBuilder
 import net.postchain.rell.RellConfigGen
 import net.postchain.rell.compiler.base.utils.C_SourceDir
+import net.postchain.rell.lib.test.C_Lib_Test_Events
+import net.postchain.rell.lib.test.RawTestTxValue
+import net.postchain.rell.lib.test.Rt_TestBlockValue
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.RellPostchainModuleApp
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
-import net.postchain.rell.tools.RunPostchainApp
-import net.postchain.rell.utils.*
+import net.postchain.rell.utils.cli.RellApiGtxUtils
 import net.postchain.rell.utils.cli.RellCliCompileConfig
 import net.postchain.rell.utils.cli.RellCliException
-import net.postchain.rell.utils.cli.RellCliInternalApi
+import net.postchain.rell.utils.cli.RellCliInternalBaseApi
 import java.sql.Connection
 
 class Rt_PostchainUnitTestBlockRunner(
@@ -150,7 +151,7 @@ class Rt_PostchainUnitTestBlockRunner(
 
 abstract class Rt_BlockRunnerStrategy {
     abstract fun getGtvConfig(): Gtv
-    abstract fun getPrecompiledApp(): RellPostchainModuleApp?
+    abstract fun getPrecompiledApp(): RellGtxModuleApp?
 }
 
 class Rt_StaticBlockRunnerStrategy(private val gtvConfig: Gtv): Rt_BlockRunnerStrategy() {
@@ -166,7 +167,7 @@ class Rt_DynamicBlockRunnerStrategy(
 ): Rt_BlockRunnerStrategy() {
     private val modules = modules?.toImmList()
 
-    private val lazyConfig: Pair<Gtv, RellPostchainModuleApp> by lazy {
+    private val lazyConfig: Pair<Gtv, RellGtxModuleApp> by lazy {
         try {
             createConfig()
         } catch (e: RellCliException) {
@@ -180,14 +181,14 @@ class Rt_DynamicBlockRunnerStrategy(
         return lazyConfig.first
     }
 
-    override fun getPrecompiledApp(): RellPostchainModuleApp {
+    override fun getPrecompiledApp(): RellGtxModuleApp {
         return lazyConfig.second
     }
 
-    private fun createConfig(): Pair<Gtv, RellPostchainModuleApp> {
+    private fun createConfig(): Pair<Gtv, RellGtxModuleApp> {
         val pubKey0 = keyPair.pub.toByteArray()
-        val template = RunPostchainApp.genBlockchainConfigTemplateNoRell(pubKey0)
-        val (rellNode, modApp) = RellCliInternalApi.compileGtvEx(compileConfig, sourceDir, modules)
+        val template = RellApiGtxUtils.genBlockchainConfigTemplateNoRell(pubKey0)
+        val (rellNode, modApp) = RellCliInternalBaseApi.compileGtvEx(compileConfig, sourceDir, modules)
         val resNode = RellConfigGen.makeConfig(template, rellNode)
         return resNode to modApp
     }
@@ -203,7 +204,7 @@ class Rt_BlockRunnerConfig(
     fun makePostchainModuleEnvironment(
         globalCtx: Rt_GlobalContext,
         txContextFactory: Rt_PostchainTxContextFactory,
-        precompiledApp: RellPostchainModuleApp?,
+        precompiledApp: RellGtxModuleApp?,
     ): RellPostchainModuleEnvironment {
         return RellPostchainModuleEnvironment(
             outPrinter = globalCtx.outPrinter,

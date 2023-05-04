@@ -8,6 +8,8 @@ import net.postchain.base.BaseBlockEContext
 import net.postchain.base.BaseEContext
 import net.postchain.base.BaseTxEContext
 import net.postchain.base.TxEventSink
+import net.postchain.base.data.PostgreSQLDatabaseAccess
+import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.common.BlockchainRid
 import net.postchain.common.exception.UserMistake
 import net.postchain.common.hexStringToByteArray
@@ -27,7 +29,6 @@ import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellPostchainModuleFactory
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.utils.CommonUtils
-import net.postchain.rell.utils.PostchainBaseUtils
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -53,7 +54,7 @@ class RellGtxTester(
 
         val gtxModule = createGtxModule(moduleCode)
 
-        val dbAccess = PostchainBaseUtils.createDatabaseAccess()
+        val dbAccess = createDatabaseAccess()
         sqlExec.connection { con ->
             val ctx = BaseEContext(con, chainId, dbAccess)
             dbAccess.initializeBlockchain(ctx, bRid)
@@ -173,7 +174,7 @@ class RellGtxTester(
         init()
         val res = tstCtx.sqlMgr().execute(tx) { sqlExec ->
             sqlExec.connection { con ->
-                val dbAccess = PostchainBaseUtils.createDatabaseAccess()
+                val dbAccess = createDatabaseAccess()
                 val ctx = BaseEContext(con, chainId, dbAccess)
                 code(ctx)
             }
@@ -256,6 +257,8 @@ class RellGtxTester(
         val v = RellTestUtils.RELL_VER
         return "{'gtx':{'rell':{'modules':'{MODULES}','sources':'{SOURCES}','version':'$v','moduleArgs':'{MODULE_ARGS}'}}}"
     }
+
+    private fun createDatabaseAccess(): SQLDatabaseAccess = PostgreSQLDatabaseAccess()
 
     private class TransactorTransaction(val transactor: Transactor): Transaction {
         override fun apply(ctx: TxEContext): Boolean = transactor.apply(ctx)

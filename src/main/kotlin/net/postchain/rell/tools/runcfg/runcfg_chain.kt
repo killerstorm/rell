@@ -10,7 +10,7 @@ import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.utils.*
 import net.postchain.rell.utils.cli.RellCliCompileConfig
 import net.postchain.rell.utils.cli.RellCliEnv
-import net.postchain.rell.utils.cli.RellCliInternalApi
+import net.postchain.rell.utils.cli.RellCliInternalBaseApi
 
 class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv, params: RellRunConfigParams) {
     private val sourceDir = params.sourceDir
@@ -135,7 +135,7 @@ class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv
             .moduleArgs0(app.args)
             .version(RellVersions.VERSION)
             .build()
-        return RellCliInternalApi.compileGtv(config, sourceDir, immListOf(app.module))
+        return RellCliInternalBaseApi.compileGtv(config, sourceDir, immListOf(app.module))
     }
 
     private fun genChainGtv(chainGtv: Rcfg_ChainConfigGtv): Rcfg_Gtv {

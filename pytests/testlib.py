@@ -10,7 +10,7 @@ RELL_REPO_DIR = os.path.abspath('..')
 def __get_rell_scripts_dir():
     k = 'RELL_SCRIPTS_DIR'
     m = os.environ
-    return m[k] if k in m else RELL_REPO_DIR
+    return m[k] if k in m else os.path.join(RELL_REPO_DIR, 'work')
 
 RELL_SCRIPTS_DIR=__get_rell_scripts_dir()
 

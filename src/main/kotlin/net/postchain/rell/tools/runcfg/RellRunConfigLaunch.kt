@@ -21,9 +21,6 @@ import net.postchain.logging.CHAIN_IID_TAG
 import net.postchain.logging.NODE_PUBKEY_TAG
 import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
-import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
-import net.postchain.rell.lib.test.Rt_PostchainUnitTestBlockRunner
-import net.postchain.rell.lib.test.Rt_StaticBlockRunnerStrategy
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.module.RellPostchainModuleEnvironment
@@ -35,10 +32,9 @@ import net.postchain.rell.sql.PostchainSqlInitProjExt
 import net.postchain.rell.sql.PostchainStorageSqlManager
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.utils.*
+import net.postchain.rell.utils.cli.RellApiBaseUtils
 import net.postchain.rell.utils.cli.RellCliBasicException
 import net.postchain.rell.utils.cli.RellCliExitException
-import net.postchain.rell.utils.cli.RellCliLogUtils
-import net.postchain.rell.utils.cli.RellCliUtils
 import org.apache.commons.configuration2.PropertiesConfiguration
 import picocli.CommandLine
 import java.io.File
@@ -46,18 +42,18 @@ import java.io.StringReader
 import java.util.*
 
 private val log = run {
-    RellCliLogUtils.initLogging()
+    RellToolsLogUtils.initLogging()
     KotlinLogging.logger("PostchainApp")
 }
 
 fun main(args: Array<String>) {
-    RellCliUtils.runCli(args, RellRunConfigLaunchCliArgs())
+    RellToolsUtils.runCli(args, RellRunConfigLaunchCliArgs())
 }
 
 private fun main0(args: RellRunConfigLaunchCliArgs) {
-    val runConfigFile = RellCliUtils.checkFile(args.runConfigFile)
-    val sourceDir = RellCliUtils.checkDir(args.sourceDir ?: ".").absoluteFile
-    val sourceVer = RellCliUtils.checkVersion(args.sourceVersion)
+    val runConfigFile = RellToolsUtils.checkFile(args.runConfigFile)
+    val sourceDir = RellToolsUtils.checkDir(args.sourceDir ?: ".").absoluteFile
+    val sourceVer = RellToolsUtils.checkVersion(args.sourceVersion)
     val commonArgs = CommonArgs(runConfigFile, sourceDir, sourceVer, args.sqlLog)
 
     if (args.test) {
@@ -82,7 +78,7 @@ private fun runApp(args: CommonArgs) {
     log.info("    run config file: ${args.runConfigFile.absolutePath}")
     log.info("")
 
-    RellCliUtils.printVersionInfo()
+    RellToolsUtils.printVersionInfo()
 
     val rellAppConf = generateRunConfig(args, false)
 
@@ -90,7 +86,7 @@ private fun runApp(args: CommonArgs) {
     for (chain in rellAppConf.config.chains) {
         val modules = chain.modules.toList()
         val modSel = C_CompilerModuleSelection(modules)
-        RellCliUtils.compileApp(rellAppConf.sourceDir, modSel, true, C_CompilerOptions.DEFAULT)
+        RellToolsUtils.compileApp(rellAppConf.sourceDir, modSel, true, C_CompilerOptions.DEFAULT)
     }
 
     val appConfig = startPostchainNode(rellAppConf)
@@ -171,7 +167,7 @@ private fun runTests(args: CommonArgs, matcher: UnitTestMatcher, targetChains: C
             val modules = listOf(config.appModule)
             val testModules = (modules.toSet() + config.testModules.toSet()).toList()
             val modSel = C_CompilerModuleSelection(modules, testModules)
-            val rApp = RellCliUtils.compileApp(rellAppConf.sourceDir, modSel, true, compilerOptions)
+            val rApp = RellToolsUtils.compileApp(rellAppConf.sourceDir, modSel, true, compilerOptions)
             TestChain(chain, rApp, config.gtvConfig)
         }
     }
@@ -183,7 +179,7 @@ private fun runTests(args: CommonArgs, matcher: UnitTestMatcher, targetChains: C
         val sqlMgr = PostchainStorageSqlManager(storage, args.sqlLog)
 
         for (tChain in tChains) {
-            val globalCtx = RellCliUtils.createGlobalContext(compilerOptions, typeCheck = true)
+            val globalCtx = RellApiBaseUtils.createGlobalContext(compilerOptions, typeCheck = true)
             val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(tChain.rApp, Rt_ChainSqlMapping(tChain.chain.iid))
             val chainCtx = PostchainBaseUtils.createChainContext(tChain.gtvConfig, tChain.rApp, tChain.chain.brid)
 

@@ -37,12 +37,6 @@ import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.utils.*
 import org.apache.commons.lang3.time.FastDateFormat
 
-object ConfigConstants {
-    const val RELL_VERSION_KEY = "version"
-    const val RELL_SOURCES_KEY = "sources"
-    const val RELL_FILES_KEY = "files"
-}
-
 private fun convertArgs(ctx: GtvToRtContext, params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
         val param = params[index]
@@ -329,8 +323,6 @@ private class RellPostchainModule(
     override fun makeBlockBuilderExtensions(): List<BaseBlockBuilderExtension> = immListOf()
 }
 
-class RellPostchainModuleApp(val app: R_App, val compilerOptions: C_CompilerOptions)
-
 class RellPostchainModuleEnvironment(
     val outPrinter: Rt_Printer = Rt_OutPrinter,
     val logPrinter: Rt_Printer = Rt_LogPrinter(),
@@ -344,7 +336,7 @@ class RellPostchainModuleEnvironment(
     val hiddenLib: Boolean = false,
     val sqlLog: Boolean = false,
     val fallbackModules: List<R_ModuleName> = immListOf(R_ModuleName.EMPTY),
-    val precompiledApp: RellPostchainModuleApp? = null,
+    val precompiledApp: RellGtxModuleApp? = null,
     val txContextFactory: Rt_PostchainTxContextFactory = Rt_DefaultPostchainTxContextFactory,
 ) {
     companion object {
@@ -412,7 +404,7 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
         rellNode: Map<String, Gtv>,
         errorHandler: ErrorHandler,
         copyOutput: Boolean,
-    ): RellPostchainModuleApp {
+    ): RellGtxModuleApp {
         if (env.precompiledApp != null) {
             return env.precompiledApp
         }
@@ -422,7 +414,7 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
         val modules = getModuleNames(rellNode)
         val compilerOptions = getCompilerOptions(sourceCfg.version)
         val app = compileApp(sourceDir, modules, compilerOptions, errorHandler, copyOutput)
-        return RellPostchainModuleApp(app, compilerOptions)
+        return RellGtxModuleApp(app, compilerOptions)
     }
 
     private fun getCompilerOptions(langVersion: R_LangVersion): C_CompilerOptions {
@@ -553,7 +545,7 @@ private class SourceCodeConfig(rellNode: Map<String, Gtv>) {
 
         val source = allSources.first()
         if (source.legacy && ver != null) {
-            val verKey = ConfigConstants.RELL_VERSION_KEY
+            val verKey = RellGtxConfigConstants.RELL_VERSION_KEY
             throw UserMistake("Keys '${source.key}' and '$verKey' cannot be specified together")
         }
 
@@ -573,7 +565,7 @@ private class SourceCodeConfig(rellNode: Map<String, Gtv>) {
     }
 
     private fun getSourceVersion(rellNode: Map<String, Gtv>): R_LangVersion? {
-        val verStr = rellNode[ConfigConstants.RELL_VERSION_KEY]?.asString()
+        val verStr = rellNode[RellGtxConfigConstants.RELL_VERSION_KEY]?.asString()
         verStr ?: return null
 
         val ver = try {
@@ -592,10 +584,10 @@ private class SourceCodeConfig(rellNode: Map<String, Gtv>) {
     private fun getSourceCodes(rellNode: Map<String, Gtv>, ver: R_LangVersion?, files: Boolean): List<SourceCode> {
         val res = mutableListOf<SourceCode>()
 
-        val key = if (files) ConfigConstants.RELL_FILES_KEY else ConfigConstants.RELL_SOURCES_KEY
+        val key = if (files) RellGtxConfigConstants.RELL_FILES_KEY else RellGtxConfigConstants.RELL_SOURCES_KEY
 
         if (key in rellNode) {
-            val verKey = ConfigConstants.RELL_VERSION_KEY
+            val verKey = RellGtxConfigConstants.RELL_VERSION_KEY
             ver ?: throw UserMistake("Configuration key '$key' is specified, but '$verKey' is missing")
             res.add(SourceCode(key, ver, files, false))
         }
@@ -617,7 +609,7 @@ private class SourceCodeConfig(rellNode: Map<String, Gtv>) {
         return when (s) {
             "0.10" -> R_LangVersion.of("0.10.4")
             else -> {
-                val verKey = ConfigConstants.RELL_VERSION_KEY
+                val verKey = RellGtxConfigConstants.RELL_VERSION_KEY
                 throw UserMistake("Invalid source code key: $key; use '$keyPrefix' and '$verKey' instead")
             }
         }

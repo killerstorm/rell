@@ -15,67 +15,15 @@ import net.postchain.rell.compiler.base.utils.C_SourcePath
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.module.ConfigConstants
 import net.postchain.rell.utils.*
 import net.postchain.rell.utils.cli.*
-import picocli.CommandLine
-import java.io.File
-import java.io.FileOutputStream
-import java.io.OutputStream
-
-fun main(args: Array<String>) {
-    RellCliLogUtils.initLogging()
-    RellCliUtils.runCli(args, RellConfigGenCliArgs())
-}
-
-private fun main0(args: RellConfigGenCliArgs) {
-    val target = RellCliUtils.getTarget(args.sourceDir, args.module)
-
-    val template = if (args.configTemplateFile == null) null else {
-        readFile(File(args.configTemplateFile))
-    }
-
-    val configGen = RellConfigGen.create(MainRellCliEnv, target)
-    val config = configGen.makeConfig(template)
-
-    if (args.outputFile != null) {
-        val outputFile = File(args.outputFile)
-        verifyCfg(outputFile.absoluteFile.parentFile.isDirectory, "Path not found: $outputFile")
-        FileOutputStream(outputFile).use {
-            writeResult(args, it, config)
-        }
-    } else {
-        writeResult(args, System.out, config)
-    }
-}
-
-private fun writeResult(args: RellConfigGenCliArgs, os: OutputStream, config: Gtv) {
-    val bytes = if (args.binaryOutput) {
-        PostchainGtvUtils.gtvToBytes(config)
-    } else {
-        val text = RellConfigGen.configToText(config)
-        text.toByteArray()
-    }
-    os.write(bytes)
-}
-
-private fun readFile(file: File): String {
-    verifyCfg(file.isFile, "File not found: ${file.path}")
-    return file.readText()
-}
-
-private fun verifyCfg(b: Boolean, msg: String) {
-    if (!b) {
-        throw RellCliBasicException(msg)
-    }
-}
 
 class RellConfigGen(
-        private val sourceDir: C_SourceDir,
-        private val sourceVersion: R_LangVersion,
-        private val modules: List<R_ModuleName>,
-        private val moduleFiles: List<C_SourcePath>,
-        val app: R_App,
+    private val sourceDir: C_SourceDir,
+    private val sourceVersion: R_LangVersion,
+    private val modules: List<R_ModuleName>,
+    private val moduleFiles: List<C_SourcePath>,
+    val app: R_App,
 ) {
     fun makeConfig(templateXml: String?): Gtv {
         val template = getConfigTemplate(templateXml)
@@ -113,20 +61,20 @@ class RellConfigGen(
             }
         }
 
-        val sourcesDict = getDictByKey(rellDict, ConfigConstants.RELL_SOURCES_KEY)
+        val sourcesDict = getDictByKey(rellDict, RellGtxConfigConstants.RELL_SOURCES_KEY)
         for ((name, source) in files) {
             sourcesDict.putString(name, source)
         }
 
-        if (rellDict.get(ConfigConstants.RELL_VERSION_KEY) == null) {
-            rellDict.putString(ConfigConstants.RELL_VERSION_KEY, sourceVersion.str())
+        if (rellDict.get(RellGtxConfigConstants.RELL_VERSION_KEY) == null) {
+            rellDict.putString(RellGtxConfigConstants.RELL_VERSION_KEY, sourceVersion.str())
         }
 
-        rellDict.remove(ConfigConstants.RELL_FILES_KEY)
+        rellDict.remove(RellGtxConfigConstants.RELL_FILES_KEY)
     }
 
-    fun getModuleSources(): RellModuleSources {
-        return RellCliInternalApi.catchCommonError {
+    private fun getModuleSources(): RellModuleSources {
+        return RellCliInternalBaseApi.catchCommonError {
             val fileMap = getModuleFiles(sourceDir, moduleFiles)
             val strModules = modules.map { it.str() }
             RellModuleSources(strModules, fileMap)
@@ -150,8 +98,8 @@ class RellConfigGen(
                 .moduleArgsMissingError(false)
                 .build()
 
-            val options = RellCliInternalApi.makeCompilerOptions(config)
-            val (apiRes, rApp) = RellCliInternalApi.compileApp(config, options, sourceDir, modules, immListOf())
+            val options = RellCliInternalBaseApi.makeCompilerOptions(config)
+            val (apiRes, rApp) = RellCliInternalBaseApi.compileApp(config, options, sourceDir, modules, immListOf())
             return RellConfigGen(sourceDir, sourceVersion, modules, apiRes.cRes.files, rApp)
         }
 
@@ -225,6 +173,11 @@ class RellConfigGen(
             return RellCliBasicException("Found $type instead of ${expected} ($pathStr)")
         }
     }
+}
+
+private class RellModuleSources(modules: List<String>, files: Map<String, String>) {
+    val modules = modules.toImmList()
+    val files = files.toImmMap()
 }
 
 private sealed class GtvNode(val path: String?) {
@@ -303,24 +256,5 @@ private class ArrayGtvNode(path: String?, list: List<GtvNode>): GtvNode(path) {
     fun add(gtv: Gtv) {
         val path = subPath(path, list.size)
         list.add(create(path, gtv))
-    }
-}
-
-@CommandLine.Command(name = "RellConfigGen", description = ["Generates Rell Postchain configuration"])
-class RellConfigGenCliArgs: RellBaseCliArgs() {
-    @CommandLine.Parameters(index = "0", paramLabel = "MODULE", description = ["Module name"])
-    var module: String = ""
-
-    @CommandLine.Parameters(index = "1", arity = "0..1", paramLabel = "OUTPUT_FILE", description = ["Output configuration file"])
-    var outputFile: String? = null
-
-    @CommandLine.Option(names = ["--template"], paramLabel = "TEMPLATE_FILE", description = ["Configuration template file"])
-    var configTemplateFile: String? = null
-
-    @CommandLine.Option(names = ["--binary-output"], paramLabel = "BINARY_OUTPUT", description = ["Write output as binary"])
-    var binaryOutput: Boolean = false
-
-    override fun execute() {
-        main0(this)
     }
 }

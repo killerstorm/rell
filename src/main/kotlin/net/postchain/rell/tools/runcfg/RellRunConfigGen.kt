@@ -5,25 +5,25 @@
 package net.postchain.rell.tools.runcfg
 
 import net.postchain.rell.utils.DirFile
-import net.postchain.rell.utils.cli.RellBaseCliArgs
-import net.postchain.rell.utils.cli.RellCliLogUtils
-import net.postchain.rell.utils.cli.RellCliUtils
+import net.postchain.rell.utils.RellBaseCliArgs
+import net.postchain.rell.utils.RellToolsLogUtils
+import net.postchain.rell.utils.RellToolsUtils
 import picocli.CommandLine
 import java.io.File
 
 fun main(args: Array<String>) {
-    RellCliLogUtils.initLogging()
-    RellCliUtils.runCli(args, RellRunConfigGenCliArgs())
+    RellToolsLogUtils.initLogging()
+    RellToolsUtils.runCli(args, RellRunConfigGenCliArgs())
 }
 
 private fun main0(args: RellRunConfigGenCliArgs) {
-    val runConfigFile = RellCliUtils.checkFile(args.runConfigFile)
-    val sourceDir = RellCliUtils.checkDir(args.sourceDir ?: ".")
-    val sourceVersion = RellCliUtils.checkVersion(args.sourceVersion)
+    val runConfigFile = RellToolsUtils.checkFile(args.runConfigFile)
+    val sourceDir = RellToolsUtils.checkDir(args.sourceDir ?: ".")
+    val sourceVersion = RellToolsUtils.checkVersion(args.sourceVersion)
 
     val outputDir = if (args.outputDir == null) File(".") else {
         val f = File(args.outputDir!!)
-        RellCliUtils.check(f.isDirectory || f.absoluteFile.parentFile.isDirectory) { "Bad output directory: $f" }
+        RellToolsUtils.check(f.isDirectory || f.absoluteFile.parentFile.isDirectory) { "Bad output directory: $f" }
         f
     }
 
@@ -38,11 +38,11 @@ private fun main0(args: RellRunConfigGenCliArgs) {
 }
 
 private fun createFiles(outputDir: File, files: Map<String, DirFile>) {
-    RellCliUtils.prepareDir(outputDir)
+    RellToolsUtils.prepareDir(outputDir)
     for ((path, file) in files) {
         val javaFile = File(outputDir, path)
         val dir = javaFile.parentFile
-        RellCliUtils.prepareDir(dir)
+        RellToolsUtils.prepareDir(dir)
         file.write(javaFile)
     }
 }

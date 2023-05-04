@@ -5,10 +5,10 @@
 package net.postchain.rell.tools
 
 import net.postchain.rell.compiler.parser.S_Grammar
+import net.postchain.rell.utils.RellCliArgs
+import net.postchain.rell.utils.RellToolsLogUtils
+import net.postchain.rell.utils.RellToolsUtils
 import net.postchain.rell.utils.checkEquals
-import net.postchain.rell.utils.cli.RellCliArgs
-import net.postchain.rell.utils.cli.RellCliLogUtils
-import net.postchain.rell.utils.cli.RellCliUtils
 import picocli.CommandLine
 import java.io.File
 import java.nio.file.Files
@@ -45,12 +45,12 @@ private val MIGRATION_MAP = mapOf(
 )
 
 fun main(args: Array<String>) {
-    RellCliLogUtils.initLogging()
-    RellCliUtils.runCli(args, RellMigratorCliArgs())
+    RellToolsLogUtils.initLogging()
+    RellToolsUtils.runCli(args, RellMigratorCliArgs())
 }
 
 private fun main0(args: RellMigratorCliArgs) {
-    val dir = RellCliUtils.checkDir(args.directory)
+    val dir = RellToolsUtils.checkDir(args.directory)
 
     var totalFileCount = 0
     var replaceFileCount = 0

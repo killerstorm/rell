@@ -14,10 +14,10 @@ def check_rellcfg(command):
     assert doc.firstChild.nodeName == 'dict'
 
 def test__stair():
-    check_rellcfg('rellcfg.sh -d test-cli/src stair')
+    check_rellcfg('rellcfg.sh -d work/testproj/src stair')
 
 def test__mod():
-    check_rellcfg('rellcfg.sh -d test-cli/src mod')
+    check_rellcfg('rellcfg.sh -d work/testproj/src mod')
 
 def test__mod_complex_foo():
-    check_rellcfg('rellcfg.sh -d test-cli/src mod.complex.foo')
+    check_rellcfg('rellcfg.sh -d work/testproj/src mod.complex.foo')

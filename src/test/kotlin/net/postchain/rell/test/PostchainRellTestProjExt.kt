@@ -9,9 +9,6 @@ import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.gtv.Gtv
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.lib.test.C_Lib_Test
-import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
-import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
-import net.postchain.rell.lib.test.Rt_PostchainUnitTestBlockRunner
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.repl.PostchainReplInterpreterProjExt
@@ -19,8 +16,7 @@ import net.postchain.rell.repl.ReplInterpreterProjExt
 import net.postchain.rell.sql.PostchainSqlInitProjExt
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInitProjExt
-import net.postchain.rell.utils.PostchainBaseUtils
-import net.postchain.rell.utils.Rt_UnitTestBlockRunner
+import net.postchain.rell.utils.*
 import net.postchain.rell.utils.cli.RellCliCompileConfig
 
 object PostchainRellTestProjExt: RellTestProjExt() {

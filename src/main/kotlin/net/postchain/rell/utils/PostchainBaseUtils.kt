@@ -4,30 +4,19 @@
 
 package net.postchain.rell.utils
 
-import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.common.exception.UserMistake
 import net.postchain.gtv.Gtv
 import net.postchain.rell.model.R_App
 import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.model.R_StructDefinition
-import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.runtime.Rt_ChainContext
 import net.postchain.rell.runtime.Rt_Value
 
 object PostchainBaseUtils {
     val DATABASE_VERSION = 6
 
-    fun createDatabaseAccess(): SQLDatabaseAccess = PostgreSQLDatabaseAccess()
-
     fun calcBlockchainRid(config: Gtv): Bytes32 {
         val hash = PostchainGtvUtils.merkleHash(config)
         return Bytes32(hash)
-    }
-
-    fun moduleArgsGtvToRt(struct: R_StructDefinition, gtv: Gtv): Rt_Value {
-        val convCtx = GtvToRtContext.make(true)
-        return struct.type.gtvToRt(convCtx, gtv)
     }
 
     fun createChainContext(rawConfig: Gtv, rApp: R_App, blockchainRid: Bytes32): Rt_ChainContext {
@@ -47,7 +36,7 @@ object PostchainBaseUtils {
                             "but type ${argsStruct.moduleLevelName} defined in the code")
                 }
 
-                val rtArgs = moduleArgsGtvToRt(argsStruct, gtvArgs)
+                val rtArgs = PostchainGtvUtils.moduleArgsGtvToRt(argsStruct, gtvArgs)
                 moduleArgs[rModule.name] = rtArgs
             }
         }

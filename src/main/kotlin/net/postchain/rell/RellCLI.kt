@@ -10,9 +10,6 @@ import net.postchain.rell.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.lib.test.C_Lib_Test
-import net.postchain.rell.lib.test.Rt_BlockRunnerConfig
-import net.postchain.rell.lib.test.Rt_DynamicBlockRunnerStrategy
-import net.postchain.rell.lib.test.Rt_PostchainUnitTestBlockRunner
 import net.postchain.rell.model.*
 import net.postchain.rell.module.GtvToRtContext
 import net.postchain.rell.module.RellPostchainModuleEnvironment
@@ -29,11 +26,11 @@ import java.util.*
 
 @Suppress("unused")
 private val INIT = run {
-    RellCliLogUtils.initLogging()
+    RellToolsLogUtils.initLogging()
 }
 
 fun main(args: Array<String>) {
-    RellCliUtils.runCli(args, RellInterpreterCliArgs())
+    RellToolsUtils.runCli(args, RellInterpreterCliArgs())
 }
 
 private fun main0(args: RellInterpreterCliArgs) {
@@ -77,7 +74,7 @@ private fun main0(args: RellInterpreterCliArgs) {
     val (entryModule, entryRoutine) = parseEntryPoint(args)
 
     if (args.batch || (entryModule != null && entryRoutine != null)) {
-        val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
+        val app = RellToolsUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
         val module = if (entryModule == null) null else app.moduleMap[entryModule]
         if (module != null && module.test) {
             runSingleModuleTests(argsEx, app, module, entryRoutine)
@@ -85,7 +82,7 @@ private fun main0(args: RellInterpreterCliArgs) {
             runApp(globalCtx, args, dbSpecified, entryModule, entryRoutine, app)
         }
     } else if (entryModule != null) {
-        val app = RellCliUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
+        val app = RellToolsUtils.compileApp(args.sourceDir, entryModule, args.quiet, compilerOptions)
         val module = app.moduleMap[entryModule]
         if (module != null && module.test) {
             runSingleModuleTests(argsEx, app, module, entryRoutine)
@@ -119,7 +116,7 @@ private fun runApp(
     val appCtx = createRegularAppContext(globalCtx, app)
 
     runWithSqlManager(args, true) { sqlMgr ->
-        val sqlCtx = RellCliUtils.createSqlContext(app)
+        val sqlCtx = RellApiBaseUtils.createSqlContext(app)
         if (dbSpecified) {
             initDatabase(appCtx, args, sqlMgr, sqlCtx)
         }
@@ -140,9 +137,9 @@ private fun runMultiModuleTests(args: RellCliArgsEx, modules: List<String>) {
         modules.map { R_ModuleName.ofOpt(it) ?: throw RellCliBasicException("Invalid module name: '$it'") }
     }
 
-    val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
+    val sourceDir = RellApiBaseUtils.createSourceDir(args.raw.sourceDir)
     val modSel = C_CompilerModuleSelection(listOf(), rModules)
-    val app = RellCliUtils.compileApp(sourceDir, modSel, args.raw.quiet, C_CompilerOptions.DEFAULT)
+    val app = RellToolsUtils.compileApp(sourceDir, modSel, args.raw.quiet, C_CompilerOptions.DEFAULT)
 
     val testFns = UnitTestRunner.getTestFunctions(app, UnitTestMatcher.ANY)
     runTests(args, app, testFns)
@@ -150,10 +147,10 @@ private fun runMultiModuleTests(args: RellCliArgsEx, modules: List<String>) {
 
 private fun runTests(args: RellCliArgsEx, app: R_App, fns: List<R_FunctionDefinition>) {
     val globalCtx = createGlobalCtx(args)
-    val chainCtx = RellCliUtils.createChainContext()
-    val sqlCtx = RellCliUtils.createSqlContext(app)
+    val chainCtx = RellApiBaseUtils.createChainContext()
+    val sqlCtx = RellApiBaseUtils.createSqlContext(app)
 
-    val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
+    val sourceDir = RellApiBaseUtils.createSourceDir(args.raw.sourceDir)
     val blockRunner = createBlockRunner(args, sourceDir, app)
 
     val allOk = runWithSqlManager(args.raw, true) { sqlMgr ->
@@ -186,7 +183,7 @@ private fun createBlockRunner(args: RellCliArgsEx, sourceDir: C_SourceDir, app: 
         dbInitLogLevel = RellPostchainModuleEnvironment.DEFAULT_DB_INIT_LOG_LEVEL,
     )
 
-    val blockRunnerModules = RellCliUtils.getMainModules(app)
+    val blockRunnerModules = RellApiBaseUtils.getMainModules(app)
     val compileConfig = RellCliCompileConfig.Builder()
         .cliEnv(NullRellCliEnv)
         .build()
@@ -204,11 +201,11 @@ private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Bool
         }
 
         val globalCtx = createGlobalCtx(args)
-        val sourceDir = RellCliUtils.createSourceDir(args.raw.sourceDir)
+        val sourceDir = RellApiBaseUtils.createSourceDir(args.raw.sourceDir)
         val blockRunnerCfg = Rt_BlockRunnerConfig()
         val projExt = PostchainReplInterpreterProjExt(PostchainSqlInitProjExt, blockRunnerCfg)
 
-        val historyFile = if (args.raw.noHistory) null else RellCliInternalApi.getDefaultReplHistoryFile()
+        val historyFile = if (args.raw.noHistory) null else RellCliInternalShellApi.getDefaultReplHistoryFile()
 
         ReplShell.start(
             sourceDir,
@@ -274,7 +271,7 @@ private fun getAppLauncher(
 }
 
 private fun <T> runWithSqlManager(args: RellInterpreterCliArgs, sqlErrorLog: Boolean, code: (SqlManager) -> T): T {
-    return RellCliUtils.runWithSqlManager(args.dbUrl, args.dbProperties, args.sqlLog, sqlErrorLog, code)
+    return RellApiGtxUtils.runWithSqlManager(args.dbUrl, args.dbProperties, args.sqlLog, sqlErrorLog, code)
 }
 
 private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_QualifiedName): RellEntryPoint {
@@ -319,7 +316,7 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
 }
 
 private fun createRegularAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
-    val chainCtx = RellCliUtils.createChainContext()
+    val chainCtx = RellApiBaseUtils.createChainContext()
     return Rt_AppContext(
             globalCtx,
             chainCtx,
@@ -331,7 +328,7 @@ private fun createRegularAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt
 }
 
 private fun createGlobalCtx(args: RellCliArgsEx): Rt_GlobalContext {
-    return RellCliUtils.createGlobalContext(
+    return RellApiBaseUtils.createGlobalContext(
         args.compilerOptions,
         typeCheck = args.raw.typeCheck,
     )

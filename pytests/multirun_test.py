@@ -25,11 +25,11 @@ CTE_STDOUT = [
     '<LOG:INFO><RE>PostchainApp -     source directory: /.+',
     '<LOG:INFO><RE>PostchainApp -     run config file: /.+/.+[.]xml',
     '<LOG:INFO><RE>PostchainApp - ',
-    '<LOG:INFO><RE>RellCliUtils - rell: [0-9]+[.][0-9]+[.][0-9]+(-SNAPSHOT)?;.*',
+    '<LOG:INFO><RE>RellToolsUtils - rell: [0-9]+[.][0-9]+[.][0-9]+(-SNAPSHOT)?;.*',
 ]
 
 def test__run_simple():
-    app = apprunner.Multirun('multirun.sh -d test-cli/src test-cli/config/run-simple.xml')
+    app = apprunner.Multirun('multirun.sh -d work/testproj/src work/testproj/config/run-simple.xml')
     try:
         app.wait_till_up()
         app.check_query('{"type":"sum_digits_int","n":1000}', status = 200, text = '"73fb9a5de29b"')
@@ -40,7 +40,7 @@ def test__run_simple():
         app.stop()
 
 def test__run_simple__get_raw_config():
-    app = apprunner.Multirun('multirun.sh -d test-cli/src test-cli/config/run-simple.xml')
+    app = apprunner.Multirun('multirun.sh -d work/testproj/src work/testproj/config/run-simple.xml')
     try:
         app.wait_till_up()
         r = app.send_post('query/iid_1', '{"type":"get_raw_config"}')
@@ -84,7 +84,7 @@ def test__run_simple__get_raw_config():
         app.stop()
 
 def test__run_simple__get_app_structure():
-    app = apprunner.Multirun('multirun.sh -d test-cli/src test-cli/config/run-simple.xml')
+    app = apprunner.Multirun('multirun.sh -d work/testproj/src work/testproj/config/run-simple.xml')
     try:
         app.wait_till_up()
         r = app.send_post('query/iid_1', '{"type":"rell.get_app_structure"}')
@@ -140,7 +140,7 @@ def test__run_simple__get_app_structure():
         app.stop()
 
 def test__run_stack_trace__main_q():
-    app = apprunner.Multirun('multirun.sh -d test-cli/src test-cli/config/run-stack_trace.xml')
+    app = apprunner.Multirun('multirun.sh -d work/testproj/src work/testproj/config/run-stack_trace.xml')
     try:
         app.wait_till_up()
 
@@ -164,7 +164,7 @@ def test__run_stack_trace__main_q():
         app.stop()
 
 def test__run_stack_trace__error_q():
-    app = apprunner.Multirun('multirun.sh -d test-cli/src test-cli/config/run-stack_trace.xml')
+    app = apprunner.Multirun('multirun.sh -d work/testproj/src work/testproj/config/run-stack_trace.xml')
     try:
         app.wait_till_up()
 
@@ -189,7 +189,7 @@ def test__run_stack_trace__error_q():
         app.stop()
 
 def test__run_stack_trace_entities():
-    app = apprunner.Multirun('multirun.sh -d test-cli/src test-cli/config/run-stack_trace_entities.xml')
+    app = apprunner.Multirun('multirun.sh -d work/testproj/src work/testproj/config/run-stack_trace_entities.xml')
     try:
         app.wait_till_up()
 
@@ -206,7 +206,7 @@ def test__run_stack_trace_entities():
         app.stop()
 
 def test__run_tests():
-    testlib.check_tests('multirun.sh -d test-cli/src test-cli/config/run-tests.xml --test', 0, [
+    testlib.check_tests('multirun.sh -d work/testproj/src work/testproj/config/run-tests.xml --test', 0, [
         'TEST RESULTS:',
         '',
         'OK foo[1]:run_tests.common_test:test_common',
@@ -232,7 +232,7 @@ def test__run_tests():
     ])
 
 def test__run_tests__filter_common():
-    testlib.check_tests('multirun.sh -d test-cli/src test-cli/config/run-tests.xml --test --test-filter run_tests.common*:*', 0, [
+    testlib.check_tests('multirun.sh -d work/testproj/src work/testproj/config/run-tests.xml --test --test-filter run_tests.common*:*', 0, [
         'TEST RESULTS:',
         '',
         'OK foo[1]:run_tests.common_test:test_common',
@@ -245,7 +245,7 @@ def test__run_tests__filter_common():
     ])
 
 def test__run_tests__filter_foo():
-    testlib.check_tests('multirun.sh -d test-cli/src test-cli/config/run-tests.xml --test --test-filter run_tests.foo*:*', 0, [
+    testlib.check_tests('multirun.sh -d work/testproj/src work/testproj/config/run-tests.xml --test --test-filter run_tests.foo*:*', 0, [
         'TEST RESULTS:',
         '',
         'OK foo[1]:run_tests.foo_10.foo_10_test:test_module_args',
@@ -262,7 +262,7 @@ def test__run_tests__filter_foo():
     ])
 
 def test__run_tests__filter_bar():
-    testlib.check_tests('multirun.sh -d test-cli/src test-cli/config/run-tests.xml --test --test-filter run_tests.bar.bar_test', 0, [
+    testlib.check_tests('multirun.sh -d work/testproj/src work/testproj/config/run-tests.xml --test --test-filter run_tests.bar.bar_test', 0, [
         'TEST RESULTS:',
         '',
         'OK bar[2]:run_tests.bar.bar_test:test_module_args',
@@ -279,7 +279,7 @@ def test__run_tests__filter_bar():
     ])
 
 def test__run_tests__chain():
-    testlib.check_tests('multirun.sh -d test-cli/src test-cli/config/run-tests.xml --test --test-chain foo,bar', 0, [
+    testlib.check_tests('multirun.sh -d work/testproj/src work/testproj/config/run-tests.xml --test --test-chain foo,bar', 0, [
         'TEST RESULTS:',
         '',
         'OK foo[1]:run_tests.common_test:test_common',
@@ -304,7 +304,7 @@ def test__run_tests__chain():
         '***** OK *****',
     ])
 
-    testlib.check_tests('multirun.sh -d test-cli/src test-cli/config/run-tests.xml --test --test-chain bar,foo', 0, [
+    testlib.check_tests('multirun.sh -d work/testproj/src work/testproj/config/run-tests.xml --test --test-chain bar,foo', 0, [
         'TEST RESULTS:',
         '',
         'OK foo[1]:run_tests.common_test:test_common',
@@ -329,7 +329,7 @@ def test__run_tests__chain():
         '***** OK *****',
     ])
 
-    testlib.check_tests('multirun.sh -d test-cli/src test-cli/config/run-tests.xml --test --test-chain foo', 0, [
+    testlib.check_tests('multirun.sh -d work/testproj/src work/testproj/config/run-tests.xml --test --test-chain foo', 0, [
         'TEST RESULTS:',
         '',
         'OK foo[1]:run_tests.common_test:test_common',
@@ -345,7 +345,7 @@ def test__run_tests__chain():
         '',
         '***** OK *****',
     ])
-    testlib.check_tests('multirun.sh -d test-cli/src test-cli/config/run-tests.xml --test --test-chain bar', 0, [
+    testlib.check_tests('multirun.sh -d work/testproj/src work/testproj/config/run-tests.xml --test --test-chain bar', 0, [
         'TEST RESULTS:',
         '',
         'OK bar[2]:run_tests.bar.bar_test:test_module_args',
@@ -364,7 +364,7 @@ def test__run_tests__chain():
     ])
 
 def test__run_tests_generic():
-    testlib.check_tests('multirun.sh -d test-cli/src test-cli/config/run-tests-generic.xml --test', 1, [
+    testlib.check_tests('multirun.sh -d work/testproj/src work/testproj/config/run-tests-generic.xml --test', 1, [
         'TEST RESULTS:',
         '',
         'OK A[1]:run_tests.generic.tests:test_get_app_name',
@@ -382,7 +382,7 @@ def test__run_tests_generic():
     ])
 
 def test__run_extend__test():
-    testlib.check_command('multirun.sh -d test-cli/src test-cli/config/run-extend.xml --test',
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-extend.xml --test',
         stdout = [
             '------------------------------------------------------------------------',
             'TEST foo[1]:extend.test:test',
@@ -406,7 +406,7 @@ def test__run_extend__test():
     )
 
 def test__run_extend_g__test():
-    testlib.check_command('multirun.sh -d test-cli/src test-cli/config/run-extend-g.xml --test',
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-extend-g.xml --test',
         stdout = [
             '------------------------------------------------------------------------',
             'TEST foo[1]:extend.test:test',
@@ -430,7 +430,7 @@ def test__run_extend_g__test():
     )
 
 def test__run_extend_h__test():
-    testlib.check_command('multirun.sh -d test-cli/src test-cli/config/run-extend-h.xml --test',
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-extend-h.xml --test',
         stdout = [
             '------------------------------------------------------------------------',
             'TEST foo[1]:extend.test:test',
@@ -454,7 +454,7 @@ def test__run_extend_h__test():
     )
 
 def test__run_tests_simple__test():
-    testlib.check_tests('multirun.sh -d test-cli/src test-cli/config/run-tests-simple.xml --test', code = 1, expected = [
+    testlib.check_tests('multirun.sh -d work/testproj/src work/testproj/config/run-tests-simple.xml --test', code = 1, expected = [
             'TEST RESULTS:',
             '',
             'OK foo[1]:tests.calc_test:test_square',
@@ -475,7 +475,7 @@ def test__run_tests_simple__test():
     ])
 
 def test__modargs_ok():
-    app = apprunner.Multirun('multirun.sh -d test-cli/src test-cli/config/run-modargs-ok.xml')
+    app = apprunner.Multirun('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-ok.xml')
     try:
         app.wait_till_up()
         app.check_query('{"type":"foo_args"}', status = 200, text = '{"x":123,"y":"Bob"}')
@@ -484,10 +484,10 @@ def test__modargs_ok():
         app.stop()
 
 def test__modargs_ok__test():
-    testlib.check_command('multirun.sh -d test-cli/src test-cli/config/run-modargs-ok.xml --test', stdout = NO_TESTS_STDOUT)
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-ok.xml --test', stdout = NO_TESTS_STDOUT)
 
 def test__modargs_extra():
-    app = apprunner.Multirun('multirun.sh -d test-cli/src test-cli/config/run-modargs-extra.xml')
+    app = apprunner.Multirun('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-extra.xml')
     try:
         app.wait_till_up()
         app.check_query('{"type":"foo_args"}', status = 200, text = '{"x":123,"y":"Bob"}')
@@ -496,20 +496,20 @@ def test__modargs_extra():
         app.stop()
 
 def test__modargs_extra__test():
-    testlib.check_command('multirun.sh -d test-cli/src test-cli/config/run-modargs-extra.xml --test', stdout = NO_TESTS_STDOUT)
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-extra.xml --test', stdout = NO_TESTS_STDOUT)
 
 def test__modargs_missing():
-    testlib.check_command('multirun.sh -d test-cli/src test-cli/config/run-modargs-missing.xml', code = 2, stdout = CTE_STDOUT,
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-missing.xml', code = 2, stdout = CTE_STDOUT,
         stderr = 'ERROR: Missing module_args for module(s): modargs.bar\n')
 
 def test__modargs_missing__test():
-    testlib.check_command('multirun.sh -d test-cli/src test-cli/config/run-modargs-missing.xml --test', code = 2,
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-missing.xml --test', code = 2,
         stderr = 'ERROR: Missing module_args for module(s): modargs.bar\n')
 
 def test__modargs_wrong():
-    testlib.check_command('multirun.sh -d test-cli/src test-cli/config/run-modargs-wrong.xml', code = 2, stdout = CTE_STDOUT,
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-wrong.xml', code = 2, stdout = CTE_STDOUT,
         stderr = "ERROR: Bad module_args for module 'modargs.bar': Decoding type 'text': expected STRING, actual INTEGER (attribute: modargs.bar:module_args.a)\n")
 
 def test__modargs_wrong__test():
-    testlib.check_command('multirun.sh -d test-cli/src test-cli/config/run-modargs-wrong.xml --test', code = 2,
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-wrong.xml --test', code = 2,
         stderr = "ERROR: Bad module_args for module 'modargs.bar': Decoding type 'text': expected STRING, actual INTEGER (attribute: modargs.bar:module_args.a)\n")

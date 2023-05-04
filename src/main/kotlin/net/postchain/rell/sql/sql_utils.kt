@@ -8,8 +8,6 @@ import com.google.common.collect.HashMultimap
 import net.postchain.rell.model.R_EntityDefinition
 import net.postchain.rell.runtime.*
 import net.postchain.rell.utils.checkEquals
-import org.apache.http.client.utils.URLEncodedUtils
-import java.net.URI
 import java.sql.Connection
 
 class SqlCol(val type: String)
@@ -124,29 +122,6 @@ object SqlUtils {
         var res: Boolean = false
         sqlExec.executeQuery(sql, {}) { res = true }
         return res
-    }
-
-    fun extractDatabaseSchema(url: String): String? {
-        val uri = URI(url)
-        check(uri.scheme == "jdbc") { "Invalid scheme: '${uri.scheme}'" }
-
-        val uri2 = URI(uri.schemeSpecificPart)
-        val query = uri2.query
-        val pairs = URLEncodedUtils.parse(query, Charsets.UTF_8)
-
-        for (pair in pairs) {
-            if (pair.name == "currentSchema") {
-                return pair.value
-            }
-        }
-
-        return null
-    }
-
-    fun prepareSchema(con: Connection, schema: String) {
-        con.createStatement().use { stmt ->
-            stmt.execute("""CREATE SCHEMA IF NOT EXISTS "$schema";""")
-        }
     }
 
     fun printConnectionInfo(sqlExec: SqlExecutor) {

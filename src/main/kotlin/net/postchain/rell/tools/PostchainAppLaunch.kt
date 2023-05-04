@@ -11,11 +11,8 @@ import net.postchain.api.internal.BlockchainApi
 import net.postchain.api.rest.infra.RestApiConfig
 import net.postchain.base.gtv.GtvToBlockchainRidFactory
 import net.postchain.base.withReadWriteConnection
-import net.postchain.common.hexStringToByteArray
-import net.postchain.common.toHex
 import net.postchain.config.app.AppConfig
 import net.postchain.core.EContext
-import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.logging.BLOCKCHAIN_RID_TAG
@@ -25,27 +22,27 @@ import net.postchain.rell.RellConfigGen
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.Rt_LogPrinter
 import net.postchain.rell.sql.SqlInitLogging
+import net.postchain.rell.utils.RellBaseCliArgs
+import net.postchain.rell.utils.RellToolsLogUtils
+import net.postchain.rell.utils.RellToolsUtils
 import net.postchain.rell.utils.RellVersions
-import net.postchain.rell.utils.checkEquals
 import net.postchain.rell.utils.cli.MainRellCliEnv
-import net.postchain.rell.utils.cli.RellBaseCliArgs
-import net.postchain.rell.utils.cli.RellCliLogUtils
-import net.postchain.rell.utils.cli.RellCliUtils
+import net.postchain.rell.utils.cli.RellApiGtxUtils
 import picocli.CommandLine
 import java.io.File
 
 private val log = run {
-    RellCliLogUtils.initLogging()
+    RellToolsLogUtils.initLogging()
     KotlinLogging.logger("PostchainApp")
 }
 
 fun main(args: Array<String>) {
-    RellCliUtils.runCli(args, RunPostchainAppArgs())
+    RellToolsUtils.runCli(args, RunPostchainAppArgs())
 }
 
 private fun main0(args: RunPostchainAppArgs) {
-    val target = RellCliUtils.getTarget(args.sourceDir, args.module)
-    RellCliUtils.checkFile(args.nodeConfigFile)
+    val target = RellToolsUtils.getTarget(args.sourceDir, args.module)
+    RellToolsUtils.checkFile(args.nodeConfigFile)
 
     log.info("STARTING POSTCHAIN APP")
     log.info("    source directory: ${target.sourcePath.absolutePath}")
@@ -53,12 +50,12 @@ private fun main0(args: RunPostchainAppArgs) {
     log.info("    node config file: ${File(args.nodeConfigFile).absolutePath}")
     log.info("")
 
-    RellCliUtils.printVersionInfo()
+    RellToolsUtils.printVersionInfo()
 
     val configGen = RellConfigGen.create(MainRellCliEnv, target)
 
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
-    val template = RunPostchainApp.genBlockchainConfigTemplate(nodeAppConf.pubKeyByteArray)
+    val template = genBlockchainConfigTemplate(nodeAppConf.pubKeyByteArray)
     val bcConf = configGen.makeConfig(template)
 
     val node = PostchainNode(nodeAppConf, true)
@@ -93,36 +90,12 @@ private fun main0(args: RunPostchainAppArgs) {
     }
 }
 
-object RunPostchainApp {
-    fun genBlockchainConfigTemplate(pubKey: ByteArray): Gtv {
-        val template0 = genBlockchainConfigTemplateNoRell(pubKey)
-        val rell = gtv(
-            "version" to gtv(RellVersions.VERSION_STR),
-        )
-        return RellConfigGen.makeConfig(template0, rell)
-    }
-
-    fun genBlockchainConfigTemplateNoRell(pubKey: ByteArray): Gtv {
-        return gtv(
-            "blockstrategy" to gtv("name" to gtv("net.postchain.base.BaseBlockBuildingStrategy")),
-            "configurationfactory" to gtv("net.postchain.gtx.GTXBlockchainConfigurationFactory"),
-            "signers" to gtv(listOf(gtv(pubKey))),
-            "gtx" to gtv(
-                "modules" to gtv(
-                    gtv("net.postchain.rell.module.RellPostchainModuleFactory"),
-                    gtv("net.postchain.gtx.StandardOpsGTXModule"),
-                ),
-            )
-        )
-    }
-
-    fun calcPubKey(privKey: String): String {
-        checkEquals(privKey.length, 64)
-        val privKeyBytes = privKey.hexStringToByteArray()
-        val pubKeyBytes = secp256k1_derivePubKey(privKeyBytes)
-        return pubKeyBytes.toHex()
-
-    }
+private fun genBlockchainConfigTemplate(pubKey: ByteArray): Gtv {
+    val template0 = RellApiGtxUtils.genBlockchainConfigTemplateNoRell(pubKey)
+    val rell = gtv(
+        "version" to gtv(RellVersions.VERSION_STR),
+    )
+    return RellConfigGen.makeConfig(template0, rell)
 }
 
 @CommandLine.Command(name = "PostchainAppLaunch", description = ["Runs a Rell Postchain app"])

@@ -25,7 +25,7 @@ def run_postchain_wipe_db(dir):
     ])
 
 def test__run_simple__generate():
-    dir = run_multigen('multigen.sh -d test-cli/src -o %s test-cli/config/run-simple.xml')
+    dir = run_multigen('multigen.sh -d work/testproj/src -o %s work/testproj/config/run-simple.xml')
 
     files = os.listdir(dir)
     assert 'node-config.properties' in files
@@ -42,7 +42,7 @@ def test__run_simple__generate():
     assert re.fullmatch(r'[0-9A-F]{64}', brid), brid
 
 def test__run_simple__start_node():
-    dir = run_multigen('multigen.sh -d test-cli/src -o %s test-cli/config/run-simple.xml')
+    dir = run_multigen('multigen.sh -d work/testproj/src -o %s work/testproj/config/run-simple.xml')
     run_postchain_wipe_db(dir)
 
     app = apprunner.Postchain('postchain.sh run-node-auto -d %s' % dir)
@@ -68,7 +68,7 @@ def test__run_simple__start_node():
         app.stop()
 
 def test__run_stack_trace():
-    dir = run_multigen('multigen.sh -d test-cli/src -o %s test-cli/config/run-stack_trace.xml')
+    dir = run_multigen('multigen.sh -d work/testproj/src -o %s work/testproj/config/run-stack_trace.xml')
     run_postchain_wipe_db(dir)
 
     app = apprunner.Postchain('postchain.sh run-node-auto -d %s' % dir)
@@ -97,7 +97,7 @@ def test__run_stack_trace():
         app.stop()
 
 def test__runxml_docs_sample():
-    dir = run_multigen('multigen.sh -d test-cli/runxml-docs-sample/src -o %s test-cli/runxml-docs-sample/run.xml')
+    dir = run_multigen('multigen.sh -d work/runxml-docs-sample/src -o %s work/runxml-docs-sample/run.xml')
 
     files = os.listdir(dir)
     assert 'node-config.properties' in files
@@ -117,7 +117,7 @@ def test__runxml_docs_sample():
     assert re.fullmatch(r'[0-9A-F]{64}', brid), brid
 
 def test__run_blktx():
-    dir = run_multigen('multigen.sh -d test-cli/src -o %s test-cli/config/run-blktx.xml')
+    dir = run_multigen('multigen.sh -d work/testproj/src -o %s work/testproj/config/run-blktx.xml')
     run_postchain_wipe_db(dir)
 
     app = apprunner.Postchain('postchain.sh run-node-auto -d %s' % dir)
@@ -130,15 +130,15 @@ def test__run_blktx():
         app.stop()
 
 def test__modargs_ok():
-    run_multigen('multigen.sh -d test-cli/src -o %s test-cli/config/run-modargs-ok.xml')
+    run_multigen('multigen.sh -d work/testproj/src -o %s work/testproj/config/run-modargs-ok.xml')
 
 def test__modargs_missing():
-    run_multigen('multigen.sh -d test-cli/src -o %s test-cli/config/run-modargs-missing.xml', code = 2,
+    run_multigen('multigen.sh -d work/testproj/src -o %s work/testproj/config/run-modargs-missing.xml', code = 2,
         stderr = 'ERROR: Missing module_args for module(s): modargs.bar\n')
 
 def test__modargs_wrong():
-    run_multigen('multigen.sh -d test-cli/src -o %s test-cli/config/run-modargs-wrong.xml', code = 2,
+    run_multigen('multigen.sh -d work/testproj/src -o %s work/testproj/config/run-modargs-wrong.xml', code = 2,
         stderr = "ERROR: Bad module_args for module 'modargs.bar': Decoding type 'text': expected STRING, actual INTEGER (attribute: modargs.bar:module_args.a)\n")
 
 def test__modargs_extra():
-    run_multigen('multigen.sh -d test-cli/src -o %s test-cli/config/run-modargs-extra.xml')
+    run_multigen('multigen.sh -d work/testproj/src -o %s work/testproj/config/run-modargs-extra.xml')

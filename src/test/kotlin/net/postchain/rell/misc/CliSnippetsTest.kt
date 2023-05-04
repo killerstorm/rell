@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.misc
@@ -63,7 +63,7 @@ class CliSnippetsTest {
     }
 
     private fun chkModules(modSel: C_CompilerModuleSelection) {
-        val dir = File("test-cli/src")
+        val dir = File("work/testproj/src")
         val sourceDir = C_SourceDir.diskDir(dir)
         val res = RellTestUtils.compileApp(sourceDir, modSel, C_CompilerOptions.DEFAULT)
         assertEquals(0, res.messages.size, res.messages.toString())

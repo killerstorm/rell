@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.utils
@@ -48,8 +48,10 @@ object CommonUtils {
         * */
         val resourcePrefix = "classpath:"
         return if (path.startsWith(resourcePrefix)) {
-            javaClass.getResource(path.substringAfter(resourcePrefix))
-                    .readText()
+            val resourcePath = path.substringAfter(resourcePrefix)
+            val resource = javaClass.getResource(resourcePath)
+            checkNotNull(resource) { "File not found: $resourcePath" }
+            resource.readText()
         } else {
             File(path).readText()
         }

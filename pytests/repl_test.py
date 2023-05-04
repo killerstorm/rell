@@ -20,7 +20,7 @@ def check_quit(app):
     app.check_stop()
 
 def test__none():
-    app = apprunner.ReplRunner('rell.sh -d test-cli/src')
+    app = apprunner.ReplRunner('rell.sh -d work/testproj/src')
     try:
         check_intro(app)
         check_quit(app)
@@ -28,7 +28,7 @@ def test__none():
         app.stop()
 
 def test__sum_digits_integer():
-    app = apprunner.ReplRunner('rell.sh -d test-cli/src')
+    app = apprunner.ReplRunner('rell.sh -d work/testproj/src')
     try:
         check_intro(app)
         app.input('import calc;\n')
@@ -43,7 +43,7 @@ def test__sum_digits_integer():
         app.stop()
 
 def test__company_user__no_tables():
-    app = apprunner.ReplRunner('rell.sh --resetdb --db-properties test-cli/config/node-config.properties -d test-cli/src')
+    app = apprunner.ReplRunner('rell.sh --resetdb --db-properties work/testproj/config/node-config.properties -d work/testproj/src')
     try:
         app.ignore_output(testlib.MSG_META_TABLE_DOES_NOT_EXIST)
 
@@ -129,7 +129,7 @@ def test__company_user__no_tables():
         app.stop()
 
 def test__company_user__existing_tables():
-    app = apprunner.ReplRunner('rell.sh --resetdb --db-properties test-cli/config/node-config.properties -d test-cli/src')
+    app = apprunner.ReplRunner('rell.sh --resetdb --db-properties work/testproj/config/node-config.properties -d work/testproj/src')
     try:
         app.ignore_output(testlib.MSG_META_TABLE_DOES_NOT_EXIST)
         app.ignore_output('<LOG:INFO><RE>SqlInit - .+')
@@ -144,7 +144,7 @@ def test__company_user__existing_tables():
     finally:
         app.stop()
 
-    app = apprunner.ReplRunner('rell.sh --db-properties test-cli/config/node-config.properties -d test-cli/src')
+    app = apprunner.ReplRunner('rell.sh --db-properties work/testproj/config/node-config.properties -d work/testproj/src')
     try:
         app.ignore_output(testlib.MSG_META_TABLE_DOES_NOT_EXIST)
         app.ignore_output('<LOG:INFO><RE>SQLDatabaseAccess - Upgrading to version [0-9]+')

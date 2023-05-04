@@ -12,6 +12,9 @@ import net.postchain.gtv.gtvml.GtvMLEncoder
 import net.postchain.gtv.gtvml.GtvMLParser
 import net.postchain.gtv.merkle.GtvMerkleHashCalculator
 import net.postchain.gtv.merkle.MerkleHashCalculator
+import net.postchain.rell.model.R_StructDefinition
+import net.postchain.rell.module.GtvToRtContext
+import net.postchain.rell.runtime.Rt_Value
 
 object PostchainGtvUtils {
     val cryptoSystem: CryptoSystem = Secp256K1CryptoSystem()
@@ -37,4 +40,9 @@ object PostchainGtvUtils {
     fun gtvToJsonPretty(v: Gtv): String = PRETTY_GSON.toJson(v, Gtv::class.java)
 
     fun merkleHash(v: Gtv): ByteArray = v.merkleHash(merkleCalculator)
+
+    fun moduleArgsGtvToRt(struct: R_StructDefinition, gtv: Gtv): Rt_Value {
+        val convCtx = GtvToRtContext.make(true)
+        return struct.type.gtvToRt(convCtx, gtv)
+    }
 }
