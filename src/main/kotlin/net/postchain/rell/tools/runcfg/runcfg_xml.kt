@@ -4,9 +4,9 @@
 
 package net.postchain.rell.tools.runcfg
 
-import net.postchain.rell.utils.GeneralDir
-import net.postchain.rell.utils.checkEquals
-import net.postchain.rell.utils.cli.RellCliBasicException
+import net.postchain.rell.api.base.RellCliBasicException
+import net.postchain.rell.base.utils.GeneralDir
+import net.postchain.rell.base.utils.checkEquals
 import org.w3c.dom.Document
 import org.w3c.dom.Element
 import org.w3c.dom.Node

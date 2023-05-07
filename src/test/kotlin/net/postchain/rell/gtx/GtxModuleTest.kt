@@ -7,9 +7,9 @@ package net.postchain.rell.gtx
 import net.postchain.common.exception.UserMistake
 import net.postchain.gtv.GtvInteger
 import net.postchain.gtx.NON_STRICT_QUERY_ARGUMENT
-import net.postchain.rell.test.BaseGtxTest
-import net.postchain.rell.test.RellGtxTester
-import net.postchain.rell.test.SqlTestUtils
+import net.postchain.rell.base.testutils.SqlTestUtils
+import net.postchain.rell.gtx.testutils.BaseGtxTest
+import net.postchain.rell.gtx.testutils.RellGtxTester
 import org.junit.Test
 import kotlin.test.assertFailsWith
 

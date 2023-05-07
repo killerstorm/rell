@@ -9,9 +9,9 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.gtv.GtvNull
 import net.postchain.gtv.GtvType
-import net.postchain.rell.runtime.utils.toGtv
-import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.base.runtime.utils.toGtv
+import net.postchain.rell.base.utils.toImmList
+import net.postchain.rell.base.utils.toImmMap
 
 enum class Rcfg_Gtv_ArrayMerge {
     REPLACE,

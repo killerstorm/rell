@@ -5,9 +5,9 @@
 package net.postchain.rell.gtx
 
 import net.postchain.gtv.GtvBigInteger
-import net.postchain.rell.lang.type.DecimalTest
-import net.postchain.rell.lib.LibBlockTransactionTest
-import net.postchain.rell.test.BaseGtxTest
+import net.postchain.rell.base.lang.type.DecimalTest
+import net.postchain.rell.base.lib.LibBlockTransactionTest
+import net.postchain.rell.gtx.testutils.BaseGtxTest
 import org.junit.Test
 import java.math.BigInteger
 

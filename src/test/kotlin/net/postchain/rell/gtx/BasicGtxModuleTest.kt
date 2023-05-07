@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
@@ -118,7 +118,7 @@ class BasicGtxModuleTest : IntegrationTest() {
     }
 
     private fun setupNode(): PostchainTestNode {
-        val node = createNode(0, "/net/postchain/rell/basic/blockchain_config.xml")
+        val node = createNode(0, "/net/postchain/rell/base/basic/blockchain_config.xml")
         blockchainRid = node.getBlockchainRid(1L)
         return node
     }

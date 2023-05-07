@@ -1,11 +1,11 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
 
-import net.postchain.rell.test.BaseGtxTest
-import net.postchain.rell.test.RellTestUtils
+import net.postchain.rell.base.testutils.RellTestUtils
+import net.postchain.rell.gtx.testutils.BaseGtxTest
 import org.junit.Test
 
 class ChainContextTest : BaseGtxTest() {

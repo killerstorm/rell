@@ -6,12 +6,12 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvEncoder
-import net.postchain.rell.compiler.base.utils.C_SourceDir
-import net.postchain.rell.model.R_LangVersion
-import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.utils.*
-import net.postchain.rell.utils.cli.MainRellCliEnv
-import net.postchain.rell.utils.cli.RellCliEnv
+import net.postchain.rell.api.base.MainRellCliEnv
+import net.postchain.rell.api.base.RellCliEnv
+import net.postchain.rell.base.compiler.base.utils.C_SourceDir
+import net.postchain.rell.base.model.R_LangVersion
+import net.postchain.rell.base.model.R_ModuleName
+import net.postchain.rell.base.utils.*
 import java.io.File
 
 class RellPostAppCliConfig(val sourceDir: C_SourceDir, val configDir: File, val config: RellPostAppConfig)

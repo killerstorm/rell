@@ -6,11 +6,11 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
-import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.utils.Bytes32
-import net.postchain.rell.utils.RellVersions
-import net.postchain.rell.utils.toImmList
-import net.postchain.rell.utils.toImmMap
+import net.postchain.rell.base.model.R_ModuleName
+import net.postchain.rell.base.utils.Bytes32
+import net.postchain.rell.base.utils.RellVersions
+import net.postchain.rell.base.utils.toImmList
+import net.postchain.rell.base.utils.toImmMap
 
 class RunConfigParserOptions(
         val unitTest: Boolean

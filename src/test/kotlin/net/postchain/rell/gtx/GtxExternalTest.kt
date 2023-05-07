@@ -1,13 +1,13 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
 
-import net.postchain.rell.lib.LibBlockTransactionTest
-import net.postchain.rell.test.BaseGtxTest
-import net.postchain.rell.test.RellCodeTester
-import net.postchain.rell.test.RellTestUtils
+import net.postchain.rell.base.lib.LibBlockTransactionTest
+import net.postchain.rell.base.testutils.RellCodeTester
+import net.postchain.rell.base.testutils.RellTestUtils
+import net.postchain.rell.gtx.testutils.BaseGtxTest
 import org.junit.Test
 
 class GtxExternalTest: BaseGtxTest() {

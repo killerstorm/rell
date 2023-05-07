@@ -4,11 +4,8 @@
 
 package net.postchain.rell.tools
 
-import net.postchain.rell.compiler.parser.S_Grammar
-import net.postchain.rell.utils.RellCliArgs
-import net.postchain.rell.utils.RellToolsLogUtils
-import net.postchain.rell.utils.RellToolsUtils
-import net.postchain.rell.utils.checkEquals
+import net.postchain.rell.base.compiler.parser.S_Grammar
+import net.postchain.rell.base.utils.checkEquals
 import picocli.CommandLine
 import java.io.File
 import java.nio.file.Files

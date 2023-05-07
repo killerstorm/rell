@@ -1,11 +1,11 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
 
 import net.postchain.common.exception.UserMistake
-import net.postchain.rell.test.BaseGtxTest
+import net.postchain.rell.gtx.testutils.BaseGtxTest
 import org.apache.commons.lang3.StringUtils
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -136,7 +136,7 @@ class GtxConfigTest: BaseGtxTest() {
     private fun runConfig(sources: String): String {
         val s = sources
                 .replace("SOURCES", "{'a.rell':'query q() = 42;'}")
-                .replace("FILES", "{'a.rell':'classpath:/net/postchain/rell/42.rell'}")
+                .replace("FILES", "{'a.rell':'classpath:/net/postchain/rell/base/42.rell'}")
         tst.configTemplate = "{'gtx':{'rell':{'modules':'{MODULES}','moduleArgs':'{MODULE_ARGS}',$s}}}"
 
         try {

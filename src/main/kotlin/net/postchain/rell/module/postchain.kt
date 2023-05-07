@@ -22,19 +22,23 @@ import net.postchain.gtx.GTXOperation
 import net.postchain.gtx.NON_STRICT_QUERY_ARGUMENT
 import net.postchain.gtx.data.ExtOpData
 import net.postchain.gtx.special.GTXSpecialTxExtension
-import net.postchain.rell.compiler.base.core.C_CompilationResult
-import net.postchain.rell.compiler.base.core.C_Compiler
-import net.postchain.rell.compiler.base.core.C_CompilerOptions
-import net.postchain.rell.compiler.base.utils.*
-import net.postchain.rell.model.*
-import net.postchain.rell.runtime.*
-import net.postchain.rell.runtime.utils.Rt_SqlExecutor
-import net.postchain.rell.runtime.utils.Rt_Utils
-import net.postchain.rell.sql.ConnectionSqlExecutor
-import net.postchain.rell.sql.NullSqlInitProjExt
-import net.postchain.rell.sql.SqlInit
-import net.postchain.rell.sql.SqlInitLogging
-import net.postchain.rell.utils.*
+import net.postchain.rell.base.compiler.base.core.C_CompilationResult
+import net.postchain.rell.base.compiler.base.core.C_Compiler
+import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.base.compiler.base.utils.*
+import net.postchain.rell.base.model.*
+import net.postchain.rell.base.runtime.*
+import net.postchain.rell.base.runtime.utils.Rt_SqlExecutor
+import net.postchain.rell.base.runtime.utils.Rt_Utils
+import net.postchain.rell.base.sql.ConnectionSqlExecutor
+import net.postchain.rell.base.sql.NullSqlInitProjExt
+import net.postchain.rell.base.sql.SqlInit
+import net.postchain.rell.base.sql.SqlInitLogging
+import net.postchain.rell.base.utils.*
+import net.postchain.rell.gtx.PostchainBaseUtils
+import net.postchain.rell.gtx.Rt_DefaultPostchainTxContextFactory
+import net.postchain.rell.gtx.Rt_PostchainOpContext
+import net.postchain.rell.gtx.Rt_PostchainTxContextFactory
 import org.apache.commons.lang3.time.FastDateFormat
 
 private fun convertArgs(ctx: GtvToRtContext, params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {

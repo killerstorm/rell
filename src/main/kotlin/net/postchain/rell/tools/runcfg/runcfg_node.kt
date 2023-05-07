@@ -1,10 +1,10 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.tools.runcfg
 
-import net.postchain.rell.utils.*
+import net.postchain.rell.base.utils.*
 import org.apache.commons.configuration2.PropertiesConfiguration
 import java.io.StringReader
 import java.util.*

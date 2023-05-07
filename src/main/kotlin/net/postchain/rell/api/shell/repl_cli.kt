@@ -1,0 +1,82 @@
+/*
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ */
+
+package net.postchain.rell.api.shell
+
+import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.base.compiler.base.utils.C_SourceDir
+import net.postchain.rell.base.model.R_ModuleName
+import net.postchain.rell.base.repl.ReplInputChannelFactory
+import net.postchain.rell.base.repl.ReplInterpreter
+import net.postchain.rell.base.repl.ReplInterpreterProjExt
+import net.postchain.rell.base.repl.ReplOutputChannelFactory
+import net.postchain.rell.base.runtime.Rt_GlobalContext
+import net.postchain.rell.base.runtime.Rt_RellVersion
+import net.postchain.rell.base.runtime.Rt_RellVersionProperty
+import net.postchain.rell.base.sql.SqlManager
+import org.apache.commons.lang3.StringUtils
+import java.io.File
+
+object ReplShell {
+    fun start(
+        sourceDir: C_SourceDir,
+        module: R_ModuleName?,
+        globalCtx: Rt_GlobalContext,
+        sqlMgr: SqlManager,
+        compilerOptions: C_CompilerOptions,
+        projExt: ReplInterpreterProjExt,
+        inChannelFactory: ReplInputChannelFactory,
+        outChannelFactory: ReplOutputChannelFactory,
+        historyFile: File?,
+    ) {
+        val outChannel = outChannelFactory.createOutputChannel()
+
+        val repl = ReplInterpreter.create(
+            compilerOptions,
+            sourceDir,
+            module,
+            globalCtx,
+            sqlMgr,
+            projExt,
+            outChannel,
+        )
+
+        if (repl == null) {
+            return
+        }
+
+        printIntro(repl, module)
+
+        val inChannel = inChannelFactory.createInputChannel(historyFile)
+
+        while (!repl.mustQuit()) {
+            val line = inChannel.readLine(">>> ")
+            if (line == null) {
+                break
+            } else if (!StringUtils.isBlank(line)) {
+                repl.execute(line)
+            }
+        }
+    }
+
+    private fun printIntro(repl: ReplInterpreter, moduleName: R_ModuleName?) {
+        val ver = getVersionInfo()
+        println(ver)
+
+        val quit = repl.getQuitCommand()
+        val help = repl.getHelpCommand()
+        println("Type '$quit' to quit or '$help' for help.")
+
+        if (moduleName != null) {
+            println("Current module: '$moduleName'")
+        }
+    }
+
+    private fun getVersionInfo(): String {
+        val v = Rt_RellVersion.getInstance()
+        if (v == null) return "Version unknown"
+        val ver = v.properties[Rt_RellVersionProperty.RELL_VERSION] ?: "[unknown version]"
+        return "Rell $ver"
+    }
+}

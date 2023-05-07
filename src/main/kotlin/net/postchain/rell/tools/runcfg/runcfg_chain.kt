@@ -6,11 +6,12 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory.gtv
-import net.postchain.rell.model.R_ModuleName
-import net.postchain.rell.utils.*
-import net.postchain.rell.utils.cli.RellApiBaseInternal
-import net.postchain.rell.utils.cli.RellApiCompile
-import net.postchain.rell.utils.cli.RellCliEnv
+import net.postchain.rell.api.base.RellApiBaseInternal
+import net.postchain.rell.api.base.RellApiCompile
+import net.postchain.rell.api.base.RellCliEnv
+import net.postchain.rell.base.model.R_ModuleName
+import net.postchain.rell.base.utils.*
+import net.postchain.rell.gtx.PostchainBaseUtils
 
 class RunConfigChainConfigGen private constructor(private val cliEnv: RellCliEnv, params: RellRunConfigParams) {
     private val sourceDir = params.sourceDir

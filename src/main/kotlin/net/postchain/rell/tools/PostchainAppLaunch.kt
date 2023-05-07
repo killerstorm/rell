@@ -18,16 +18,13 @@ import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.logging.BLOCKCHAIN_RID_TAG
 import net.postchain.logging.CHAIN_IID_TAG
 import net.postchain.logging.NODE_PUBKEY_TAG
-import net.postchain.rell.RellConfigGen
+import net.postchain.rell.api.base.MainRellCliEnv
+import net.postchain.rell.api.base.RellConfigGen
+import net.postchain.rell.api.gtx.RellApiGtxUtils
+import net.postchain.rell.base.runtime.Rt_LogPrinter
+import net.postchain.rell.base.sql.SqlInitLogging
+import net.postchain.rell.base.utils.RellVersions
 import net.postchain.rell.module.RellPostchainModuleEnvironment
-import net.postchain.rell.runtime.Rt_LogPrinter
-import net.postchain.rell.sql.SqlInitLogging
-import net.postchain.rell.utils.RellBaseCliArgs
-import net.postchain.rell.utils.RellToolsLogUtils
-import net.postchain.rell.utils.RellToolsUtils
-import net.postchain.rell.utils.RellVersions
-import net.postchain.rell.utils.cli.MainRellCliEnv
-import net.postchain.rell.utils.cli.RellApiGtxUtils
 import picocli.CommandLine
 import java.io.File
 
