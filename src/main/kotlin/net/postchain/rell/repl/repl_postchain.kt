@@ -13,7 +13,7 @@ import net.postchain.rell.utils.Rt_DynamicBlockRunnerStrategy
 import net.postchain.rell.utils.Rt_PostchainUnitTestBlockRunner
 import net.postchain.rell.utils.Rt_UnitTestBlockRunner
 import net.postchain.rell.utils.cli.NullRellCliEnv
-import net.postchain.rell.utils.cli.RellCliCompileConfig
+import net.postchain.rell.utils.cli.RellApiCompile
 
 class PostchainReplInterpreterProjExt(
     private val sqlInitProjExt: SqlInitProjExt,
@@ -23,7 +23,7 @@ class PostchainReplInterpreterProjExt(
 
     override fun createBlockRunner(sourceDir: C_SourceDir, modules: List<R_ModuleName>): Rt_UnitTestBlockRunner {
         val keyPair = C_Lib_Test.BLOCK_RUNNER_KEYPAIR
-        val compileConfig = RellCliCompileConfig.Builder().cliEnv(NullRellCliEnv).build()
+        val compileConfig = RellApiCompile.Config.Builder().cliEnv(NullRellCliEnv).build()
         val runnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, modules, compileConfig)
         return Rt_PostchainUnitTestBlockRunner(keyPair, runnerConfig, runnerStrategy)
     }

@@ -7,8 +7,8 @@ package net.postchain.rell.misc
 import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.RellReplTester
-import net.postchain.rell.utils.cli.RellCliInternalShellApi
-import net.postchain.rell.utils.cli.RellCliRunShellConfig
+import net.postchain.rell.utils.cli.RellApiRunShell
+import net.postchain.rell.utils.cli.RellApiShellInternal
 import org.junit.Test
 
 class RellApiRunShellTest: BaseRellApiTest() {
@@ -29,13 +29,13 @@ class RellApiRunShellTest: BaseRellApiTest() {
 
         val outChannelFactory = RellReplTester.TestReplOutputChannelFactory()
 
-        val runConfig = RellCliRunShellConfig.Builder()
+        val runConfig = RellApiRunShell.Config.Builder()
             .compileConfig(defaultConfig)
             .inputChannelFactory(inChannelFactory)
             .outputChannelFactory(outChannelFactory)
             .build()
 
-        RellCliInternalShellApi.runShell(runConfig, sourceDir, R_ModuleName.of("start"))
+        RellApiShellInternal.runShell(runConfig, sourceDir, R_ModuleName.of("start"))
         outChannelFactory.chk("RES:int[4]", "RES:int[123]", "CTE:<console>:unknown_name:g", "RES:int[456]")
     }
 
@@ -44,13 +44,13 @@ class RellApiRunShellTest: BaseRellApiTest() {
         val inChannelFactory = RellReplTester.TestReplInputChannelFactory("color.red", "\\q")
         val outChannelFactory = RellReplTester.TestReplOutputChannelFactory()
 
-        val runConfig = RellCliRunShellConfig.Builder()
+        val runConfig = RellApiRunShell.Config.Builder()
             .compileConfig(defaultConfig)
             .inputChannelFactory(inChannelFactory)
             .outputChannelFactory(outChannelFactory)
             .build()
 
-        RellCliInternalShellApi.runShell(runConfig, sourceDir, R_ModuleName.of("lib"))
+        RellApiShellInternal.runShell(runConfig, sourceDir, R_ModuleName.of("lib"))
         outChannelFactory.chk("RES:lib:color[red]")
     }
 }

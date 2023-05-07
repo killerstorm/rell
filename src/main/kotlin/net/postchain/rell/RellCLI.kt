@@ -184,7 +184,7 @@ private fun createBlockRunner(args: RellCliArgsEx, sourceDir: C_SourceDir, app: 
     )
 
     val blockRunnerModules = RellApiBaseUtils.getMainModules(app)
-    val compileConfig = RellCliCompileConfig.Builder()
+    val compileConfig = RellApiCompile.Config.Builder()
         .cliEnv(NullRellCliEnv)
         .build()
     val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, blockRunnerModules, compileConfig)
@@ -205,7 +205,7 @@ private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Bool
         val blockRunnerCfg = Rt_BlockRunnerConfig()
         val projExt = PostchainReplInterpreterProjExt(PostchainSqlInitProjExt, blockRunnerCfg)
 
-        val historyFile = if (args.raw.noHistory) null else RellCliInternalShellApi.getDefaultReplHistoryFile()
+        val historyFile = if (args.raw.noHistory) null else RellApiShellInternal.getDefaultReplHistoryFile()
 
         ReplShell.start(
             sourceDir,

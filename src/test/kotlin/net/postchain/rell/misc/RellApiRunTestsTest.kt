@@ -10,17 +10,17 @@ import net.postchain.rell.compiler.base.utils.C_SourceDir
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.Rt_TestPrinter
 import net.postchain.rell.test.SqlTestUtils
-import net.postchain.rell.utils.cli.RellCliCompileConfig
-import net.postchain.rell.utils.cli.RellCliInternalBaseApi
-import net.postchain.rell.utils.cli.RellCliInternalGtxApi
-import net.postchain.rell.utils.cli.RellCliRunTestsConfig
+import net.postchain.rell.utils.cli.RellApiBaseInternal
+import net.postchain.rell.utils.cli.RellApiCompile
+import net.postchain.rell.utils.cli.RellApiGtxInternal
+import net.postchain.rell.utils.cli.RellApiRunTests
 import net.postchain.rell.utils.toImmList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class RellApiRunTestsTest: BaseRellApiTest() {
     @Test fun testRunTestsBasic() {
-        val runConfig = RellCliRunTestsConfig.Builder().build()
+        val runConfig = RellApiRunTests.Config.Builder().build()
         val sourceDir = C_SourceDir.mapDirOf(
             "test.rell" to "@test module; function test_1(){} function test_2(){} function test_3(){}",
         )
@@ -30,7 +30,7 @@ class RellApiRunTestsTest: BaseRellApiTest() {
     }
 
     @Test fun testRunTestsStopOnError() {
-        val runConfig = RellCliRunTestsConfig.Builder().build()
+        val runConfig = RellApiRunTests.Config.Builder().build()
         val sourceDir = C_SourceDir.mapDirOf(
             "test.rell" to "@test module; function test_1(){} function test_2(){ assert_true(false); } function test_3(){}",
         )
@@ -51,8 +51,8 @@ class RellApiRunTestsTest: BaseRellApiTest() {
     @Test fun testRunTestsSubModules() {
         val compileConfig1 = configBuilder().includeTestSubModules(true).build()
         val compileConfig2 = configBuilder().includeTestSubModules(false).build()
-        val runConfig1 = RellCliRunTestsConfig.Builder().compileConfig(compileConfig1).build()
-        val runConfig2 = RellCliRunTestsConfig.Builder().compileConfig(compileConfig2).build()
+        val runConfig1 = RellApiRunTests.Config.Builder().compileConfig(compileConfig1).build()
+        val runConfig2 = RellApiRunTests.Config.Builder().compileConfig(compileConfig2).build()
 
         val sourceDir = C_SourceDir.mapDirOf(
             "a/module.rell" to "module;",
@@ -77,12 +77,12 @@ class RellApiRunTestsTest: BaseRellApiTest() {
     }
 
     @Test fun testRunTestsModuleNotFound() {
-        val runConfig = RellCliRunTestsConfig.Builder().build()
+        val runConfig = RellApiRunTests.Config.Builder().build()
         chkRunTests(runConfig, generalSourceDir, listOf(), listOf("foo"), "CME:import:not_found:foo")
     }
 
     @Test fun testRunTestsAllAppModules() {
-        val runConfig = RellCliRunTestsConfig.Builder().build()
+        val runConfig = RellApiRunTests.Config.Builder().build()
         val sourceDir = C_SourceDir.mapDirOf(
             "lib.rell" to "module; @extendable function f(): integer?;",
             "def.rell" to "module; import lib; @extend(lib.f) function() = 123;",
@@ -112,7 +112,7 @@ class RellApiRunTestsTest: BaseRellApiTest() {
         val fooArgs = mapOf("x" to GtvFactory.gtv(123))
         val barArgs = mapOf("y" to GtvFactory.gtv("Hello"))
 
-        var runConfig = RellCliRunTestsConfig.Builder().build()
+        var runConfig = RellApiRunTests.Config.Builder().build()
         chkRunTests(runConfig, sourceDir, listOf(), listOf(""), "CME:module_args_missing:bar,foo")
         runConfig = runTestsConfig(configBuilder().moduleArgs())
         chkRunTests(runConfig, sourceDir, listOf(), listOf(""), "CME:module_args_missing:bar,foo")
@@ -197,27 +197,27 @@ class RellApiRunTestsTest: BaseRellApiTest() {
     }
 
     private fun runTestsConfig(
-        compileConfig: RellCliCompileConfig.Builder,
-        proto: RellCliRunTestsConfig = RellCliRunTestsConfig.DEFAULT,
-    ): RellCliRunTestsConfig {
+        compileConfig: RellApiCompile.Config.Builder,
+        proto: RellApiRunTests.Config = RellApiRunTests.Config.DEFAULT,
+    ): RellApiRunTests.Config {
         return proto.toBuilder().compileConfig(compileConfig.build()).build()
     }
 
-    private fun runTestsDbConfig(): RellCliRunTestsConfig {
-        return RellCliRunTestsConfig.Builder()
+    private fun runTestsDbConfig(): RellApiRunTests.Config {
+        return RellApiRunTests.Config.Builder()
             .databaseUrl(SqlTestUtils.getDbUrl())
             .build()
     }
 
     private fun chkRunTestsFnExtend(
-        compileConfig: RellCliCompileConfig,
+        compileConfig: RellApiCompile.Config,
         sourceDir: C_SourceDir,
         appModules: List<String>?,
         testModules: List<String>,
         expectedOut: String,
     ) {
         val printer = Rt_TestPrinter()
-        val runConfig = RellCliRunTestsConfig.Builder()
+        val runConfig = RellApiRunTests.Config.Builder()
             .compileConfig(compileConfig)
             .outPrinter(printer)
             .build()
@@ -226,7 +226,7 @@ class RellApiRunTestsTest: BaseRellApiTest() {
     }
 
     private fun chkRunTests(
-        config: RellCliRunTestsConfig,
+        config: RellApiRunTests.Config,
         sourceDir: C_SourceDir,
         appModules: List<String>?,
         testModules: List<String>,
@@ -237,7 +237,7 @@ class RellApiRunTestsTest: BaseRellApiTest() {
     }
 
     private fun runTests(
-        config: RellCliRunTestsConfig,
+        config: RellApiRunTests.Config,
         sourceDir: C_SourceDir,
         appModules: List<String>?,
         testModules: List<String>,
@@ -245,7 +245,7 @@ class RellApiRunTestsTest: BaseRellApiTest() {
         val appMods = appModules?.map { R_ModuleName.of(it) }
         val testMods = testModules.map { R_ModuleName.of(it) }
 
-        val options = RellCliInternalBaseApi.makeCompilerOptions(config.compileConfig)
+        val options = RellApiBaseInternal.makeCompilerOptions(config.compileConfig)
 
         val apiRes = try {
             compileApp0(config.compileConfig, options, sourceDir, appMods, testMods)
@@ -263,7 +263,7 @@ class RellApiRunTestsTest: BaseRellApiTest() {
             .onTestCaseFinished { actualList.add("${it.case.name}:${it.res}") }
             .build()
 
-        val res = RellCliInternalGtxApi.runTests(config2, options, sourceDir, rApp, appMods, apiRes.moduleArgs)
+        val res = RellApiGtxInternal.runTests(config2, options, sourceDir, rApp, appMods, apiRes.moduleArgs)
         val resList = res.getResults().map { "${it.case.name}:${it.res}" }
 
         assertEquals(actualList, resList)

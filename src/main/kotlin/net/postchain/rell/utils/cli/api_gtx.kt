@@ -16,132 +16,168 @@ import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.sql.PostchainSqlInitProjExt
 import net.postchain.rell.sql.SqlInitLogging
 import net.postchain.rell.utils.*
+import java.io.File
 
-class RellCliRunTestsConfig(
-    /** Compilation config. */
-    val compileConfig: RellCliCompileConfig,
-    /** CLI environment used to print tests execution progress (test cases) and results. */
-    val cliEnv: RellCliEnv,
-    /** Stop tests after the first error. */
-    val stopOnError: Boolean,
-    /** Database URL. */
-    val databaseUrl: String?,
-    /** Enable SQL logging. */
-    val sqlLog: Boolean,
-    /** Enable SQL error logging. */
-    val sqlErrorLog: Boolean,
-    /** List of glob patterns to filter test cases: when not `null`, only tests matching one of the patterns will be executed. */
-    val testPatterns: List<String>?,
-    /** Printer used for Rell `print()` calls. */
-    val outPrinter: Rt_Printer,
-    /** Printer used for Rell `log()` calls. */
-    val logPrinter: Rt_Printer,
-    /** Print test case names and results during the execution. */
-    val printTestCases: Boolean,
-    /** Add dependencies of test modules to the active modules available during block execution (default: `true`). */
-    val addTestDependenciesToBlockRunModules: Boolean,
-    /** Test case start callback. */
-    val onTestCaseStart: (UnitTestCase) -> Unit,
-    /** Test case finished callback. */
-    val onTestCaseFinished: (UnitTestCaseResult) -> Unit,
-) {
-    fun toBuilder() = Builder(this)
+object RellApiRunTests {
+    /**
+     * Run tests.
+     *
+     * Use-case 1: run tests same way as **`multirun`** does. Set [appModules] to the app's main module, add the
+     * main module to [testModules], set [compileConfig.includeTestSubModules][RellApiCompile.Config.includeTestSubModules]
+     * to `true`.
+     *
+     * Use-case 2: run all tests. Add the *root* module (`""`) to [testModules],
+     * set [compileConfig.includeTestSubModules][RellApiCompile.Config.includeTestSubModules] to `true`.
+     *
+     * @param config Configuration.
+     * @param sourceDir Source directory.
+     * @param appModules List of app modules. Empty means none, `null` means all. Defines active modules for blocks
+     * execution (tests can execute only operations defined in active modules).
+     * @param testModules List of test modules to run. Empty means none. Can contain also app modules, if
+     * [compileConfig.includeTestSubModules][RellApiCompile.Config.includeTestSubModules] is `true`.
+     */
+    fun runTests(
+        config: Config,
+        sourceDir: File,
+        appModules: List<String>?,
+        testModules: List<String>,
+    ): UnitTestRunnerResults {
+        val cSourceDir = C_SourceDir.diskDir(sourceDir)
+        val rAppModules = appModules?.map { R_ModuleName.of(it) }?.toImmList()
+        val rTestModules = testModules.map { R_ModuleName.of(it) }.toImmList()
 
-    companion object {
-        val DEFAULT = RellCliRunTestsConfig(
-            compileConfig = RellCliCompileConfig.DEFAULT,
-            cliEnv = MainRellCliEnv,
-            stopOnError = false,
-            databaseUrl = null,
-            sqlLog = false,
-            sqlErrorLog = false,
-            testPatterns = null,
-            outPrinter = Rt_OutPrinter,
-            logPrinter = Rt_LogPrinter(),
-            printTestCases = true,
-            addTestDependenciesToBlockRunModules = true,
-            onTestCaseStart = {},
-            onTestCaseFinished = {},
-        )
+        val compileConfig = config.compileConfig
+        val options = RellApiBaseInternal.makeCompilerOptions(compileConfig)
+        val (cRes, app) = RellApiBaseInternal.compileApp(compileConfig, options, cSourceDir, rAppModules, rTestModules)
+        return RellApiGtxInternal.runTests(config, options, cSourceDir, app, rAppModules, cRes.moduleArgs)
     }
 
-    class Builder(proto: RellCliRunTestsConfig = DEFAULT) {
-        private var compileConfig = proto.compileConfig
-        private var cliEnv = proto.cliEnv
-        private var stopOnError = proto.stopOnError
-        private var databaseUrl = proto.databaseUrl
-        private var sqlLog = proto.sqlLog
-        private var sqlErrorLog = proto.sqlErrorLog
-        private var testPatterns = proto.testPatterns
-        private var outPrinter = proto.outPrinter
-        private var logPrinter = proto.logPrinter
-        private var printTestCases = proto.printTestCases
-        private var addTestDependenciesToBlockRunModules = proto.addTestDependenciesToBlockRunModules
-        private var onTestCaseStart = proto.onTestCaseStart
-        private var onTestCaseFinished = proto.onTestCaseFinished
+    class Config(
+        /** Compilation config. */
+        val compileConfig: RellApiCompile.Config,
+        /** CLI environment used to print tests execution progress (test cases) and results. */
+        val cliEnv: RellCliEnv,
+        /** Stop tests after the first error. */
+        val stopOnError: Boolean,
+        /** Database URL. */
+        val databaseUrl: String?,
+        /** Enable SQL logging. */
+        val sqlLog: Boolean,
+        /** Enable SQL error logging. */
+        val sqlErrorLog: Boolean,
+        /** List of glob patterns to filter test cases: when not `null`, only tests matching one of the patterns will be executed. */
+        val testPatterns: List<String>?,
+        /** Printer used for Rell `print()` calls. */
+        val outPrinter: Rt_Printer,
+        /** Printer used for Rell `log()` calls. */
+        val logPrinter: Rt_Printer,
+        /** Print test case names and results during the execution. */
+        val printTestCases: Boolean,
+        /** Add dependencies of test modules to the active modules available during block execution (default: `true`). */
+        val addTestDependenciesToBlockRunModules: Boolean,
+        /** Test case start callback. */
+        val onTestCaseStart: (UnitTestCase) -> Unit,
+        /** Test case finished callback. */
+        val onTestCaseFinished: (UnitTestCaseResult) -> Unit,
+    ) {
+        fun toBuilder() = Builder(this)
 
-        /** @see [RellCliRunTestsConfig.compileConfig] */
-        fun compileConfig(v: RellCliCompileConfig) = apply { compileConfig = v }
-
-        /** @see [RellCliRunTestsConfig.cliEnv] */
-        fun cliEnv(v: RellCliEnv) = apply { cliEnv = v }
-
-        /** @see [RellCliRunTestsConfig.stopOnError] */
-        fun stopOnError(v: Boolean) = apply { stopOnError = v }
-
-        /** @see [RellCliRunTestsConfig.databaseUrl] */
-        fun databaseUrl(v: String?) = apply { databaseUrl = v }
-
-        /** @see [RellCliRunTestsConfig.sqlLog] */
-        fun sqlLog(v: Boolean) = apply { sqlLog = v }
-
-        /** @see [RellCliRunTestsConfig.sqlErrorLog] */
-        fun sqlErrorLog(v: Boolean) = apply { sqlErrorLog = v }
-
-        /** @see [RellCliRunTestsConfig.testPatterns] */
-        fun testPatterns(v: List<String>?) = apply { testPatterns = v?.toImmList() }
-
-        /** @see [RellCliRunTestsConfig.outPrinter] */
-        fun outPrinter(v: Rt_Printer) = apply { outPrinter = v }
-
-        /** @see [RellCliRunTestsConfig.logPrinter] */
-        fun logPrinter(v: Rt_Printer) = apply { logPrinter = v }
-
-        /** @see [RellCliRunTestsConfig.printTestCases] */
-        fun printTestCases(v: Boolean) = apply { printTestCases = v }
-
-        /** @see [RellCliRunTestsConfig.addTestDependenciesToBlockRunModules]  */
-        fun addTestDependenciesToBlockRunModules(v: Boolean) = apply { addTestDependenciesToBlockRunModules = v }
-
-        /** @see [RellCliRunTestsConfig.onTestCaseStart] */
-        fun onTestCaseStart(v: (UnitTestCase) -> Unit) = apply { onTestCaseStart = v }
-
-        /** @see [RellCliRunTestsConfig.onTestCaseFinished] */
-        fun onTestCaseFinished(v: (UnitTestCaseResult) -> Unit) = apply { onTestCaseFinished = v }
-
-        fun build(): RellCliRunTestsConfig {
-            return RellCliRunTestsConfig(
-                compileConfig = compileConfig,
-                cliEnv = cliEnv,
-                stopOnError = stopOnError,
-                databaseUrl = databaseUrl,
-                sqlLog = sqlLog,
-                sqlErrorLog = sqlErrorLog,
-                testPatterns = testPatterns?.toImmList(),
-                outPrinter = outPrinter,
-                logPrinter = logPrinter,
-                printTestCases = printTestCases,
-                addTestDependenciesToBlockRunModules = addTestDependenciesToBlockRunModules,
-                onTestCaseStart = onTestCaseStart,
-                onTestCaseFinished = onTestCaseFinished,
+        companion object {
+            val DEFAULT = Config(
+                compileConfig = RellApiCompile.Config.DEFAULT,
+                cliEnv = MainRellCliEnv,
+                stopOnError = false,
+                databaseUrl = null,
+                sqlLog = false,
+                sqlErrorLog = false,
+                testPatterns = null,
+                outPrinter = Rt_OutPrinter,
+                logPrinter = Rt_LogPrinter(),
+                printTestCases = true,
+                addTestDependenciesToBlockRunModules = true,
+                onTestCaseStart = {},
+                onTestCaseFinished = {},
             )
+        }
+
+        class Builder(proto: Config = DEFAULT) {
+            private var compileConfig = proto.compileConfig
+            private var cliEnv = proto.cliEnv
+            private var stopOnError = proto.stopOnError
+            private var databaseUrl = proto.databaseUrl
+            private var sqlLog = proto.sqlLog
+            private var sqlErrorLog = proto.sqlErrorLog
+            private var testPatterns = proto.testPatterns
+            private var outPrinter = proto.outPrinter
+            private var logPrinter = proto.logPrinter
+            private var printTestCases = proto.printTestCases
+            private var addTestDependenciesToBlockRunModules = proto.addTestDependenciesToBlockRunModules
+            private var onTestCaseStart = proto.onTestCaseStart
+            private var onTestCaseFinished = proto.onTestCaseFinished
+
+            /** @see [Config.compileConfig] */
+            fun compileConfig(v: RellApiCompile.Config) = apply { compileConfig = v }
+
+            /** @see [Config.cliEnv] */
+            fun cliEnv(v: RellCliEnv) = apply { cliEnv = v }
+
+            /** @see [Config.stopOnError] */
+            fun stopOnError(v: Boolean) = apply { stopOnError = v }
+
+            /** @see [Config.databaseUrl] */
+            fun databaseUrl(v: String?) = apply { databaseUrl = v }
+
+            /** @see [Config.sqlLog] */
+            fun sqlLog(v: Boolean) = apply { sqlLog = v }
+
+            /** @see [Config.sqlErrorLog] */
+            fun sqlErrorLog(v: Boolean) = apply { sqlErrorLog = v }
+
+            /** @see [Config.testPatterns] */
+            fun testPatterns(v: List<String>?) = apply { testPatterns = v?.toImmList() }
+
+            /** @see [Config.outPrinter] */
+            fun outPrinter(v: Rt_Printer) = apply { outPrinter = v }
+
+            /** @see [Config.logPrinter] */
+            fun logPrinter(v: Rt_Printer) = apply { logPrinter = v }
+
+            /** @see [Config.printTestCases] */
+            fun printTestCases(v: Boolean) = apply { printTestCases = v }
+
+            /** @see [Config.addTestDependenciesToBlockRunModules]  */
+            fun addTestDependenciesToBlockRunModules(v: Boolean) = apply { addTestDependenciesToBlockRunModules = v }
+
+            /** @see [Config.onTestCaseStart] */
+            fun onTestCaseStart(v: (UnitTestCase) -> Unit) = apply { onTestCaseStart = v }
+
+            /** @see [Config.onTestCaseFinished] */
+            fun onTestCaseFinished(v: (UnitTestCaseResult) -> Unit) = apply { onTestCaseFinished = v }
+
+            fun build(): Config {
+                return Config(
+                    compileConfig = compileConfig,
+                    cliEnv = cliEnv,
+                    stopOnError = stopOnError,
+                    databaseUrl = databaseUrl,
+                    sqlLog = sqlLog,
+                    sqlErrorLog = sqlErrorLog,
+                    testPatterns = testPatterns?.toImmList(),
+                    outPrinter = outPrinter,
+                    logPrinter = logPrinter,
+                    printTestCases = printTestCases,
+                    addTestDependenciesToBlockRunModules = addTestDependenciesToBlockRunModules,
+                    onTestCaseStart = onTestCaseStart,
+                    onTestCaseFinished = onTestCaseFinished,
+                )
+            }
         }
     }
 }
 
-object RellCliInternalGtxApi {
+object RellApiGtxInternal {
     fun runTests(
-        config: RellCliRunTestsConfig,
+        config: RellApiRunTests.Config,
         options: C_CompilerOptions,
         sourceDir: C_SourceDir,
         app: R_App,
@@ -192,7 +228,7 @@ object RellCliInternalGtxApi {
     }
 
     private fun createBlockRunner(
-        config: RellCliRunTestsConfig,
+        config: RellApiRunTests.Config,
         sourceDir: C_SourceDir,
         app: R_App,
         appModules: List<R_ModuleName>?,
@@ -212,7 +248,7 @@ object RellCliInternalGtxApi {
         }
 
         val compileConfig = config.compileConfig
-        val gtvCompileConfig = RellCliCompileConfig.Builder()
+        val gtvCompileConfig = RellApiCompile.Config.Builder()
             .cliEnv(compileConfig.cliEnv)
             .version(compileConfig.version)
             .moduleArgs0(compileConfig.moduleArgs)

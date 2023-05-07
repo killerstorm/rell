@@ -11,8 +11,8 @@ import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.test.RellTestUtils
 import net.postchain.rell.test.TestRellCliEnv
 import net.postchain.rell.utils.PostchainGtvUtils
-import net.postchain.rell.utils.cli.RellCliCompileConfig
-import net.postchain.rell.utils.cli.RellCliInternalBaseApi
+import net.postchain.rell.utils.cli.RellApiBaseInternal
+import net.postchain.rell.utils.cli.RellApiCompile
 import net.postchain.rell.utils.immListOf
 import org.junit.Test
 import kotlin.test.assertEquals
@@ -176,7 +176,7 @@ class RellApiCompileTest: BaseRellApiTest() {
     }
 
     private fun chkCompileAppModules(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         sourceDir: C_SourceDir,
         appModules: List<String>?,
         testModules: List<String>,
@@ -193,12 +193,12 @@ class RellApiCompileTest: BaseRellApiTest() {
     }
 
     private fun compileApp(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         sourceDir: C_SourceDir,
         appModules: List<R_ModuleName>?,
         testModules: List<R_ModuleName> = immListOf(),
     ): List<String> {
-        val options = RellCliInternalBaseApi.makeCompilerOptions(config)
+        val options = RellApiBaseInternal.makeCompilerOptions(config)
 
         val apiRes = try {
             compileApp0(config, options, sourceDir, appModules, testModules)
@@ -260,7 +260,7 @@ class RellApiCompileTest: BaseRellApiTest() {
     }
 
     private fun chkCompileGtv(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         sourceDir: C_SourceDir,
         mainModule: String,
         expected: String,
@@ -270,7 +270,7 @@ class RellApiCompileTest: BaseRellApiTest() {
     }
 
     private fun compileGtv(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         sourceDir: C_SourceDir,
         mainModule: String,
     ): String {
@@ -282,11 +282,11 @@ class RellApiCompileTest: BaseRellApiTest() {
     }
 
     private fun compileGtv0(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         sourceDir: C_SourceDir,
         mainModule: String,
     ): String {
-        val options = RellCliInternalBaseApi.makeCompilerOptions(config)
+        val options = RellApiBaseInternal.makeCompilerOptions(config)
         val rModuleName = R_ModuleName.of(mainModule)
         val apiRes = compileApp0(config, options, sourceDir, listOf(rModuleName))
 
@@ -294,7 +294,7 @@ class RellApiCompileTest: BaseRellApiTest() {
         val ctErr = handleCompilationError(cRes)
         if (ctErr != null) return ctErr
 
-        val gtv = RellCliInternalBaseApi.compileGtv0(config, sourceDir, immListOf(rModuleName), cRes.files)
+        val gtv = RellApiBaseInternal.compileGtv0(config, sourceDir, immListOf(rModuleName), cRes.files)
         return PostchainGtvUtils.gtvToJson(gtv)
     }
 }

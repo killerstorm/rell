@@ -74,7 +74,7 @@ class RellConfigGen(
     }
 
     private fun getModuleSources(): RellModuleSources {
-        return RellCliInternalBaseApi.catchCommonError {
+        return RellApiBaseInternal.catchCommonError {
             val fileMap = getModuleFiles(sourceDir, moduleFiles)
             val strModules = modules.map { it.str() }
             RellModuleSources(strModules, fileMap)
@@ -92,14 +92,14 @@ class RellConfigGen(
             modules: List<R_ModuleName>,
             sourceVersion: R_LangVersion = RellVersions.VERSION,
         ): RellConfigGen {
-            val config = RellCliCompileConfig.Builder()
+            val config = RellApiCompile.Config.Builder()
                 .cliEnv(cliEnv)
                 .version(sourceVersion)
                 .moduleArgsMissingError(false)
                 .build()
 
-            val options = RellCliInternalBaseApi.makeCompilerOptions(config)
-            val (apiRes, rApp) = RellCliInternalBaseApi.compileApp(config, options, sourceDir, modules, immListOf())
+            val options = RellApiBaseInternal.makeCompilerOptions(config)
+            val (apiRes, rApp) = RellApiBaseInternal.compileApp(config, options, sourceDir, modules, immListOf())
             return RellConfigGen(sourceDir, sourceVersion, modules, apiRes.cRes.files, rApp)
         }
 

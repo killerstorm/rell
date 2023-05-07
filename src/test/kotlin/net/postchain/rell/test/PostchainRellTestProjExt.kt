@@ -17,7 +17,7 @@ import net.postchain.rell.sql.PostchainSqlInitProjExt
 import net.postchain.rell.sql.SqlExecutor
 import net.postchain.rell.sql.SqlInitProjExt
 import net.postchain.rell.utils.*
-import net.postchain.rell.utils.cli.RellCliCompileConfig
+import net.postchain.rell.utils.cli.RellApiCompile
 
 object PostchainRellTestProjExt: RellTestProjExt() {
     private val sqlInitProjExt: SqlInitProjExt = PostchainSqlInitProjExt
@@ -45,7 +45,7 @@ object PostchainRellTestProjExt: RellTestProjExt() {
         val blkRunConfig = createBlockRunnerConfig()
 
         val modules = app.modules.filter { !it.test && !it.abstract && !it.external }.map { it.name }
-        val compileConfig = RellCliCompileConfig.Builder().moduleArgs0(moduleArgs).build()
+        val compileConfig = RellApiCompile.Config.Builder().moduleArgs0(moduleArgs).build()
         val blkRunStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, modules, compileConfig)
 
         return Rt_PostchainUnitTestBlockRunner(keyPair, blkRunConfig, blkRunStrategy)

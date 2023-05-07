@@ -19,125 +19,174 @@ import net.postchain.rell.model.R_LangVersion
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.runtime.Rt_Value
 import net.postchain.rell.utils.*
+import java.io.File
 
-class RellCliCompileConfig(
-    /** CLI environment used to print compilation messages and errors. */
-    val cliEnv: RellCliEnv,
-    /** Language version for backward compatibility (may affect some aspects of compilation). */
-    val version: R_LangVersion,
-    /** Module arguments. */
-    val moduleArgs: Map<R_ModuleName, Gtv>,
-    /** Submodules of all test modules are compiled in addition to the explicitly specified test modules, when `true`. */
-    val includeTestSubModules: Boolean,
-    /** Missing module arguments for a module (which defines `module_args`) causes compilation error, when `true`. */
-    val moduleArgsMissingError: Boolean,
-    /** Mount name conflicts cause compilation error, when `true`. */
-    val mountConflictError: Boolean,
-    /** Specifying a non-test module in the list of test modules causes an error, when `true`. */
-    val appModuleInTestsError: Boolean,
-    /** Do not print non-error compilation messages (warnings) if compilation succeeds, when `true`. */
-    val quiet: Boolean,
-) {
-    fun toBuilder() = Builder(this)
+object RellApiCompile {
+    /**
+     * Compile an app.
+     *
+     * Use-case 1: compile an app same way as **`multirun`** or **`multigen`**. Specify a single app module and no
+     * test modules (a test module may add other app modules to the active set).
+     *
+     * Use-case 2: compile all app modules. Specify `null` as the list of app modules.
+     *
+     * Use-case 3: compile all app modules and all test modules. Pass `null` for the list of app modules and the *root*
+     * module (`""`) in the list of test modules; [Config.includeTestSubModules] must be `true`.
+     *
+     * @param config Compile configuration.
+     * @param sourceDir Source directory.
+     * @param appModules List of app (non-test) modules. Empty means none, `null` means all.
+     * @param testModules List of test modules. Empty means none.
+     * Can contain also app modules, if [Config.includeTestSubModules] is `true`.
+     */
+    fun compileApp(
+        config: Config,
+        sourceDir: File,
+        appModules: List<String>?,
+        testModules: List<String> = immListOf(),
+    ): R_App {
+        val cSourceDir = C_SourceDir.diskDir(sourceDir)
+        val rAppModules = appModules?.map { R_ModuleName.of(it) }?.toImmList()
+        val rTestModules = testModules.map { R_ModuleName.of(it) }.toImmList()
 
-    companion object {
-        val DEFAULT = RellCliCompileConfig(
-            cliEnv = MainRellCliEnv,
-            version = RellVersions.VERSION,
-            moduleArgs = immMapOf(),
-            includeTestSubModules = true,
-            moduleArgsMissingError = true,
-            mountConflictError = true,
-            appModuleInTestsError = true,
-            quiet = false,
-        )
+        val options = RellApiBaseInternal.makeCompilerOptions(config)
+        val (_, rApp) = RellApiBaseInternal.compileApp(config, options, cSourceDir, rAppModules, rTestModules)
+        return rApp
     }
 
-    class Builder(proto: RellCliCompileConfig = DEFAULT) {
-        private var cliEnv = proto.cliEnv
-        private var version = proto.version
-        private var moduleArgs = proto.moduleArgs
-        private var includeTestSubModules = proto.includeTestSubModules
-        private var moduleArgsMissingError = proto.moduleArgsMissingError
-        private var mountConflictError = proto.mountConflictError
-        private var appModuleInTestsError = proto.appModuleInTestsError
-        private var quiet = proto.quiet
+    /**
+     * Compiles an app, returns a `Gtv`. The returned value is the `Gtv` node to be put at the path `gtx.rell` in a
+     * blockchain configuration.
+     */
+    fun compileGtv(
+        config: Config,
+        sourceDir: File,
+        mainModule: String,
+    ): Gtv {
+        val cSourceDir = C_SourceDir.diskDir(sourceDir)
+        val rMainModule = R_ModuleName.of(mainModule)
+        return RellApiBaseInternal.compileGtv(config, cSourceDir, immListOf(rMainModule))
+    }
 
-        /** @see [RellCliCompileConfig.cliEnv] */
-        fun cliEnv(v: RellCliEnv) = apply { cliEnv = v }
+    class Config(
+        /** CLI environment used to print compilation messages and errors. */
+        val cliEnv: RellCliEnv,
+        /** Language version for backward compatibility (may affect some aspects of compilation). */
+        val version: R_LangVersion,
+        /** Module arguments. */
+        val moduleArgs: Map<R_ModuleName, Gtv>,
+        /** Submodules of all test modules are compiled in addition to the explicitly specified test modules, when `true`. */
+        val includeTestSubModules: Boolean,
+        /** Missing module arguments for a module (which defines `module_args`) causes compilation error, when `true`. */
+        val moduleArgsMissingError: Boolean,
+        /** Mount name conflicts cause compilation error, when `true`. */
+        val mountConflictError: Boolean,
+        /** Specifying a non-test module in the list of test modules causes an error, when `true`. */
+        val appModuleInTestsError: Boolean,
+        /** Do not print non-error compilation messages (warnings) if compilation succeeds, when `true`. */
+        val quiet: Boolean,
+    ) {
+        fun toBuilder() = Builder(this)
 
-        /** @see [RellCliCompileConfig.version] */
-        fun version(v: String) = apply { version = R_LangVersion.of(v) }
-
-        /** @see [RellCliCompileConfig.version] */
-        fun version(v: R_LangVersion) = apply { version = v }
-
-        /** @see [RellCliCompileConfig.moduleArgs] */
-        fun moduleArgs(v: Map<String, Map<String, Gtv>>) = moduleArgs0(
-            v.map { R_ModuleName.of(it.key) to GtvFactory.gtv(it.value) }.toImmMap()
-        )
-
-        /** @see [RellCliCompileConfig.moduleArgs] */
-        fun moduleArgs(vararg v: Pair<String, Map<String, Gtv>>) = moduleArgs(v.toMap())
-
-        /** @see [RellCliCompileConfig.moduleArgs] */
-        fun moduleArgs0(v: Map<R_ModuleName, Gtv>) = apply { moduleArgs = v.toImmMap() }
-
-        /** @see [RellCliCompileConfig.includeTestSubModules] */
-        fun includeTestSubModules(v: Boolean) = apply { includeTestSubModules = v }
-
-        /** @see [RellCliCompileConfig.moduleArgsMissingError] */
-        fun moduleArgsMissingError(v: Boolean) = apply { moduleArgsMissingError = v }
-
-        /** @see [RellCliCompileConfig.mountConflictError] */
-        fun mountConflictError(v: Boolean) = apply { mountConflictError = v }
-
-        /** @see [RellCliCompileConfig.appModuleInTestsError] */
-        fun appModuleInTestsError(v: Boolean) = apply { appModuleInTestsError = v }
-
-        /** @see [RellCliCompileConfig.quiet] */
-        fun quiet(v: Boolean) = apply { quiet = v }
-
-        fun build(): RellCliCompileConfig {
-            return RellCliCompileConfig(
-                cliEnv = cliEnv,
-                version = version,
-                moduleArgs = moduleArgs,
-                includeTestSubModules = includeTestSubModules,
-                moduleArgsMissingError = moduleArgsMissingError,
-                mountConflictError = mountConflictError,
-                appModuleInTestsError = appModuleInTestsError,
-                quiet = quiet,
+        companion object {
+            val DEFAULT = Config(
+                cliEnv = MainRellCliEnv,
+                version = RellVersions.VERSION,
+                moduleArgs = immMapOf(),
+                includeTestSubModules = true,
+                moduleArgsMissingError = true,
+                mountConflictError = true,
+                appModuleInTestsError = true,
+                quiet = false,
             )
+        }
+
+        class Builder(proto: Config = DEFAULT) {
+            private var cliEnv = proto.cliEnv
+            private var version = proto.version
+            private var moduleArgs = proto.moduleArgs
+            private var includeTestSubModules = proto.includeTestSubModules
+            private var moduleArgsMissingError = proto.moduleArgsMissingError
+            private var mountConflictError = proto.mountConflictError
+            private var appModuleInTestsError = proto.appModuleInTestsError
+            private var quiet = proto.quiet
+
+            /** @see [Config.cliEnv] */
+            fun cliEnv(v: RellCliEnv) = apply { cliEnv = v }
+
+            /** @see [Config.version] */
+            fun version(v: String) = apply { version = R_LangVersion.of(v) }
+
+            /** @see [Config.version] */
+            fun version(v: R_LangVersion) = apply { version = v }
+
+            /** @see [Config.moduleArgs] */
+            fun moduleArgs(v: Map<String, Map<String, Gtv>>) = moduleArgs0(
+                v.map { R_ModuleName.of(it.key) to GtvFactory.gtv(it.value) }.toImmMap()
+            )
+
+            /** @see [Config.moduleArgs] */
+            fun moduleArgs(vararg v: Pair<String, Map<String, Gtv>>) = moduleArgs(v.toMap())
+
+            /** @see [Config.moduleArgs] */
+            fun moduleArgs0(v: Map<R_ModuleName, Gtv>) = apply { moduleArgs = v.toImmMap() }
+
+            /** @see [Config.includeTestSubModules] */
+            fun includeTestSubModules(v: Boolean) = apply { includeTestSubModules = v }
+
+            /** @see [Config.moduleArgsMissingError] */
+            fun moduleArgsMissingError(v: Boolean) = apply { moduleArgsMissingError = v }
+
+            /** @see [Config.mountConflictError] */
+            fun mountConflictError(v: Boolean) = apply { mountConflictError = v }
+
+            /** @see [Config.appModuleInTestsError] */
+            fun appModuleInTestsError(v: Boolean) = apply { appModuleInTestsError = v }
+
+            /** @see [Config.quiet] */
+            fun quiet(v: Boolean) = apply { quiet = v }
+
+            fun build(): Config {
+                return Config(
+                    cliEnv = cliEnv,
+                    version = version,
+                    moduleArgs = moduleArgs,
+                    includeTestSubModules = includeTestSubModules,
+                    moduleArgsMissingError = moduleArgsMissingError,
+                    mountConflictError = mountConflictError,
+                    appModuleInTestsError = appModuleInTestsError,
+                    quiet = quiet,
+                )
+            }
         }
     }
 }
 
-class RellCliCompilationResult(
+class RellApiCompilationResult(
     val cRes: C_CompilationResult,
     val moduleArgs: Map<R_ModuleName, Rt_Value>,
 )
 
-object RellCliInternalBaseApi {
+object RellApiBaseInternal {
     fun compileApp(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         options: C_CompilerOptions,
         sourceDir: C_SourceDir,
         appModules: List<R_ModuleName>?,
         testModules: List<R_ModuleName>,
-    ): Pair<RellCliCompilationResult, R_App> {
+    ): Pair<RellApiCompilationResult, R_App> {
         return wrapCompilation(config) {
             compileApp0(config, options, sourceDir, appModules, testModules)
         }
     }
 
     fun compileApp0(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         options: C_CompilerOptions,
         sourceDir: C_SourceDir,
         appModules: List<R_ModuleName>?,
         testModules: List<R_ModuleName>,
-    ): RellCliCompilationResult {
+    ): RellApiCompilationResult {
         val modSel = makeCompilerModuleSelection(config, appModules, testModules)
         val cRes = C_Compiler.compile(sourceDir, modSel, options)
 
@@ -148,11 +197,11 @@ object RellCliInternalBaseApi {
             immMapOf()
         }
 
-        return RellCliCompilationResult(cRes, moduleArgs)
+        return RellApiCompilationResult(cRes, moduleArgs)
     }
 
     fun compileGtv(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         sourceDir: C_SourceDir,
         modules: List<R_ModuleName>?,
     ): Gtv {
@@ -161,7 +210,7 @@ object RellCliInternalBaseApi {
     }
 
     fun compileGtvEx(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         sourceDir: C_SourceDir,
         modules: List<R_ModuleName>?,
     ): Pair<Gtv, RellGtxModuleApp> {
@@ -178,7 +227,7 @@ object RellCliInternalBaseApi {
     }
 
     fun compileGtv0(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         sourceDir: C_SourceDir,
         modules: List<R_ModuleName>,
         files: List<C_SourcePath>,
@@ -200,7 +249,7 @@ object RellCliInternalBaseApi {
         return GtvFactory.gtv(map.toImmMap())
     }
 
-    fun makeCompilerOptions(config: RellCliCompileConfig): C_CompilerOptions {
+    fun makeCompilerOptions(config: RellApiCompile.Config): C_CompilerOptions {
         return C_CompilerOptions.DEFAULT.toBuilder()
             .compatibility(config.version)
             .mountConflictError(config.mountConflictError)
@@ -209,7 +258,7 @@ object RellCliInternalBaseApi {
     }
 
     fun makeCompilerModuleSelection(
-        config: RellCliCompileConfig,
+        config: RellApiCompile.Config,
         appModules: List<R_ModuleName>?,
         testModules: List<R_ModuleName>,
     ): C_CompilerModuleSelection {
@@ -250,9 +299,9 @@ object RellCliInternalBaseApi {
     }
 
     fun wrapCompilation(
-        config: RellCliCompileConfig,
-        code: () -> RellCliCompilationResult,
-    ): Pair<RellCliCompilationResult, R_App> {
+        config: RellApiCompile.Config,
+        code: () -> RellApiCompilationResult,
+    ): Pair<RellApiCompilationResult, R_App> {
         val cliEnv = config.cliEnv
         val res = catchCommonError {
             code()

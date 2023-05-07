@@ -28,10 +28,10 @@ import net.postchain.rell.lib.test.Rt_TestBlockValue
 import net.postchain.rell.model.R_ModuleName
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.runtime.*
+import net.postchain.rell.utils.cli.RellApiBaseInternal
+import net.postchain.rell.utils.cli.RellApiCompile
 import net.postchain.rell.utils.cli.RellApiGtxUtils
-import net.postchain.rell.utils.cli.RellCliCompileConfig
 import net.postchain.rell.utils.cli.RellCliException
-import net.postchain.rell.utils.cli.RellCliInternalBaseApi
 import java.sql.Connection
 
 class Rt_PostchainUnitTestBlockRunner(
@@ -160,10 +160,10 @@ class Rt_StaticBlockRunnerStrategy(private val gtvConfig: Gtv): Rt_BlockRunnerSt
 }
 
 class Rt_DynamicBlockRunnerStrategy(
-        private val sourceDir: C_SourceDir,
-        private val keyPair: BytesKeyPair,
-        modules: List<R_ModuleName>?,
-        private val compileConfig: RellCliCompileConfig,
+    private val sourceDir: C_SourceDir,
+    private val keyPair: BytesKeyPair,
+    modules: List<R_ModuleName>?,
+    private val compileConfig: RellApiCompile.Config,
 ): Rt_BlockRunnerStrategy() {
     private val modules = modules?.toImmList()
 
@@ -188,7 +188,7 @@ class Rt_DynamicBlockRunnerStrategy(
     private fun createConfig(): Pair<Gtv, RellGtxModuleApp> {
         val pubKey0 = keyPair.pub.toByteArray()
         val template = RellApiGtxUtils.genBlockchainConfigTemplateNoRell(pubKey0)
-        val (rellNode, modApp) = RellCliInternalBaseApi.compileGtvEx(compileConfig, sourceDir, modules)
+        val (rellNode, modApp) = RellApiBaseInternal.compileGtvEx(compileConfig, sourceDir, modules)
         val resNode = RellConfigGen.makeConfig(template, rellNode)
         return resNode to modApp
     }
