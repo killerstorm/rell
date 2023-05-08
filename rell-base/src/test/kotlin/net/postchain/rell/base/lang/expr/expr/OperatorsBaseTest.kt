@@ -905,6 +905,11 @@ abstract class OperatorsBaseTest: BaseResourcefulTest() {
         chkExpr("#0.to_base64()", "text[yv66vt6tvu8=]", vBytes("cafebabedeadbeef"))
     }
 
+    @Test fun testLibTextUpperCase() {
+        chkExpr("#0.upper_case()", "text[\\u0407]", vText("ї"))
+        chkExpr("#0.lower_case()", "text[\\u0457]", vText("Ї"))
+    }
+
     @Test fun testIf() {
         chkExpr("if (#0) 1 else 2", "int[1]", vBool(true))
         chkExpr("if (#0) 1 else 2", "int[2]", vBool(false))

@@ -64,7 +64,7 @@ object SqlTestUtils {
         return "$url$sep$name=$value"
     }
 
-    private fun readDbProperties(): DbConnProps {
+    fun readDbProperties(): DbConnProps {
         val config = loadProperties("/rell-db-config.properties")
         val url = System.getenv("POSTCHAIN_DB_URL") ?: config.getProperty("database.url")
         val user = System.getenv("POSTGRES_USER") ?: config.getProperty("database.username")
@@ -80,7 +80,7 @@ object SqlTestUtils {
         return props
     }
 
-    private data class DbConnProps(val url: String, val user: String, val password: String)
+    data class DbConnProps(val url: String, val user: String, val password: String)
 
     private var freeDiskSpace = true
 

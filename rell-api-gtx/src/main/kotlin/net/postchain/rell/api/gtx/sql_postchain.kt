@@ -5,6 +5,7 @@
 package net.postchain.rell.api.gtx
 
 import net.postchain.base.BaseEContext
+import net.postchain.base.data.DatabaseAccess
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.base.withReadConnection
@@ -22,6 +23,12 @@ class PostchainStorageSqlManager(private val storage: Storage, logging: Boolean)
     override val hasConnection = true
 
     private val conLogger = SqlConnectionLogger(logging)
+
+    init {
+        storage.withReadConnection { ctx ->
+            DatabaseAccess.of(ctx).checkCollation(ctx.conn, suppressError = false)
+        }
+    }
 
     override fun <T> execute0(tx: Boolean, code: (SqlExecutor) -> T): T {
         val res = if (tx) {
