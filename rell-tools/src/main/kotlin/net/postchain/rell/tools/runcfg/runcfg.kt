@@ -6,6 +6,7 @@ package net.postchain.rell.tools.runcfg
 
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvEncoder
+import net.postchain.gtv.builder.GtvBuilder
 import net.postchain.rell.api.base.MainRellCliEnv
 import net.postchain.rell.api.base.RellCliEnv
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
@@ -74,7 +75,7 @@ class Rcfg_App(
         val addDefaults: Boolean
 )
 
-class Rcfg_ChainConfigGtv(val path: List<String>, val src: String?, val gtv: Rcfg_Gtv?)
+class Rcfg_ChainConfigGtv(val path: List<String>, val src: String?, val gtv: GtvBuilder.GtvNode?)
 
 class RellRunConfigParams(
         val sourceDir: C_SourceDir,
