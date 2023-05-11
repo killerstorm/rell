@@ -90,7 +90,7 @@ class Rt_RellVersion private constructor(
 
         private fun getBuildProperties(): Map<String, String>? {
             try {
-                val url = Resources.getResource(Rt_Utils.javaClass, "/rell-tools-maven.properties")
+                val url = Resources.getResource(Rt_Utils.javaClass, "/rell-base-maven.properties")
                 val text = Resources.toString(url, Charsets.UTF_8)
                 val props = Properties()
                 props.load(StringReader(text))

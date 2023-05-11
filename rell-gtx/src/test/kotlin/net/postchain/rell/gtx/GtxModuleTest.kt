@@ -7,11 +7,13 @@ package net.postchain.rell.gtx
 import net.postchain.common.exception.UserMistake
 import net.postchain.gtv.GtvInteger
 import net.postchain.gtx.NON_STRICT_QUERY_ARGUMENT
+import net.postchain.rell.base.testutils.RellTestUtils
 import net.postchain.rell.base.testutils.SqlTestUtils
 import net.postchain.rell.gtx.testutils.BaseGtxTest
 import net.postchain.rell.gtx.testutils.RellGtxTester
 import org.junit.Test
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class GtxModuleTest: BaseGtxTest() {
     private val tablePrefix = "c995511."
@@ -188,5 +190,15 @@ class GtxModuleTest: BaseGtxTest() {
 
         chkCallQuery("q", mapOf("x" to GtvInteger(123)), "123")
         chkCallQuery("q", mapOf("x" to GtvInteger(123), NON_STRICT_QUERY_ARGUMENT to GtvInteger(1)), "123")
+    }
+
+    @Test fun testRellGetRellVersion() {
+        chkCallQuery("rell.get_rell_version", mapOf(), "'${RellTestUtils.RELL_VER}'")
+    }
+
+    // Doesn't work in IntelliJ - needs a Maven build (to create rell-base-maven.properties).
+    /*@Test*/ fun testRellGetBuild() {
+        val actual = tst.callQuery("rell.get_build", mapOf())
+        assertTrue(actual.startsWith("'rell: ${RellTestUtils.RELL_VER}"), actual)
     }
 }
