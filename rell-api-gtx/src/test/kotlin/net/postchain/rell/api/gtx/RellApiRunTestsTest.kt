@@ -14,7 +14,7 @@ import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.testutils.Rt_TestPrinter
 import net.postchain.rell.base.testutils.SqlTestUtils
 import net.postchain.rell.base.utils.toImmList
-import kotlin.test.Test
+import org.junit.Test
 import kotlin.test.assertEquals
 
 class RellApiRunTestsTest: BaseRellApiTest() {
