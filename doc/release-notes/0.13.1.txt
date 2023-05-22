@@ -49,3 +49,13 @@ Returns the list of events emitted during the last block execution.
 Checks that the list of events emitted during the last block execution is the same as the expected list. Example:
 
     assert_events(('Foo', (123).to_gtv()), ('Bar', (456).to_gtv()));
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Library: error message check for assert_fails() and run_must_fail() changed from equals to contains
+
+Changed handling of the expected error message passed to functions:
+
+- run_must_fail() of types rell.test.block, rell.test.tx and rell.test.op
+- global function assert_fails()
+
+Now the actual error message must contain the expected message, while in the old version they must have been equal.

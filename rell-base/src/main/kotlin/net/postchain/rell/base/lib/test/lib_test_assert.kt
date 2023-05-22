@@ -62,6 +62,14 @@ object C_Lib_Test_Assert {
             throw Rt_AssertError.exception(code, "expected <${expected.str()}> but was <${actual.str()}>")
         }
     }
+
+    fun assertErrorMessage(fn: String, expected: String?, actual: String) {
+        if (expected != null && !actual.contains(expected)) {
+            val code = "$fn:mismatch:[$expected]:[$actual]"
+            val msg = "expected to contain <$expected> but was <$actual>"
+            throw Rt_AssertError.exception(code, msg)
+        }
+    }
 }
 
 private object R_Fns {
@@ -123,11 +131,7 @@ private object R_Fns {
             }
 
             val message = err.message()
-            if (expected != null && message != expected) {
-                val code = "assert_fails:mismatch:[$expected]:[$message]"
-                val msg = "expected <$expected> but was <$message>"
-                throw Rt_AssertError.exception(code, msg)
-            }
+            C_Lib_Test_Assert.assertErrorMessage("assert_fails", expected, message)
 
             return Rt_TestFailureValue(message)
         }

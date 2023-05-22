@@ -140,13 +140,7 @@ private class BlockCommonFunctions(
             ctx.appCtx.blockRunner.runBlock(ctx, block)
         } catch (e: Throwable) {
             val actual = e.message ?: ""
-            if (expected != null) {
-                if (actual != expected) {
-                    val code = "$runMustFailSimpleName:mismatch:[$expected]:[$actual]"
-                    val msg = "wrong error: expected <$expected> but was <$actual>"
-                    throw Rt_AssertError.exception(code, msg)
-                }
-            }
+            C_Lib_Test_Assert.assertErrorMessage(runMustFailSimpleName, expected, actual)
             return C_Lib_Test_Assert.failureValue(actual)
         }
         throw Rt_Exception.common("fn:$runMustFailFullName:nofail", "Transaction did not fail")

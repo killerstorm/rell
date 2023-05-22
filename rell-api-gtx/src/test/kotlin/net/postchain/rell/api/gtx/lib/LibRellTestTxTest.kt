@@ -436,6 +436,9 @@ class LibRellTestTxTest: BaseRellTest(false) {
         repl.chk("foo(123).run_must_fail('x is negative: -1');", "rt_err:fn:rell.test.op.run_must_fail:nofail")
         repl.chk("foo(-1).run_must_fail('x is negative: -1');", "x is negative: -1")
         repl.chk("foo(-1).run_must_fail('x is negative: -2');", "asrt_err:run_must_fail:mismatch:[x is negative: -2]:[x is negative: -1]")
+        repl.chk("foo(-1).run_must_fail('x is negative');", "x is negative: -1")
+        repl.chk("foo(-1).run_must_fail('negative');", "x is negative: -1")
+        repl.chk("foo(-1).run_must_fail('positive');", "asrt_err:run_must_fail:mismatch:[positive]:[x is negative: -1]")
     }
 
     @Test fun testRunMustFailResult() {

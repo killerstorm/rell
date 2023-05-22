@@ -288,7 +288,11 @@ class LibRellTestAssertTest: BaseRellTest(false) {
         chkAssert("assert_fails(json('', *))", "int[0]")
         chkAssert("assert_fails(json('{}', *))", "asrt_err:assert_fails:no_fail:fn[json(text[{}])]")
         chkAssert("assert_fails('Bad JSON: ', json('', *))", "int[0]")
+
         chkAssert("assert_fails('error', json('', *))", "asrt_err:assert_fails:mismatch:[error]:[Bad JSON: ]")
+        chkAssert("assert_fails('Bad ', json('', *))", "int[0]")
+        chkAssert("assert_fails('JSON', json('', *))", "int[0]")
+        chkAssert("assert_fails('json', json('', *))", "asrt_err:assert_fails:mismatch:[json]:[Bad JSON: ]")
     }
 
     @Test fun testAssertFailsRequire() {
