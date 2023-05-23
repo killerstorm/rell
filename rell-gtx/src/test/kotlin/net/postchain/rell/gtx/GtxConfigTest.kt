@@ -86,7 +86,6 @@ class GtxConfigTest: BaseGtxTest() {
         chkVersion("0.11.0", "OK")
         chkVersion("0.12.0", "OK")
         chkVersion("0.13.0", "OK")
-        chkVersion("0.13.1", "OK")
     }
 
     @Test fun testSourcesWithVersionOutOfRange() {
@@ -97,6 +96,7 @@ class GtxConfigTest: BaseGtxTest() {
         chkVersion("0.10.12", "$msg: 0.10.12")
         chkVersion("0.11.1", "$msg: 0.11.1")
         chkVersion("0.12.1", "$msg: 0.12.1")
+        chkVersion("0.13.1", "$msg: 0.13.1")
         chkVersion("0.13.2", "$msg: 0.13.2")
         chkVersion("0.14.0", "$msg: 0.14.0")
         chkVersion("1.0.0", "$msg: 1.0.0")
