@@ -14,7 +14,7 @@ import net.postchain.rell.base.utils.Bytes32
 import net.postchain.rell.base.utils.PostchainGtvUtils
 
 object PostchainBaseUtils {
-    val DATABASE_VERSION = 6
+    val DATABASE_VERSION = 7
 
     fun calcBlockchainRid(config: Gtv): Bytes32 {
         val hash = PostchainGtvUtils.merkleHash(config)

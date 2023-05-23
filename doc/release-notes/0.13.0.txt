@@ -1,4 +1,4 @@
-RELEASE NOTES 0.13.1 (2023-??-??)
+RELEASE NOTES 0.13.0 (2023-05-23)
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 1. Library: function try_call()
@@ -11,7 +11,7 @@ Calls the function, returns the result on success, or "null" on failure.
 
     try_call(f: ()->unit): boolean
 
-Same as the previous, but for functions that return unit: returns "true" on success or "false" on failure.
+Same as the previous, but for functions that return "unit": returns "true" on success or "false" on failure.
 
     try_call(f: ()->T, fallback: T): T
 
@@ -31,7 +31,7 @@ New function:
 
     gtv.from_bytes_or_null(byte_array): gtv?
 
-Same as gtv.from_bytes(byte_array), but returns null if the byte array is not a valid gtv, instead of throwing an
+Same as gtv.from_bytes(byte_array), but returns "null" if the byte array is not a valid gtv, instead of throwing an
 exception.
 
 @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
