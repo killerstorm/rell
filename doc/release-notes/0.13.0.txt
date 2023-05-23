@@ -1,0 +1,61 @@
+RELEASE NOTES 0.13.0 (2023-05-23)
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+1. Library: function try_call()
+
+Function "try_call" catches exceptions thrown by a function and returns a fallback value.
+
+    try_call(f: ()->T): T?
+
+Calls the function, returns the result on success, or "null" on failure.
+
+    try_call(f: ()->unit): boolean
+
+Same as the previous, but for functions that return "unit": returns "true" on success or "false" on failure.
+
+    try_call(f: ()->T, fallback: T): T
+
+Calls the function, returns the result on success or the fallback value on failure. The fallback expression is
+evaluated only when the function fails.
+
+Examples:
+
+    val int_or_null = try_call(integer.from_hex(s, *));
+    val int_or_default = try_call(integer.from_hex(s, *), -1);
+    val l = try_call(list<integer>.from_gtv(my_gtv, *));
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Library: function gtv.from_bytes_or_null()
+
+New function:
+
+    gtv.from_bytes_or_null(byte_array): gtv?
+
+Same as gtv.from_bytes(byte_array), but returns "null" if the byte array is not a valid gtv, instead of throwing an
+exception.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+3. Library: functions assert_events() and rell.test.get_events() for unit tests
+
+New functions to test the op_context.emit_event() function:
+
+    rell.test.get_events(): list<(text,gtv)>
+
+Returns the list of events emitted during the last block execution.
+
+    assert_events(expected: (text,gtv)...)
+    rell.test.assert_events(expected: (text,gtv)...)
+
+Checks that the list of events emitted during the last block execution is the same as the expected list. Example:
+
+    assert_events(('Foo', (123).to_gtv()), ('Bar', (456).to_gtv()));
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Library: error message check for assert_fails() and run_must_fail() changed from equals to contains
+
+Changed handling of the expected error message passed to functions:
+
+- run_must_fail() of types rell.test.block, rell.test.tx and rell.test.op
+- global function assert_fails()
+
+Now the actual error message must contain the expected message, while in the old version they must have been equal.

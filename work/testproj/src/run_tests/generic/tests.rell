@@ -1,0 +1,31 @@
+@test module;
+
+import run_tests.generic;
+
+function test_get_app_name() {
+    val app = generic.get_app_name();
+    log('app =', app);
+    require(app in ['A', 'B'], app);
+}
+
+function test_add_user() {
+    assert_equals((generic.user @* {}).size(), 0);
+
+    val tx = rell.test.tx(generic.add_user('Bob'));
+    assert_equals((generic.user @* {}).size(), 0);
+
+    tx.run();
+    val users = generic.user @* {};
+    assert_equals(users.size(), 1);
+
+    val user = users[0];
+    assert_equals(user.name, 'Bob');
+    assert_equals(user.app, generic.get_app_name());
+    assert_true(user.app in ['A', 'B']);
+
+    log('user', user, 'name', user.name, 'app', user.app);
+}
+
+function test_fail() {
+    assert_equals(generic.get_app_name(), 'X');
+}

@@ -1,0 +1,5 @@
+module;
+
+operation event_op(x: integer) {
+    op_context.emit_event('foo', x.to_gtv());
+}

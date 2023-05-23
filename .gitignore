@@ -4,8 +4,7 @@
 META-INF
 /.run
 /target
+*/target
 /.attach_pid*
-/logs
 /out
 /postchain.pid
-/db.log

@@ -67,32 +67,18 @@ Launch a run config
 First, set up a PostgreSQL database and user:
 
 ```
-CREATE DATABASE "relltestdb" WITH TEMPLATE = template0 LC_COLLATE = 'C.UTF-8' LC_CTYPE = 'C.UTF-8' ENCODING 'UTF-8';
-CREATE USER "relltestuser" WITH PASSWORD '1234';
-GRANT ALL ON DATABASE "relltestdb" TO "relltestuser";
+CREATE USER "postchain";
+ALTER USER "postchain" WITH PASSWORD 'postchain';
+CREATE DATABASE "postchain" WITH TEMPLATE = template0 LC_COLLATE = 'C.UTF-8' LC_CTYPE = 'C.UTF-8' ENCODING 'UTF-8';
+GRANT ALL PRIVILEGES ON DATABASE "postchain" TO "postchain";
 ```
 
-By default, database connection configuration for tests is taken from file `config.properties` in the `postchain2` artifact. At the moment of writing:
-
-```
-database.url=jdbc:postgresql://localhost:5432/postchain
-database.username=postchain
-database.password=postchain
-```
-
-Those values can be overridden in a local file `src/test/resources/local-config.properties` (git-ignored). For example:
-
-```
-database.url=jdbc:postgresql://test-sql-server/relltestdb
-database.username=relltestuser
-database.password=1234
-
-include = config.properties
-```
+Database connection configuration for tests is taken from the file `src/test/resources/rell-db-config.properties`.
 
 **WARNING**: Unit tests drop all existing tables in the specified database, so make sure you specify a right database.
 
-To run unit tests in IntelliJ, select the `net.postchain.rell` package (or an individual tests class) and press Ctrl-Shift-F10 (or right click and choose "Run 'Tests in 'net.postchain.rell''").
+To run unit tests in IntelliJ, select the `net.postchain.rell` package (or an individual tests class) and press
+Ctrl-Shift-F10 (or right click and choose "Run 'Tests in 'net.postchain.rell''").
 
 ## Copyright & License information
 
