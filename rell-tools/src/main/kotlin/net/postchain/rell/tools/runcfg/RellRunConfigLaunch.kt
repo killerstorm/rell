@@ -114,7 +114,7 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): AppConfig {
             CHAIN_IID_TAG to chain.iid.toString(),
             BLOCKCHAIN_RID_TAG to brid.toHex()
         ) {
-            withReadWriteConnection(node.postchainContext.storage, chain.iid) { eContext: EContext ->
+            withReadWriteConnection(node.postchainContext.sharedStorage, chain.iid) { eContext: EContext ->
                 BlockchainApi.initializeBlockchain(eContext, brid, override = true, genesisConfig)
             }
             log.info { "Chain '${chain.name}' ID = ${chain.iid} RID = ${brid.toHex()}" }
@@ -126,7 +126,7 @@ private fun startPostchainNode(rellAppConf: RellPostAppCliConfig): AppConfig {
             for ((height, config) in chain.configs) {
                 if (height != 0L) {
                     log.info("Adding configuration for chain: ${chain.iid}, height: $height")
-                    withReadWriteConnection(node.postchainContext.storage, chain.iid) { eContext: EContext ->
+                    withReadWriteConnection(node.postchainContext.sharedStorage, chain.iid) { eContext: EContext ->
                         BlockchainApi.addConfiguration(eContext, height, override = true, config.gtvConfig)
                     }
                 }

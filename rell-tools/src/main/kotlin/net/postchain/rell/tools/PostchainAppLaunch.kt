@@ -72,7 +72,7 @@ private fun main0(args: RunPostchainAppArgs) {
         BLOCKCHAIN_RID_TAG to brid.toHex()
     ) {
         RellPostchainModuleEnvironment.set(pcEnv) {
-            withReadWriteConnection(node.postchainContext.storage, chainId) { eContext: EContext ->
+            withReadWriteConnection(node.postchainContext.sharedStorage, chainId) { eContext: EContext ->
                 BlockchainApi.initializeBlockchain(eContext, brid, override = true, bcConf)
             }
 
