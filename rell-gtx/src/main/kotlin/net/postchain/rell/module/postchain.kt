@@ -89,7 +89,7 @@ private class ErrorHandler(val printer: Rt_Printer, private val wrapCtErrors: Bo
 
         if (!ignore) {
             val fullMsg = Rt_Utils.appendStackTrace(headMsg, stack)
-            printer.print("ERROR $fullMsg")
+            printer.print(fullMsg)
         }
         ignore = false
 
