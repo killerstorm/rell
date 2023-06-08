@@ -26,7 +26,7 @@
     </modules>
 
     <properties>
-        <postchain.version>3.11.0-SNAPSHOT</postchain.version>
+        <postchain.version>3.10.1</postchain.version>
         <dist-classifier>dist</dist-classifier>
 
         <kotlin.version>1.8.10</kotlin.version>
