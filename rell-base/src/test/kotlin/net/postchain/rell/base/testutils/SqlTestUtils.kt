@@ -139,6 +139,7 @@ object SqlTestUtils {
                 tx_rid BYTEA NOT NULL,
                 tx_data BYTEA NOT NULL,
                 tx_hash BYTEA NOT NULL,
+                tx_number BIGINT NOT NULL UNIQUE,
                 block_iid bigint NOT NULL REFERENCES "$blocksTable"(block_iid),
                 UNIQUE (tx_rid)
             );

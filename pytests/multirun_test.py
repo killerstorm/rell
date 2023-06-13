@@ -151,7 +151,7 @@ def test__run_stack_trace__main_q():
 
         app.check_output([
             '<LOG:INFO>Rell - [stack_trace:main_q(stack_trace/main.rell:34)] main start',
-            '<LOG:INFO>Rell - ERROR Query \'main_q\' failed: x must be positive, but was 0',
+            '<LOG:INFO>Rell - Query \'main_q\' failed: x must be positive, but was 0',
             '\tat stack_trace:calc(stack_trace/main.rell:7)',
             '\tat stack_trace:calc(stack_trace/main.rell:11)',
             '\tat stack_trace:calc(stack_trace/main.rell:12)',
@@ -198,7 +198,7 @@ def test__run_stack_trace_entities():
             text = r'{"error":"[stack_trace.entities:ent_main(stack_trace/entities.rell:6)] Query \u0027ent_main_q\u0027 failed: No records found"}')
 
         app.check_output([
-            '<LOG:INFO>Rell - ERROR Query \'ent_main_q\' failed: No records found',
+            '<LOG:INFO>Rell - Query \'ent_main_q\' failed: No records found',
             '\tat stack_trace.entities:ent_main(stack_trace/entities.rell:6)',
             '\tat stack_trace.entities:ent_main_q(stack_trace/entities.rell:11)',
         ], ignore_rest = True)

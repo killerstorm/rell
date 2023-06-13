@@ -84,7 +84,7 @@ def test__run_stack_trace():
 
         app.check_output([
             '<LOG:INFO>Rell - [stack_trace:main_q(stack_trace/main.rell:34)] main start',
-            '<LOG:INFO>Rell - ERROR Query \'main_q\' failed: x must be positive, but was 0',
+            '<LOG:INFO>Rell - Query \'main_q\' failed: x must be positive, but was 0',
             '\tat stack_trace:calc(stack_trace/main.rell:7)',
             '\tat stack_trace:calc(stack_trace/main.rell:11)',
             '\tat stack_trace:calc(stack_trace/main.rell:12)',

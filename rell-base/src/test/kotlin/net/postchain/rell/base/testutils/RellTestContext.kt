@@ -31,8 +31,9 @@ class RellTestContext(
         }
 
         fun tx(iid: Long, block: Long, rid: String, data: String, hash: String): BlockBuilder {
-            val s = """INSERT INTO "c$chainId.transactions"(tx_iid,tx_rid,tx_data,tx_hash,block_iid)
-                VALUES($iid,E'\\x$rid',E'\\x$data',E'\\x$hash',$block);"""
+            val txNumber = list.size
+            val s = """INSERT INTO "c$chainId.transactions"(tx_iid,tx_rid,tx_data,tx_hash,tx_number,block_iid)
+                VALUES($iid,E'\\x$rid',E'\\x$data',E'\\x$hash',$txNumber,$block);"""
             list.add(s)
             return this
         }
