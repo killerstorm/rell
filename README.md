@@ -80,6 +80,16 @@ Database connection configuration for tests is taken from the file `src/test/res
 To run unit tests in IntelliJ, select the `net.postchain.rell` package (or an individual tests class) and press
 Ctrl-Shift-F10 (or right click and choose "Run 'Tests in 'net.postchain.rell''").
 
+## Generating rell grammar test snippets
+
+### Using IntelliJ:
+1. Create run configuration from `work/Test_snippets.run.xml` file
+2. Run it
+
+Archive will be created in `user.home` directory, with name `testsources-<RELL_VERSION>.zip`
+
+**Do not run snippet generation using Maven, currently it's not supported** 
+
 ## Copyright & License information
 
 Copyright (c) 2017-2021 ChromaWay AB. All rights reserved.

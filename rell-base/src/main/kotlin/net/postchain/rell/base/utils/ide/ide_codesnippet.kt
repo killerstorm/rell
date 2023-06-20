@@ -4,6 +4,8 @@
 
 package net.postchain.rell.base.utils.ide
 
+import com.fasterxml.jackson.core.util.DefaultIndenter
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.databind.ObjectMapper
 import net.postchain.rell.base.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
@@ -51,8 +53,9 @@ class IdeCodeSnippet(
     @JvmField val files = files.toImmMap()
     @JvmField val messages = messages.toImmList()
     @JvmField val parsing = parsing.toImmMap()
+    val serialized: String by lazy { serialize() }
 
-    fun serialize(): String {
+    private fun serialize(): String {
         val opts = options.toPojoMap()
 
         val modulesObj = mapOf(
@@ -74,10 +77,20 @@ class IdeCodeSnippet(
 
         val mapper = ObjectMapper()
         val res = mapper.writeValueAsString(obj)
+        deserialize(res) // Verification
         return res
     }
 
+    override fun equals(other: Any?) = this === other || (other is IdeCodeSnippet && other.serialized == serialized)
+
+    override fun hashCode() = serialized.hashCode()
+
     companion object {
+        @JvmStatic fun serialize(snippets: Collection<IdeCodeSnippet>): String {
+            val json = snippets.joinToString(separator = ",", prefix = "[", postfix = "]") { it.serialized }
+            return prettyFormatJson(json)
+        }
+
         @JvmStatic fun deserialize(s: String): IdeCodeSnippet {
             val mapper = ObjectMapper()
             val any = mapper.readValue(s, Any::class.java)
@@ -108,6 +121,13 @@ class IdeCodeSnippet(
             }.toMap()
 
             return IdeCodeSnippet(files, modules, options, messages, parsing)
+        }
+
+        private fun prettyFormatJson(json: String): String {
+            val mapper = ObjectMapper()
+            val prettyPrinter = DefaultPrettyPrinter().withArrayIndenter(DefaultIndenter("  ", "\n"))
+            val jsonObject = mapper.readValue(json, Any::class.java)
+            return mapper.writer().with(prettyPrinter).writeValueAsString(jsonObject)
         }
     }
 }

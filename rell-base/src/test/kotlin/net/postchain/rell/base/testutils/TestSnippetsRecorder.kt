@@ -18,11 +18,12 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
 object TestSnippetsRecorder {
-    private const val ENABLED = false
+    private val enabled = System.getProperty("test.snippets.recorder.enabled", "false").toBoolean()
+    private const val RELL_BASE_PACKAGE_NAME = "net.postchain.rell"
     private val SOURCES_FILE: String = System.getProperty("user.home") + "/testsources-${RellVersions.VERSION_STR}.zip"
 
     private val sync = Any()
-    private val snippets = mutableListOf<IdeCodeSnippet>()
+    private val snippets = mutableMapOf<String, MutableSet<IdeCodeSnippet>>()
     private var shutdownHookInstalled = false
 
     fun record(
@@ -31,14 +32,26 @@ object TestSnippetsRecorder {
         options: C_CompilerOptions,
         res: C_CompilationResult
     ) {
-        if (!ENABLED) return
+        if (!enabled) return
 
         val files = sourceDirToMap(sourceDir)
         val messages = res.messages.map { IdeSnippetMessage(it.pos.str(), it.type, it.code, it.text) }
         val parsing = makeParsing(files)
 
+        val snippetFilePath = populateSnippetFilePath();
         val snippet = IdeCodeSnippet(files, modules, options, messages, parsing)
-        addSnippet(snippet)
+        addSnippet(snippetFilePath, snippet)
+    }
+
+    private fun populateSnippetFilePath(): String {
+        val stackTraceElements = Thread.currentThread().stackTrace
+        val caller = stackTraceElements.findLast { it.className.startsWith(RELL_BASE_PACKAGE_NAME) }
+
+        return if (caller != null) {
+            "${caller.className}/${caller.methodName}.json"
+        } else {
+            throw IllegalStateException("Unable to find caller of TestSnippetsRecorder.record()")
+        }
     }
 
     private fun sourceDirToMap(sourceDir: C_SourceDir): Map<String, String> {
@@ -79,9 +92,9 @@ object TestSnippetsRecorder {
         return res.toImmMap()
     }
 
-    private fun addSnippet(snippet: IdeCodeSnippet) {
+    private fun addSnippet(snippetFilePath: String, snippet: IdeCodeSnippet) {
         synchronized (sync) {
-            snippets.add(snippet)
+            snippets.getOrPut(snippetFilePath) { mutableSetOf() }.add(snippet)
             if (!shutdownHookInstalled) {
                 val thread = Thread(TestSnippetsRecorder::saveSources)
                 thread.name = "SaveSources"
@@ -106,15 +119,15 @@ object TestSnippetsRecorder {
     private fun saveSourcesZipFile(f: File) {
         FileOutputStream(f).use { fout ->
             ZipOutputStream(fout).use { zout ->
-                for ((i, snippet) in snippets.withIndex()) {
-                    val str = snippet.serialize()
-                    IdeCodeSnippet.deserialize(str) // Verification
-                    zout.putNextEntry(ZipEntry(String.format("%04d.json", i)))
-                    zout.write(str.toByteArray())
+                for ((filePath, snippetSet) in snippets) {
+                    val serialized = IdeCodeSnippet.serialize(snippetSet)
+                    zout.putNextEntry(ZipEntry(filePath))
+                    zout.write(serialized.toByteArray())
                 }
             }
         }
-        printNotice(snippets.size, f)
+        val count = snippets.values.sumOf { it.size }
+        printNotice(count, f)
     }
 
     private fun printNotice(count: Int, f: File) {
