@@ -43,9 +43,9 @@ object RellApiBaseUtils {
             if (errCnt == 0) {
                 cliEnv.error(errMsg("Compilation failed"))
             }
-            throw RellCliExitException(1, "Compilation failed")
+            throw RellCliExitException(1, "Compilation failed: ${res.errors.joinToString("\n") { it.text }}")
         } else if (errCnt > 0) {
-            throw RellCliExitException(1, "Compilation failed")
+            throw RellCliExitException(1, "Compilation failed: ${res.errors.joinToString("\n") { it.text }}")
         }
 
         return app
