@@ -43,9 +43,9 @@ object RellApiBaseUtils {
             if (errCnt == 0) {
                 cliEnv.error(errMsg("Compilation failed"))
             }
-            throw RellCliExitException(1, "Compilation failed: ${res.errors.joinToString("\n") { it.text }}")
+            throw RellCliCompileException(res.errors.joinToString("\n") { it.text })
         } else if (errCnt > 0) {
-            throw RellCliExitException(1, "Compilation failed: ${res.errors.joinToString("\n") { it.text }}")
+            throw RellCliCompileException(res.errors.joinToString("\n") { it.text })
         }
 
         return app
@@ -83,7 +83,8 @@ object RellApiBaseUtils {
 
 abstract class RellCliException(msg: String): RuntimeException(msg)
 class RellCliBasicException(msg: String): RellCliException(msg)
-class RellCliExitException(val code: Int, msg: String = "exit $code"): RellCliException(msg)
+open class RellCliExitException(val code: Int, msg: String = "exit $code"): RellCliException(msg)
+class RellCliCompileException(val error: String): RellCliExitException(1, "Compilation failed: $error")
 
 class RellCliTarget(val sourcePath: File, val sourceDir: C_SourceDir, val modules: List<R_ModuleName>)
 
