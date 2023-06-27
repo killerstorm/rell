@@ -7,6 +7,7 @@ package net.postchain.rell.api.base
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.base.compiler.base.core.C_CompilationResult
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.base.compiler.base.utils.C_Message
 import net.postchain.rell.base.compiler.base.utils.C_MessageType
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.model.R_App
@@ -43,9 +44,9 @@ object RellApiBaseUtils {
             if (errCnt == 0) {
                 cliEnv.error(errMsg("Compilation failed"))
             }
-            throw RellCliCompileException(res.errors.joinToString("\n") { it.text })
+            throw RellCliCompileException(res.errors)
         } else if (errCnt > 0) {
-            throw RellCliCompileException(res.errors.joinToString("\n") { it.text })
+            throw RellCliCompileException(res.errors)
         }
 
         return app
@@ -83,8 +84,8 @@ object RellApiBaseUtils {
 
 abstract class RellCliException(msg: String): RuntimeException(msg)
 class RellCliBasicException(msg: String): RellCliException(msg)
-open class RellCliExitException(val code: Int, msg: String = "exit $code"): RellCliException(msg)
-class RellCliCompileException(val error: String): RellCliExitException(1, "Compilation failed: $error")
+class RellCliExitException(val code: Int, msg: String = "exit $code"): RellCliException(msg)
+class RellCliCompileException(val errors: List<C_Message>): RellCliException("Compilation failed: $errors")
 
 class RellCliTarget(val sourcePath: File, val sourceDir: C_SourceDir, val modules: List<R_ModuleName>)
 

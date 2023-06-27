@@ -6,6 +6,7 @@ package net.postchain.rell.tools
 
 import net.postchain.gtv.GtvDecoder
 import net.postchain.rell.api.base.RellCliBasicException
+import net.postchain.rell.api.base.RellCliCompileException
 import net.postchain.rell.api.base.RellCliExitException
 import net.postchain.rell.api.base.testutils.TestRellCliEnv
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
@@ -421,7 +422,7 @@ class RunConfigGenTest {
         """))
     }
 
-    @Test(expected = RellCliExitException::class)
+    @Test(expected = RellCliCompileException::class)
     fun testCompilationError() {
         val sourceFiles = mapOf(
                 "app.rell" to "module; struct foo { x: unknown; }"
