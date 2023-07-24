@@ -12,8 +12,8 @@ import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.compiler.vexpr.*
-import net.postchain.rell.base.lib.type.C_Lib_Type_Any
-import net.postchain.rell.base.lib.type.C_Lib_Type_Decimal
+import net.postchain.rell.base.lib.type.Lib_Type_Any
+import net.postchain.rell.base.lib.type.Lib_Type_Decimal
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.model.stmt.R_UpdateStatementWhat
@@ -376,7 +376,7 @@ sealed class C_BinOp_EqNe(private val eq: Boolean): C_BinOp_Common() {
         fun adaptOperands(operands: List<V_Expr>): List<V_Expr>? {
             val hasNull = operands.any { it.type == R_NullType }
             return if (hasNull) {
-                operands.map { it.asNullable() }
+                operands.map { it.asNullable().unwrap() }
             } else {
                 null
             }
@@ -486,7 +486,7 @@ object C_BinOp_Plus: C_BinOp_Common() {
 
     private fun adaptToText(ctx: C_ExprContext, vExpr: V_Expr): V_Expr {
         val type = vExpr.type
-        val rFn: R_SysFunction = C_Lib_Type_Any.ToText_R
+        val rFn: R_SysFunction = Lib_Type_Any.ToText_R
         val dbFn = getDbToStringFunction(type)
 
         val resType: R_Type = R_TextType
@@ -500,9 +500,9 @@ object C_BinOp_Plus: C_BinOp_Common() {
 
     private fun getDbToStringFunction(type: R_Type): Db_SysFunction? {
         return when (type) {
-            R_BooleanType, R_IntegerType, R_BigIntegerType, R_RowidType, R_JsonType -> C_Lib_Type_Any.ToText_Db
-            R_DecimalType -> C_Lib_Type_Decimal.ToText_Db
-            is R_EntityType -> C_Lib_Type_Any.ToText_Db
+            R_BooleanType, R_IntegerType, R_BigIntegerType, R_RowidType, R_JsonType -> Lib_Type_Any.ToText_Db
+            R_DecimalType -> Lib_Type_Decimal.ToText_Db
+            is R_EntityType -> Lib_Type_Any.ToText_Db
             else -> null
         }
     }
@@ -672,7 +672,7 @@ class C_BinOp_In(private val not: Boolean): C_BinOp() {
 
 object C_BinOp_Elvis: C_BinOp() {
     override fun compile(ctx: C_ExprContext, left: V_Expr, right: V_Expr): V_Expr? {
-        val left2 = left.asNullable()
+        val left2 = left.asNullable().unwrap()
         return compile0(ctx, left2, right)
     }
 

@@ -5,7 +5,6 @@
 package net.postchain.rell.api.gtx
 
 import net.postchain.StorageBuilder
-import net.postchain.base.data.DatabaseAccess
 import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.Gtv

@@ -10,6 +10,7 @@ import net.postchain.rell.base.compiler.base.core.C_CompilationResult
 import net.postchain.rell.base.compiler.base.core.C_Compiler
 import net.postchain.rell.base.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.base.compiler.base.lib.C_LibModule
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Message
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
@@ -36,19 +37,20 @@ object RellTestUtils {
     }
 
     fun processApp(
-            sourceDir: C_SourceDir,
-            errPos: Boolean = false,
-            options: C_CompilerOptions = DEFAULT_COMPILER_OPTIONS,
-            outMessages: MutableList<C_Message>? = null,
-            modules: List<R_ModuleName> = listOf(R_ModuleName.EMPTY),
-            testModules: List<R_ModuleName> = listOf(),
-            processor: (T_App) -> String
+        sourceDir: C_SourceDir,
+        errPos: Boolean = false,
+        options: C_CompilerOptions = DEFAULT_COMPILER_OPTIONS,
+        outMessages: MutableList<C_Message>? = null,
+        modules: List<R_ModuleName> = listOf(R_ModuleName.EMPTY),
+        testModules: List<R_ModuleName> = listOf(),
+        extraLibMod: C_LibModule? = null,
+        processor: (T_App) -> String,
     ): String {
         val modSel = C_CompilerModuleSelection(modules, testModules)
-        val cRes = compileApp(sourceDir, modSel, options)
+        val cRes = compileApp(sourceDir, modSel, options, extraLibMod)
         outMessages?.addAll(cRes.messages)
 
-        if (!cRes.errors.isEmpty()) {
+        if (cRes.errors.isNotEmpty()) {
             val s = errsToString(cRes.errors, errPos)
             return "ct_err:$s"
         }
@@ -114,7 +116,10 @@ object RellTestUtils {
 
     fun rtErrToResult(e: Throwable): TestCallResult {
         return when (e) {
-            is Rt_Exception -> TestCallResult(e.err.code(), e.info.stack)
+            is Rt_Exception -> when (e.err) {
+                is Rt_ValueTypeError -> throw e // Internal error, test shall crash.
+                else -> TestCallResult(e.err.code(), e.info.stack)
+            }
             else -> throw e
         }
     }
@@ -194,11 +199,12 @@ object RellTestUtils {
     }
 
     fun compileApp(
-            sourceDir: C_SourceDir,
-            modSel: C_CompilerModuleSelection,
-            options: C_CompilerOptions
+        sourceDir: C_SourceDir,
+        modSel: C_CompilerModuleSelection,
+        options: C_CompilerOptions,
+        extraMod: C_LibModule? = null,
     ): C_CompilationResult {
-        val res = C_Compiler.compile(sourceDir, modSel, options)
+        val res = C_Compiler.compileInternal(sourceDir, modSel, options, extraMod)
         TestSnippetsRecorder.record(sourceDir, modSel, options, res)
         return res
     }

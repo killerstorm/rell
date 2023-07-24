@@ -7,13 +7,15 @@ package net.postchain.rell.base.testutils
 import net.postchain.gtv.Gtv
 import net.postchain.rell.base.compiler.base.utils.C_Message
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
-import net.postchain.rell.base.lib.C_Lib_OpContext
+import net.postchain.rell.base.lib.Lib_OpContext
 import net.postchain.rell.base.model.R_App
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.model.R_StackPos
 import net.postchain.rell.base.repl.NullReplInterpreterProjExt
 import net.postchain.rell.base.repl.ReplInterpreterProjExt
-import net.postchain.rell.base.runtime.*
+import net.postchain.rell.base.runtime.Rt_OpContext
+import net.postchain.rell.base.runtime.Rt_Printer
+import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.sql.NullSqlInitProjExt
 import net.postchain.rell.base.sql.SqlExecutor
@@ -92,9 +94,7 @@ class Rt_TestOpContext(
 
     override fun allOperations(): List<Rt_Value> {
         return allOperations.map { op ->
-            val name = Rt_TextValue(op.first)
-            val args = Rt_ListValue(C_Lib_OpContext.LIST_OF_GTV_TYPE, op.second.map { Rt_GtvValue(it) }.toMutableList())
-            Rt_StructValue(C_Lib_OpContext.GTX_OPERATION_STRUCT_TYPE, mutableListOf(name, args)) as Rt_Value
+            Lib_OpContext.gtxTransactionStructValue(op.first, op.second)
         }
     }
 

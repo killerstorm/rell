@@ -15,7 +15,7 @@ import net.postchain.rell.base.model.R_FrameBlock
 import net.postchain.rell.base.model.R_IdeName
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.model.expr.*
-import net.postchain.rell.base.model.stmt.R_ForIterator
+import net.postchain.rell.base.model.stmt.R_IterableAdapter
 import net.postchain.rell.base.utils.*
 
 class V_AtEntityExpr(
@@ -172,12 +172,12 @@ class V_AtExprExtras(private val limit: V_Expr?, private val offset: V_Expr?) {
     }
 }
 
-class V_ColAtFrom(private val rIterator: R_ForIterator, private val expr: V_Expr) {
+class V_ColAtFrom(private val rIterableAdapter: R_IterableAdapter, private val expr: V_Expr) {
     fun innerExprs(): List<V_Expr> = immListOf(expr)
 
     fun toRFrom(): R_ColAtFrom {
         val rExpr = expr.toRExpr()
-        return R_ColAtFrom(rIterator, rExpr)
+        return R_ColAtFrom(rIterableAdapter, rExpr)
     }
 }
 

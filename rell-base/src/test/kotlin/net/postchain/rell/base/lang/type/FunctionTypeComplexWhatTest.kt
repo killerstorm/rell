@@ -187,8 +187,8 @@ class FunctionTypeComplexWhatTest: BaseRellTest(false) {
         def("function f(i: integer) = if (i < 20) 'f:'+i else null;")
         initComplexWhat()
 
-        chk("data @* {} ( f(.i).replace('f',.t) )", "ct_err:expr_mem_null:replace")
-        chk("data @* {} ( f(.i).replace('f','Z') )", "ct_err:expr_mem_null:replace")
+        chk("data @* {} ( f(.i).replace('f',.t) )", "ct_err:expr_mem_null:text?:replace")
+        chk("data @* {} ( f(.i).replace('f','Z') )", "ct_err:expr_mem_null:text?:replace")
 
         chk("data @* {} ( f(.i)?.replace('f',.t) )", "list<text?>[text[A:11],null]")
         chk("data @* {} ( f(.i)?.replace('f','Z') )", "list<text?>[text[Z:11],null]")
@@ -203,7 +203,7 @@ class FunctionTypeComplexWhatTest: BaseRellTest(false) {
         def("function f(i: integer) = if (i < 20) 'f:'+i else null;")
         initComplexWhat()
 
-        chk("_type_of(data @ {} ( f(.i).replace('f',*) ))", "ct_err:expr_mem_null:replace")
+        chk("_type_of(data @ {} ( f(.i).replace('f',*) ))", "ct_err:expr_mem_null:text?:replace")
         chk("_type_of(data @ {} ( f(.i)?.replace('f',*) ))", "text[((text)->text)?]")
 
         chk("data @* {} ( f(.i)?.replace('f',*) )", "list<((text)->text)?>[fn[text.replace(text[f],*)],null]")

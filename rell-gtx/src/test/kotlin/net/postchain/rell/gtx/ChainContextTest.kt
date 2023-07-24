@@ -8,7 +8,7 @@ import net.postchain.rell.base.testutils.RellTestUtils
 import net.postchain.rell.gtx.testutils.BaseGtxTest
 import org.junit.Test
 
-class ChainContextTest : BaseGtxTest() {
+class ChainContextTest: BaseGtxTest() {
     @Test fun testRawConfig() {
         val ver = RellTestUtils.RELL_VER
 

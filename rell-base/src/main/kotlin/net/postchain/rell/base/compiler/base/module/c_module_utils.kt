@@ -207,7 +207,7 @@ private class C_ModuleDirTree(
 
         fun subDir(name: R_Name): DirNode? {
             return subNode(name, subDirs) {
-                val subModule = moduleName.child(name)
+                val subModule = moduleName.append(name)
                 val subPath = path.add(name.str)
                 val subExists = sourceDir.dir(subPath)
                 if (subExists) DirNode(subPath, subModule) else null
@@ -281,7 +281,7 @@ private class C_ModuleDirTree(
                 val rName = R_Name.ofOpt(dir)
                 if (rName == null || rName in subDirs) continue
 
-                val subModule = moduleName.child(rName)
+                val subModule = moduleName.append(rName)
                 val subPath = path.add(rName.str)
                 subDirs[rName] = DirNode(subPath, subModule)
             }
@@ -345,7 +345,7 @@ private class C_ModuleDirTree(
             val ast = astLazy
 
             return if (ast != null && ast.header == null) null else {
-                val moduleName = dirModuleName.child(rName)
+                val moduleName = dirModuleName.append(rName)
                 C_FileModuleSource(readerCtx.appCtx, moduleName, C_ParsedRellFile(path, idePath, ast))
             }
         }
@@ -445,7 +445,7 @@ class S_DefinitionContext private constructor(val fileCtx: S_FileContext, val na
     val moduleName = modCtx.moduleName
 
     fun namespace(path: C_RNamePath): S_DefinitionContext {
-        val subNamespacePath = namespacePath.child(path.parts)
+        val subNamespacePath = namespacePath.append(path.parts)
         return S_DefinitionContext(fileCtx, subNamespacePath)
     }
 

@@ -26,6 +26,7 @@ abstract class V_TypeValueMember(val type: R_Type) {
     abstract fun implicitAttrName(): C_Name?
     abstract fun ideInfo(): IdeSymbolInfo
     abstract fun vExprs(): List<V_Expr>
+    open fun postVarFacts(): C_VarFacts = C_VarFacts.andPostFacts(vExprs())
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
     open fun safeCallable() = true
 
@@ -62,7 +63,17 @@ class V_ValueMemberExpr(
 ): V_Expr(exprCtx, base.pos) {
     private val actualType = C_Utils.effectiveMemberType(member.type, safe)
 
-    override fun exprInfo0() = V_ExprInfo.simple(actualType, immListOf(base) + member.vExprs(), canBeDbExpr = member.canBeDbExpr())
+    override fun exprInfo0() = V_ExprInfo.simple(
+        actualType,
+        subExprs = immListOf(base) + member.vExprs(),
+        canBeDbExpr = member.canBeDbExpr(),
+    )
+
+    override fun varFacts0(): C_ExprVarFacts {
+        var postFacts = base.varFacts.postFacts
+        postFacts = postFacts.and(member.postVarFacts())
+        return C_ExprVarFacts.of(postFacts = postFacts)
+    }
 
     override fun implicitTargetAttrName(): R_Name? {
         val isAt = base.isAtExprItem()
@@ -117,13 +128,14 @@ class V_ValueMemberExpr(
 
     override fun member0(
         ctx: C_ExprContext,
+        selfType: R_Type,
         memberName: C_Name,
         memberValue: C_TypeValueMember,
         safe: Boolean,
         exprHint: C_ExprHint,
     ): C_ExprMember {
         val member2 = member.member(ctx, memberName, memberValue, safe, exprHint)
-        member2 ?: return super.member0(ctx, memberName, memberValue, safe, exprHint)
+        member2 ?: return super.member0(ctx, selfType, memberName, memberValue, safe, exprHint)
         val vExpr = V_ValueMemberExpr(ctx, base, member2, memberName.pos, safe)
         val cExpr = C_ValueExpr(vExpr)
         return C_ExprMember(cExpr, member2.ideInfo())

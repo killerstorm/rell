@@ -14,14 +14,11 @@ import net.postchain.rell.base.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.base.compiler.base.namespace.C_NamespacePropertyContext
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.compiler.vexpr.V_ConstantValueEvalContext
-import net.postchain.rell.base.lib.C_Lib_OpContext
+import net.postchain.rell.base.lib.Lib_OpContext
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.runtime.utils.toGtv
-import net.postchain.rell.base.utils.RellVersions
+import net.postchain.rell.base.utils.*
 import net.postchain.rell.base.utils.ide.*
-import net.postchain.rell.base.utils.immListOf
-import net.postchain.rell.base.utils.toImmList
-import net.postchain.rell.base.utils.toImmMap
 
 sealed class S_AttrHeader: S_Node() {
     abstract fun discoverVar(): R_Name
@@ -306,7 +303,7 @@ class S_EntityDefinition(
             return null
         }
 
-        val sysDefs = extChain?.sysDefs ?: ctx.modCtx.sysDefs
+        val sysDefs = extChain?.sysDefs?.common ?: ctx.modCtx.sysDefsCommon
         val rEntity = entGetter(sysDefs)
 
         val cDefBase = ctx.defBaseEx(cName, C_DefinitionType.ENTITY, IdeSymbolKind.DEF_ENTITY, extChain = extChain)
@@ -376,11 +373,11 @@ class S_EntityDefinition(
         val sysAttrs = mutableListOf<C_SysAttribute>()
 
         if (rEntity.flags.log) {
-            val sysDefs = extChain?.sysDefs ?: defCtx.modCtx.sysDefs
+            val sysDefs = extChain?.sysDefs?.common ?: defCtx.modCtx.sysDefsCommon
             val txType = sysDefs.transactionEntity.type
             val expr = if (extChain == null) {
                 val propCtx = C_NamespacePropertyContext(defCtx.initExprCtx)
-                C_Lib_OpContext.transactionRExpr(propCtx, cName.pos)
+                Lib_OpContext.transactionRExpr(propCtx, cName.pos)
             } else {
                 C_ExprUtils.errorRExpr(txType, "Trying to initialize transaction for external entity '${rEntity.appLevelName}'")
             }
@@ -405,9 +402,9 @@ class S_EntityDefinition(
     }
 
     companion object {
-        private val HEADER_ENTITIES = mutableMapOf(
-                C_Constants.BLOCK_ENTITY to { sysDefs: C_SystemDefs -> sysDefs.blockEntity },
-                C_Constants.TRANSACTION_ENTITY to { sysDefs: C_SystemDefs -> sysDefs.transactionEntity }
+        private val HEADER_ENTITIES: Map<String, (C_SystemDefsCommon) -> R_EntityDefinition> = immMapOf(
+                C_Constants.BLOCK_ENTITY to { sysDefs: C_SystemDefsCommon -> sysDefs.blockEntity },
+                C_Constants.TRANSACTION_ENTITY to { sysDefs: C_SystemDefsCommon -> sysDefs.transactionEntity }
         )
 
         private const val MAX_ENTITY_MOUNT_NAME_LEN = 60 // Postgres allows 63, minimal prefix is "c0.", i. e. 3 characters.
@@ -470,14 +467,14 @@ class S_ObjectDefinition(
         val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
         val rEntity = C_Utils.createEntity(
-                ctx.appCtx,
-                C_DefinitionType.OBJECT,
-                defBase,
-                cName.rName,
-                mountName,
-                entityFlags,
-                sqlMapping,
-                null
+            ctx.appCtx,
+            C_DefinitionType.OBJECT,
+            defBase,
+            cName.rName,
+            mountName,
+            entityFlags,
+            sqlMapping,
+            null,
         )
 
         val rObject = R_ObjectDefinition(defBase, rEntity)
@@ -659,13 +656,13 @@ class S_NamespaceDefinition(
             for (name in qualifiedName.parts) {
                 val nameHand = name.compile(ctx.symCtx)
 
-                val fullName = nsPath.fullName(nameHand.rName)
+                val fullName = nsPath.qualifiedName(nameHand.rName)
                 val ideId = ctx.fileCtx.addNamespaceName(nameHand, fullName)
                 val ideLink = IdeGlobalSymbolLink(IdeSymbolGlobalId(name.pos.idePath(), ideId))
                 val refIdeInfo = IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE, link = ideLink)
 
                 names.add(C_IdeName(nameHand.name, refIdeInfo))
-                nsPath = nsPath.child(nameHand.rName)
+                nsPath = nsPath.append(nameHand.rName)
             }
 
             C_IdeQualifiedName(names)

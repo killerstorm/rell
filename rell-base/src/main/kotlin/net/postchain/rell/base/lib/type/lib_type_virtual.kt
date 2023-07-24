@@ -4,24 +4,28 @@
 
 package net.postchain.rell.base.lib.type
 
-import net.postchain.rell.base.compiler.base.utils.C_SysFunction
-import net.postchain.rell.base.runtime.Rt_ByteArrayValue
-import net.postchain.rell.base.runtime.utils.Rt_Utils
-import net.postchain.rell.base.utils.PostchainGtvUtils
+import net.postchain.rell.base.compiler.ast.S_VirtualType
+import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 
-object C_Lib_Type_Virtual {
-    val ToFull = C_SysFunction.simple1 { a ->
+object Lib_Type_Virtual {
+    val ToFull = C_SysFunction.simple { a ->
         val virtual = a.asVirtual()
         val full = virtual.toFull()
         full
     }
 
-    val Hash = C_SysFunction.simple1(pure = true) { a ->
-        val virtual = a.asVirtual()
-        val gtv = virtual.gtv
-        val hash = Rt_Utils.wrapErr("fn:virtual:hash") {
-            PostchainGtvUtils.merkleHash(gtv)
+    val NAMESPACE = Ld_NamespaceDsl.make {
+        type("virtual", hidden = true) {
+            generic("T")
+
+            rType { t ->
+                S_VirtualType.virtualType(t)
+            }
+
+            function("to_full", result = "T") {
+                bodyFunction(ToFull)
+            }
         }
-        Rt_ByteArrayValue(hash)
     }
 }

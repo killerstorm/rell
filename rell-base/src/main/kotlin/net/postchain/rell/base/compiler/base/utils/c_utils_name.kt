@@ -4,6 +4,7 @@
 
 package net.postchain.rell.base.compiler.base.utils
 
+import net.postchain.rell.base.compiler.base.core.C_DefinitionPath
 import net.postchain.rell.base.compiler.base.core.C_QualifiedName
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_QualifiedName
@@ -83,25 +84,14 @@ class C_StringQualifiedName private constructor(parts: List<String>): C_GenericQ
     }
 }
 
-class C_RQualifiedName private constructor(parts: List<R_Name>): C_GenericQualifiedName<R_Name, C_RQualifiedName>(parts) {
-    override fun create(names: List<R_Name>) = C_RQualifiedName(names)
-
-    override fun checkName(name: R_Name) {
-        // Nothing to check.
-    }
-
-    companion object {
-        fun of(parts: List<R_Name>): C_RQualifiedName = ofNames0(parts) { C_RQualifiedName(it) }
-        fun of(name: R_Name): C_RQualifiedName = ofName0(name) { C_RQualifiedName(it) }
-    }
-}
-
 class C_RNamePath private constructor(parts: List<R_Name>) {
     val parts = parts.toImmList()
 
-    fun child(name: R_Name) = C_RNamePath(parts + name)
-    fun child(names: List<R_Name>) = of(parts + names)
-    fun fullName(name: R_Name): R_QualifiedName = R_QualifiedName(parts + name)
+    fun append(name: R_Name) = C_RNamePath(parts + name)
+    fun append(names: List<R_Name>) = of(parts + names)
+    fun qualifiedName(name: R_Name): R_QualifiedName = R_QualifiedName(parts + name)
+
+    fun toDefPath(): C_DefinitionPath = C_DefinitionPath("", parts.map { it.str })
 
     override fun equals(other: Any?) = other is C_RNamePath && parts == other.parts
     override fun hashCode() = parts.hashCode()
@@ -109,6 +99,7 @@ class C_RNamePath private constructor(parts: List<R_Name>) {
 
     companion object {
         val EMPTY = C_RNamePath(immListOf())
+        fun of(qualifiedName: R_QualifiedName): C_RNamePath = of(qualifiedName.parts)
         fun of(parts: List<R_Name>): C_RNamePath = if (parts.isEmpty()) EMPTY else C_RNamePath(parts)
     }
 }

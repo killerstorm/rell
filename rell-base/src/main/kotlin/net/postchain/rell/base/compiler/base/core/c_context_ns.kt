@@ -6,10 +6,11 @@ package net.postchain.rell.base.compiler.base.core
 
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.base.compiler.base.def.C_TypeDef
 import net.postchain.rell.base.compiler.base.expr.C_Expr
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.base.compiler.base.lib.C_LibUtils
+import net.postchain.rell.base.compiler.base.lib.C_TypeDef
 import net.postchain.rell.base.compiler.base.modifier.C_ModifierValue
 import net.postchain.rell.base.compiler.base.namespace.*
 import net.postchain.rell.base.compiler.base.utils.*
@@ -75,12 +76,21 @@ class C_DefinitionPath(private val module: String, path: List<String>) {
         return C_DefinitionName(module, qName)
     }
 
+    fun subName(name: R_QualifiedName): C_DefinitionName {
+        val qName = C_StringQualifiedName.of(path + name.parts.map { it.str })
+        return C_DefinitionName(module, qName)
+    }
+
     fun subPath(name: String): C_DefinitionPath {
         return C_DefinitionPath(module, path + name)
     }
 
     companion object {
         val ROOT = C_DefinitionPath(C_LibUtils.DEFAULT_MODULE_STR, immListOf())
+
+        fun make(module: String, vararg path: String): C_DefinitionPath {
+            return C_DefinitionPath(module, path.toList())
+        }
     }
 }
 

@@ -237,4 +237,58 @@ class KotlinTest {
         assertEquals("[123 x 2, 789, 456, 321, 987]", s.toString())
         assertEquals("[123 x 2, 789, 456, 321, 987]", s.toImmMultiset().toString())
     }
+
+    @Test fun testOverrideVal() {
+        val list = mutableListOf<String>()
+
+        abstract class Parent {
+            init { list.add("Parent.init.begin") }
+            abstract val foo: Int
+            init { list.add("Parent.init.end") }
+        }
+
+        class Child: Parent() {
+            init { list.add("Child.init.begin") }
+
+            override val foo: Int = let {
+                list.add("Child.foo")
+                123
+            }
+
+            init { list.add("Child.init.end") }
+        }
+
+        assertEquals("[]", list.toString())
+        val c = Child()
+        assertEquals("[Parent.init.begin, Parent.init.end, Child.init.begin, Child.foo, Child.init.end]", list.toString())
+
+        list.clear()
+        assertEquals("[]", list.toString())
+        assertEquals(123, c.foo)
+        assertEquals("[]", list.toString())
+
+        class Child2: Parent() {
+            init { list.add("Child2.init.begin") }
+
+            override val foo: Int
+                get() {
+                    list.add("Child2.foo")
+                    return 123
+                }
+
+            init { list.add("Child2.init.end") }
+        }
+
+        assertEquals("[]", list.toString())
+        val c2 = Child2()
+        assertEquals("[Parent.init.begin, Parent.init.end, Child2.init.begin, Child2.init.end]", list.toString())
+
+        list.clear()
+        assertEquals("[]", list.toString())
+        assertEquals(123, c2.foo)
+        assertEquals("[Child2.foo]", list.toString())
+
+        assertEquals(123, c2.foo)
+        assertEquals("[Child2.foo, Child2.foo]", list.toString())
+    }
 }

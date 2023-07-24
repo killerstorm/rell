@@ -54,7 +54,7 @@ class DeprecatedAnnotationTest: BaseRellTest(useSql = false) {
         def("@deprecated enum bar { a }")
         chk("foo.a", "foo[a]")
         chk("bar.a", "ct_err:deprecated:ENUM:bar")
-        chk("bar.b", "ct_err:[deprecated:ENUM:bar][unknown_name:[bar]:b]")
+        chk("bar.b", "ct_err:[deprecated:ENUM:bar][unknown_member:[bar]:b]")
         chk("bar.values()", "ct_err:deprecated:ENUM:bar")
         chk("bar.value(0)", "ct_err:deprecated:ENUM:bar")
         chk("bar.a.value", "ct_err:deprecated:ENUM:bar")
@@ -113,12 +113,13 @@ class DeprecatedAnnotationTest: BaseRellTest(useSql = false) {
         file("a.rell", "module; @deprecated namespace ns { function f() = 123; }")
         file("b.rell", "module; namespace ns { function g() = 456; }")
         chkCompile("import a.*; import b.*; function h() = ns.f();",
-            "ct_err:[deprecated:NAMESPACE:a:ns][name:ambig:ns:[NAMESPACE:a:ns,NAMESPACE:b:ns]]")
+            "ct_err:[deprecated:NAMESPACE:a:ns][namespace:ambig:ns:[NAMESPACE:a:ns,NAMESPACE:b:ns]]")
         chkCompile("import b.*; import a.*; function h() = ns.f();",
-            "ct_err:[name:ambig:ns:[NAMESPACE:b:ns,NAMESPACE:a:ns]][unknown_name:[b:ns]:f]")
+            "ct_err:[namespace:ambig:ns:[NAMESPACE:b:ns,NAMESPACE:a:ns]][unknown_name:[b:ns]:f]")
         chkCompile("import a.*; import b.*; function h() = ns.g();",
-            "ct_err:[deprecated:NAMESPACE:a:ns][name:ambig:ns:[NAMESPACE:a:ns,NAMESPACE:b:ns]][unknown_name:[a:ns]:g]")
-        chkCompile("import b.*; import a.*; function h() = ns.g();", "ct_err:name:ambig:ns:[NAMESPACE:b:ns,NAMESPACE:a:ns]")
+            "ct_err:[deprecated:NAMESPACE:a:ns][namespace:ambig:ns:[NAMESPACE:a:ns,NAMESPACE:b:ns]][unknown_name:[a:ns]:g]")
+        chkCompile("import b.*; import a.*; function h() = ns.g();",
+            "ct_err:namespace:ambig:ns:[NAMESPACE:b:ns,NAMESPACE:a:ns]")
     }
 
     @Test fun testDefObject() {

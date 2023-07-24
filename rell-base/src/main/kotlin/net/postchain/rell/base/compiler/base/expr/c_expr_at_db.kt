@@ -91,19 +91,21 @@ class C_AtFrom_Entities(
     override fun findMembers(name: R_Name): List<C_AtFromMember> {
         return entities.flatMap { atEntity ->
             val base = C_AtFromBase_Entity(atEntity)
-            atEntity.rEntity.type.getValueMembers(name).map { C_AtFromMember(base, it) }
+            val selfType = atEntity.rEntity.type
+            val members = innerExprCtx.typeMgr.getValueMembers(selfType, name)
+            members.map { C_AtFromMember(base, selfType, it) }
         }.toImmList()
     }
 
     override fun findImplicitAttributesByName(name: R_Name): List<C_AtFromImplicitAttr> {
         return findContextAttrs { rEntity ->
-            rEntity.type.getAtImplicitAttrs(name)
+            innerExprCtx.typeMgr.getAtImplicitAttrsByName(rEntity.type, name)
         }
     }
 
     override fun findImplicitAttributesByType(type: R_Type): List<C_AtFromImplicitAttr> {
         return findContextAttrs { rEntity ->
-            rEntity.type.getAtImplicitAttrs(type)
+            innerExprCtx.typeMgr.getAtImplicitAttrsByType(rEntity.type, type)
         }
     }
 
@@ -112,7 +114,7 @@ class C_AtFrom_Entities(
             .flatMap { entity ->
                 val base = C_AtFromBase_Entity(entity)
                 val members = getter(entity.rEntity)
-                members.map { C_AtFromImplicitAttr(base, it) }
+                members.map { C_AtFromImplicitAttr(base, entity.rEntity.type, it) }
             }.toImmList()
     }
 

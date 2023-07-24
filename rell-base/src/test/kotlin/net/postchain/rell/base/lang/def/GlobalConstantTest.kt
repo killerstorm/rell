@@ -336,24 +336,26 @@ class GlobalConstantTest: BaseRellTest(false) {
     }
 
     @Test fun testExprOpContext() {
-        chkConstErr("op_context.last_block_time", "ct_err:[def:const:bad_expr:0::X:fn:prop:op_context.last_block_time][op_ctx_noop]")
-        chkConstErr("op_context.block_height", "ct_err:[def:const:bad_expr:0::X:fn:prop:op_context.block_height][op_ctx_noop]")
-        chkConstErr("op_context.op_index", "ct_err:[def:const:bad_expr:0::X:fn:prop:op_context.op_index][op_ctx_noop]")
+        val err = "def:const:bad_expr:0::X:fn"
+
+        chkConstErr("op_context.last_block_time", "ct_err:[$err:prop:op_context.last_block_time][op_ctx:noop]")
+        chkConstErr("op_context.block_height", "ct_err:[$err:prop:op_context.block_height][op_ctx:noop]")
+        chkConstErr("op_context.op_index", "ct_err:[$err:prop:op_context.op_index][op_ctx:noop]")
 
         chkConstErr("op_context.transaction",
-                "ct_err:[def:const:bad_type:not_pure:0::X:transaction][def:const:bad_expr:0::X:fn:prop:op_context.transaction][op_ctx_noop]")
+                "ct_err:[def:const:bad_type:not_pure:0::X:transaction][$err:prop:op_context.transaction][op_ctx:noop]")
 
-        chkConstErr("op_context.is_signer(x'1234')", "ct_err:[def:const:bad_expr:0::X:fn:sys:op_context.is_signer][op_ctx_noop]")
-        chkConstErr("is_signer(x'1234')", "ct_err:[def:const:bad_expr:0::X:fn:sys:is_signer][op_ctx_noop]")
+        chkConstErr("op_context.is_signer(x'1234')", "ct_err:[$err:sys:op_context.is_signer][op_ctx:noop]")
+        chkConstErr("is_signer(x'1234')", "ct_err:[$err:sys:is_signer][op_ctx:noop]")
 
         chkConstErr("op_context.get_signers()",
-                "ct_err:[def:const:bad_type:mutable:0::X:list<byte_array>][def:const:bad_expr:0::X:fn:sys:op_context.get_signers][op_ctx_noop]")
+                "ct_err:[def:const:bad_type:mutable:0::X:list<byte_array>][$err:sys:op_context.get_signers][op_ctx:noop]")
 
         chkConstErr("op_context.get_all_operations()",
-                "ct_err:[def:const:bad_type:mutable:0::X:list<gtx_operation>][def:const:bad_expr:0::X:fn:sys:op_context.get_all_operations][op_ctx_noop]")
+                "ct_err:[def:const:bad_type:mutable:0::X:list<gtx_operation>][$err:sys:op_context.get_all_operations][op_ctx:noop]")
 
         chkConstErr("op_context.emit_event('', gtv.from_json('{}'))",
-                "ct_err:[type:def:const:unit:X][def:const:bad_expr:0::X:fn:sys:op_context.emit_event][op_ctx_noop]")
+                "ct_err:[type:def:const:unit:X][$err:sys:op_context.emit_event][op_ctx:noop]")
     }
 
     @Test fun testExprStruct() {
@@ -371,8 +373,8 @@ class GlobalConstantTest: BaseRellTest(false) {
     }
 
     @Test fun testExprSysFnSpecial() {
-        chkCompile("val X = print();", "ct_err:[def:const:bad_expr:0::X:fn:print][type:def:const:unit:X]")
-        chkCompile("val X = log();", "ct_err:[def:const:bad_expr:0::X:fn:log][type:def:const:unit:X]")
+        chkCompile("val X = print();", "ct_err:[def:const:bad_expr:0::X:fn:sys:print][type:def:const:unit:X]")
+        chkCompile("val X = log();", "ct_err:[def:const:bad_expr:0::X:fn:sys:log][type:def:const:unit:X]")
 
         chkCompile("val X = _type_of(0);", "OK")
         chkCompile("val X = _nullable(0);", "OK")
@@ -470,16 +472,19 @@ class GlobalConstantTest: BaseRellTest(false) {
         chkConst("rell.test.pubkeys.bob", "byte_array[034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa]")
         chkConst("rell.test.privkeys.bob", "byte_array[1111111111111111111111111111111111111111111111111111111111111111]")
 
-        chkConstErr("assert_not_null(_nullable(123))",
-                "ct_err:[def:const:bad_expr:0::X:fn:rell.test.assert_not_null][type:def:const:unit:X]")
-        chkConstErr("assert_equals(123, 456)",
-                "ct_err:[def:const:bad_expr:0::X:fn:rell.test.assert_equals][type:def:const:unit:X]")
-        chkConstErr("assert_not_equals(123, 456)",
-                "ct_err:[def:const:bad_expr:0::X:fn:rell.test.assert_not_equals][type:def:const:unit:X]")
-        chkConstErr("assert_lt(123, 456)",
-                "ct_err:[def:const:bad_expr:0::X:fn:rell.test.assert_lt][type:def:const:unit:X]")
-        chkConstErr("assert_gt_lt(123, 456, 789)",
-                "ct_err:[def:const:bad_expr:0::X:fn:rell.test.assert_gt_lt][type:def:const:unit:X]")
+        chkConstErr("assert_null(_nullable_int(null))", "ct_err:type:def:const:unit:X")
+        chkConstErr("assert_not_null(_nullable(123))", "ct_err:type:def:const:unit:X")
+        chkConstErr("assert_equals(123, 456)", "ct_err:type:def:const:unit:X")
+        chkConstErr("assert_not_equals(123, 456)", "ct_err:type:def:const:unit:X")
+        chkConstErr("assert_lt(123, 456)", "ct_err:type:def:const:unit:X")
+        chkConstErr("assert_gt_lt(123, 456, 789)", "ct_err:type:def:const:unit:X")
+
+        val errBadType = "def:const:bad_type:not_pure:0::X:rell.test.failure"
+        val errAssertFails = "def:const:bad_expr:0::X:fn:sys:rell.test.assert_fails"
+        chkConstErr("assert_fails(integer.from_hex('1234', *))",
+            "ct_err:[$errBadType][$errAssertFails][def:const:bad_expr:0::X:partial_call]")
+        chkConstErr("assert_fails('hello', integer.from_hex('1234', *))",
+            "ct_err:[$errBadType][$errAssertFails][def:const:bad_expr:0::X:partial_call]")
     }
 
     @Test fun testExprEnum() {
@@ -516,7 +521,7 @@ class GlobalConstantTest: BaseRellTest(false) {
         chkType("123", "integer", "int[123]")
         chkType("12.34", "decimal", "dec[12.34]")
         chkType("x'1234'", "byte_array", "byte_array[1234]")
-        chkType("_int_to_rowid(123)", "rowid", "rowid[123]")
+        chkType("rowid(123)", "rowid", "rowid[123]")
         chkType("json('{}')", "json", "json[{}]")
         chkType("color.red", "color", "color[red]")
         chkType("range(100)", "range", "range[0,100,1]")

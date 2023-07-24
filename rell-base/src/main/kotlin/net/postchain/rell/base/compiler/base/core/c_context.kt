@@ -12,6 +12,7 @@ import net.postchain.rell.base.compiler.base.def.C_OverrideFunctionDescriptor
 import net.postchain.rell.base.compiler.base.def.C_Struct
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.fn.C_FormalParameters
+import net.postchain.rell.base.compiler.base.lib.C_LibTypeManager
 import net.postchain.rell.base.compiler.base.modifier.C_ModifierValue
 import net.postchain.rell.base.compiler.base.modifier.C_MountAnnotationValue
 import net.postchain.rell.base.compiler.base.modifier.C_RawMountAnnotationValue
@@ -82,11 +83,11 @@ class C_ModuleProvider(modules: Map<C_ModuleKey, C_Module>, preModules: Map<C_Mo
 }
 
 sealed class C_ModuleContext(
-        val appCtx: C_AppContext,
-        private val modProvider: C_ModuleProvider,
-        val moduleName: R_ModuleName,
-        val extChain: C_ExternalChain?,
-        val containerKey: C_ContainerKey
+    val appCtx: C_AppContext,
+    private val modProvider: C_ModuleProvider,
+    val moduleName: R_ModuleName,
+    val extChain: C_ExternalChain?,
+    val containerKey: C_ContainerKey,
 ) {
     val globalCtx = appCtx.globalCtx
     val msgCtx = appCtx.msgCtx
@@ -98,7 +99,6 @@ sealed class C_ModuleContext(
     abstract val test: Boolean
     abstract val selected: Boolean
     abstract val mountName: R_MountName
-    abstract val sysDefs: C_SystemDefs
     abstract val repl: Boolean
 
     abstract val scopeBuilder: C_ScopeBuilder
@@ -106,6 +106,14 @@ sealed class C_ModuleContext(
     open val isTestDependency: Boolean = false
 
     val rModuleKey = R_ModuleKey(moduleName, extChain?.name)
+
+    private val sysDefs = extChain?.sysDefs ?: appCtx.sysDefs
+    val sysDefsCommon: C_SystemDefsCommon get() = sysDefs.common
+    val sysDefsScope: C_SystemDefsScope get() = if (isTestLib()) sysDefs.testScope else sysDefs.appScope
+
+    val typeMgr: C_LibTypeManager by lazy {
+        C_LibTypeManager(sysDefsScope.modules)
+    }
 
     private val containerUid = appCtx.nextContainerUid(containerKey.keyStr())
     private val fnUidGen = C_UidGen { id, name -> R_FnUid(id, name, containerUid) }
@@ -137,17 +145,17 @@ sealed class C_ModuleContext(
 }
 
 class C_RegularModuleContext(
-        appCtx: C_AppContext,
-        modProvider: C_ModuleProvider,
-        private val module: C_Module,
-        override val selected: Boolean,
-        override val isTestDependency: Boolean,
+    appCtx: C_AppContext,
+    modProvider: C_ModuleProvider,
+    private val module: C_Module,
+    override val selected: Boolean,
+    override val isTestDependency: Boolean,
 ): C_ModuleContext(
-        appCtx,
-        modProvider,
-        module.descriptor.name,
-        module.descriptor.extChain,
-        module.descriptor.containerKey
+    appCtx,
+    modProvider,
+    module.descriptor.name,
+    module.descriptor.extChain,
+    module.descriptor.containerKey,
 ) {
     private val descriptor = module.descriptor
 
@@ -156,16 +164,14 @@ class C_RegularModuleContext(
     override val directory = descriptor.directory
     override val test = descriptor.header.test
     override val mountName = descriptor.header.mountName
-    override val sysDefs = extChain?.sysDefs ?: appCtx.sysDefs
     override val repl = false
 
-    private val nsAssembler = appCtx.createModuleNsAssembler(descriptor.key, sysDefs, external)
+    private val nsAssembler = appCtx.createModuleNsAssembler(descriptor.key, sysDefsScope, external)
     private val defsGetter = nsAssembler.futureDefs()
 
     override val scopeBuilder: C_ScopeBuilder = let {
-        val sysNs = if (isTestLib()) sysDefs.testNs else sysDefs.appNs
         val rootScopeBuilder = C_ScopeBuilder()
-        val sysScopeBuilder = rootScopeBuilder.nested { sysNs }
+        val sysScopeBuilder = rootScopeBuilder.nested { sysDefsScope.ns }
         val nsGetter = nsAssembler.futureNs()
         sysScopeBuilder.nested(nsGetter)
     }
@@ -182,11 +188,11 @@ class C_RegularModuleContext(
 }
 
 class C_ReplModuleContext(
-        appCtx: C_AppContext,
-        modProvider: C_ModuleProvider,
-        moduleName: R_ModuleName,
-        replNsGetter: Getter<C_Namespace>,
-        componentNsGetter: Getter<C_Namespace>
+    appCtx: C_AppContext,
+    modProvider: C_ModuleProvider,
+    moduleName: R_ModuleName,
+    replNsGetter: Getter<C_Namespace>,
+    componentNsGetter: Getter<C_Namespace>,
 ): C_ModuleContext(appCtx, modProvider, moduleName, null, C_ReplContainerKey) {
     override val abstract = false
     override val external = false
@@ -194,12 +200,11 @@ class C_ReplModuleContext(
     override val test = false
     override val selected = true // Doesn't really matter
     override val mountName = R_MountName.EMPTY
-    override val sysDefs = appCtx.sysDefs
     override val repl = true
 
     override val scopeBuilder: C_ScopeBuilder = let {
         var builder = C_ScopeBuilder()
-        builder = builder.nested { sysDefs.testNs }
+        builder = builder.nested { sysDefsScope.ns }
         builder = builder.nested(replNsGetter)
         builder.nested(componentNsGetter)
     }

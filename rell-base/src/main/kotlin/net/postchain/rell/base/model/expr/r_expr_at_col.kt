@@ -7,7 +7,7 @@ package net.postchain.rell.base.model.expr
 import net.postchain.rell.base.model.R_FrameBlock
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.model.R_VarPtr
-import net.postchain.rell.base.model.stmt.R_ForIterator
+import net.postchain.rell.base.model.stmt.R_IterableAdapter
 import net.postchain.rell.base.runtime.Rt_CallFrame
 import net.postchain.rell.base.runtime.Rt_Exception
 import net.postchain.rell.base.runtime.Rt_NullValue
@@ -266,10 +266,10 @@ class R_ColAtLimiter_Late(private val limit: Long, private val offset: Long): R_
     }
 }
 
-class R_ColAtFrom(private val iterator: R_ForIterator, private val expr: R_Expr) {
+class R_ColAtFrom(private val iterableAdapter: R_IterableAdapter, private val expr: R_Expr) {
     fun evaluate(frame: Rt_CallFrame): Iterable<Rt_Value> {
         val value = expr.evaluate(frame)
-        return iterator.list(value)
+        return iterableAdapter.iterable(value)
     }
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.vexpr
@@ -12,6 +12,8 @@ import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.expr.C_VarFact
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.base.utils.C_Error
+import net.postchain.rell.base.compiler.base.utils.C_PosCodeMsg
+import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.model.expr.R_AssignExpr
 import net.postchain.rell.base.model.expr.R_Expr
@@ -87,12 +89,12 @@ class V_LocalVarExpr(
 }
 
 class V_SmartNullableExpr(
-        exprCtx: C_ExprContext,
-        private val subExpr: V_Expr,
-        private val nulled: Boolean,
-        private val smartType: R_Type?,
-        private val name: String,
-        private val kind: C_CodeMsg
+    exprCtx: C_ExprContext,
+    private val subExpr: V_Expr,
+    private val nulled: Boolean,
+    private val smartType: R_Type?,
+    private val name: String,
+    private val kind: C_CodeMsg,
 ): V_Expr(exprCtx, subExpr.pos) {
     override fun exprInfo0() = V_ExprInfo.simple(smartType ?: subExpr.type, subExpr)
 
@@ -108,10 +110,13 @@ class V_SmartNullableExpr(
         return if (smartType == null) rExpr else R_NotNullExpr(smartType, rExpr)
     }
 
-    override fun asNullable(): V_Expr {
-        val (freq, msg) = if (nulled) Pair("always", "is always") else Pair("never", "cannot be")
-        msgCtx.warning(pos, "expr:smartnull:${kind.code}:$freq:$name", "${kind.msg} '$name' $msg null at this location")
-        return subExpr
+    override fun asNullable(): V_ExprWrapper {
+        return V_ExprWrapper(msgCtx, subExpr) {
+            val cm = if (nulled) ("always" toCodeMsg "is always") else ("never" toCodeMsg "cannot be")
+            val code = "expr:smartnull:${kind.code}:${cm.code}:$name"
+            val msg = "${kind.msg} '$name' ${cm.msg} null at this location"
+            C_PosCodeMsg(pos, code, msg)
+        }
     }
 
     override fun destination(): C_Destination {
@@ -120,8 +125,8 @@ class V_SmartNullableExpr(
     }
 
     private class C_Destination_SmartNullable(
-            val destination: C_Destination,
-            val effectiveType: R_Type
+        val destination: C_Destination,
+        val effectiveType: R_Type,
     ): C_Destination() {
         override fun type() = destination.type()
         override fun effectiveType() = effectiveType

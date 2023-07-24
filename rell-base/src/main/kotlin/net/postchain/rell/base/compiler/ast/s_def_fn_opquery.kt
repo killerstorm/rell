@@ -27,11 +27,11 @@ import net.postchain.rell.base.utils.toImmMap
 import net.postchain.rell.base.utils.toImmSet
 
 class S_OperationDefinition(
-        pos: S_Pos,
-        modifiers: S_Modifiers,
-        val name: S_Name,
-        val params: List<S_FormalParameter>,
-        val body: S_Statement
+    pos: S_Pos,
+    modifiers: S_Modifiers,
+    val name: S_Name,
+    val params: List<S_FormalParameter>,
+    val body: S_Statement,
 ): S_BasicDefinition(pos, modifiers) {
     override fun compileBasic(ctx: C_MountContext) {
         ctx.checkNotExternal(name.pos, C_DeclarationType.OPERATION)
@@ -54,9 +54,11 @@ class S_OperationDefinition(
         val defCtx = cDefBase.defCtx(ctx)
         val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
-        val mirrorStructs = C_Utils.createMirrorStructs(ctx.appCtx, defBase, defCtx.definitionType, operation = mountName)
 
-        val rOperation = R_OperationDefinition(defBase, mountName, mirrorStructs)
+        val rOperation = R_OperationDefinition(defBase, defCtx.definitionType, mountName)
+        ctx.appCtx.defsAdder.addStruct(rOperation.mirrorStructs.immutable)
+        ctx.appCtx.defsAdder.addStruct(rOperation.mirrorStructs.mutable)
+
         val cOperation = C_OperationGlobalFunction(rOperation)
 
         ctx.appCtx.defsAdder.addOperation(rOperation)
@@ -64,7 +66,7 @@ class S_OperationDefinition(
         ctx.mntBuilder.addOperation(cName, rOperation)
 
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
-            val header = compileHeader(defCtx, cOperation, mirrorStructs)
+            val header = compileHeader(defCtx, cOperation, rOperation.mirrorStructs)
             ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
                 compileBody(defCtx, rOperation, header)
             }

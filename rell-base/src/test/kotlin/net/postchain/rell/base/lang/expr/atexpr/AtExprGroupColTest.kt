@@ -50,7 +50,7 @@ class AtExprGroupColTest: AtExprGroupBaseTest() {
         chkTypeGroupNullable("decimal", "123.456", "dec[123.456]")
         chkTypeGroupNullable("text", "'hi'", "text[hi]")
         chkTypeGroupNullable("byte_array", "x'beef'", "byte_array[beef]")
-        chkTypeGroupNullable("rowid", "_int_to_rowid(123)", "rowid[123]")
+        chkTypeGroupNullable("rowid", "rowid(123)", "rowid[123]")
         chkTypeGroupNullable("color", "color.green", "color[green]")
         chkTypeGroupNullable("const_struct", "const_struct(123)", "const_struct[q=int[123]]")
     }

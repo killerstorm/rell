@@ -103,4 +103,11 @@ class TestModuleTest: BaseRellTest(false) {
         file("tests.rell", "@test @mount('foo') module; function test() {}")
         chkTests("tests", "ct_err:tests.rell:modifier:bad_combination:ann:test,ann:mount")
     }
+
+    @Test fun testSysNameConflict() {
+        mainModule("main")
+        chkCompile("module; function abs() {}", "ct_err:name_conflict:sys:abs:FUNCTION")
+        chkCompile("@test module; function abs() {}", "ct_err:name_conflict:sys:abs:FUNCTION")
+        chkCompile("@test module; function assert_equals() {}", "ct_err:name_conflict:sys:assert_equals:FUNCTION")
+    }
 }

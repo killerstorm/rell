@@ -7,8 +7,9 @@ package net.postchain.rell.gtx
 import net.postchain.core.TxEContext
 import net.postchain.gtv.Gtv
 import net.postchain.gtx.data.OpData
-import net.postchain.rell.base.lib.C_Lib_OpContext
-import net.postchain.rell.base.runtime.*
+import net.postchain.rell.base.lib.Lib_OpContext
+import net.postchain.rell.base.runtime.Rt_OpContext
+import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.Bytes
 import net.postchain.rell.base.utils.toImmList
 
@@ -54,9 +55,7 @@ class Rt_PostchainOpContext(
 
     override fun allOperations(): List<Rt_Value> {
         return allOperations.map { op ->
-            val name = Rt_TextValue(op.opName)
-            val args = Rt_ListValue(C_Lib_OpContext.LIST_OF_GTV_TYPE, op.args.map { Rt_GtvValue(it) }.toMutableList())
-            Rt_StructValue(C_Lib_OpContext.GTX_OPERATION_STRUCT_TYPE, mutableListOf(name, args)) as Rt_Value
+            Lib_OpContext.gtxTransactionStructValue(op.opName, op.args.asList())
         }
     }
 

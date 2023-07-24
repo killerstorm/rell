@@ -8,30 +8,63 @@ import net.postchain.rell.base.testutils.BaseRellTest
 import org.junit.Test
 
 class LibSetTest: BaseRellTest(false) {
-    @Test fun testConstructor() {
-        chk("set()", "ct_err:expr_set_notype")
-        chk("set<integer>()", "set<integer>[]")
+    @Test fun testConstructorRaw() {
+        chk("set()", "ct_err:fn:sys:unresolved_type_params:set:T")
         chk("set([])", "ct_err:expr_list_no_type")
-        chk("set<integer>([])", "ct_err:expr_list_no_type")
         chk("set([123])", "set<integer>[int[123]]")
         chk("set([123, 456, 789])", "set<integer>[int[123],int[456],int[789]]")
         chk("set([1, 2, 3, 2, 3, 4, 5])", "set<integer>[int[1],int[2],int[3],int[4],int[5]]")
         chk("set(list([123, 456, 789]))", "set<integer>[int[123],int[456],int[789]]")
-        chk("set(range(5))", "set<integer>[int[0],int[1],int[2],int[3],int[4]]")
+        chk("set([[123]])", "ct_err:expr_call_argtypes:[set]:list<list<integer>>")
         chk("set([1:'A',2:'B'])", "set<(integer,text)>[(int[1],text[A]),(int[2],text[B])]")
-        chk("set<list<integer>>()", "ct_err:expr_set_type:list<integer>")
-        chk("set([[123]])", "ct_err:expr_set_type:list<integer>")
         chk("set(x=[1,2,3])", "ct_err:expr:call:named_args_not_allowed:[set]:x")
-        chk("set<integer>(x=[1,2,3])", "ct_err:expr:call:named_args_not_allowed:[set]:x")
+
+        chk("set(range(5))", "set<integer>[int[0],int[1],int[2],int[3],int[4]]")
+        chk("set(x'feed')", "set<integer>[int[254],int[237]]")
+    }
+
+    @Test fun testConstructorTyped() {
+        chk("set<integer>()", "set<integer>[]")
+        chk("set<integer>([])", "set<integer>[]")
+        chk("set<list<integer>>()",
+            "ct_err:[param_bounds:set:T:-immutable:list<integer>][param_bounds:set:T:-immutable:list<integer>]")
+
+        chk("set<integer>([123])", "set<integer>[int[123]]")
+        chk("set<integer>([123, 456, 789])", "set<integer>[int[123],int[456],int[789]]")
+        chk("set<integer>([1, 2, 3, 2, 3, 4, 5])", "set<integer>[int[1],int[2],int[3],int[4],int[5]]")
+        chk("set<integer>(list([123, 456, 789]))", "set<integer>[int[123],int[456],int[789]]")
+        chk("set<list<integer>>([[123]])",
+            "ct_err:[param_bounds:set:T:-immutable:list<integer>][param_bounds:set:T:-immutable:list<integer>]")
+        chk("set<(integer,text)>([:])", "set<(integer,text)>[]")
+        chk("set<(integer,text)>([1:'A',2:'B'])", "set<(integer,text)>[(int[1],text[A]),(int[2],text[B])]")
+
+        chk("set<integer>(x=[1,2,3])", "ct_err:expr:call:named_args_not_allowed:[set<integer>]:x")
+
+        chk("set<integer>(range(5))", "set<integer>[int[0],int[1],int[2],int[3],int[4]]")
+        chk("set<integer>(x'feed')", "set<integer>[int[254],int[237]]")
     }
 
     @Test fun testConstructorPartial() {
         chk("set(*)", "ct_err:expr:call:partial_not_supported:set")
-        chk("set<integer>(*)", "ct_err:expr:call:partial_not_supported:set")
+        chk("set<integer>(*)", "ct_err:expr:call:partial_ambiguous:set<integer>")
+
         chkEx("{ val f: () -> set<integer> = set(*); return f; }", "ct_err:expr:call:partial_not_supported:set")
-        chkEx("{ val f: () -> set<integer> = set<integer>(*); return f; }", "ct_err:expr:call:partial_not_supported:set")
-        chkEx("{ val f: (list<integer>) -> set<integer> = set(*); return f; }", "ct_err:expr:call:partial_not_supported:set")
-        chkEx("{ val f: (list<integer>) -> set<integer> = set<integer>(*); return f; }", "ct_err:expr:call:partial_not_supported:set")
+        chkEx("{ val f: () -> set<integer> = set<integer>(*); return f; }", "fn[set<integer>()]")
+        chkEx("{ val f: () -> set<integer> = set<integer>(*); return f(); }", "set<integer>[]")
+
+        chkEx("{ val f: (list<integer>) -> set<integer> = set(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:set")
+        chkEx("{ val f: (list<integer>) -> set<integer> = set<integer>(*); return f; }", "fn[set<integer>(*)]")
+
+        chkEx("{ val f: (set<integer>) -> set<integer> = set(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:set")
+        chkEx("{ val f: (map<text,integer>) -> set<(text,integer)> = set(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:set")
+
+        chkEx("{ val f: (range) -> set<integer> = set(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:set")
+        chkEx("{ val f: (byte_array) -> set<integer> = set(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:set")
     }
 
     @Test fun testEmpty() {
@@ -156,9 +189,10 @@ class LibSetTest: BaseRellTest(false) {
     }
 
     @Test fun testMutableElement() {
-        chkEx("{ return set([[123]]); }", "ct_err:expr_set_type:list<integer>")
-        chkEx("{ return set<list<integer>>(); }", "ct_err:expr_set_type:list<integer>")
-        chkEx("{ var x: set<list<integer>>; return 0; }", "ct_err:expr_set_type:list<integer>")
+        chkEx("{ return set([[123]]); }", "ct_err:expr_call_argtypes:[set]:list<list<integer>>")
+        chkEx("{ return set<list<integer>>(); }",
+            "ct_err:[param_bounds:set:T:-immutable:list<integer>][param_bounds:set:T:-immutable:list<integer>]")
+        chkEx("{ var x: set<list<integer>>; return 0; }", "ct_err:param_bounds:set:T:-immutable:list<integer>")
     }
 
     @Test fun testSort() {
@@ -168,6 +202,6 @@ class LibSetTest: BaseRellTest(false) {
         chkEx("{ val s = set([ 5, 4, 3, 2, 1 ]); s._sort(); return s; }", "ct_err:unknown_member:[set<integer>]:_sort")
 
         chk("set([ 5, 4, 3, 2, 1 ]).sorted()", "[1, 2, 3, 4, 5]")
-        chk("set([rec(123), rec(456)]).sorted()", "ct_err:unknown_member:[set<rec>]:sorted")
+        chk("set([rec(123), rec(456)]).sorted()", "ct_err:fn:collection.sorted:not_comparable:rec")
     }
 }

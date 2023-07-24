@@ -17,6 +17,8 @@ import org.apache.commons.lang3.StringUtils
 import java.io.File
 import kotlin.system.exitProcess
 
+private const val FILTER: String = ""
+
 fun main(args: Array<String>) {
     val reposDir = if (args.isNotEmpty()) File(args[0]) else File(System.getProperty("user.home"), "rell-repos")
     check(reposDir.isDirectory) { reposDir }
@@ -36,12 +38,13 @@ private class RunInfo(
         val srcDir: File,
         val module: String,
         val test: Boolean,
-        val rellVer: R_LangVersion?
+        val rellVer: R_LangVersion?,
 )
 
 private class ReposCompiler {
+    private val startTimeMs = System.currentTimeMillis()
     private var totCount = 0
-    private var errCount = 0
+    private var errList = mutableListOf<String>()
 
     fun go(reposDir: File) {
         val verDirs = mutableListOf<VerDir>()
@@ -77,7 +80,17 @@ private class ReposCompiler {
         }
 
         println("---------------------------------------------------------------------------")
-        println("Failed $errCount / $totCount")
+
+        if (errList.isNotEmpty()) {
+            println("Failed:")
+            for (err in errList) {
+                println(err)
+            }
+            println("---------------------------------------------------------------------------")
+        }
+
+        val totTimeMs = System.currentTimeMillis() - startTimeMs
+        println("Failed ${errList.size} / $totCount (time: ${totTimeMs / 1000} sec)")
     }
 
     private fun parseVerDirName(verDir: File): Pair<String, R_LangVersion?> {
@@ -102,6 +115,11 @@ private class ReposCompiler {
     }
 
     private fun processSources(repoName: String, verName: String, runInfo: RunInfo) {
+        val caseKey = "$repoName/$verName/${runInfo.module}"
+        if (!"$caseKey/".startsWith(FILTER)) {
+            return
+        }
+
         val sourceDir = C_SourceDir.diskDir(runInfo.srcDir)
 
         val modules = listOf(R_ModuleName.of(runInfo.module))
@@ -117,13 +135,18 @@ private class ReposCompiler {
             C_CompilerOptions.forLangVersion(runInfo.rellVer)
         }
 
-        val res = C_Compiler.compile(sourceDir, modSel, opts)
+        val res = try {
+            C_Compiler.compile(sourceDir, modSel, opts)
+        } catch (e: Throwable) {
+            println("crashed: ${runInfo.srcDir} [${runInfo.module}]")
+            throw e
+        }
 
         val err = res.app == null || res.errors.isNotEmpty()
 
         ++totCount
         if (err) {
-            ++errCount
+            errList.add(caseKey)
         }
 
         val resStr = if (err) "*** ERROR ***" else "ok"
@@ -137,11 +160,11 @@ private class ReposCompiler {
 
 private fun parseRunInfo(verDir: VerDir, line: String): RunInfo {
     val parts = StringUtils.splitPreserveAllTokens(line, ":")
-    check(parts.size >= 2 && parts.size <= 4) { parts.toList() }
+    check(parts.size in 2 .. 4) { parts.toList() }
 
     val srcPath = parts[0]
     val srcDir = File(verDir.dir, srcPath)
-    check(srcDir.isDirectory) { srcDir }
+    check(srcDir.isDirectory) { "Directory not found: [$srcDir]" }
 
     val module = parts[1].trim()
 

@@ -26,7 +26,7 @@ class LibTryCallTest: BaseRellTest(false) {
         def("function f(x: integer) { require(x > 0); }")
         chk("try_call(f(1, *), true)", "ct_err:expr_call_argtypes:[try_call]:()->unit,boolean")
         chk("try_call(f(1, *), 0)", "ct_err:expr_call_argtypes:[try_call]:()->unit,integer")
-        chk("try_call(f(1, *), null)", "ct_err:expr_call_argtypes:[try_call]:()->unit,null")
+        chk("try_call(f(1, *), null)", "ct_err:fn:sys:no_res_type:try_call")
     }
 
     @Test fun testTwoArgsValue() {
@@ -113,8 +113,11 @@ class LibTryCallTest: BaseRellTest(false) {
         def("entity data { value: integer; }")
         insert("c0.data", "value", "1,123")
 
-        //TODO support this
-        chk("data @ {} ( try_call(f(5, *), .value) )", "ct_err:[expr_call_nosql:try_call][expr_nosql:()->integer]")
-        chk("data @ {} ( try_call(f(-5, *), .value) )", "ct_err:[expr_call_nosql:try_call][expr_nosql:()->integer]")
+        chk("data @ {} ( try_call(f(5, *), .value) )", "int[25]")
+        chk("data @ {} ( try_call(f(-5, *), .value) )", "int[123]")
+        chk("data @ {} ( try_call(f(.value, *), 456) )", "int[15129]")
+        chk("data @ {} ( try_call(f(-.value, *), 456) )", "int[456]")
+        chk("data @ {} ( try_call(f(.value, *), -.value) )", "int[15129]")
+        chk("data @ {} ( try_call(f(-.value, *), -.value) )", "int[-123]")
     }
 }

@@ -8,7 +8,6 @@ import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_BlockContext
 import net.postchain.rell.base.compiler.base.core.C_LoopUid
 import net.postchain.rell.base.compiler.base.core.C_OwnerBlockContext
-import net.postchain.rell.base.compiler.base.namespace.C_NamespacePropertyContext
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.model.R_AtExprId
 import net.postchain.rell.base.model.R_EntityDefinition
@@ -29,8 +28,8 @@ class C_ExprContext private constructor(
     val symCtx = defCtx.symCtx
     val appCtx = defCtx.appCtx
     val msgCtx = nsCtx.msgCtx
+    val typeMgr = modCtx.typeMgr
     val executor = defCtx.executor
-    val propCtx = C_NamespacePropertyContext(this)
 
     fun makeAtEntity(rEntity: R_EntityDefinition, atExprId: R_AtExprId) = R_DbAtEntity(rEntity, appCtx.nextAtEntityId(atExprId))
 

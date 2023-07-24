@@ -6,7 +6,6 @@ package net.postchain.rell.base.lang.expr.expr
 
 import net.postchain.rell.base.model.R_App
 import net.postchain.rell.base.model.R_EntityDefinition
-import net.postchain.rell.base.model.R_EntityType
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.sql.NoConnSqlExecutor
 import net.postchain.rell.base.testutils.RellTestUtils
@@ -137,8 +136,7 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
         class Obj(val ent: String, val id: Long): InterpTstVal(ent) {
             override fun rt(c: ValCtx): Rt_Value {
                 val entity = findEntity(c.app, ent)
-                val t = R_EntityType(entity)
-                return Rt_EntityValue(t, id)
+                return Rt_EntityValue(entity.type, id)
             }
 
             private fun findEntity(app: R_App, name: String): R_EntityDefinition {

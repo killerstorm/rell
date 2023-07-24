@@ -1,17 +1,16 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.model.stmt
 
-import com.google.common.collect.Iterables
-import net.postchain.rell.base.model.*
+import net.postchain.rell.base.model.R_FilePos
+import net.postchain.rell.base.model.R_FrameBlock
+import net.postchain.rell.base.model.R_Type
+import net.postchain.rell.base.model.R_VarPtr
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.runtime.Rt_CallFrame
-import net.postchain.rell.base.runtime.Rt_IntValue
-import net.postchain.rell.base.runtime.Rt_TupleValue
 import net.postchain.rell.base.runtime.Rt_Value
-import net.postchain.rell.base.utils.immListOf
 
 sealed class R_StatementResult
 class R_StatementResult_Return(val value: Rt_Value?): R_StatementResult()
@@ -174,55 +173,31 @@ class R_WhileStatement(val expr: R_Expr, val stmt: R_Statement, val frameBlock: 
     }
 }
 
-sealed class R_ForIterator {
-    abstract fun list(v: Rt_Value): Iterable<Rt_Value>
+sealed class R_IterableAdapter {
+    abstract fun iterable(v: Rt_Value): Iterable<Rt_Value>
 }
 
-object R_ForIterator_ByteArray: R_ForIterator() {
-    override fun list(v: Rt_Value): Iterable<Rt_Value> {
-        val array = v.asByteArray()
-        val res = Iterables.transform(array.asIterable()) {
-            val signed = it!!.toInt()
-            val unsigned = if (signed >= 0) signed else (signed + 256)
-            Rt_IntValue(unsigned.toLong())
-        }
-        return res
+object R_IterableAdapter_Direct: R_IterableAdapter() {
+    override fun iterable(v: Rt_Value) = v.asIterable()
+}
+
+object R_IterableAdapter_LegacyMap: R_IterableAdapter() {
+    override fun iterable(v: Rt_Value): Iterable<Rt_Value> {
+        val map = v.asMapValue()
+        return map.asIterable(true)
     }
-}
-
-object R_ForIterator_Collection: R_ForIterator() {
-    override fun list(v: Rt_Value): Iterable<Rt_Value> = v.asCollection()
-}
-
-object R_ForIterator_VirtualCollection: R_ForIterator() {
-    override fun list(v: Rt_Value): Iterable<Rt_Value> = v.asVirtualCollection().iterable()
-}
-
-class R_ForIterator_Map(private val tupleType: R_TupleType): R_ForIterator() {
-    override fun list(v: Rt_Value): Iterable<Rt_Value> {
-        val map = v.asMap()
-        return Iterables.transform(map.entries) {
-            val entry = it!!
-            Rt_TupleValue(tupleType, immListOf(entry.key, entry.value))
-        }
-    }
-}
-
-object R_ForIterator_Range: R_ForIterator() {
-    override fun list(v: Rt_Value): Iterable<Rt_Value> = v.asRange()
 }
 
 class R_ForStatement(
-        val varDeclarator: R_VarDeclarator,
-        val expr: R_Expr,
-        val iterator: R_ForIterator,
-        val stmt: R_Statement,
-        val frameBlock: R_FrameBlock
-): R_Statement()
-{
+    val varDeclarator: R_VarDeclarator,
+    val expr: R_Expr,
+    val iterator: R_IterableAdapter,
+    val stmt: R_Statement,
+    val frameBlock: R_FrameBlock
+): R_Statement() {
     override fun execute(frame: Rt_CallFrame): R_StatementResult? {
         val value = expr.evaluate(frame)
-        val list = iterator.list(value)
+        val list = iterator.iterable(value)
 
         val res = frame.block(frameBlock) {
             execute0(frame, list)
@@ -254,13 +229,13 @@ class R_ForStatement(
 }
 
 class R_BreakStatement: R_Statement() {
-    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult {
         return R_StatementResult_Break
     }
 }
 
 class R_ContinueStatement: R_Statement() {
-    override fun execute(frame: Rt_CallFrame): R_StatementResult? {
+    override fun execute(frame: Rt_CallFrame): R_StatementResult {
         return R_StatementResult_Continue
     }
 }

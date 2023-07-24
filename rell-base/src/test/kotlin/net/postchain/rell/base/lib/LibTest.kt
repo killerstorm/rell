@@ -4,29 +4,10 @@
 
 package net.postchain.rell.base.lib
 
-import net.postchain.rell.base.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.base.testutils.BaseRellTest
 import org.junit.Test
-import kotlin.test.assertEquals
-import kotlin.test.fail
 
 class LibTest: BaseRellTest(false) {
-    @Test fun testAbs() {
-        chk("abs(a)", 0, "int[0]")
-        chk("abs(a)", -123, "int[123]")
-        chk("abs(a)", 123, "int[123]")
-        chk("abs('Hello')", "ct_err:expr_call_argtypes:[abs]:text")
-        chk("abs()", "ct_err:expr_call_argtypes:[abs]:")
-        chk("abs(1, 2)", "ct_err:expr_call_argtypes:[abs]:integer,integer")
-    }
-
-    @Test fun testMinMax() {
-        chk("min(a, b)", 100, 200, "int[100]")
-        chk("min(a, b)", 200, 100, "int[100]")
-        chk("max(a, b)", 100, 200, "int[200]")
-        chk("max(a, b)", 200, 100, "int[200]")
-    }
-
     @Test fun testPrint() {
         chkEx("{ print('Hello'); return 123; }", "int[123]")
         chkOut("Hello")
@@ -42,6 +23,10 @@ class LibTest: BaseRellTest(false) {
 
         chkEx("{ print(); return 123; }", "int[123]")
         chkOut("")
+        chkLog()
+
+        chkEx("{ print(null, 123, _nullable('hello')); return 123; }", "int[123]")
+        chkOut("null 123 hello")
         chkLog()
     }
 
@@ -71,109 +56,10 @@ class LibTest: BaseRellTest(false) {
         chkEx("{ f(); return 0; }", "int[0]")
         chkOut()
         chkLog("[:f(main.rell:1)] this is f()")
-    }
 
-    @Test fun testTypeOf() {
-        tst.strictToString = false
-        def("entity user { name: text; }")
-
-        chk("_type_of(null)", "null")
-        chk("_type_of(true)", "boolean")
-        chk("_type_of(123)", "integer")
-        chk("_type_of('Hello')", "text")
-        chk("_type_of(range(10))", "range")
-        chk("_type_of((123,'Hello'))", "(integer,text)")
-        chk("_type_of(list<integer>())", "list<integer>")
-        chk("_type_of(set<integer>())", "set<integer>")
-        chk("_type_of(map<integer,text>())", "map<integer,text>")
-
-        chk("1/0", "rt_err:expr:/:div0:1")
-        chk("_type_of(1/0)", "integer")
-
-        chk("_type_of(user @ {})", "user")
-        chk("_type_of(user @? {})", "user?")
-        chk("_type_of(user @* {})", "list<user>")
-        chk("_type_of(user @+ {})", "list<user>")
-
-        // Side effect.
-        chkEx("{ val s = set([123]); val t = _type_of(s.add(456)); return (s, t); }", "([123],boolean)")
-    }
-
-    @Test fun testTypeOfInAtExpr() {
-        tstCtx.useSql = true
-        def("entity user { name: text; }")
-        insert("c0.user", "name", "1,'Bob'")
-        chk("user @{} ( _type_of(.name) )", "text[text]")
-        chk("user @{} ( _type_of(.name).matches('text') )", "boolean[true]")
-        chk("user @{} ( .name.matches('Bob') )", "boolean[true]")
-    }
-
-    @Test fun testStrictStr() {
-        tst.strictToString = false
-        chk("123", "123")
-        chk("_strict_str(123)", "int[123]")
-        chk("_strict_str('Hello')", "text[Hello]")
-        chk("_strict_str(true)", "boolean[true]")
-        chk("_strict_str((123,'Hello'))", "(int[123],text[Hello])")
-    }
-
-    @Test fun testNullable() {
-        tst.strictToString = false
-        chk("_type_of(123)", "integer")
-        chk("_type_of(_nullable(123))", "integer?")
-    }
-
-    @Test fun testJsonStr() {
-        chkEx("""{ val s = json('{  "x":5, "y" : 10  }'); return s.str(); }""", """text[{"x":5,"y":10}]""")
-    }
-
-    @Test fun testGtv() {
-        chk("""gtv.from_json('{"x":123,"y":[4,5,6]}')""", """gtv[{"x":123,"y":[4,5,6]}]""")
-        chk("""gtv.from_json(json('{"x":123,"y":[4,5,6]}'))""", """gtv[{"x":123,"y":[4,5,6]}]""")
-        chk("gtv.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106')",
-                """gtv[{"x":123,"y":[4,5,6]}]""")
-        chk("gtv.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106').to_json()",
-                """json[{"x":123,"y":[4,5,6]}]""")
-        chk("''+gtv.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106').to_json()",
-                """text[{"x":123,"y":[4,5,6]}]""")
-        chk("""gtv.from_json('{"x":123,"y":[4,5,6]}').to_bytes()""",
-                "byte_array[a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106]")
-    }
-
-    @Test fun testStruct() {
-        def("struct foo { a: integer; b: text; }")
-        def("struct bar { a: (x: integer, text); }")
-        def("struct qaz { m: map<integer,text>; }")
-
-        chk("foo(123,'Hello').to_gtv()", """gtv[[123,"Hello"]]""")
-        chk("foo(123,'Hello').to_gtv_pretty()", """gtv[{"a":123,"b":"Hello"}]""")
-        chk("foo(123,'Hello').to_bytes()", "byte_array[a510300ea30302017ba2070c0548656c6c6f]")
-        chk("foo.from_gtv(gtv.from_bytes(x'a510300ea30302017ba2070c0548656c6c6f'))", "foo[a=int[123],b=text[Hello]]")
-        chk("foo.from_gtv_pretty(gtv.from_bytes(x'a41a301830080c0161a30302017b300c0c0162a2070c0548656c6c6f'))",
-                "foo[a=int[123],b=text[Hello]]")
-        chk("foo.from_bytes(x'a510300ea30302017ba2070c0548656c6c6f')", "foo[a=int[123],b=text[Hello]]")
-
-        chk("bar((x=123,'Hello')).to_gtv()", """gtv[[[123,"Hello"]]]""")
-        chk("bar((x=123,'Hello')).to_gtv_pretty()", """gtv[{"a":[123,"Hello"]}]""")
-        chk("bar((x=123,'Hello')).to_bytes()", "byte_array[a5143012a510300ea30302017ba2070c0548656c6c6f]")
-        chk("bar.from_gtv(gtv.from_bytes(x'a5143012a510300ea30302017ba2070c0548656c6c6f'))",
-                "bar[a=(x=int[123],text[Hello])]")
-        chk("bar((x=123,'Hello')).to_gtv_pretty().to_bytes()", "byte_array[a419301730150c0161a510300ea30302017ba2070c0548656c6c6f]")
-        chk("bar.from_gtv_pretty(gtv.from_bytes(x'a419301730150c0161a510300ea30302017ba2070c0548656c6c6f'))",
-                "bar[a=(x=int[123],text[Hello])]")
-        chk("bar.from_bytes(x'a5143012a510300ea30302017ba2070c0548656c6c6f')", "bar[a=(x=int[123],text[Hello])]")
-
-        chk("qaz([123:'Hello']).to_gtv()", """gtv[[[[123,"Hello"]]]]""")
-        chk("qaz([123:'Hello']).to_gtv_pretty()", """gtv[{"m":[[123,"Hello"]]}]""")
-        chk("qaz([123:'Hello']).to_bytes()", "byte_array[a5183016a5143012a510300ea30302017ba2070c0548656c6c6f]")
-        chk("qaz([123:'Hello']).to_gtv_pretty().to_bytes()",
-                "byte_array[a41d301b30190c016da5143012a510300ea30302017ba2070c0548656c6c6f]")
-        chk("qaz.from_gtv(gtv.from_bytes(x'a5183016a5143012a510300ea30302017ba2070c0548656c6c6f'))",
-                "qaz[m=map<integer,text>[int[123]=text[Hello]]]")
-        chk("qaz.from_gtv_pretty(gtv.from_bytes(x'a41d301b30190c016da5143012a510300ea30302017ba2070c0548656c6c6f'))",
-                "qaz[m=map<integer,text>[int[123]=text[Hello]]]")
-        chk("qaz.from_bytes(x'a5183016a5143012a510300ea30302017ba2070c0548656c6c6f')",
-                "qaz[m=map<integer,text>[int[123]=text[Hello]]]")
+        chkEx("{ log(null, 123, _nullable('hello')); return 123; }", "int[123]")
+        chkOut()
+        chkLog("[:q(main.rell:2)] null 123 hello")
     }
 
     @Test fun testExists() {
@@ -310,47 +196,5 @@ class LibTest: BaseRellTest(false) {
     @Test fun testSysQueries() {
         chk("rell.get_rell_version()", "ct_err:unknown_name:[rell]:get_rell_version")
         chk("rell.get_app_structure()", "ct_err:unknown_name:[rell]:get_app_structure")
-    }
-
-    @Test fun testGtxOperationType() {
-        chk("gtx_operation(name = 'foo', args = list<gtv>())", "gtx_operation[name=text[foo],args=list<gtv>[]]")
-        chk("gtx_operation()", "ct_err:attr_missing:name,args")
-        chkEx("{ var o: gtx_operation; o = gtx_operation('foo', ['Bob'.to_gtv()]); return o; }",
-                """gtx_operation[name=text[foo],args=list<gtv>[gtv["Bob"]]]""")
-    }
-
-    @Test fun testGtxTransactionBodyType() {
-        chk("gtx_transaction_body(blockchain_rid = x'1234', operations = list<gtx_operation>(), signers = list<gtv>())",
-                "gtx_transaction_body[blockchain_rid=byte_array[1234],operations=list<gtx_operation>[],signers=list<gtv>[]]")
-        chk("gtx_transaction_body()", "ct_err:attr_missing:blockchain_rid,operations,signers")
-    }
-
-    @Test fun testGtxTransactionType() {
-        val expBody = "gtx_transaction_body[blockchain_rid=byte_array[1234],operations=list<gtx_operation>[],signers=list<gtv>[]]"
-        chk("gtx_transaction(body = gtx_transaction_body(blockchain_rid = x'1234', operations = [], signers = []), signatures = [])",
-                "gtx_transaction[body=$expBody,signatures=list<gtv>[]]")
-        chk("gtx_transaction()", "ct_err:attr_missing:body,signatures")
-    }
-
-    @Test fun testHiddenLib() {
-        chk("_type_of(123)", "text[integer]")
-        chk("_nullable(123)", "int[123]")
-        chk("_nullable_int(123)", "int[123]")
-        chk("_crash('hello')", "ct_err:query_exprtype_unit")
-
-        tst.hiddenLib = false
-        chk("_type_of(123)", "ct_err:unknown_name:_type_of")
-        chk("_nullable(123)", "ct_err:unknown_name:_nullable")
-        chk("_nullable_int(123)", "ct_err:unknown_name:_nullable_int")
-        chk("_crash('hello')", "ct_err:unknown_name:_crash")
-    }
-
-    @Test fun testCrash() {
-        try {
-            chkEx("{ _crash('hello'); return 0; }", "...")
-            fail()
-        } catch (e: RellInterpreterCrashException) {
-            assertEquals("hello", e.message)
-        }
     }
 }

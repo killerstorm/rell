@@ -73,11 +73,15 @@ class LibRellTestAssertTest: BaseRellTest(false) {
         chkAssert("assert_not_equals(123.0, 123)", "asrt_err:assert_not_equals:dec[123]")
         chkAssert("assert_not_equals(123, 123.0)", "asrt_err:assert_not_equals:dec[123]")
 
-        // More complex type promotions not supported yet.
-        chkAssertEqualsBad("_nullable_int(123)", "123.0", "integer?", "decimal")
-        chkAssertEqualsBad("123.0", "_nullable_int(123)", "decimal", "integer?")
-        chkAssertEqualsBad("_nullable(123.0)", "123", "decimal?", "integer")
-        chkAssertEqualsBad("123", "_nullable(123.0)", "integer", "decimal?")
+        chkAssert("assert_equals(_nullable_int(123), 123.0)", "int[0]")
+        chkAssert("assert_equals(123.0, _nullable_int(123))", "int[0]")
+        chkAssert("assert_equals(_nullable_int(123), 456.0)", "asrt_err:assert_equals:dec[123]:dec[456]")
+        chkAssert("assert_equals(123.0, _nullable_int(456))", "asrt_err:assert_equals:dec[123]:dec[456]")
+
+        chkAssert("assert_equals(_nullable(123.0), 123)", "int[0]")
+        chkAssert("assert_equals(123, _nullable(123.0))", "int[0]")
+        chkAssert("assert_equals(_nullable(123.0), 456)", "asrt_err:assert_equals:dec[123]:dec[456]")
+        chkAssert("assert_equals(123, _nullable(456.0))", "asrt_err:assert_equals:dec[123]:dec[456]")
     }
 
     @Test fun testAssertEqualsBadArgs() {
@@ -124,7 +128,7 @@ class LibRellTestAssertTest: BaseRellTest(false) {
         chkAssert("assert_null(_nullable_int(123))", "asrt_err:assert_null:int[123]")
         chkAssert("assert_null(_nullable_int(null))", "int[0]")
         chkAssert("assert_null(123)", "ct_err:expr_call_argtypes:[FN]:integer")
-        chkAssert("assert_null(null)", "int[0]")
+        chkAssert("assert_null(null)", "ct_err:expr_call_argtypes:[FN]:null")
 
         chkAssert("assert_not_null(_nullable_int(123))", "int[0]")
         chkAssert("assert_not_null(_nullable_int(null))", "asrt_err:assert_not_null")
@@ -200,7 +204,63 @@ class LibRellTestAssertTest: BaseRellTest(false) {
         chkAssert("$fn($a, $b)", exp)
     }
 
+    @Test fun testAssertCompareBoolean() {
+        chkAssertCmpPair("false,false", "boolean[false]:boolean[false]", 0)
+        chkAssertCmpPair("false,true", "boolean[false]:boolean[true]", -1)
+        chkAssertCmpPair("true,false", "boolean[true]:boolean[false]", 1)
+        chkAssertCmpPair("true,true", "boolean[true]:boolean[true]", 0)
+    }
+
+    @Test fun testAssertCompareEnum() {
+        def("enum color { red, green, blue }")
+        chkAssertCmpPair("color.red,color.red", "color[red]:color[red]", 0)
+        chkAssertCmpPair("color.red,color.green", "color[red]:color[green]", -1)
+        chkAssertCmpPair("color.red,color.blue", "color[red]:color[blue]", -1)
+        chkAssertCmpPair("color.green,color.red", "color[green]:color[red]", 1)
+        chkAssertCmpPair("color.green,color.green", "color[green]:color[green]", 0)
+        chkAssertCmpPair("color.green,color.blue", "color[green]:color[blue]", -1)
+        chkAssertCmpPair("color.blue,color.red", "color[blue]:color[red]", 1)
+        chkAssertCmpPair("color.blue,color.green", "color[blue]:color[green]", 1)
+        chkAssertCmpPair("color.blue,color.blue", "color[blue]:color[blue]", 0)
+    }
+
+    @Test fun testAssertCompareTuple() {
+        for (a in listOf(1, 2, 3)) {
+            for (b in "ABC") {
+                for (c in listOf(1, 2, 3)) {
+                    for (d in "ABC") {
+                        val cmp = "$a$b".compareTo("$c$d")
+                        chkAssertCmpPair("($a,'$b'),($c,'$d')", "(int[$a],text[$b]):(int[$c],text[$d])", cmp)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun chkAssertCmpPair(args: String, values: String, cmp: Int) {
+        chkFn("{ assert_le($args); }", if (cmp <= 0) "unit" else "asrt_err:assert_compare:<=:$values")
+        chkFn("{ assert_lt($args); }", if (cmp < 0)  "unit" else "asrt_err:assert_compare:<:$values")
+        chkFn("{ assert_gt($args); }", if (cmp > 0)  "unit" else "asrt_err:assert_compare:>:$values")
+        chkFn("{ assert_ge($args); }", if (cmp >= 0) "unit" else "asrt_err:assert_compare:>=:$values")
+    }
+
+    @Test fun testAssertCompareWrongArgs() {
+        chkAssertCmpWrongArgs("123,'Hello'", "integer,text")
+        chkAssertCmpWrongArgs("false,123", "boolean,integer")
+        chkAssertCmpWrongArgs("gtv.from_json('{}'),gtv.from_json('{}')", "gtv,gtv")
+        chkAssertCmpWrongArgs("(1,'A'),0.0", "(integer,text),decimal")
+        chkAssertCmpWrongArgs("(123,456.0),(123.0,456)", "(integer,decimal),(decimal,integer)")
+    }
+
+    private fun chkAssertCmpWrongArgs(args: String, types: String) {
+        chk("assert_lt($args)", "ct_err:expr_call_argtypes:[assert_lt]:$types")
+        chk("assert_gt($args)", "ct_err:expr_call_argtypes:[assert_gt]:$types")
+        chk("assert_le($args)", "ct_err:expr_call_argtypes:[assert_le]:$types")
+        chk("assert_ge($args)", "ct_err:expr_call_argtypes:[assert_ge]:$types")
+    }
+
     @Test fun testAssertRange() {
+        def("enum ord { zero, one, two, three, four }")
         chkAssertRange("assert_gt_lt", CmpOp.GT, CmpOp.LT)
         chkAssertRange("assert_gt_le", CmpOp.GT, CmpOp.LE)
         chkAssertRange("assert_ge_lt", CmpOp.GE, CmpOp.LT)
@@ -213,6 +273,10 @@ class LibRellTestAssertTest: BaseRellTest(false) {
         chkAssertRange(fn, op1, op2, "'a' 'b' 'c' 'd' 'e'", "text[a] text[b] text[c] text[d] text[e]")
         chkAssertRange(fn, op1, op2, "x'a1' x'b2' x'c3' x'd4' x'e5'",
                 "byte_array[a1] byte_array[b2] byte_array[c3] byte_array[d4] byte_array[e5]")
+        chkAssertRange(fn, op1, op2, "ord.zero ord.one ord.two ord.three ord.four",
+            "ord[zero] ord[one] ord[two] ord[three] ord[four]")
+        chkAssertRange(fn, op1, op2, "(1,'a') (1,'b') (2,'a') (3,'c') (3,'d')",
+            "(int[1],text[a]) (int[1],text[b]) (int[2],text[a]) (int[3],text[c]) (int[3],text[d])")
     }
 
     private fun chkAssertRange(fn: String, op1: CmpOp, op2: CmpOp, exprsStr: String, valuesStr: String) {

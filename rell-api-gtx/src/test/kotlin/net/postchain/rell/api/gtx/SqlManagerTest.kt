@@ -1,10 +1,14 @@
+/*
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ */
+
 package net.postchain.rell.api.gtx
 
-import net.postchain.rell.base.testutils.SqlTestUtils
 import net.postchain.StorageBuilder
 import net.postchain.config.app.AppConfig
 import net.postchain.rell.base.sql.ConnectionSqlManager
 import net.postchain.rell.base.sql.SqlUtils
+import net.postchain.rell.base.testutils.SqlTestUtils
 import org.apache.commons.configuration2.PropertiesConfiguration
 import org.junit.Test
 

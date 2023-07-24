@@ -6,9 +6,11 @@ package net.postchain.rell.base.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.rell.base.compiler.base.core.C_CompilerPass
+import net.postchain.rell.base.compiler.base.core.C_DefinitionType
 import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
 import net.postchain.rell.base.compiler.base.utils.C_LateInit
+import net.postchain.rell.base.lib.type.R_OperationType
 import net.postchain.rell.base.model.expr.R_AttributeDefaultValueExpr
 import net.postchain.rell.base.model.expr.R_CreateExpr
 import net.postchain.rell.base.model.expr.R_CreateExprAttr
@@ -16,11 +18,8 @@ import net.postchain.rell.base.model.expr.R_Expr
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.runtime.utils.toGtv
-import net.postchain.rell.base.utils.checkEquals
+import net.postchain.rell.base.utils.*
 import net.postchain.rell.base.utils.ide.IdeSymbolInfo
-import net.postchain.rell.base.utils.toGtv
-import net.postchain.rell.base.utils.toImmList
-import net.postchain.rell.base.utils.toImmMap
 
 sealed class R_KeyIndex(attribs: List<R_Name>) {
     val attribs = attribs.toImmList()
@@ -57,17 +56,19 @@ class R_EntityBody(
 class R_ExternalEntity(val chain: R_ExternalChainRef, val metaCheck: Boolean)
 
 class R_EntityDefinition(
-        base: R_DefinitionBase,
-        val rName: R_Name,
-        val mountName: R_MountName,
-        val flags: R_EntityFlags,
-        val sqlMapping: R_EntitySqlMapping,
-        val external: R_ExternalEntity?,
-        val mirrorStructs: R_MirrorStructs
+    base: R_DefinitionBase,
+    defType: C_DefinitionType,
+    val rName: R_Name,
+    val mountName: R_MountName,
+    val flags: R_EntityFlags,
+    val sqlMapping: R_EntitySqlMapping,
+    val external: R_ExternalEntity?,
 ): R_Definition(base) {
     val metaName = mountName.str()
 
     val type = R_EntityType(this)
+
+    val mirrorStructs = R_MirrorStructs(base, defType.name, type)
 
     private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, ERROR_BODY)
 
@@ -133,13 +134,13 @@ class R_StructFlags(
 )
 
 class R_Struct(
-        val name: String,
-        val typeMetaGtv: Gtv,
-        val initFrameGetter: C_LateGetter<R_CallFrame>,
-        val mirrorStructs: R_MirrorStructs?,
+    val name: String,
+    val typeMetaGtv: Gtv,
+    val initFrameGetter: C_LateGetter<R_CallFrame>,
+    val mirrorStructs: R_MirrorStructs?,
 ) {
-    private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, ERROR_BODY)
-    private val flagsLate = C_LateInit(C_CompilerPass.APPDEFS, ERROR_STRUCT_FLAGS)
+    private val bodyLate = LateInit(ERROR_BODY)
+    private val flagsLate = LateInit(ERROR_STRUCT_FLAGS)
 
     val attributes: Map<R_Name, R_Attribute> get() = bodyLate.get().attrMap
     val attributesList: List<R_Attribute> get() = bodyLate.get().attrList
@@ -156,7 +157,7 @@ class R_Struct(
         val attrsList = attrs.values.toList()
         attrsList.withIndex().forEach { (idx, attr) -> checkEquals(attr.index, idx) }
         val attrMutable = attrs.values.any { it.mutable }
-        bodyLate.set(R_StructBody(attrs, attrsList, attrMutable), true)
+        bodyLate.set(R_StructBody(attrs, attrsList, attrMutable))
     }
 
     fun setFlags(flags: R_StructFlags) {
@@ -194,28 +195,30 @@ class R_Struct(
 }
 
 class R_MirrorStructs(
-        defBase: R_DefinitionBase,
-        defType: String,
-        val operation: R_MountName?
+    defBase: R_DefinitionBase,
+    defType: String,
+    val innerType: R_Type,
 ) {
     val immutable = createStruct(defBase, defType, false)
     val mutable = createStruct(defBase, defType, true)
 
+    val operation: R_OperationDefinition? = (innerType as? R_OperationType)?.rOperation
+
     fun getStruct(mutable: Boolean) = if (mutable) this.mutable else this.immutable
 
     private fun createStruct(
-            defBase: R_DefinitionBase,
-            defType: String,
-            mutable: Boolean
+        defBase: R_DefinitionBase,
+        defType: String,
+        mutable: Boolean,
     ): R_Struct {
         val mutableStr = if (mutable) "mutable " else ""
         val structName = "struct<$mutableStr${defBase.defName.appLevelName}>"
 
         val structMetaGtv = mapOf(
-                "type" to "struct".toGtv(),
-                "definition_type" to defType.toGtv(),
-                "definition" to defBase.defName.appLevelName.toGtv(),
-                "mutable" to mutable.toGtv()
+            "type" to "struct".toGtv(),
+            "definition_type" to defType.toGtv(),
+            "definition" to defBase.defName.appLevelName.toGtv(),
+            "mutable" to mutable.toGtv(),
         ).toGtv()
 
         return R_Struct(structName, structMetaGtv, defBase.initFrameGetter, mirrorStructs = this)
@@ -238,13 +241,13 @@ class R_EnumAttr(val rName: R_Name, val value: Int, val ideInfo: IdeSymbolInfo) 
 }
 
 class R_EnumDefinition(
-        base: R_DefinitionBase,
-        val attrs: List<R_EnumAttr>
+    base: R_DefinitionBase,
+    val attrs: List<R_EnumAttr>,
 ): R_Definition(base) {
     val type = R_EnumType(this)
 
-    private val attrMap = attrs.map { Pair(it.name, it) }.toMap()
-    private val rtValues = attrs.map { Rt_EnumValue(type, it) }
+    private val attrMap = attrs.associateBy { it.name }.toImmMap()
+    private val rtValues = attrs.map { Rt_EnumValue(type, it) }.toImmList()
 
     fun attr(name: String): R_EnumAttr? {
         return attrMap[name]

@@ -119,7 +119,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         t.chk("""struct<data>.from_gtv(gtv.from_json('[123,"abc"]'))""", "struct<data>[x=int[123],y=text[abc]]")
         t.chk("""struct<data>.from_gtv_pretty(gtv.from_json('{"x":123,"y":"abc"}'))""", "struct<data>[x=int[123],y=text[abc]]")
         t.chk("struct<data>.from_bytes(x'a50e300ca30302017ba2050c03616263')", "struct<data>[x=int[123],y=text[abc]]")
-        t.chk("struct<data>.bad_name()", "ct_err:unknown_name:[struct<data>]:bad_name")
+        t.chk("struct<data>.bad_name()", "ct_err:unknown_member:[struct<data>]:bad_name")
     }
 
     @Test fun testSystemEntity() {
@@ -166,9 +166,9 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("_type_of((user@{}).to_struct())", "text[struct<user>]")
         chk("(user@{}).to_struct()", "struct<user>[name=text[Bob],rating=int[123]]")
 
-        chk("_type_of((user@?{}).to_struct())", "ct_err:expr_mem_null:to_struct")
+        chk("_type_of((user@?{}).to_struct())", "ct_err:expr_mem_null:user?:to_struct")
         chk("_type_of((user@?{})?.to_struct())", "text[struct<user>?]")
-        chk("(user@?{'Bob'}).to_struct()", "ct_err:expr_mem_null:to_struct")
+        chk("(user@?{'Bob'}).to_struct()", "ct_err:expr_mem_null:user?:to_struct")
         chk("(user@?{'Bob'})?.to_struct()", "struct<user>[name=text[Bob],rating=int[123]]")
         chk("(user@?{'Alice'})?.to_struct()", "null")
 

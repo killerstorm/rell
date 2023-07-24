@@ -180,11 +180,11 @@ class ExpressionTest: BaseRellTest(false) {
         def("function data() = c4 @? {} limit 1;")
         initEntityPathExprComplex()
 
-        chkEx("{ val c = data(); return c.c3; }", "ct_err:expr_mem_null:c3")
+        chkEx("{ val c = data(); return c.c3; }", "ct_err:expr_mem_null:c4?:c3")
         chkEx("{ val c = data(); return c?.c3; }", "c3[5]")
-        chkEx("{ val c = data(); return c?.c3.c2; }", "ct_err:expr_mem_null:c2")
+        chkEx("{ val c = data(); return c?.c3.c2; }", "ct_err:expr_mem_null:c3?:c2")
         chkEx("{ val c = data(); return c?.c3?.c2; }", "c2[3]")
-        chkEx("{ val c = data(); return c?.c3?.c2.c1; }", "ct_err:expr_mem_null:c1")
+        chkEx("{ val c = data(); return c?.c3?.c2.c1; }", "ct_err:expr_mem_null:c2?:c1")
         chkEx("{ val c = data(); return c?.c3?.c2?.c1; }", "c1[1]")
     }
 
@@ -239,11 +239,11 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testList() {
         chk("list([1,2,3,4,5])", "list<integer>[int[1],int[2],int[3],int[4],int[5]]")
-        chk("list()", "ct_err:expr_list_notype")
+        chk("list()", "ct_err:fn:sys:unresolved_type_params:list:T")
         chk("list<integer>()", "list<integer>[]")
         chk("list<integer>([1,2,3])", "list<integer>[int[1],int[2],int[3]]")
-        chk("list<integer>(['Hello'])", "ct_err:expr_list_typemiss:integer:text")
-        chk("list<text>([12345])", "ct_err:expr_list_typemiss:text:integer")
+        chk("list<integer>(['Hello'])", "ct_err:expr_call_argtypes:[list<integer>]:list<text>")
+        chk("list<text>([12345])", "ct_err:expr_call_argtypes:[list<text>]:list<integer>")
         chk("['Hello', 'World']", "list<text>[text[Hello],text[World]]")
         chk("['Hello', 'World', 12345]", "ct_err:expr_list_itemtype:[text]:[integer]")
         chk("[unit()]", "ct_err:expr_list_unit")
@@ -458,7 +458,7 @@ class ExpressionTest: BaseRellTest(false) {
         chkEx("{ val a: list<integer>? = null; return a !== [1,2,3]; }", "boolean[true]")
     }
 
-    @Test fun testEqTupleSubtype() {
+    @Test fun testEqTupleSubType() {
         chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = a; return a === b; }", "boolean[true]")
         chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = a; return b === a; }", "boolean[true]")
         chkEx("{ val a = (123, 'Hello'); val b: (integer?, text?) = a; return a !== b; }", "boolean[false]")
@@ -739,7 +739,9 @@ class ExpressionTest: BaseRellTest(false) {
     @Test fun testImplicitTargetAttrSmartNullable() {
         def("struct s { foo: integer; bar: integer; }")
         chkEx("{ val foo = _nullable_int(123); return s(foo, bar = 456); }", "ct_err:attr_bad_type:0:foo:integer:integer?")
-        chkEx("{ val foo = _nullable_int(123); return if (foo == null) null else s(foo, bar = 456); }", "s[foo=int[123],bar=int[456]]")
-        chkEx("{ val bar = _nullable_int(456); return if (bar == null) null else s(foo = 123, bar); }", "s[foo=int[123],bar=int[456]]")
+        chkEx("{ val foo = _nullable_int(123); return if (foo == null) null else s(foo, bar = 456); }",
+            "s[foo=int[123],bar=int[456]]")
+        chkEx("{ val bar = _nullable_int(456); return if (bar == null) null else s(foo = 123, bar); }",
+            "s[foo=int[123],bar=int[456]]")
     }
 }

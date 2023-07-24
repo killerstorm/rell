@@ -98,6 +98,14 @@ object CommonUtils {
         return res.toImmList()
     }
 
+    fun <T> concatLists(list1: List<T>, list2: List<T>): List<T> {
+        return when {
+            list2.isEmpty() -> list1
+            list1.isEmpty() -> list2
+            else -> (list1 + list2).toImmList()
+        }
+    }
+
     fun tableToStrings(table: List<List<String>>): List<String> {
         val widths = mutableListOf<Int>()
 
@@ -116,6 +124,16 @@ object CommonUtils {
     }
 
     fun failIfUnitTest() {
-        check(!IS_UNIT_TEST)
+        // Don't fail if called for a debug evaluation - IntelliJ calls toString() to show variable values.
+        check(!IS_UNIT_TEST || isIntelliJDebugEvaluation())
+    }
+
+    private fun isIntelliJDebugEvaluation(): Boolean {
+        val stack = Thread.currentThread().stackTrace
+        val ij = stack.withIndex().firstOrNull { it.value.className.startsWith("com.intellij.rt.debugger.") }
+        ij ?: return false
+        return stack.withIndex().any {
+            it.index > ij.index && it.value.className.startsWith("net.postchain.rell.")
+        }
     }
 }

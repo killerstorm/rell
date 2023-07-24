@@ -4,12 +4,9 @@
 
 package net.postchain.rell.base.lang.misc
 
-import net.postchain.rell.base.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.base.testutils.BaseRellTest
 import net.postchain.rell.base.testutils.RellCodeTester
 import org.junit.Test
-import kotlin.test.assertEquals
-import kotlin.test.fail
 
 class StackTraceTest: BaseRellTest(false) {
     @Test fun testRequire() {
@@ -115,16 +112,6 @@ class StackTraceTest: BaseRellTest(false) {
 
         chk("state.x", "req_err:[forced_crash]")
         chkStack(":f(main.rell:1)", ":g(main.rell:2)", ":state(main.rell:3)")
-    }
-
-    @Test fun testCrash() {
-        def("function f() { _crash('Hello'); }")
-        try {
-            chkEx("{ f(); return 0; }", "???")
-            fail("no exception")
-        } catch (e: RellInterpreterCrashException) {
-            assertEquals("Hello", e.message)
-        }
     }
 
     @Test fun testSpecificErrorsCollections() {

@@ -5,6 +5,7 @@
 package net.postchain.rell.base.compiler.base.core
 
 import net.postchain.rell.base.compiler.base.def.*
+import net.postchain.rell.base.compiler.base.lib.C_LibModule
 import net.postchain.rell.base.compiler.base.module.C_CompiledModule
 import net.postchain.rell.base.compiler.base.module.C_ModuleDescriptor
 import net.postchain.rell.base.compiler.base.module.C_ModuleKey
@@ -14,6 +15,7 @@ import net.postchain.rell.base.compiler.base.namespace.C_NsAsm_AppAssembler
 import net.postchain.rell.base.compiler.base.namespace.C_NsAsm_ModuleAssembler
 import net.postchain.rell.base.compiler.base.namespace.C_NsAsm_ReplAssembler
 import net.postchain.rell.base.compiler.base.utils.*
+import net.postchain.rell.base.lmodel.L_Module
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.putAllAbsent
 import net.postchain.rell.base.utils.toImmList
@@ -39,10 +41,11 @@ private object C_InternalAppUtils {
 }
 
 class C_AppContext(
-        val msgCtx: C_MessageContext,
-        val executor: C_CompilerExecutor,
-        val repl: Boolean,
-        private val oldReplState: C_ReplAppState
+    val msgCtx: C_MessageContext,
+    val executor: C_CompilerExecutor,
+    val repl: Boolean,
+    private val oldReplState: C_ReplAppState,
+    private val extraLibMod: C_LibModule?,
 ) {
     val globalCtx = msgCtx.globalCtx
 
@@ -52,7 +55,7 @@ class C_AppContext(
     private val defsBuilder = C_AppDefsBuilder(executor)
     val defsAdder: C_AppDefsAdder = defsBuilder
 
-    val sysDefs = oldReplState.sysDefs ?: C_SystemDefs.create(this, appUid)
+    val sysDefs = oldReplState.sysDefs ?: C_SystemDefs.create(this, appUid, extraLibMod)
 
     val functionReturnTypeCalculator = C_FunctionBody.createReturnTypeCalculator()
 
@@ -129,12 +132,16 @@ class C_AppContext(
 
     fun getNewReplState() = newReplStateLate.get()
 
-    fun createModuleNsAssembler(moduleKey: C_ModuleKey, sysDefs: C_SystemDefs, exportSysEntities: Boolean): C_NsAsm_ModuleAssembler {
-        return nsAssembler.addModule(moduleKey, sysDefs.nsProto, exportSysEntities)
+    fun createModuleNsAssembler(
+        moduleKey: C_ModuleKey,
+        sysDefsScope: C_SystemDefsScope,
+        exportSysEntities: Boolean,
+    ): C_NsAsm_ModuleAssembler {
+        return nsAssembler.addModule(moduleKey, sysDefsScope.nsProto, exportSysEntities)
     }
 
     fun createReplNsAssembler(linkedModule: C_ModuleKey?): C_NsAsm_ReplAssembler {
-        return nsAssembler.addRepl(sysDefs.nsProto, linkedModule, oldReplState.nsAsmState)
+        return nsAssembler.addRepl(sysDefs.appScope.nsProto, linkedModule, oldReplState.nsAsmState)
     }
 
     fun addExternalChain(name: String): C_ExternalChain {
@@ -148,7 +155,7 @@ class C_AppContext(
         val blockEntity = C_Utils.createBlockEntity(this, ref)
         val transactionEntity = C_Utils.createTransactionEntity(this, ref, blockEntity)
 
-        val extSysDefs = C_SystemDefs.create(globalCtx, appUid, blockEntity, transactionEntity, listOf())
+        val extSysDefs = C_SystemDefs.create(globalCtx, appUid, blockEntity, transactionEntity, listOf(), extraLibMod)
         return C_ExternalChain(name, ref, extSysDefs)
     }
 
@@ -171,7 +178,7 @@ class C_AppContext(
         val topologicalEntities = calcTopologicalEntities(appDefs.entities)
 
         val appOperationsMap = routinesToMap(appDefs.operations)
-        val appQueriesMap = routinesToMap(sysDefs.queries + appDefs.queries)
+        val appQueriesMap = routinesToMap(sysDefs.common.queries + appDefs.queries)
 
         val valid = !msgCtx.messages().any { !it.type.ignorable }
 
@@ -240,10 +247,10 @@ class C_AppContext(
 
     private fun createAppMounts(): C_MountTables {
         val builder = C_MountTablesBuilder(appUid)
-        builder.add(sysDefs.mntTables)
+        builder.add(sysDefs.common.mntTables)
 
         for (extChain in externalChains.values) {
-            builder.add(extChain.sysDefs.mntTables)
+            builder.add(extChain.sysDefs.common.mntTables)
         }
 
         for (module in modulesBuilder.commit()) {

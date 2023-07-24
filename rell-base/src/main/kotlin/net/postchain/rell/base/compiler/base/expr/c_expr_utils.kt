@@ -8,7 +8,6 @@ import net.postchain.rell.base.compiler.ast.C_BinOp_EqNe
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_MessageContext
 import net.postchain.rell.base.compiler.base.core.C_QualifiedName
-import net.postchain.rell.base.compiler.base.fn.C_FuncCaseCtx
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.vexpr.*
@@ -64,10 +63,6 @@ object C_ExprUtils {
 
     fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, nameMsg: LazyPosString): R_Expr {
         return createSysCallRExpr(type, fn, args, nameMsg.pos, nameMsg.lazyStr)
-    }
-
-    fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, caseCtx: C_FuncCaseCtx): R_Expr {
-        return createSysCallRExpr(type, fn, args, caseCtx.linkPos, caseCtx.qualifiedNameMsgLazy())
     }
 
     fun createSysCallRExpr(type: R_Type, fn: R_SysFunction, args: List<R_Expr>, pos: S_Pos, nameMsg: LazyString): R_Expr {

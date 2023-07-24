@@ -243,7 +243,7 @@ class EntityTest: BaseRellTest(false) {
         chkEx("{ val c = company @ { 'BobCorp' }; return c.boss.rowid; }", "rowid[100]")
         chkEx("{ val c = company @ { 'AliceCorp' }; return c.boss.rowid; }", "rowid[200]")
 
-        chkEx("{ val u = user @? { 'Bob' }; return u.rowid; }", "ct_err:expr_mem_null:rowid")
+        chkEx("{ val u = user @? { 'Bob' }; return u.rowid; }", "ct_err:expr_mem_null:user?:rowid")
         chkEx("{ val u = user @? { 'Bob' }; return u?.rowid; }", "rowid[100]")
         chkEx("{ val u = user @? { 'Alice' }; return u?.rowid; }", "rowid[200]")
         chkEx("{ val u = user @? { 'Trudy' }; return u?.rowid; }", "null")

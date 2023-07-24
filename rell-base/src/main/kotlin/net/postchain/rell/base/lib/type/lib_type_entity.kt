@@ -7,37 +7,44 @@ package net.postchain.rell.base.lib.type
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_LambdaBlock
 import net.postchain.rell.base.compiler.base.core.C_Name
+import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.expr.*
-import net.postchain.rell.base.compiler.base.fn.C_FuncMatchUtils
-import net.postchain.rell.base.compiler.base.fn.C_MemberFuncCaseCtx
-import net.postchain.rell.base.compiler.base.fn.C_PartialCallArguments
-import net.postchain.rell.base.compiler.base.fn.C_SpecialSysMemberFunction
+import net.postchain.rell.base.compiler.base.lib.C_LibFuncCaseCtx
+import net.postchain.rell.base.compiler.base.lib.C_LibFuncCaseUtils
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunction
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.base.utils.C_Errors
-import net.postchain.rell.base.compiler.base.utils.C_LibUtils
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
-import net.postchain.rell.base.compiler.vexpr.V_Expr
-import net.postchain.rell.base.compiler.vexpr.V_GlobalConstantRestriction
-import net.postchain.rell.base.compiler.vexpr.V_MemberFunctionCall
-import net.postchain.rell.base.compiler.vexpr.V_TypeValueMember
+import net.postchain.rell.base.compiler.vexpr.*
+import net.postchain.rell.base.lmodel.L_TypeUtils
+import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.model.R_EntityDefinition
 import net.postchain.rell.base.model.R_EntityType
-import net.postchain.rell.base.model.R_FunctionType
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.utils.CommonUtils
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
 
-object C_Lib_Type_Entity {
-    fun getValueMembers(type: R_EntityType): List<C_TypeValueMember> {
-        val memberFns = C_LibUtils.typeMemFuncBuilder(type)
-            .add("to_struct", C_Fn_ToStruct(type, false))
-            .add("to_mutable_struct", C_Fn_ToStruct(type, true))
-            .build()
+object Lib_Type_Entity {
+    val NAMESPACE = Ld_NamespaceDsl.make {
+        type("entity", abstract = true, hidden = true) {
+            supertypeStrategySpecial { mType ->
+                val rType = L_TypeUtils.getRType(mType)
+                rType is R_EntityType
+            }
+        }
 
-        val attrMembers = C_EntityAttrRef.getEntityAttrs(type.rEntity).map { C_TypeValueMember_EntityAttr(it) }
-        return C_LibUtils.makeValueMembers(type, memberFns, attrMembers)
+        type("entity_extension", abstract = true, extension = true, hidden = true) {
+            generic("T", subOf = "entity")
+
+            function("to_struct", C_Fn_ToStruct(false))
+            function("to_mutable_struct", C_Fn_ToStruct(true))
+        }
+    }
+
+    fun getValueMembers(type: R_EntityType): List<C_TypeValueMember> {
+        return C_EntityAttrRef.getEntityAttrs(type.rEntity).map { C_TypeValueMember_EntityAttr(it) }
     }
 
     fun pathToDbExpr(ctx: C_ExprContext, atEntity: R_DbAtEntity, path: List<C_EntityAttrRef>, resType: R_Type, linkPos: S_Pos): Db_Expr {
@@ -50,7 +57,9 @@ object C_Lib_Type_Entity {
         return dbExpr
     }
 
-    private class C_TypeValueMember_EntityAttr(val attr: C_EntityAttrRef): C_TypeValueMember(attr.ideName, attr.type) {
+    private class C_TypeValueMember_EntityAttr(
+        val attr: C_EntityAttrRef,
+    ): C_TypeValueMember_Value(attr.ideName, attr.type) {
         override fun kindMsg() = "attribute"
         override fun nameMsg(): C_CodeMsg = attr.attrName.str toCodeMsg attr.attrName.str
 
@@ -122,33 +131,30 @@ object C_Lib_Type_Entity {
         }
     }
 
-    abstract class C_SysFn_ToStruct_Common: C_SpecialSysMemberFunction() {
-        protected abstract fun compile0(ctx: C_ExprContext): V_MemberFunctionCall
+    abstract class C_SysFn_ToStruct_Common: C_SpecialLibMemberFunction() {
+        protected abstract fun compile0(ctx: C_ExprContext, selfType: R_Type): V_MemberFunctionCall?
 
-        final override fun compileCallFull(ctx: C_ExprContext, callCtx: C_MemberFuncCaseCtx, args: List<V_Expr>): V_MemberFunctionCall {
+        final override fun compileCallFull(
+            ctx: C_ExprContext,
+            callCtx: C_LibFuncCaseCtx,
+            selfType: R_Type,
+            args: List<V_Expr>,
+            resTypeHint: C_TypeHint,
+        ): V_MemberFunctionCall {
             if (args.isNotEmpty()) {
                 val argTypes = args.map { it.type }
-                C_FuncMatchUtils.errNoMatch(ctx, callCtx.linkPos, callCtx.qualifiedNameMsg(), argTypes)
+                C_LibFuncCaseUtils.errNoMatch(ctx, callCtx.linkPos, callCtx.qualifiedNameMsg(), argTypes)
             }
-            return compile0(ctx)
-        }
 
-        final override fun compileCallPartial(
-            ctx: C_ExprContext,
-            caseCtx: C_MemberFuncCaseCtx,
-            args: C_PartialCallArguments,
-            resTypeHint: R_FunctionType?
-        ): V_MemberFunctionCall? {
-            args.errPartialNotSupported(caseCtx.qualifiedNameMsg())
-            return null
+            val vCall = compile0(ctx, selfType)
+            return vCall ?: V_MemberFunctionCall_Error(ctx)
         }
     }
 
-    private class C_Fn_ToStruct(
-        private val entityType: R_EntityType,
-        private val mutable: Boolean
-    ): C_SysFn_ToStruct_Common() {
-        override fun compile0(ctx: C_ExprContext): V_MemberFunctionCall {
+    private class C_Fn_ToStruct(private val mutable: Boolean): C_SysFn_ToStruct_Common() {
+        override fun compile0(ctx: C_ExprContext, selfType: R_Type): V_MemberFunctionCall? {
+            val entityType = selfType as? R_EntityType
+            entityType ?: return null
             return V_MemberFunctionCall_EntityToStruct(ctx, entityType, mutable)
         }
     }
@@ -170,7 +176,7 @@ private object EntityUtils {
     ): R_MemberCalculator {
         val atEntity = ctx.makeAtEntity(rEntity, ctx.appCtx.nextAtExprId())
 
-        val dbExpr = C_Lib_Type_Entity.pathToDbExpr(ctx, atEntity, path, resType, linkPos)
+        val dbExpr = Lib_Type_Entity.pathToDbExpr(ctx, atEntity, path, resType, linkPos)
         val whatValue = Db_AtWhatValue_DbExpr(dbExpr, path.last().type)
         val whatField = Db_AtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
 

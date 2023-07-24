@@ -30,14 +30,14 @@ abstract class C_FunctionCallTargetInfo {
 }
 
 abstract class C_FunctionCallTarget: C_FunctionCallTargetInfo() {
-    abstract fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall?
+    abstract fun compileFull(args: C_FullCallArguments, resTypeHint: C_TypeHint): V_GlobalFunctionCall?
     abstract fun compilePartial(args: C_PartialCallArguments, resTypeHint: R_FunctionType?): V_GlobalFunctionCall?
 }
 
 abstract class C_FunctionCallTarget_Regular(
-        private val ctx: C_ExprContext,
-        private val callInfo: C_FunctionCallInfo,
-        private val retType: R_Type?,
+    private val ctx: C_ExprContext,
+    private val callInfo: C_FunctionCallInfo,
+    private val retType: R_Type?,
 ): C_FunctionCallTarget() {
     protected open fun vBase(): V_Expr? = null
     protected open fun safe() = false
@@ -47,7 +47,7 @@ abstract class C_FunctionCallTarget_Regular(
     final override fun typeHints() = callInfo.params.typeHints
     final override fun getParameter(name: R_Name) = callInfo.params.map[name]
 
-    final override fun compileFull(args: C_FullCallArguments): V_GlobalFunctionCall? {
+    final override fun compileFull(args: C_FullCallArguments, resTypeHint: C_TypeHint): V_GlobalFunctionCall? {
         retType ?: return null
         val vBase = vBase()
         val vTarget = createVTarget()
@@ -85,9 +85,18 @@ class C_FunctionCallTarget_FunctionType(
     override fun createVTarget(): V_FunctionCallTarget = V_FunctionCallTarget_FunctionValue
 }
 
-abstract class C_PartialCallTarget<ExprT>(val callPos: S_Pos, val fullName: LazyString, val params: C_FunctionCallParameters) {
-    abstract fun matchesType(fnType: R_FunctionType): Boolean
-    abstract fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): ExprT
+abstract class C_PartialCallTargetMatch<CallT: V_FunctionCall>(val exact: Boolean) {
+    abstract fun paramTypes(): List<R_Type>?
+    abstract fun compileCall(ctx: C_ExprContext, args: C_EffectivePartialArguments): CallT
+}
+
+abstract class C_PartialCallTarget<CallT: V_FunctionCall>(
+    val callPos: S_Pos,
+    val fullName: LazyString,
+) {
+    abstract fun codeMsg(): C_CodeMsg
+    abstract fun match(): C_PartialCallTargetMatch<CallT>
+    abstract fun match(fnType: R_FunctionType): C_PartialCallTargetMatch<CallT>?
 }
 
 class C_FunctionCallInfo(

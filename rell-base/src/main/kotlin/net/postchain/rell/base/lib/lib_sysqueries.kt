@@ -14,7 +14,7 @@ import net.postchain.rell.base.utils.immListOf
 
 // Not a normal library, only provides queries that are not bound to a namespace, but are accessible via their mount names.
 
-object C_Lib_SysQueries {
+object Lib_SysQueries {
     fun createQueries(executor: C_CompilerExecutor): List<R_QueryDefinition> {
         return immListOf(
             C_Utils.createSysQuery(executor, "get_rell_version", R_TextType, SysQueryFns.GetRellVersion),
@@ -27,14 +27,14 @@ object C_Lib_SysQueries {
 }
 
 private object SysQueryFns {
-    object GetRellVersion: R_SysFunction {
+    object GetRellVersion: R_SysFunctionEx_N() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
             return Rt_TextValue(RellVersions.VERSION_STR)
         }
     }
 
-    object GetPostchainVersion: R_SysFunction {
+    object GetPostchainVersion: R_SysFunctionEx_N() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
             val ver = ctx.globalCtx.rellVersion()
@@ -43,7 +43,7 @@ private object SysQueryFns {
         }
     }
 
-    object GetBuild: R_SysFunction {
+    object GetBuild: R_SysFunctionEx_N() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
             val ver = ctx.globalCtx.rellVersion()
@@ -51,7 +51,7 @@ private object SysQueryFns {
         }
     }
 
-    object GetBuildDetails: R_SysFunction {
+    object GetBuildDetails: R_SysFunctionEx_N() {
         val TYPE = R_MapType(R_TextType, R_TextType)
 
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
@@ -61,7 +61,7 @@ private object SysQueryFns {
         }
     }
 
-    object GetAppStructure: R_SysFunction {
+    object GetAppStructure: R_SysFunctionEx_N() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
             val v = ctx.appCtx.app.toMetaGtv()

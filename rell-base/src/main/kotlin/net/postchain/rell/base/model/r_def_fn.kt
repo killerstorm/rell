@@ -6,8 +6,10 @@ package net.postchain.rell.base.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.rell.base.compiler.base.core.C_CompilerPass
+import net.postchain.rell.base.compiler.base.core.C_DefinitionType
 import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.base.compiler.base.utils.C_LateInit
+import net.postchain.rell.base.lib.type.R_OperationType
 import net.postchain.rell.base.model.stmt.R_Statement
 import net.postchain.rell.base.model.stmt.R_StatementResult_Return
 import net.postchain.rell.base.runtime.*
@@ -33,15 +35,18 @@ sealed class R_RoutineDefinition(base: R_DefinitionBase): R_Definition(base) {
 }
 
 sealed class R_MountedRoutineDefinition(
-        base: R_DefinitionBase,
-        val mountName: R_MountName
+    base: R_DefinitionBase,
+    val mountName: R_MountName,
 ): R_RoutineDefinition(base)
 
 class R_OperationDefinition(
-        base: R_DefinitionBase,
-        mountName: R_MountName,
-        val mirrorStructs: R_MirrorStructs
+    base: R_DefinitionBase,
+    defType: C_DefinitionType,
+    mountName: R_MountName,
 ): R_MountedRoutineDefinition(base, mountName) {
+    val type: R_Type = R_OperationType(this)
+    val mirrorStructs = R_MirrorStructs(base, defType.name, type)
+
     private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
 
     fun setInternals(varParams: List<R_VarParam>, body: R_Statement, frame: R_CallFrame) {

@@ -287,7 +287,7 @@ abstract class AtExprGroupBaseTest: AtExprBaseTest() {
         chkTypeGroup("decimal", "123.456", "dec[123.456]")
         chkTypeGroup("text", "'Hi'", "text[Hi]")
         chkTypeGroup("byte_array", "x'1c'", "byte_array[1c]")
-        chkTypeGroup("rowid", "_int_to_rowid(123)", "rowid[123]")
+        chkTypeGroup("rowid", "rowid(123)", "rowid[123]")
         chkTypeGroup("color", "color.red", "color[red]")
         chkTypeGroup("user", "user@{'Bob'}", "user[303]")
     }
@@ -375,7 +375,7 @@ abstract class AtExprGroupBaseTest: AtExprBaseTest() {
         chkTypeMinMaxOK("integer", "111 222", "int[111]", "int[222]")
         chkTypeMinMaxOK("decimal", "12.34 56.78", "dec[12.34]", "dec[56.78]")
         chkTypeMinMaxOK("text", "'abc' 'xyz'", "text[abc]", "text[xyz]")
-        chkTypeMinMaxOK("rowid", "_int_to_rowid(123) _int_to_rowid(456)", "rowid[123]", "rowid[456]")
+        chkTypeMinMaxOK("rowid", "rowid(123) rowid(456)", "rowid[123]", "rowid[456]")
         chkTypeMinMaxOK("color", "color.red color.green", "color[red]", "color[green]")
         chkTypeMinMaxOK("user", "user@{'Bob'} user@{'Alice'}", "user[501]", "user[502]")
     }

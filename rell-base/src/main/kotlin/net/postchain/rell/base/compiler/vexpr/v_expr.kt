@@ -1,20 +1,20 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.vexpr
 
 import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_Pos
-import net.postchain.rell.base.compiler.base.core.C_Name
-import net.postchain.rell.base.compiler.base.core.C_TypeHint
-import net.postchain.rell.base.compiler.base.core.C_VarUid
+import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallInfo
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTarget_FunctionType
 import net.postchain.rell.base.compiler.base.fn.C_FunctionUtils
+import net.postchain.rell.base.compiler.base.lib.C_TypeMember
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Errors
+import net.postchain.rell.base.compiler.base.utils.C_PosCodeMsg
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.Db_Expr
 import net.postchain.rell.base.model.expr.R_BlockCheckExpr
@@ -91,6 +91,22 @@ class V_ConstantValueEvalContext {
 
 class V_GlobalConstantRestriction(val code: String, val msg: String?)
 
+class V_ExprWrapper(
+    private val msgCtx: C_MessageContext,
+    private val expr: V_Expr,
+    private val msgSupplier: () -> C_PosCodeMsg? = { null },
+) {
+    val type: R_Type = expr.type
+
+    fun unwrap(): V_Expr {
+        val cm = msgSupplier()
+        if (cm != null) {
+            msgCtx.warning(cm.pos, cm.code, cm.msg)
+        }
+        return expr
+    }
+}
+
 abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     protected val msgCtx = exprCtx.msgCtx
 
@@ -156,7 +172,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
 
     fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
         if (safe) {
-            if (asNullable().type !is R_NullableType && type.isNotError()) {
+            if (asNullable().unwrap().type !is R_NullableType && type.isNotError()) {
                 val typeStr = type.strCode()
                 ctx.msgCtx.error(memberName.pos, "expr_safemem_type:[$typeStr]", "Wrong type for operator '?.': $typeStr")
             }
@@ -164,24 +180,28 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
             if (type is R_NullableType) {
                 val nameStr = memberName.str
                 val msg = "Cannot access member '$nameStr' of nullable type ${type.str()}"
-                ctx.msgCtx.error(memberName.pos, "expr_mem_null:$nameStr", msg)
+                ctx.msgCtx.error(memberName.pos, "expr_mem_null:${type.strCode()}:$nameStr", msg)
             }
         }
 
-        val member = C_TypeValueMember.getTypeMember(ctx, type, memberName, exprHint)
+        val selfType = C_Types.removeNullable(type)
+
+        val members = ctx.typeMgr.getValueMembers(selfType, memberName.rName)
+        val member = C_TypeMember.getMember(ctx.msgCtx, members, exprHint, memberName, selfType, "type_value_member")
         member ?: return C_ExprUtils.errorMember(ctx, memberName.pos)
 
-        return member0(ctx, memberName, member, safe && (type is R_NullableType), exprHint)
+        return member0(ctx, selfType, memberName, member, safe && (type is R_NullableType), exprHint)
     }
 
     protected open fun member0(
         ctx: C_ExprContext,
+        selfType: R_Type,
         memberName: C_Name,
         memberValue: C_TypeValueMember,
         safe: Boolean,
         exprHint: C_ExprHint,
     ): C_ExprMember {
-        val link = C_MemberLink(this, memberName.pos, memberName, safe)
+        val link = C_MemberLink(this, selfType, memberName.pos, memberName, safe)
         return memberValue.compile(ctx, link)
     }
 
@@ -251,5 +271,6 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     open fun varId(): C_VarUid? = null
     open fun globalConstantId(): R_GlobalConstantId? = null
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
-    open fun asNullable(): V_Expr = this
+    open fun asNullable(): V_ExprWrapper = asWrapper()
+    fun asWrapper(): V_ExprWrapper = V_ExprWrapper(msgCtx, this)
 }

@@ -123,13 +123,40 @@ class UpdateDeleteTest: BaseRellTest() {
         chkData()
     }
 
+    @Test fun testDeleteConstraint() {
+        createCitiesAndPersons()
+
+        chkData(
+            "city(1,New York)", "city(2,San Francisco)", "city(3,Los Angeles)",
+            "person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)",
+        )
+
+        chkOp("delete city @ { .name == 'New York' };", "rt_err:sqlerr:0")
+        chkData(
+            "city(1,New York)", "city(2,San Francisco)", "city(3,Los Angeles)",
+            "person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,250)",
+        )
+
+        chkOp("delete person @ { .name == 'Mike' };")
+        chkData(
+            "city(1,New York)", "city(2,San Francisco)", "city(3,Los Angeles)",
+            "person(4,James,3,Evergreen Ave,5,100)",
+        )
+
+        chkOp("delete city @ { .name == 'New York' };")
+        chkData(
+            "city(2,San Francisco)", "city(3,Los Angeles)",
+            "person(4,James,3,Evergreen Ave,5,100)",
+        )
+    }
+
     @Test fun testUpdateEntityAlias() {
         createCitiesAndPersons()
 
         chkOp("update (p: person) @ { p.name == 'Mike' } ( score = 999 );")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
 
-        chkOp("update (p: person) @ { person.name == 'Mike' } ( score = 777 );", "ct_err:unknown_name:[person]:name")
+        chkOp("update (p: person) @ { person.name == 'Mike' } ( score = 777 );", "ct_err:unknown_member:[person]:name")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)", "person(5,Mike,1,Grand St,7,999)")
 
         chkOp("update person @ { person.name == 'Mike' } ( score = 777 );")
@@ -142,7 +169,7 @@ class UpdateDeleteTest: BaseRellTest() {
         chkOp("delete (p: person) @ { p.name == 'Mike' };")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)")
 
-        chkOp("delete (p: person) @ { person.name == 'James' };", "ct_err:unknown_name:[person]:name")
+        chkOp("delete (p: person) @ { person.name == 'James' };", "ct_err:unknown_member:[person]:name")
         chkDataCommon("person(4,James,3,Evergreen Ave,5,100)")
 
         chkOp("delete person @ { person.name == 'James' };")
@@ -499,7 +526,7 @@ class UpdateDeleteTest: BaseRellTest() {
         createCitiesAndPersons()
         chkDataCommon(james(100), mike(250))
 
-        resetChkOp("val p = ${person("James")}; p.score = 33;", "ct_err:expr_mem_null:score")
+        resetChkOp("val p = ${person("James")}; p.score = 33;", "ct_err:expr_mem_null:person?:score")
         chkDataCommon(james(100), mike(250))
 
         resetChkOp("val p = ${person("James")}; p!!.score = 33;")
@@ -664,8 +691,8 @@ class UpdateDeleteTest: BaseRellTest() {
 
         chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
 
-        chkOp("val u = user @? {}; u.company.city = 'Dallas';", "ct_err:expr_mem_null:company")
-        chkOp("val u = user @? {}; u?.company.city = 'Dallas';", "ct_err:expr_mem_null:city")
+        chkOp("val u = user @? {}; u.company.city = 'Dallas';", "ct_err:expr_mem_null:user?:company")
+        chkOp("val u = user @? {}; u?.company.city = 'Dallas';", "ct_err:expr_mem_null:company?:city")
         chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
 
         resetSqlCtr()

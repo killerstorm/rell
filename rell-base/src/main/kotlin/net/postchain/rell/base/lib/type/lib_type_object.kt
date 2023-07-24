@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -8,8 +8,12 @@ import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_Name
 import net.postchain.rell.base.compiler.base.core.C_QualifiedName
 import net.postchain.rell.base.compiler.base.expr.*
-import net.postchain.rell.base.compiler.base.utils.*
+import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
+import net.postchain.rell.base.compiler.base.utils.C_Errors
+import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.compiler.vexpr.*
+import net.postchain.rell.base.lmodel.L_TypeUtils
+import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.model.R_Attribute
 import net.postchain.rell.base.model.R_ObjectDefinition
 import net.postchain.rell.base.model.R_ObjectType
@@ -22,22 +26,32 @@ import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.checkEquals
 import net.postchain.rell.base.utils.immListOf
 
-object C_Lib_Type_Object {
-    fun getMemberValues(type: R_ObjectType): List<C_TypeValueMember> {
-        val fns = C_MemberFuncBuilder(type.defName)
-            .add("to_struct", C_Fn_ToStruct(type, false))
-            .add("to_mutable_struct", C_Fn_ToStruct(type, true))
-            .build()
+object Lib_Type_Object {
+    val NAMESPACE = Ld_NamespaceDsl.make {
+        type("object", abstract = true, hidden = true) {
+            supertypeStrategySpecial { mType ->
+                val rType = L_TypeUtils.getRType(mType)
+                rType is R_ObjectType
+            }
+        }
 
+        type("object_extension", abstract = true, extension = true, hidden = true) {
+            generic("T", subOf = "object")
+
+            function("to_struct", C_Fn_ToStruct(false))
+            function("to_mutable_struct", C_Fn_ToStruct(true))
+        }
+    }
+
+    fun getMemberValues(type: R_ObjectType): List<C_TypeValueMember> {
         val rObject = type.rObject
-        val attrMembers = rObject.rEntity.attributes.values.map { C_TypeValueMember_ObjectAttr(rObject, it) }
-        return C_LibUtils.makeValueMembers(type, fns, attrMembers)
+        return rObject.rEntity.attributes.values.map { C_TypeValueMember_ObjectAttr(rObject, it) }
     }
 
     private class C_TypeValueMember_ObjectAttr(
         private val rObject: R_ObjectDefinition,
         private val attr: R_Attribute,
-    ): C_TypeValueMember(attr.ideName, attr.type) {
+    ): C_TypeValueMember_Value(attr.ideName, attr.type) {
         override fun kindMsg() = "attribute"
         override fun nameMsg(): C_CodeMsg = attr.rName.str toCodeMsg attr.rName.str
 
@@ -84,10 +98,11 @@ object C_Lib_Type_Object {
     }
 
     private class C_Fn_ToStruct(
-        private val objectType: R_ObjectType,
         private val mutable: Boolean
-    ): C_Lib_Type_Entity.C_SysFn_ToStruct_Common() {
-        override fun compile0(ctx: C_ExprContext): V_MemberFunctionCall {
+    ): Lib_Type_Entity.C_SysFn_ToStruct_Common() {
+        override fun compile0(ctx: C_ExprContext, selfType: R_Type): V_MemberFunctionCall? {
+            val objectType = selfType as? R_ObjectType
+            objectType ?: return null
             return V_MemberFunctionCall_ObjectToStruct(ctx, objectType, mutable)
         }
     }

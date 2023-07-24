@@ -8,6 +8,7 @@ import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.expr.*
+import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
@@ -46,7 +47,8 @@ sealed class C_FullCallArguments(protected val ctx: C_ExprContext): C_CallArgume
 
 sealed class C_PartialCallArguments(protected val ctx: C_ExprContext, val wildcardPos: S_Pos): C_CallArguments() {
     abstract fun compileEffectiveArgs(callInfo: C_FunctionCallInfo): C_EffectivePartialArguments?
-    abstract fun errPartialNotSupported(functionName: String?)
+    abstract fun errPartialNotSupportedFn(functionName: String)
+    abstract fun errPartialNotSupportedCase(fnCase: C_CodeMsg)
 }
 
 object C_FunctionCallArgsUtils {
@@ -60,7 +62,7 @@ object C_FunctionCallArgsUtils {
         return when (callArgs) {
             null -> null
             is C_FullCallArguments -> {
-                target.compileFull(callArgs)
+                target.compileFull(callArgs, resTypeHint)
             }
             is C_PartialCallArguments -> {
                 val resFnType = resTypeHint.getFunctionType()
@@ -126,16 +128,15 @@ private sealed class C_CallArgsAdapter<ArgT> {
     ): C_TypeAdapter? {
         val paramType = param.type
         return if (paramType.isError()) C_TypeAdapter_Direct else {
-            val matcher = C_ArgTypeMatcher_Simple(paramType)
-            val m = matcher.match(argType)
-            if (m == null && argType.isNotError()) {
+            val adapter = paramType.getTypeAdapter(argType)
+            if (adapter == null && argType.isNotError()) {
                 val paramName = param.nameCodeMsg()
                 val fnNameCode = callInfo.functionName ?: "?"
                 val code = "expr_call_argtype:[$fnNameCode]:${paramName.code}:${paramType.strCode()}:${argType.strCode()}"
                 val msg = "Wrong argument type for parameter ${paramName.msg}: ${argType.str()} instead of ${paramType.str()}"
                 ctx.msgCtx.error(callInfo.callPos, code, msg)
             }
-            m
+            adapter
         }
     }
 }
@@ -196,8 +197,14 @@ private class C_PartialCallArguments_Impl(
         return args.compileEffectiveArgs(ctx, callInfo)
     }
 
-    override fun errPartialNotSupported(functionName: String?) {
+    override fun errPartialNotSupportedFn(functionName: String) {
         ctx.msgCtx.error(args.firstWildcardPos, C_Errors.msgPartialCallNotAllowed(functionName))
+    }
+
+    override fun errPartialNotSupportedCase(fnCase: C_CodeMsg) {
+        val code = "expr:call:partial_bad_case:${fnCase.code}"
+        val msg = "Partial application not supported for function ${fnCase.msg}"
+        ctx.msgCtx.error(args.firstWildcardPos, code, msg)
     }
 }
 

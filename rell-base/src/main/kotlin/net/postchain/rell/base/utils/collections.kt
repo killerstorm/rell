@@ -49,6 +49,90 @@ private class ChainIterable<T>(private val head: T, private val nextGetter: (T) 
     }
 }
 
+fun <T: Any> Array<out T?>.filterNotNullAllOrNull(): List<T>? {
+    val res: MutableList<T> = ArrayList(this.size)
+    for (value in this) {
+        value ?: return null
+        res.add(value)
+    }
+    return res.toImmList()
+}
+
+fun <T: Any> Iterable<T?>.filterNotNullAllOrNull(): List<T>? {
+    val res: MutableList<T> = ArrayList()
+    for (value in this) {
+        value ?: return null
+        res.add(value)
+    }
+    return res.toImmList()
+}
+
+fun <T, R> Iterable<T>.mapNotNullAllOrNull(f: (T) -> R?): List<R>? {
+    val res: MutableList<R> = ArrayList()
+    for (value in this) {
+        val resValue = f(value)
+        resValue ?: return null
+        res.add(resValue)
+    }
+    return res.toImmList()
+}
+
+fun <T, R> Iterable<T>.mapIndexedNotNullAllOrNull(f: (Int, T) -> R?): List<R>? {
+    val res: MutableList<R> = ArrayList()
+    for (entry in this.withIndex()) {
+        val index = res.size
+        val resValue = f(index, entry.value)
+        resValue ?: return null
+        res.add(resValue)
+    }
+    return res.toImmList()
+}
+
+fun <T> List<T>.mapOrSame(f: (T) -> T): List<T> {
+    var res: MutableList<T>? = null
+
+    for (i in this.indices) {
+        val v = this[i]
+        val v2 = f(v)
+        if (res == null && v2 !== v) {
+            res = ArrayList(this.size)
+            for (j in 0 until i) {
+                res.add(this[j])
+            }
+        }
+        res?.add(v2)
+    }
+
+    return if (res == null) this else res.toImmList()
+}
+
+fun <T> List<T>.mapIndexedOrSame(f: (Int, T) -> T): List<T> {
+    var res: MutableList<T>? = null
+
+    for (i in this.indices) {
+        val v = this[i]
+        val v2 = f(i, v)
+        if (res == null && v2 !== v) {
+            res = ArrayList(this.size)
+            for (j in 0 until i) {
+                res.add(this[j])
+            }
+        }
+        res?.add(v2)
+    }
+
+    return if (res == null) this else res.toImmList()
+}
+
+fun <K, V> Map<K, V>.unionNoConflicts(m: Map<K, V>): Map<K, V> {
+    val res = this.toMutableMap()
+    for (entry in m.entries) {
+        check(entry.key !in res) { "Key conflict: $entry" }
+        res[entry.key] = entry.value
+    }
+    return res.toImmMap()
+}
+
 fun <T> immListOf(vararg values: T): List<T> = ImmutableList.copyOf(values)
 fun <T> immListOfNotNull(value: T?): List<T> = if (value == null) immListOf() else immListOf(value)
 fun <T> Iterable<T>.toImmList(): List<T> = ImmutableList.copyOf(this)

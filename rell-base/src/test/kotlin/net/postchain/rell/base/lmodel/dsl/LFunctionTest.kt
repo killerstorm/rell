@@ -1,0 +1,157 @@
+/*
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ */
+
+package net.postchain.rell.base.lmodel.dsl
+
+import net.postchain.rell.base.lmodel.L_ParamArity
+import net.postchain.rell.base.runtime.Rt_UnitValue
+import org.junit.Test
+
+class LFunctionTest: BaseLTest() {
+    @Test fun testFunctionBasic() {
+        val mod = makeModule("test") {
+            type("text") {}
+            type("boolean") {}
+            type("json") {
+                function("to_text") {
+                    result("text")
+                    param(name = "pretty", type = "boolean", arity = L_ParamArity.ZERO_ONE)
+                    body { -> Rt_UnitValue }
+                }
+            }
+        }
+
+        chkTypeMems(mod, "json", "function to_text(@arity(ZERO_ONE) pretty: boolean): text")
+    }
+
+    @Test fun testFunctionHeader() {
+        val mod = makeModule("test") {
+            type("integer")
+            type("text")
+            type("data") {
+                function("foo", params = listOf("text")) {
+                    result(type = "integer")
+                    chkErr("LDE:common_fun:params_already_defined:text") { param(type = "text") }
+                    chkErr("LDE:common_fun:params_already_defined:integer") { param(type = "integer") }
+                    body { -> Rt_UnitValue }
+                }
+                function("bar", result = "integer") {
+                    chkErr("LDE:function:result_already_defined:integer") { result(type = "integer") }
+                    chkErr("LDE:function:result_already_defined:text") { result(type = "text") }
+                    body { -> Rt_UnitValue }
+                }
+            }
+        }
+        chkTypeMems(mod, "data", "function foo(text): integer", "function bar(): integer")
+    }
+
+    @Test fun testFunctionUsesSelfType() {
+        val mod = makeModule("test") {
+            type("integer") {}
+            type("text") {
+                function("upper_case") {
+                    result(type = "text")
+                    body { -> Rt_UnitValue }
+                }
+                function("index_of") {
+                    result(type = "integer")
+                    param(type = "text")
+                    body { -> Rt_UnitValue }
+                }
+            }
+        }
+        chkTypeMems(mod, "text", "function upper_case(): text", "function index_of(text): integer")
+    }
+
+    @Test fun testTypeParamOfFunction() {
+        val mod = makeModule("test") {
+            type("data") {
+                function("f") {
+                    generic("T")
+                    result(type = "T")
+                    param(type = "T")
+                    body { -> Rt_UnitValue }
+                }
+            }
+        }
+        chkTypeMems(mod, "data", "function <T> f(T): T")
+    }
+
+    @Test fun testTypeParamUsesTypeParamFunction() {
+        val mod = makeModule("test") {
+            type("data") {
+                function("f") {
+                    generic("T")
+                    generic("U", subOf = "T")
+                    result(type = "U")
+                    param(type = "T")
+                    body { -> Rt_UnitValue }
+                }
+            }
+        }
+        chkTypeMems(mod, "data", "function <T,U:-T> f(T): U")
+    }
+
+    @Test fun testTypeParamConflictOuter() {
+        val mod = makeModule("test") {
+            type("data") {
+                generic("T")
+                constructor {
+                    chkErr("LDE:fun:type_param_conflict_outer:T") { generic("T") }
+                    generic("U")
+                    chkErr("LDE:fun:type_param_conflict:U") { generic("U") }
+                    generic("V")
+                    body { -> Rt_UnitValue }
+                }
+                function("f", result = "anything") {
+                    chkErr("LDE:fun:type_param_conflict_outer:T") { generic("T") }
+                    generic("U")
+                    chkErr("LDE:fun:type_param_conflict:U") { generic("U") }
+                    generic("V")
+                    body { -> Rt_UnitValue }
+                }
+                staticFunction("g", result = "anything") {
+                    chkErr("LDE:fun:type_param_conflict_outer:T") { generic("T") }
+                    generic("U")
+                    chkErr("LDE:fun:type_param_conflict:U") { generic("U") }
+                    generic("V")
+                    body { -> Rt_UnitValue }
+                }
+            }
+        }
+
+        chkTypeMems(mod, "data",
+            "constructor <U,V> ()",
+            "function <U,V> f(): anything",
+            "static function <U,V> g(): anything",
+        )
+    }
+
+    @Test fun testParamNullable() {
+        chkModuleErr("LDE:function:param_not_nullable:integer") {
+            type("integer")
+            function("f", result = "anything") {
+                param(type = "integer", nullable = true)
+                body { -> Rt_UnitValue }
+            }
+        }
+    }
+
+    @Test fun testAliasConflict() {
+        val mod = makeModule("test") {
+            function("f", result = "anything") {
+                chkErr("LDE:alias_conflict:f") { alias("f") }
+                alias("g")
+                chkErr("LDE:alias_conflict:g") { alias("g") }
+                alias("h")
+                body { -> Rt_UnitValue }
+            }
+        }
+        chkDefs(mod,
+            "function f(): anything",
+            "function g(): anything",
+            "function h(): anything",
+        )
+    }
+}

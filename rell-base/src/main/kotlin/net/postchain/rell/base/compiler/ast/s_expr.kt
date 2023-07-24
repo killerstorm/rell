@@ -11,8 +11,11 @@ import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.compiler.vexpr.*
+import net.postchain.rell.base.lib.Lib_Rell
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
-import net.postchain.rell.base.model.stmt.R_ForIterator_Collection
+import net.postchain.rell.base.model.stmt.R_IterableAdapter_Direct
+import net.postchain.rell.base.mtype.M_TypeUtils
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
 import net.postchain.rell.base.utils.ide.IdeSymbolInfo
@@ -64,14 +67,14 @@ abstract class S_Expr(val startPos: S_Pos) {
         val vExpr = cExpr.value()
 
         val type = vExpr.type
-        val cIterator = C_ForIterator.compile(ctx, type, true)
+        val cIterableAdapter = C_IterableAdapter.compile(ctx, type, true)
 
-        return if (cIterator == null) {
+        return if (cIterableAdapter == null) {
             val s = type.strCode()
             ctx.msgCtx.error(startPos, "at:from:bad_type:$s", "Invalid type for at-expression: $s")
-            C_AtFromItem_Iterable(startPos, vExpr, type, R_ForIterator_Collection)
+            C_AtFromItem_Iterable(startPos, vExpr, type, R_IterableAdapter_Direct)
         } else {
-            C_AtFromItem_Iterable(startPos, vExpr, cIterator.itemType, cIterator.rIterator)
+            C_AtFromItem_Iterable(startPos, vExpr, cIterableAdapter.itemType, cIterableAdapter.rAdapter)
         }
     }
 
@@ -481,9 +484,21 @@ class S_ListLiteralExpr(pos: S_Pos, val exprs: List<S_Expr>): S_Expr(pos) {
             C_Utils.checkUnitType(vExpr.pos, vExpr.type) { "expr_list_unit" toCodeMsg "Element expression returns nothing" }
         }
 
-        val hintElemType = typeHint.getListElementType()
+        val hintElemType = getHintElemType(typeHint)
         val rElemType = compileElementType(vExprs, hintElemType)
         return R_ListType(rElemType)
+    }
+
+    private fun getHintElemType(typeHint: C_TypeHint): R_Type? {
+        val mGenType = Lib_Rell.LIST_TYPE.mGenericType
+        val mHintType = L_TypeUtils.getExpectedType(mGenType.params, mGenType.commonType, typeHint)
+        mHintType ?: return null
+
+        val typeArgs = M_TypeUtils.getTypeArgs(mHintType)
+        val mElemType = typeArgs[mGenType.params[0]]?.getExactType()
+        mElemType ?: return null
+
+        return L_TypeUtils.getRType(mElemType)
     }
 
     private fun compileElementType(vExprs: List<V_Expr>, hintElemType: R_Type?): R_Type {
@@ -528,9 +543,29 @@ class S_MapLiteralExpr(startPos: S_Pos, val entries: List<Pair<S_Expr, S_Expr>>)
             C_Utils.checkMapKeyType(ctx.defCtx, valueExpr.startPos, keyType)
         }
 
-        val hintKeyValueTypes = typeHint.getMapKeyValueTypes()
+        val hintKeyValueTypes = getHintKeyValueType(typeHint)
         val rKeyValueTypes = compileKeyValueTypes(vEntries, hintKeyValueTypes)
         return R_MapType(rKeyValueTypes)
+    }
+
+    private fun getHintKeyValueType(typeHint: C_TypeHint): R_MapKeyValueTypes? {
+        val mGenType = Lib_Rell.MAP_TYPE.mGenericType
+
+        val mHintType = L_TypeUtils.getExpectedType(mGenType.params, mGenType.commonType, typeHint)
+        mHintType ?: return null
+
+        val typeArgs = M_TypeUtils.getTypeArgs(mHintType)
+        val mKeyType = typeArgs[mGenType.params[0]]?.getExactType()
+        val mValueType = typeArgs[mGenType.params[1]]?.getExactType()
+        mKeyType ?: return null
+        mValueType ?: return null
+
+        val rKeyType = L_TypeUtils.getRType(mKeyType)
+        val rValueType = L_TypeUtils.getRType(mValueType)
+        rKeyType ?: return null
+        rValueType ?: return null
+
+        return R_MapKeyValueTypes(rKeyType, rValueType)
     }
 
     private fun compileKeyValueTypes(vEntries: List<Pair<V_Expr, V_Expr>>, hintTypes: R_MapKeyValueTypes?): R_MapKeyValueTypes {

@@ -172,7 +172,7 @@ class ImportTest: BaseRellTest(false) {
     @Test fun testWildcardConflict3() {
         file("a.rell", "module; function f(): integer = 123; function u(): integer = 456;")
         file("b.rell", "module; function f(): integer = 321; function v(): integer = 789;")
-        chkImport("import a.*; import b.*;", "f()", "ct_err:name:ambig:f:[FUNCTION:a:f,FUNCTION:b:f]")
+        chkImport("import a.*; import b.*;", "f()", "ct_err:namespace:ambig:f:[FUNCTION:a:f,FUNCTION:b:f]")
         chkImport("import a.*; import b.*;", "u()", "int[456]")
         chkImport("import a.*; import b.*;", "v()", "int[789]")
         chkImport("import a.*; import a.*;", "f()", "int[123]")
@@ -192,7 +192,7 @@ class ImportTest: BaseRellTest(false) {
         file("c/c2.rell", "function f(): integer = 789;")
         file("c/c3.rell", "import b.*;")
         file("c/c4.rell", "function g(): integer = f();")
-        chkImport("import c;", "c.f()", "ct_err:name:ambig:c.f:[FUNCTION:c:f,FUNCTION:a:f,FUNCTION:b:f]")
+        chkImport("import c;", "c.f()", "ct_err:namespace:ambig:c.f:[FUNCTION:c:f,FUNCTION:a:f,FUNCTION:b:f]")
         chkImport("import c;", "c.g()", "int[789]")
     }
 
@@ -206,25 +206,28 @@ class ImportTest: BaseRellTest(false) {
 
         chkImport("import a.{ns.*, st.*};", "x(123)", "a:st.x[v=int[123]]")
         chkImport("import a.{ns.*, st.*};", "list<x.rec>()", "list<a:ns.x.rec>[]")
-        chkImport("import a.{ns.*, st.*};", "x.f()", "ct_err:name:ambig:x:[NAMESPACE:a:ns.x,STRUCT:a:st.x]")
+        chkImport("import a.{ns.*, st.*};", "x.f()", "ct_err:namespace:ambig:x:[NAMESPACE:a:ns.x,STRUCT:a:st.x]")
 
         chkImport("import a.{ns.*, en.*};", "list<x>()", "list<a:en.x>[]")
         chkImport("import a.{ns.*, en.*};", "list<x.rec>()", "list<a:ns.x.rec>[]")
-        chkImport("import a.{ns.*, en.*};", "x.EN", "ct_err:[name:ambig:x:[NAMESPACE:a:ns.x,ENUM:a:en.x]][unknown_name:[a:ns.x]:EN]")
-        chkImport("import a.{ns.*, en.*};", "x.f()", "ct_err:name:ambig:x:[NAMESPACE:a:ns.x,ENUM:a:en.x]")
+        chkImport("import a.{ns.*, en.*};", "x.EN",
+            "ct_err:[namespace:ambig:x:[NAMESPACE:a:ns.x,ENUM:a:en.x]][unknown_name:[a:ns.x]:EN]")
+        chkImport("import a.{ns.*, en.*};", "x.f()", "ct_err:namespace:ambig:x:[NAMESPACE:a:ns.x,ENUM:a:en.x]")
 
         chkImport("import a.{ns.*, fn.*};", "list<x.rec>()", "list<a:ns.x.rec>[]")
         chkImport("import a.{ns.*, fn.*};", "x.f()", "int[456]")
         chkImport("import a.{ns.*, fn.*};", "x()", "int[123]")
 
-        chkImport("import a.{st.*, en.*};", "list<x>()", "ct_err:name:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]")
-        chkImport("import a.{st.*, en.*};", "x.EN", "ct_err:[name:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]][unknown_name:[a:st.x]:EN]")
-        chkImport("import a.{st.*, en.*};", "x.from_bytes(x'')", "ct_err:name:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]")
-        chkImport("import a.{st.*, en.*};", "x.value(0)", "ct_err:[name:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]][unknown_name:[a:st.x]:value]")
+        chkImport("import a.{st.*, en.*};", "list<x>()", "ct_err:namespace:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]")
+        chkImport("import a.{st.*, en.*};", "x.EN",
+            "ct_err:[namespace:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]][unknown_member:[a:st.x]:EN]")
+        chkImport("import a.{st.*, en.*};", "x.from_bytes(x'')", "ct_err:namespace:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]")
+        chkImport("import a.{st.*, en.*};", "x.value(0)",
+            "ct_err:[namespace:ambig:x:[STRUCT:a:st.x,ENUM:a:en.x]][unknown_member:[a:st.x]:value]")
 
         chkImport("import a.{st.*, fn.*};", "list<x>()", "list<a:st.x>[]")
         chkImport("import a.{st.*, fn.*};", "_type_of(x.from_bytes(x''))", "text[a:st.x]")
-        chkImport("import a.{st.*, fn.*};", "x(123)", "ct_err:name:ambig:x:[STRUCT:a:st.x,FUNCTION:a:fn.x]")
+        chkImport("import a.{st.*, fn.*};", "x(123)", "ct_err:namespace:ambig:x:[STRUCT:a:st.x,FUNCTION:a:fn.x]")
 
         chkImport("import a.{en.*, fn.*};", "list<x>()", "list<a:en.x>[]")
         chkImport("import a.{en.*, fn.*};", "x.EN", "a:en.x[EN]")
@@ -542,8 +545,8 @@ class ImportTest: BaseRellTest(false) {
         file("d.rell", "module; import a.*; import b.*; function f(): integer = 789;")
         chkImport("import c.{f};", "f()", "ct_err:[import:name_ambig:f][unknown_name:f]")
         chkImport("import d.{f};", "f()", "int[789]")
-        chkImport("import c.*;", "f()", "ct_err:name:ambig:f:[FUNCTION:a:f,FUNCTION:b:f]")
-        chkImport("import d.*;", "f()", "ct_err:name:ambig:f:[FUNCTION:d:f,FUNCTION:a:f,FUNCTION:b:f]")
+        chkImport("import c.*;", "f()", "ct_err:namespace:ambig:f:[FUNCTION:a:f,FUNCTION:b:f]")
+        chkImport("import d.*;", "f()", "ct_err:namespace:ambig:f:[FUNCTION:d:f,FUNCTION:a:f,FUNCTION:b:f]")
     }
 
     @Test fun testAmbiguousNameImport2() {
@@ -555,8 +558,8 @@ class ImportTest: BaseRellTest(false) {
         chkImport("import d.{x.*};", "f()", "ct_err:unknown_name:f")
         chkImport("import d.{x.*};", "g()", "ct_err:unknown_name:g")
         chkImport("import d.{x.*};", "h()", "int[789]")
-        chkImport("import c.*;", "x.f()", "ct_err:name:ambig:x:[NAMESPACE:a:x,NAMESPACE:b:x]")
-        chkImport("import d.*;", "x.h()", "ct_err:name:ambig:x:[NAMESPACE:d:x,NAMESPACE:a:x,NAMESPACE:b:x]")
+        chkImport("import c.*;", "x.f()", "ct_err:namespace:ambig:x:[NAMESPACE:a:x,NAMESPACE:b:x]")
+        chkImport("import d.*;", "x.h()", "ct_err:namespace:ambig:x:[NAMESPACE:d:x,NAMESPACE:a:x,NAMESPACE:b:x]")
     }
 
     @Test fun testAmbiguousNameQualified() {
@@ -564,7 +567,7 @@ class ImportTest: BaseRellTest(false) {
         file("b1.rell", "module; namespace b { import c.*; }")
         file("b2.rell", "module; namespace b { import c.*; }")
         file("c.rell", "module; namespace c { entity user { name; } }")
-        chkCompile("import a.*; function f() = a.b.c.user @ {};", "ct_err:name:ambig:a.b:[NAMESPACE:b1:b,NAMESPACE:b2:b]")
+        chkCompile("import a.*; function f() = a.b.c.user @ {};", "ct_err:namespace:ambig:a.b:[NAMESPACE:b1:b,NAMESPACE:b2:b]")
     }
 
     @Test fun testAmbiguousNameQualified2() {
@@ -573,8 +576,9 @@ class ImportTest: BaseRellTest(false) {
         file("b2.rell", "module; namespace b { import c2.*; }")
         file("c1.rell", "module; namespace c { entity foo { name; } }")
         file("c2.rell", "module; namespace c { entity bar { name; } }")
-        chkCompile("import a.*; function f() = a.b.c.foo @ {};", "ct_err:name:ambig:a.b:[NAMESPACE:b1:b,NAMESPACE:b2:b]")
-        chkCompile("import a.*; function f() = a.b.c.bar @ {};", "ct_err:[unknown_name:[c1:c]:bar][name:ambig:a.b:[NAMESPACE:b1:b,NAMESPACE:b2:b]]")
+        chkCompile("import a.*; function f() = a.b.c.foo @ {};", "ct_err:namespace:ambig:a.b:[NAMESPACE:b1:b,NAMESPACE:b2:b]")
+        chkCompile("import a.*; function f() = a.b.c.bar @ {};",
+            "ct_err:[unknown_name:[c1:c]:bar][namespace:ambig:a.b:[NAMESPACE:b1:b,NAMESPACE:b2:b]]")
     }
 
     @Test fun testUnresolvedName() {
@@ -610,7 +614,7 @@ class ImportTest: BaseRellTest(false) {
         chkImport(imports, "structure @? {}", "rt_err:no_sql")
         chkImport(imports, "create structure(123)", "rt_err:no_db_update:def")
         chkImport(imports, "structure.from_gtv(gtv.from_json('[0]'))",
-            "ct_err:name:ambig:structure:[ENTITY:lib.structure:structure,NAMESPACE:lib.component_definition:structure]")
+            "ct_err:namespace:ambig:structure:[ENTITY:lib.structure:structure,NAMESPACE:lib.component_definition:structure]")
         chkImport(imports, "struct<structure>()", "struct<lib.structure:structure>[x=int[123]]")
     }
 

@@ -81,7 +81,7 @@ class MirrorStructOperationTest: BaseRellTest(false) {
         chk("""$type.from_gtv(gtv.from_json('["Bob",123]'))""", "$type[name=text[Bob],rating=int[123]]")
         chk("""$type.from_gtv_pretty(gtv.from_json('{"name":"Bob","rating":123}'))""", "$type[name=text[Bob],rating=int[123]]")
         chk("$type.from_bytes(x'a50e300ca2050c03426f62a30302017b')", "$type[name=text[Bob],rating=int[123]]")
-        chk("$type.bad_name()", "ct_err:unknown_name:[$type]:bad_name")
+        chk("$type.bad_name()", "ct_err:unknown_member:[$type]:bad_name")
     }
 
     @Test fun testCycle() {
@@ -98,8 +98,10 @@ class MirrorStructOperationTest: BaseRellTest(false) {
         tst.testLib = true
         def("operation new_user(name, rating: integer) {}")
         chk("struct<new_user>('Bob',123).to_test_op()", """op[new_user("Bob",123)]""")
+        chk("struct<mutable new_user>('Bob',123).to_test_op()", """op[new_user("Bob",123)]""")
         tst.testLib = false
-        chk("struct<new_user>('Bob',123).to_test_op()", "ct_err:expr:fn:struct:to_test_op:no_test")
+        chk("struct<new_user>('Bob',123).to_test_op()", "ct_err:unknown_member:[struct<new_user>]:to_test_op")
+        chk("struct<mutable new_user>('Bob',123).to_test_op()", "ct_err:unknown_member:[struct<mutable new_user>]:to_test_op")
     }
 
     @Test fun testMutableBasic() {

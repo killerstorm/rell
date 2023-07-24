@@ -25,6 +25,7 @@ class Rt_GlobalContext(
     val logSqlErrors: Boolean = false,
     val sqlUpdatePortionSize: Int = 1000, // Experimental maximum is 2^15
     val typeCheck: Boolean = false,
+    val wrapFunctionCallErrors: Boolean = true,
 ) {
     private val rellVersion = Rt_RellVersion.getInstance()
 

@@ -10,7 +10,7 @@ import org.junit.Test
 
 class LibMapTest: BaseRellTest(false) {
     @Test fun testLiteral() {
-        chk("[]", "ct_err:expr_list_no_type")
+        chk("[:]", "ct_err:expr_map_notype")
         chk("['Bob':123]", "map<text,integer>[text[Bob]=int[123]]")
         chk("['Bob':123,'Alice':456,'Trudy':789]", "map<text,integer>[text[Bob]=int[123],text[Alice]=int[456],text[Trudy]=int[789]]")
         chk("[123:456]", "map<integer,integer>[int[123]=int[456]]")
@@ -20,41 +20,112 @@ class LibMapTest: BaseRellTest(false) {
         chk("['Bob':123,'Bob':123]", "rt_err:expr_map_dupkey:text[Bob]")
     }
 
-    @Test fun testConstructor() {
-        chk("map()", "ct_err:expr_map_notype")
-        chk("map<text,integer>()", "map<text,integer>[]")
-        chk("map<integer,integer>([123])", "ct_err:expr_map_badtype:list<integer>")
-        chk("map<integer,integer>(['Bob':123])", "ct_err:expr_map_key_typemiss:integer:text")
-        chk("map<text,integer>(['Bob':123])", "map<text,integer>[text[Bob]=int[123]]")
+    @Test fun testLiteralTypeHint() {
+        chkEx("{ val x: map<integer, text> = [:]; return x; }", "map<integer,text>[]")
+        chkEx("{ val x: map<integer, text?> = [:]; return x; }", "map<integer,text?>[]")
+        chkEx("{ val x: map<integer, text?> = [123:'Hello']; return x; }", "map<integer,text?>[int[123]=text[Hello]]")
+        chkEx("{ val x: map<integer, (text?,boolean)> = [123:('Hello',true)]; return x; }",
+            "map<integer,(text?,boolean)>[int[123]=(text[Hello],boolean[true])]")
+    }
+
+    @Test fun testConstructorRaw() {
+        chk("map()", "ct_err:fn:sys:unresolved_type_params:map:K,V")
+        chk("map([123])", "ct_err:expr_call_argtypes:[map]:list<integer>")
         chk("map(['Bob':123])", "map<text,integer>[text[Bob]=int[123]]")
 
         val exp = "map<text,integer>[text[Bob]=int[123],text[Alice]=int[456],text[Trudy]=int[789]]"
         chk("map(['Bob':123,'Alice':456,'Trudy':789])", exp)
-        chk("map<text,integer>(['Bob':123,'Alice':456,'Trudy':789])", exp)
-        chk("map<integer,text>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_key_typemiss:integer:text")
-        chk("map<integer,integer>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_key_typemiss:integer:text")
-        chk("map<text,text>(['Bob':123,'Alice':456,'Trudy':789])", "ct_err:expr_map_value_typemiss:text:integer")
 
-        chk("map(range(5))", "ct_err:expr_map_badtype:range")
         chk("map([('Bob',123),('Alice',456),('Trudy',789)])", exp)
         chk("map([(x='Bob',y=123),(x='Alice',y=456),(x='Trudy',y=789)])", exp)
         chk("map([('Bob',y=123),('Alice',y=456),('Trudy',y=789)])", exp)
-        chk("map([('Bob',123,true),('Alice',456,false)])", "ct_err:expr_map_badtype:list<(text,integer,boolean)>")
+        chk("map([('Bob',123,true),('Alice',456,false)])", "ct_err:expr_call_argtypes:[map]:list<(text,integer,boolean)>")
 
         chk("map([('Bob',123),('Bob',456)])", "rt_err:map:new:iterator:dupkey:text[Bob]")
         chk("map([('Bob',123),('Bob',123)])", "rt_err:map:new:iterator:dupkey:text[Bob]")
 
         chk("map(x=[123:'Bob'])", "ct_err:expr:call:named_args_not_allowed:[map]:x")
-        chk("map<integer,text>(x=[123:'Bob'])", "ct_err:expr:call:named_args_not_allowed:[map]:x")
+
+        chk("map(range(5))", "ct_err:expr_call_argtypes:[map]:range")
+        chk("map(x'feed')", "ct_err:expr_call_argtypes:[map]:byte_array")
+    }
+
+    @Test fun testConstructorTyped() {
+        chk("map<text,integer>()", "map<text,integer>[]")
+        chk("map<integer,integer>([123])", "ct_err:expr_call_argtypes:[map<integer,integer>]:list<integer>")
+        chk("map<integer,integer>(['Bob':123])", "ct_err:expr_call_argtypes:[map<integer,integer>]:map<text,integer>")
+        chk("map<text,integer>(['Bob':123])", "map<text,integer>[text[Bob]=int[123]]")
+
+        val exp = "map<text,integer>[text[Bob]=int[123],text[Alice]=int[456],text[Trudy]=int[789]]"
+        chk("map<text,integer>(['Bob':123,'Alice':456,'Trudy':789])", exp)
+        chk("map<integer,text>(['Bob':123,'Alice':456,'Trudy':789])",
+            "ct_err:expr_call_argtypes:[map<integer,text>]:map<text,integer>")
+        chk("map<integer,integer>(['Bob':123,'Alice':456,'Trudy':789])",
+            "ct_err:expr_call_argtypes:[map<integer,integer>]:map<text,integer>")
+        chk("map<text,text>(['Bob':123,'Alice':456,'Trudy':789])",
+            "ct_err:expr_call_argtypes:[map<text,text>]:map<text,integer>")
+
+        chk("map<text,integer>([('Bob',123),('Alice',456),('Trudy',789)])", exp)
+        chk("map<text,integer>([(x='Bob',y=123),(x='Alice',y=456),(x='Trudy',y=789)])", exp)
+        chk("map<text,integer>([('Bob',y=123),('Alice',y=456),('Trudy',y=789)])", exp)
+
+        chk("map<text,integer>([('Bob',123),('Bob',456)])", "rt_err:map:new:iterator:dupkey:text[Bob]")
+        chk("map<text,integer>([('Bob',123),('Bob',123)])", "rt_err:map:new:iterator:dupkey:text[Bob]")
+
+        chk("map<integer,text>(x=[123:'Bob'])", "ct_err:expr:call:named_args_not_allowed:[map<integer,text>]:x")
+    }
+
+    @Test fun testConstructorTypedSubType() {
+        chk("map<text?,integer?>(map<text,integer>())", "map<text?,integer?>[]")
+        chk("map<text?,integer?>(map<text?,integer>())", "map<text?,integer?>[]")
+        chk("map<text?,integer?>(map<text,integer?>())", "map<text?,integer?>[]")
+        chk("map<text?,integer?>(map<text?,integer?>())", "map<text?,integer?>[]")
+
+        chk("map<text?,integer?>(list<(text,integer)>())", "map<text?,integer?>[]")
+        chk("map<text?,integer?>(list<(text?,integer)>())", "map<text?,integer?>[]")
+        chk("map<text?,integer?>(list<(text,integer?)>())", "map<text?,integer?>[]")
+        chk("map<text?,integer?>(list<(text?,integer?)>())", "map<text?,integer?>[]")
+        chk("map<text?,integer?>(list<(text?,integer?)?>())",
+            "ct_err:expr_call_argtypes:[map<text?,integer?>]:list<(text?,integer?)?>")
+
+        chk("map<text,integer>(list<(x:text,integer)>())", "map<text,integer>[]")
+        chk("map<text,integer>(list<(text,y:integer)>())", "map<text,integer>[]")
+        chk("map<text,integer>(list<(x:text,y:integer)>())", "map<text,integer>[]")
+    }
+
+    @Test fun testConstructorMutableKey() {
+        def("struct mut { mutable x: integer; }")
+
+        chk("map(list<(list<text>,integer)>())", "ct_err:expr_call_argtypes:[map]:list<(list<text>,integer)>")
+        chk("map(list<(mut,integer)>())", "ct_err:expr_call_argtypes:[map]:list<(mut,integer)>")
+
+        chk("map<list<text>,integer>()",
+            "ct_err:[param_bounds:map:K:-immutable:list<text>][param_bounds:map:K:-immutable:list<text>]")
+        chk("map<mut,integer>()", "ct_err:[param_bounds:map:K:-immutable:mut][param_bounds:map:K:-immutable:mut]")
     }
 
     @Test fun testConstructorPartial() {
         chk("map(*)", "ct_err:expr:call:partial_not_supported:map")
-        chk("map<integer,text>(*)", "ct_err:expr:call:partial_not_supported:map")
+        chk("map<integer,text>(*)", "ct_err:expr:call:partial_ambiguous:map<integer,text>")
+
         chkEx("{ val f: () -> map<integer,text> = map(*); return f; }", "ct_err:expr:call:partial_not_supported:map")
-        chkEx("{ val f: () -> map<integer,text> = map<integer,text>(*); return f; }", "ct_err:expr:call:partial_not_supported:map")
-        chkEx("{ val f: (map<integer,text>) -> map<integer,text> = map(*); return f; }", "ct_err:expr:call:partial_not_supported:map")
-        chkEx("{ val f: (map<integer,text>) -> map<integer,text> = map<integer,text>(*); return f; }", "ct_err:expr:call:partial_not_supported:map")
+        chkEx("{ val f: () -> map<integer,text> = map<integer,text>(*); return f; }", "fn[map<integer,text>()]")
+        chkEx("{ val f: () -> map<integer,text> = map<integer,text>(*); return f(); }", "map<integer,text>[]")
+
+        chkEx("{ val f: (map<integer,text>) -> map<integer,text> = map(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:map")
+        chkEx("{ val f: (map<integer,text>) -> map<integer,text> = map<integer,text>(*); return f; }",
+            "fn[map<integer,text>(*)]")
+        chkEx("{ val f: (map<integer,text>) -> map<integer,text> = map<integer,text>(*); return f([:]); }",
+            "map<integer,text>[]")
+
+        chkEx("{ val f: (list<(integer,text)>) -> map<integer,text> = map(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:map")
+
+        chkEx("{ val f: (list<(integer,text)>) -> map<integer,text> = map<integer,text>(*); return f; }",
+            "fn[map<integer,text>(*)]")
+        chkEx("{ val f: (list<(integer,text)>) -> map<integer,text> = map<integer,text>(*); return f([(123,'Bob')]); }",
+            "map<integer,text>[int[123]=text[Bob]]")
     }
 
     @Test fun testEmpty() {
@@ -144,10 +215,21 @@ class LibMapTest: BaseRellTest(false) {
         chk("['a':123].get_or_default('b',null)", "null")
 
         chk("['a':123].get_or_default('a',45.67)", "ct_err:expr_call_argtypes:[map<text,integer>.get_or_default]:text,decimal")
-        chk("['a':12.34].get_or_default('a',567)", "ct_err:expr_call_argtypes:[map<text,decimal>.get_or_default]:text,integer")
+        chk("['a':12.34].get_or_default('a',567)", "dec[12.34]")
+        chk("['a':12.34].get_or_default('b',567)", "dec[567]")
 
         chk("[123:'a'].get_or_default(45.67,'b')", "ct_err:expr_call_argtypes:[map<integer,text>.get_or_default]:decimal,text")
         chk("[12.34:'a'].get_or_default(567,'b')", "text[b]")
+    }
+
+    @Test fun testGetOrDefaultLazy() {
+        def("function f(x: integer) { print('f:'+x); return x; }")
+
+        chk("['a':123].get_or_default('a',f(456))", "int[123]")
+        chkOut()
+
+        chk("['a':123].get_or_default('b',f(456))", "int[456]")
+        chkOut("f:456")
     }
 
     @Test fun testEquals() {
@@ -282,8 +364,9 @@ class LibMapTest: BaseRellTest(false) {
 
     @Test fun testMutableKey() {
         chkEx("{ return [[123] : 'Hello']; }", "ct_err:expr_map_keytype:list<integer>")
-        chkEx("{ var x: map<list<integer>,text>; return 0; }", "ct_err:expr_map_keytype:list<integer>")
-        chkEx("{ return map<list<integer>,text>(); }", "ct_err:expr_map_keytype:list<integer>")
+        chkEx("{ var x: map<list<integer>,text>; return 0; }", "ct_err:param_bounds:map:K:-immutable:list<integer>")
+        chkEx("{ return map<list<integer>,text>(); }",
+            "ct_err:[param_bounds:map:K:-immutable:list<integer>][param_bounds:map:K:-immutable:list<integer>]")
     }
 
     @Test fun testAsForAndAtItem() {

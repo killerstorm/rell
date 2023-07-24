@@ -67,14 +67,14 @@ class C_VarFacts private constructor(
     }
 
     private fun put0(facts1: Map<C_VarUid, C_VarFact>, facts2: Map<C_VarUid, C_VarFact>): Map<C_VarUid, C_VarFact> {
-        if (facts2.isEmpty()) {
-            return facts1
+        return if (facts2.isEmpty()) {
+            facts1
         } else if (facts1.isEmpty()) {
-            return facts2
+            facts2
         } else {
             val res = facts1.toMutableMap()
             res.putAll(facts2)
-            return res.toMap()
+            res.toImmMap()
         }
     }
 
@@ -97,6 +97,11 @@ class C_VarFacts private constructor(
                 else -> C_VarFact.MAYBE
             }
             return mapOf(varUid to fact)
+        }
+
+        fun andPostFacts(vExprs: List<V_Expr>): C_VarFacts {
+            val varFacts = vExprs.fold(EMPTY) { facts, vExpr -> facts.and(vExpr.varFacts.postFacts) }
+            return varFacts
         }
 
         fun forBranches(ctx: C_ExprContext, cases: List<C_VarFacts>): C_VarFacts {
@@ -162,9 +167,9 @@ class C_MutableVarFacts(facts: C_VarFacts = C_VarFacts.EMPTY): C_VarFactsAccess(
 
     companion object {
         private fun andFacts(
-                a: MutableMap<C_VarUid, C_VarFact>,
-                b: Map<C_VarUid, C_VarFact>,
-                op: (C_VarFact, C_VarFact) -> C_VarFact?
+            a: MutableMap<C_VarUid, C_VarFact>,
+            b: Map<C_VarUid, C_VarFact>,
+            op: (C_VarFact, C_VarFact) -> C_VarFact?,
         ) {
             for (varId in b.keys) {
                 val af = a[varId]
@@ -178,11 +183,11 @@ class C_MutableVarFacts(facts: C_VarFacts = C_VarFacts.EMPTY): C_VarFactsAccess(
             }
         }
 
-        private fun andInited(a: C_VarFact, b: C_VarFact): C_VarFact? {
+        private fun andInited(a: C_VarFact, b: C_VarFact): C_VarFact {
             return a.min(b)
         }
 
-        private fun andNulled(a: C_VarFact, b: C_VarFact): C_VarFact? {
+        private fun andNulled(a: C_VarFact, b: C_VarFact): C_VarFact {
             return if (a == b) a else C_VarFact.MAYBE
         }
     }
@@ -289,9 +294,9 @@ class C_BlockVarFacts(private val ctx: C_VarFactsContext) {
 }
 
 class C_ExprVarFacts private constructor(
-        val trueFacts: C_VarFacts,
-        val falseFacts: C_VarFacts,
-        val postFacts: C_VarFacts
+    val trueFacts: C_VarFacts,
+    val falseFacts: C_VarFacts,
+    val postFacts: C_VarFacts,
 ) {
     fun isEmpty() = trueFacts.isEmpty() && falseFacts.isEmpty()
 
@@ -305,16 +310,15 @@ class C_ExprVarFacts private constructor(
     }
 
     fun update(
-            trueFacts: C_VarFacts? = null,
-            falseFacts: C_VarFacts? = null,
-            postFacts: C_VarFacts? = null
+        trueFacts: C_VarFacts = this.trueFacts,
+        falseFacts: C_VarFacts = this.falseFacts,
+        postFacts: C_VarFacts = this.postFacts,
     ): C_ExprVarFacts {
-        if (trueFacts == null && falseFacts == null && postFacts == null) return this
-        return of(
-                trueFacts = trueFacts ?: this.trueFacts,
-                falseFacts = falseFacts ?: this.falseFacts,
-                postFacts = postFacts ?: this.postFacts
-        )
+        return if (trueFacts === this.trueFacts && falseFacts === this.falseFacts && postFacts === this.postFacts) {
+            this
+        } else {
+            of(trueFacts = trueFacts, falseFacts = falseFacts, postFacts = postFacts)
+        }
     }
 
     companion object {
@@ -357,8 +361,8 @@ class C_ExprVarFacts private constructor(
             return forSubExpressions(values.toImmList())
         }
 
-        fun forSubExpressions(values: List<V_Expr>): C_ExprVarFacts {
-            val postFacts = values.fold(C_VarFacts.EMPTY) { facts, value -> facts.and(value.varFacts.postFacts) }
+        fun forSubExpressions(vExprs: List<V_Expr>): C_ExprVarFacts {
+            val postFacts = C_VarFacts.andPostFacts(vExprs)
             return of(postFacts = postFacts)
         }
     }

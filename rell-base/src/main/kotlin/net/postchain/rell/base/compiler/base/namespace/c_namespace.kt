@@ -17,8 +17,8 @@ import net.postchain.rell.base.utils.*
 import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 
 class C_Deprecated(
-        private val useInstead: String?,
-        val error: Boolean = false
+    private val useInstead: String?,
+    val error: Boolean = false
 ) {
     fun detailsCode(): String {
         return if (useInstead != null) ":$useInstead" else ""
@@ -26,6 +26,14 @@ class C_Deprecated(
 
     fun detailsMessage(): String {
         return if (useInstead != null) ", use '$useInstead' instead" else ""
+    }
+
+    companion object {
+        fun makeOrNull(messageType: C_MessageType?, useInstead: String?): C_Deprecated? {
+            return if (messageType == null) null else {
+                C_Deprecated(useInstead = useInstead, error = messageType == C_MessageType.ERROR)
+            }
+        }
     }
 }
 
@@ -69,7 +77,7 @@ class C_NamespaceElement(
             }
             val listCode = listCodeMsg.joinToString(",") { it.code }
             val listMsg = listCodeMsg.joinToString { it.msg }
-            msgCtx.error(qName.last.pos, "name:ambig:$qNameStr:[$listCode]", "Name '$qNameStr' is ambiguous: $listMsg")
+            msgCtx.error(qName.last.pos, "namespace:ambig:$qNameStr:[$listCode]", "Name '$qNameStr' is ambiguous: $listMsg")
         }
 
         if (member.deprecation != null) {
@@ -107,7 +115,8 @@ class C_NamespaceElement(
     }
 }
 
-// This class is needed to override IDE info. Exact import alias must have different IDE info than the referenced member (def ID and link).
+// This class is needed to override IDE info. Exact import alias must have different IDE info than the referenced
+// member (def ID and link).
 class C_NamespaceItem(val member: C_NamespaceMember, val ideInfo: IdeSymbolInfo) {
     constructor(member: C_NamespaceMember): this(member, member.ideInfo)
 }
@@ -160,6 +169,18 @@ sealed class C_Namespace {
 
         fun makeLate(getter: LateGetter<C_Namespace>): C_Namespace {
             return C_LateNamespace(getter)
+        }
+
+        fun join(vararg namespaces: C_Namespace): C_Namespace {
+            return join(namespaces.toList())
+        }
+
+        fun join(namespaces: List<C_Namespace>): C_Namespace {
+            val b = C_NamespaceBuilder()
+            for (ns in namespaces) {
+                ns.addTo(b)
+            }
+            return b.build()
         }
     }
 }

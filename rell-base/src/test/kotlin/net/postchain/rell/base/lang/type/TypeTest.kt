@@ -228,10 +228,10 @@ class TypeTest: BaseRellTest() {
         chkCompile("function g(x: (unit) -> integer) {}", "ct_err:type:fntype_param:unit:?")
         chkCompile("function g(x: (integer,unit)) {}", "ct_err:type:tuple_field:unit:?")
         chkCompile("function g(x: (a:integer,b:unit)) {}", "ct_err:type:tuple_field:unit:b")
-        chkCompile("function g(x: list<unit>) {}", "ct_err:type:list:elem:unit:?")
-        chkCompile("function g(x: set<unit>) {}", "ct_err:type:set:elem:unit:?")
-        chkCompile("function g(x: map<integer,unit>) {}", "ct_err:type:map_elem:unit:?")
-        chkCompile("function g(x: map<unit,integer>) {}", "ct_err:type:map_elem:unit:?")
+        chkCompile("function g(x: list<unit>) {}", "ct_err:type:list:component:unit:?")
+        chkCompile("function g(x: set<unit>) {}", "ct_err:type:set:component:unit:?")
+        chkCompile("function g(x: map<integer,unit>) {}", "ct_err:type:map:component:unit:?")
+        chkCompile("function g(x: map<unit,integer>) {}", "ct_err:type:map:component:unit:?")
         chkCompile("function g(x: virtual<unit>) {}", "ct_err:type:virtual:bad_inner_type:unit")
     }
 

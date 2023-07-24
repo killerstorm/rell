@@ -14,7 +14,7 @@ import net.postchain.rell.base.compiler.base.core.C_AtAttrShadowing
 import net.postchain.rell.base.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
-import net.postchain.rell.base.lib.test.C_Lib_Test
+import net.postchain.rell.base.lib.test.Lib_RellTest
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.runtime.utils.Rt_Utils
@@ -177,7 +177,7 @@ private fun runTests(args: RellCliArgsEx, app: R_App, fns: List<R_FunctionDefini
 }
 
 private fun createBlockRunner(args: RellCliArgsEx, sourceDir: C_SourceDir, app: R_App): Rt_UnitTestBlockRunner {
-    val keyPair = C_Lib_Test.BLOCK_RUNNER_KEYPAIR
+    val keyPair = Lib_RellTest.BLOCK_RUNNER_KEYPAIR
 
     val blockRunnerConfig = Rt_BlockRunnerConfig(
         forceTypeCheck = args.raw.typeCheck,

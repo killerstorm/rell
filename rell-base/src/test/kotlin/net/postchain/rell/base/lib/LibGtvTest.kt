@@ -41,6 +41,20 @@ class LibGtvTest: BaseRellTest(false) {
         chk("gtv.from_bytes(x'ffff')", "rt_err:fn:gtv.from_bytes")
     }
 
+    @Test fun testToFromJson() {
+        chk("""gtv.from_json('{"x":123,"y":[4,5,6]}')""", """gtv[{"x":123,"y":[4,5,6]}]""")
+        chk("""gtv.from_json(json('{"x":123,"y":[4,5,6]}'))""", """gtv[{"x":123,"y":[4,5,6]}]""")
+        chk("""gtv.from_json('{"x":123,"y":[4,5,6]}').to_bytes()""",
+                "byte_array[a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106]")
+
+        chk("gtv.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106')",
+                """gtv[{"x":123,"y":[4,5,6]}]""")
+        chk("gtv.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106').to_json()",
+                """json[{"x":123,"y":[4,5,6]}]""")
+        chk("''+gtv.from_bytes(x'a424302230080c0178a30302017b30160c0179a511300fa303020104a303020105a303020106').to_json()",
+                """text[{"x":123,"y":[4,5,6]}]""")
+    }
+
     @Test fun testToFromGtvBigInteger() {
         chkToGtv("(0L).to_gtv()", gtv(BigInteger.valueOf(0)))
         chkToGtv("(123L).to_gtv()", gtv(BigInteger.valueOf(123)))
@@ -200,9 +214,9 @@ class LibGtvTest: BaseRellTest(false) {
 
         chkFromGtv("0", "rowid.from_gtv(g)", "rowid[0]")
         chkFromGtv("123", "rowid.from_gtv(g)", "rowid[123]")
-        chkFromGtv("-456", "rowid.from_gtv(g)", "rt_err:fn:[from_gtv]:from_gtv:false")
+        chkFromGtv("-456", "rowid.from_gtv(g)", "rt_err:fn:[rowid]:from_gtv:false")
         chkFromGtv("123", "rowid.from_gtv_pretty(g)", "rowid[123]")
-        chkFromGtv("-456", "rowid.from_gtv_pretty(g)", "rt_err:fn:[from_gtv_pretty]:from_gtv:true")
+        chkFromGtv("-456", "rowid.from_gtv_pretty(g)", "rt_err:fn:[rowid]:from_gtv:true")
 
         chkFromGtv("'Hello'", "rowid.from_gtv(g)", "gtv_err:type:[rowid]:INTEGER:STRING")
         chkFromGtv("'Hello'", "rowid.from_gtv_pretty(g)", "gtv_err:type:[rowid]:INTEGER:STRING")
@@ -267,8 +281,8 @@ class LibGtvTest: BaseRellTest(false) {
         chk("gtv.from_json('[123]').to_gtv()", "gtv[[123]]")
         chk("gtv.from_json('[123]').to_gtv_pretty()", "gtv[[123]]")
 
-        chk("range(10).to_gtv()", "ct_err:unknown_member:[range]:to_gtv")
-        chk("range(10).to_gtv_pretty()", "ct_err:unknown_member:[range]:to_gtv_pretty")
+        chk("range(10).to_gtv()", "ct_err:fn:invalid:range:to_gtv")
+        chk("range(10).to_gtv_pretty()", "ct_err:fn:invalid:range:to_gtv_pretty")
         chkFromGtv("''", "range.from_gtv(g)", "ct_err:fn:invalid:range:from_gtv")
         chkFromGtv("''", "range.from_gtv_pretty(g)", "ct_err:fn:invalid:range:from_gtv_pretty")
     }
@@ -440,8 +454,8 @@ class LibGtvTest: BaseRellTest(false) {
         chkFromGtv("5", "user.from_gtv_pretty(g)", "user[5]")
         chkFromGtv("'X'", "user.from_gtv_pretty(g)", "gtv_err:type:[user]:INTEGER:STRING")
 
-        chk("state.to_gtv()", "ct_err:unknown_member:[state]:to_gtv")
-        chk("state.to_gtv_pretty()", "ct_err:unknown_member:[state]:to_gtv_pretty")
+        chk("state.to_gtv()", "ct_err:fn:invalid:state:to_gtv")
+        chk("state.to_gtv_pretty()", "ct_err:fn:invalid:state:to_gtv_pretty")
     }
 
     @Test fun testToGtvNull() {
@@ -451,6 +465,7 @@ class LibGtvTest: BaseRellTest(false) {
         chk("null?.to_gtv()", "ct_err:[expr_safemem_type:[null]][unknown_member:[null]:to_gtv]")
         chk("(null).to_gtv()", "ct_err:unknown_member:[null]:to_gtv")
         chk("[null][0].to_gtv()", "ct_err:unknown_member:[null]:to_gtv")
+        chk("_nullable_int(123).to_gtv()", "ct_err:expr_mem_null:integer?:to_gtv")
     }
 
     @Test fun testJsonNumberTruncation() {

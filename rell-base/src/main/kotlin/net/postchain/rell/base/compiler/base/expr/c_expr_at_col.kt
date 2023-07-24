@@ -64,22 +64,25 @@ class C_AtFrom_Iterable(
 
     override fun findMembers(name: R_Name): List<C_AtFromMember> {
         val base = C_AtFromBase_Iterable()
-        val members = item.elemType.getValueMembers(name)
-        return members.map { C_AtFromMember(base, it) }.toImmList()
+        val selfType = item.elemType
+        val members = innerExprCtx.typeMgr.getValueMembers(selfType, name)
+        return members.map { C_AtFromMember(base, selfType, it) }.toImmList()
     }
 
     override fun findImplicitAttributesByName(name: R_Name): List<C_AtFromImplicitAttr> {
         val base = C_AtFromBase_Iterable()
-        val members = item.elemType.getAtImplicitAttrs(name)
+        val selfType = item.elemType
+        val members = innerExprCtx.typeMgr.getAtImplicitAttrsByName(selfType, name)
         return members
-            .map { C_AtFromImplicitAttr(base, it) }
+            .map { C_AtFromImplicitAttr(base, selfType, it) }
             .toImmList()
     }
 
     override fun findImplicitAttributesByType(type: R_Type): List<C_AtFromImplicitAttr> {
         val base = C_AtFromBase_Iterable()
-        return item.elemType.getAtImplicitAttrs(type)
-            .map { C_AtFromImplicitAttr(base, it) }
+        val selfType = item.elemType
+        return innerExprCtx.typeMgr.getAtImplicitAttrsByType(selfType, type)
+            .map { C_AtFromImplicitAttr(base, selfType, it) }
             .toImmList()
     }
 

@@ -11,11 +11,26 @@ import net.postchain.gtv.GtvFactory
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_Name
 import org.apache.commons.lang3.StringUtils
+import java.util.*
 import java.util.function.Supplier
 
 typealias Getter<T> = () -> T
 
-data class Nullable<T>(val value: T? = null)
+class Nullable<T> private constructor(val value: T?) {
+    override fun equals(other: Any?) = other === this || (other is Nullable<*> && value == other.value)
+    override fun hashCode() = if (value == null) 0 else value.hashCode()
+    override fun toString(): String = java.lang.String.valueOf(value)
+
+    companion object {
+        private val NULL: Nullable<Any> = Nullable(null)
+
+        @Suppress("UNCHECKED_CAST")
+        fun <T> of(value: T? = null): Nullable<T> {
+            return if (value != null) Nullable(value) else (NULL as Nullable<T>)
+        }
+    }
+}
+
 fun <T> Nullable<T>?.orElse(other: T?): T? = if (this != null) this.value else other
 
 data class One<T>(val value: T)
@@ -50,7 +65,17 @@ class TypedKeyMap(private val map: Map<TypedKey<Any>, Any> = mapOf()) {
 class TypedKey<V>
 
 fun ByteArray.toBytes(): Bytes = Bytes.of(this)
+
 fun String.hexStringToBytes(): Bytes = this.hexStringToByteArray().toBytes()
+
+fun String.formatSafe(vararg args: Any?): String {
+    return try {
+        format(Locale.US, *args)
+    } catch (e: IllegalFormatException) {
+        this
+    }
+}
+
 
 class Bytes {
     private val bytes: ByteArray
@@ -118,27 +143,38 @@ class BytesKeyPair(val priv: Bytes32, val pub: Bytes33) {
     constructor(priv: ByteArray, pub: ByteArray): this(Bytes32(priv), Bytes33(pub))
 }
 
-class LateInit<T> {
+class LateInit<T: Any>(fallback: T? = null) {
     val getter = LateGetter(this)
     val setter = LateSetter(this)
 
-    private var t: T? = null
+    private var value: T? = null
+    private var fallback: T? = fallback
 
-    fun isSet(): Boolean = t != null
+    fun isSet(): Boolean = value != null
 
-    fun get(): T = t!!
+    fun get(): T {
+        var res = value
+        if (res == null) {
+            res = fallback
+            checkNotNull(res) { "value not initialized" }
+            value = res
+            fallback = null
+        }
+        return res
+    }
 
     fun set(v: T) {
-        check(t == null) { "value already initialized with: <$t>" }
-        t = v
+        check(value == null) { "value already initialized with: <$value>" }
+        value = v
+        fallback = null
     }
 }
 
-class LateGetter<T>(private val init: LateInit<T>): Supplier<T> {
+class LateGetter<T: Any>(private val init: LateInit<T>): Supplier<T> {
     override fun get(): T = init.get()
 
     companion object {
-        fun <T> of(value: T): LateGetter<T> {
+        fun <T: Any> of(value: T): LateGetter<T> {
             val init = LateInit<T>()
             init.set(value)
             return init.getter
@@ -146,7 +182,7 @@ class LateGetter<T>(private val init: LateInit<T>): Supplier<T> {
     }
 }
 
-class LateSetter<T>(private val init: LateInit<T>) {
+class LateSetter<T: Any>(private val init: LateInit<T>) {
     fun set(value: T) = init.set(value)
 }
 
@@ -164,7 +200,8 @@ private class ValueLazyString(override val value: String): LazyString()
 
 private class FnLazyString(private val fn: () -> String): LazyString() {
     override val value by lazy {
-        fn()
+        val res = fn()
+        res
     }
 }
 
@@ -239,4 +276,8 @@ class MsgString(s: String) {
 
 fun <T> checkEquals(actual: T, expected: T) {
     check(expected == actual) { "expected <$expected> actual <$actual>" }
+}
+
+fun <T> checkEquals(actual: T, expected: T, lazyMsg: () -> Any) {
+    check(expected == actual) { "expected <$expected> actual <$actual>: ${lazyMsg()}" }
 }

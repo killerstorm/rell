@@ -16,32 +16,76 @@ class LibListTest: BaseRellTest(false) {
         chk("[123, 'Hello']", "ct_err:expr_list_itemtype:[integer]:[text]")
     }
 
-    @Test fun testConstructor() {
-        chk("list()", "ct_err:expr_list_notype")
-        chk("list<integer>()", "list<integer>[]")
+    @Test fun testLiteralTypeHint() {
+        chkEx("{ val x: list<integer> = []; return x; }", "list<integer>[]")
+        chkEx("{ val x: list<integer?> = []; return x; }", "list<integer?>[]")
+        chkEx("{ val x: list<integer?> = [123]; return x; }", "list<integer?>[int[123]]")
+        chkEx("{ val x: list<(integer?,text)> = [(123,'Hello')]; return x; }",
+            "list<(integer?,text)>[(int[123],text[Hello])]")
+    }
+
+    @Test fun testConstructorRaw() {
+        chk("list()", "ct_err:fn:sys:unresolved_type_params:list:T")
         chk("list([])", "ct_err:expr_list_no_type")
-        chk("list<integer>([])", "ct_err:expr_list_no_type")
         chk("list([123])", "list<integer>[int[123]]")
         chk("list([123, 456, 789])", "list<integer>[int[123],int[456],int[789]]")
+
         chk("list(set<integer>())", "list<integer>[]")
         chk("list(set([123, 456, 789]))", "list<integer>[int[123],int[456],int[789]]")
         chk("list(set<text>())", "list<text>[]")
         chk("list(set(['Hello']))", "list<text>[text[Hello]]")
-        chk("list<integer>(set<text>())", "ct_err:expr_list_typemiss:integer:text")
-        chk("list<integer>(set(['Hello']))", "ct_err:expr_list_typemiss:integer:text")
-        chk("list(range(5))", "list<integer>[int[0],int[1],int[2],int[3],int[4]]")
+
         chk("list([1:'A',2:'B'])", "list<(integer,text)>[(int[1],text[A]),(int[2],text[B])]")
         chk("list(x=[1,2,3])", "ct_err:expr:call:named_args_not_allowed:[list]:x")
-        chk("list<integer>(x=[1,2,3])", "ct_err:expr:call:named_args_not_allowed:[list]:x")
+
+        chk("list(range(5))", "list<integer>[int[0],int[1],int[2],int[3],int[4]]")
+        chk("list(x'feed')", "list<integer>[int[254],int[237]]")
+    }
+
+    @Test fun testConstructorTyped() {
+        chk("list<integer>()", "list<integer>[]")
+        chk("list<integer>([])", "list<integer>[]")
+        chk("list<integer>([123])", "list<integer>[int[123]]")
+        chk("list<integer>([123, 456, 789])", "list<integer>[int[123],int[456],int[789]]")
+        chk("list<integer>(set<integer>())", "list<integer>[]")
+        chk("list<integer>(set([123, 456, 789]))", "list<integer>[int[123],int[456],int[789]]")
+        chk("list<integer>(set<text>())", "ct_err:expr_call_argtypes:[list<integer>]:set<text>")
+        chk("list<integer>(set(['Hello']))", "ct_err:expr_call_argtypes:[list<integer>]:set<text>")
+        chk("list<integer>(range(5))", "list<integer>[int[0],int[1],int[2],int[3],int[4]]")
+        chk("list<(integer,text)>([:])", "list<(integer,text)>[]")
+        chk("list<(integer,text)>([1:'A',2:'B'])", "list<(integer,text)>[(int[1],text[A]),(int[2],text[B])]")
+        chk("list<integer>(x=[1,2,3])", "ct_err:expr:call:named_args_not_allowed:[list<integer>]:x")
     }
 
     @Test fun testConstructorPartial() {
         chk("list(*)", "ct_err:expr:call:partial_not_supported:list")
-        chk("list<integer>(*)", "ct_err:expr:call:partial_not_supported:list")
+        chk("list<integer>(*)", "ct_err:expr:call:partial_ambiguous:list<integer>")
+
         chkEx("{ val f: () -> list<integer> = list(*); return f; }", "ct_err:expr:call:partial_not_supported:list")
-        chkEx("{ val f: () -> list<integer> = list<integer>(*); return f; }", "ct_err:expr:call:partial_not_supported:list")
-        chkEx("{ val f: (list<integer>) -> list<integer> = list(*); return f; }", "ct_err:expr:call:partial_not_supported:list")
-        chkEx("{ val f: (list<integer>) -> list<integer> = list<integer>(*); return f; }", "ct_err:expr:call:partial_not_supported:list")
+        chkEx("{ val f: () -> list<integer> = list<integer>(*); return f; }", "fn[list<integer>()]")
+        chkEx("{ val f: () -> list<integer> = list<integer>(*); return f(); }", "list<integer>[]")
+
+        chkEx("{ val f: (list<integer>) -> list<integer> = list(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:list")
+        chkEx("{ val f: (set<integer>) -> list<integer> = list(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:list")
+        chkEx("{ val f: (map<text,decimal>) -> list<(text,decimal)> = list(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:list")
+        chkEx("{ val f: (range) -> list<integer> = list(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:list")
+        chkEx("{ val f: (byte_array) -> list<integer> = list(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:list")
+
+        chkEx("{ val f: (list<integer>) -> list<integer> = list<integer>(*); return f; }", "fn[list<integer>(*)]")
+        chkEx("{ val f: (list<integer>) -> list<integer> = list<integer>(*); return f([123]); }",
+            "list<integer>[int[123]]")
+        chkEx("{ val f: (set<integer>) -> list<integer> = list<integer>(*); return f; }", "fn[list<integer>(*)]")
+        chkEx("{ val f: (set<integer>) -> list<integer> = list<integer>(*); return f(set([123])); }",
+            "list<integer>[int[123]]")
+        chkEx("{ val f: (map<integer,text>) -> list<(integer,text)> = list<(integer,text)>(*); return f; }",
+            "fn[list<(integer,text)>(*)]")
+        chkEx("{ val f: (map<integer,text>) -> list<(integer,text)> = list<(integer,text)>(*); return f([123:'Bob']); }",
+            "list<(integer,text)>[(int[123],text[Bob])]")
     }
 
     @Test fun testEmpty() {
@@ -279,7 +323,7 @@ class LibListTest: BaseRellTest(false) {
 
         chk("[(2,'B'),(2,'A'),(1,'X')].sorted()", "[(1,X), (2,A), (2,B)]")
 
-        chk("[rec(123), rec(456)].sorted()", "ct_err:unknown_member:[list<rec>]:sorted")
+        chk("[rec(123), rec(456)].sorted()", "ct_err:fn:collection.sorted:not_comparable:rec")
 
         chkWarn()
         chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l._sort(); return l; }", "[1, 2, 3, 4, 5]")
@@ -338,5 +382,14 @@ class LibListTest: BaseRellTest(false) {
         chkEx("{ val l = list<integer>(); val r = l.reversed(); r.add(7); return (l, r); }", "([],[7])")
         chkEx("{ val l = [1]; val r = l.reversed(); r.add(7); return (l, r); }", "([1],[1, 7])")
         chkEx("{ val l = [1, 2, 3]; val r = l.reversed(); r.add(7); return (l, r); }", "([1, 2, 3],[3, 2, 1, 7])")
+    }
+
+    @Test fun testCollectionType() {
+        tst.testLib = true
+        chk("[[123],[456]]", "list<list<integer>>[list<integer>[int[123]],list<integer>[int[456]]]")
+        chk("[[123],set([456])]", "ct_err:expr_list_itemtype:[list<integer>]:[set<integer>]")
+        chkEx("{ assert_equals([123],[123]); return 0; }", "int[0]")
+        chkEx("{ assert_equals([123],set([123])); return 0; }",
+            "ct_err:expr_call_argtypes:[assert_equals]:list<integer>,set<integer>")
     }
 }

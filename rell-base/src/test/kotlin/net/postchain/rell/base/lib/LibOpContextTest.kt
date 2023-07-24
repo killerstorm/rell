@@ -29,7 +29,7 @@ class LibOpContextTest: BaseRellTest(false) {
         chkOut("12345")
 
         tst.opContext = Rt_NullOpContext
-        chk("op_context.last_block_time", "ct_err:op_ctx_noop")
+        chk("op_context.last_block_time", "ct_err:op_ctx:noop")
         chkFull("function f(): timestamp = op_context.last_block_time; query q() = f();", listOf(),
                 "rt_err:op_context:noop")
 
@@ -165,11 +165,11 @@ class LibOpContextTest: BaseRellTest(false) {
     }
 
     @Test fun testCallFucntionsFromQuery() {
-        chk("op_context.get_signers()", "ct_err:op_ctx_noop")
-        chk("op_context.is_signer(x'1234')", "ct_err:op_ctx_noop")
-        chk("op_context.get_all_operations()", "ct_err:op_ctx_noop")
-        chk("op_context.emit_event('foo', null.to_gtv())", "ct_err:[query_exprtype_unit][op_ctx_noop]")
-        chk("is_signer(x'1234')", "ct_err:op_ctx_noop")
+        chk("op_context.get_signers()", "ct_err:op_ctx:noop")
+        chk("op_context.is_signer(x'1234')", "ct_err:op_ctx:noop")
+        chk("op_context.get_all_operations()", "ct_err:op_ctx:noop")
+        chk("op_context.emit_event('foo', null.to_gtv())", "ct_err:[query_exprtype_unit][op_ctx:noop]")
+        chk("is_signer(x'1234')", "ct_err:op_ctx:noop")
     }
 
     @Test fun testExists() {
@@ -178,15 +178,46 @@ class LibOpContextTest: BaseRellTest(false) {
         chkOut("true")
 
         chk("op_context.exists", "boolean[true]")
-        chk("op_context.last_block_time", "ct_err:op_ctx_noop")
+        chk("op_context.last_block_time", "ct_err:op_ctx:noop")
         chkFn("= op_context.exists;", "boolean[true]")
         chkFn("= op_context.last_block_time;", "int[12345]")
 
         tst.opContext = Rt_NullOpContext
         chk("op_context.exists", "boolean[false]")
-        chk("op_context.last_block_time", "ct_err:op_ctx_noop")
+        chk("op_context.last_block_time", "ct_err:op_ctx:noop")
         chkFn("= op_context.exists;", "boolean[false]")
         chkFn("= op_context.last_block_time;", "rt_err:op_context:noop")
+    }
+
+    @Test fun testGtxOperationType() {
+        chk("gtx_operation(name = 'foo', args = list<gtv>())", "gtx_operation[name=text[foo],args=list<gtv>[]]")
+        chk("gtx_operation()", "ct_err:attr_missing:name,args")
+        chkEx("{ var o: gtx_operation; o = gtx_operation('foo', ['Bob'.to_gtv()]); return o; }",
+                """gtx_operation[name=text[foo],args=list<gtv>[gtv["Bob"]]]""")
+    }
+
+    @Test fun testGtxTransactionBodyType() {
+        chk("gtx_transaction_body(blockchain_rid = x'1234', operations = list<gtx_operation>(), signers = list<gtv>())",
+                "gtx_transaction_body[blockchain_rid=byte_array[1234],operations=list<gtx_operation>[],signers=list<gtv>[]]")
+        chk("gtx_transaction_body()", "ct_err:attr_missing:blockchain_rid,operations,signers")
+    }
+
+    @Test fun testGtxTransactionType() {
+        val expBody = "gtx_transaction_body[blockchain_rid=byte_array[1234],operations=list<gtx_operation>[],signers=list<gtv>[]]"
+        chk("gtx_transaction(body = gtx_transaction_body(blockchain_rid = x'1234', operations = [], signers = []), signatures = [])",
+                "gtx_transaction[body=$expBody,signatures=list<gtv>[]]")
+        chk("gtx_transaction()", "ct_err:attr_missing:body,signatures")
+    }
+
+    @Test fun testTestModule() {
+        file("module.rell", "@test module;")
+        chkCompile("function f() = op_context.exists;", "OK")
+        chkCompile("function f() = op_context.is_signer(x'');", "ct_err:op_ctx:test")
+        chkCompile("function f() = op_context.get_signers();", "ct_err:op_ctx:test")
+        chkCompile("function f() = is_signer(x'');", "OK")
+        chkCompile("function f(x: gtx_operation) {}", "OK")
+        chkCompile("function f(x: gtx_transaction_body) {}", "OK")
+        chkCompile("function f(x: gtx_transaction) {}", "OK")
     }
 
     companion object {

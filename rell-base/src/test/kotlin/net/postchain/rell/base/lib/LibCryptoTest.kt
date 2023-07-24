@@ -93,7 +93,7 @@ class LibCryptoTest: BaseRellTest(false) {
             val recId = Integer.parseInt(v, 16) - 27
 
             val expected = if (res == "error") {
-                "rt_err:fn:error:eth_ecrecover:java.lang.IllegalArgumentException"
+                "rt_err:fn:error:crypto.eth_ecrecover:java.lang.IllegalArgumentException"
             } else {
                 "byte_array[${res.substring(2).toLowerCase()}]"
             }
@@ -189,7 +189,7 @@ class LibCryptoTest: BaseRellTest(false) {
         chk("'A'.hash()", "0xba96d941ab620e0d6092bfbd494266922b6242427840aa452195ded17e13c696")
         chk("'B'.hash()", "0xc065296148ac7ec279e36057709c0f398bf2ca81f99b9395f9155686ceedfde0")
         chk("'C'.hash()", "0xef9f6fb8ab1cca16984702e79ea420ca8922ce15670ccd6bf12ee9b26f9fdac9")
-        chk("range(10).hash()", "ct_err:unknown_member:[range]:hash")
+        chk("range(10).hash()", "ct_err:fn:invalid:range:hash")
     }
 
     @Test fun testHashCollection() {
@@ -229,6 +229,6 @@ class LibCryptoTest: BaseRellTest(false) {
         insert("c0.cls", "x", "2,456")
         chk("(cls@{123}).hash()", "0x6ccd14b5a877874ddc7ca52bd3aeded5543b73a354779224bbb86b0fd315b418")
         chk("(cls@{456}).hash()", "0x4317338211726f61b281d62f0683fd55e355011b6e7495cf56f9e03059a3bc0a")
-        chk("obj.hash()", "ct_err:unknown_member:[obj]:hash")
+        chk("obj.hash()", "ct_err:fn:invalid:obj:hash")
     }
 }

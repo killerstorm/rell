@@ -13,6 +13,17 @@ class LibIntegerTest: BaseRellTest(false) {
         chk("integer.MAX_VALUE", "int[9223372036854775807]")
     }
 
+    @Test fun testConstructorText() {
+        // Only few cases, as it's the same as integer.from_text().
+        chk("integer('0')", "int[0]")
+        chk("integer('123456789')", "int[123456789]")
+        chk("integer('123456789', 20)", "int[28365650969]")
+        chk("integer('123', 0)", "rt_err:fn:integer.from_text:radix:0")
+        chk("integer('123', 1)", "rt_err:fn:integer.from_text:radix:1")
+        chk("integer('123', 40)", "rt_err:fn:integer.from_text:radix:40")
+        chk("integer('123', -1)", "rt_err:fn:integer.from_text:radix:-1")
+    }
+
     @Test fun testFromText() {
         chk("integer.from_text('0')", "int[0]")
         chk("integer.from_text('123456789')", "int[123456789]")

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.core
@@ -11,59 +11,56 @@ import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.compiler.vexpr.V_TypeAdapterExpr
-import net.postchain.rell.base.lib.type.C_Lib_Type_BigInteger
-import net.postchain.rell.base.lib.type.C_Lib_Type_Decimal
+import net.postchain.rell.base.lib.type.Lib_Type_BigInteger
+import net.postchain.rell.base.lib.type.Lib_Type_Decimal
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
-import net.postchain.rell.base.utils.toImmList
+import net.postchain.rell.base.mtype.M_Type
+import net.postchain.rell.base.mtype.M_Type_Function
+import net.postchain.rell.base.mtype.M_Type_Tuple
+import net.postchain.rell.base.mtype.M_Types
+import net.postchain.rell.base.utils.immListOf
+import net.postchain.rell.base.utils.immSetOf
+import net.postchain.rell.base.lmodel.L_TypeUtils
+import net.postchain.rell.base.utils.toImmSet
 
-abstract class C_TypeHint {
-    open fun getListElementType(): R_Type? = null
-    open fun getSetElementType(): R_Type? = null
-    open fun getMapKeyValueTypes(): R_MapKeyValueTypes? = null
-    open fun getFunctionType(): R_FunctionType? = null
-    open fun getTupleFieldHint(index: Int): C_TypeHint = NONE
+class C_TypeHint private constructor(val mTypes: Set<M_Type>) {
+    fun getFunctionType(): R_FunctionType? {
+        return mTypes
+            .mapNotNull { it as? M_Type_Function }
+            .mapNotNull { L_TypeUtils.getRType(it) as? R_FunctionType }
+            .singleOrNull()
+    }
+
+    fun getTupleFieldHint(index: Int): C_TypeHint {
+        check(index >= 0) { index }
+        val mResTypes = mTypes
+            .mapNotNull { it as? M_Type_Tuple }
+            .mapNotNull { it.fieldTypes.getOrNull(index) }
+            .filter { it != M_Types.NOTHING }
+        return ofTypes(mResTypes)
+    }
 
     companion object {
-        val NONE: C_TypeHint = C_TypeHint_None
+        val NONE: C_TypeHint = C_TypeHint(immSetOf())
 
-        fun ofType(type: R_Type?): C_TypeHint = if (type == null) NONE else C_TypeHint_ExactType(type)
-        fun collection(elementType: R_Type): C_TypeHint = C_TypeHint_Collection(elementType)
-        fun map(keyValueTypes: R_MapKeyValueTypes): C_TypeHint = C_TypeHint_Map(keyValueTypes)
-        fun tuple(fields: List<C_TypeHint>): C_TypeHint = C_TypeHint_Tuple(fields)
-    }
-}
+        fun ofTypes(types: List<M_Type>): C_TypeHint {
+            return if (types.isEmpty()) NONE else C_TypeHint(types.toImmSet())
+        }
 
-private object C_TypeHint_None: C_TypeHint()
+        fun ofType(mType: M_Type): C_TypeHint {
+            return ofTypes(immListOf(mType))
+        }
 
-private class C_TypeHint_ExactType(type: R_Type): C_TypeHint() {
-    private val baseType: R_Type = (type as? R_NullableType)?.valueType ?: type
+        fun ofType(type: R_Type?): C_TypeHint {
+            type ?: return NONE
+            return ofType(type.mType)
+        }
 
-    override fun getListElementType() = (baseType as? R_ListType)?.elementType
-    override fun getSetElementType() = (baseType as? R_SetType)?.elementType
-    override fun getMapKeyValueTypes() = (baseType as? R_MapType)?.keyValueTypes
-    override fun getFunctionType() = baseType as? R_FunctionType
-
-    override fun getTupleFieldHint(index: Int): C_TypeHint {
-        if (baseType !is R_TupleType) return NONE
-        return if (index < 0 || index >= baseType.fields.size) NONE else ofType(baseType.fields[index].type)
-    }
-}
-
-private class C_TypeHint_Collection(private val elementType: R_Type): C_TypeHint() {
-    override fun getListElementType() = elementType
-    override fun getSetElementType() = elementType
-}
-
-private class C_TypeHint_Map(private val keyValueTypes: R_MapKeyValueTypes): C_TypeHint() {
-    override fun getMapKeyValueTypes() = keyValueTypes
-}
-
-private class C_TypeHint_Tuple(fields: List<C_TypeHint>): C_TypeHint() {
-    private val fields = fields.toImmList()
-
-    override fun getTupleFieldHint(index: Int): C_TypeHint {
-        return if (index < 0 || index >= fields.size) NONE else fields[index]
+        fun combined(hints: List<C_TypeHint>): C_TypeHint {
+            val mTypes = hints.flatMap { it.mTypes }.toImmSet()
+            return C_TypeHint(mTypes)
+        }
     }
 }
 
@@ -91,7 +88,7 @@ object C_TypeAdapter_IntegerToBigInteger: C_TypeAdapter() {
     }
 
     override fun adaptExprDb(expr: Db_Expr): Db_Expr {
-        return Db_CallExpr(R_BigIntegerType, C_Lib_Type_BigInteger.FromInteger_Db, listOf(expr))
+        return Db_CallExpr(R_BigIntegerType, Lib_Type_BigInteger.FromInteger_Db, listOf(expr))
     }
 
     override fun toRAdapter(): R_TypeAdapter = R_TypeAdapter_IntegerToBigInteger
@@ -107,7 +104,7 @@ object C_TypeAdapter_IntegerToDecimal: C_TypeAdapter() {
     }
 
     override fun adaptExprDb(expr: Db_Expr): Db_Expr {
-        return Db_CallExpr(R_DecimalType, C_Lib_Type_Decimal.FromInteger_Db, listOf(expr))
+        return Db_CallExpr(R_DecimalType, Lib_Type_Decimal.FromInteger_Db, listOf(expr))
     }
 
     override fun toRAdapter(): R_TypeAdapter = R_TypeAdapter_IntegerToDecimal
@@ -123,7 +120,7 @@ object C_TypeAdapter_BigIntegerToDecimal: C_TypeAdapter() {
     }
 
     override fun adaptExprDb(expr: Db_Expr): Db_Expr {
-        return Db_CallExpr(R_DecimalType, C_Lib_Type_Decimal.FromBigInteger_Db, listOf(expr))
+        return Db_CallExpr(R_DecimalType, Lib_Type_Decimal.FromBigInteger_Db, listOf(expr))
     }
 
     override fun toRAdapter(): R_TypeAdapter = R_TypeAdapter_BigIntegerToDecimal
@@ -146,7 +143,7 @@ class C_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapt
 
     override fun toRAdapter(): R_TypeAdapter {
         val rInnerAdapter = innerAdapter.toRAdapter()
-        return R_TypeAdapter_Nullable(dstType, rInnerAdapter)
+        return R_TypeAdapter_Nullable(rInnerAdapter)
     }
 }
 
@@ -229,7 +226,7 @@ object C_Types {
 
     fun commonTypesOpt(a: R_MapKeyValueTypes, b: R_MapKeyValueTypes): R_MapKeyValueTypes? {
         val key = commonTypeOpt(a.key, b.key)
-        if (key == null) return null
+        key ?: return null
         val value = commonTypeOpt(a.value, b.value)
         return if (value == null) null else R_MapKeyValueTypes(key, value)
     }

@@ -81,7 +81,7 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
             if (explicitType != null) {
                 ctx.msgCtx.error(cName.pos, "var_wildcard_type", "Name '$cName' is a wildcard, it cannot have a type")
             }
-            C_WildcardVarDeclarator(ctx, mutable, cName, explicitType != null)
+            C_WildcardVarDeclarator(ctx, mutable)
         } else {
             C_SimpleVarDeclarator(ctx, mutable, cAttrHeader, cName, explicitType, cAttrHeader.ideInfo)
         }
@@ -112,8 +112,9 @@ class S_VarStatement(
     override fun compile0(ctx: C_StmtContext, repl: Boolean): C_Statement {
         val cDeclarator = declarator.compile(ctx, mutable, hasExpr = expr != null)
 
-        val typeHint = cDeclarator.getTypeHint()
+        val typeHint = C_TypeHint.ofType(cDeclarator.getHintType())
         val exprHint = C_ExprHint(typeHint)
+
         val cValue = expr?.compileSafe(ctx.exprCtx, exprHint)?.value()
         val rExpr = cValue?.toRExpr()
 
@@ -480,8 +481,8 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         val rExpr = loop.condExpr
         val exprType = rExpr.type
 
-        val cIterator = C_ForIterator.compile(ctx.exprCtx, exprType, false)
-        if (cIterator == null) {
+        val cIterableAdapter = C_IterableAdapter.compile(ctx.exprCtx, exprType, false)
+        if (cIterableAdapter == null) {
             ctx.msgCtx.error(expr.startPos, "stmt_for_expr_type:[${exprType.strCode()}]",
                     "Wrong type of for-expression: ${exprType.strCode()}")
             stmt.compile(ctx)
@@ -493,7 +494,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
 
         val mutVarFacts = C_MutableVarFacts()
         val cDeclarator = declarator.compile(loopCtx, mutable = false, hasExpr = true)
-        val rDeclarator = cDeclarator.compile(cIterator.itemType, mutVarFacts)
+        val rDeclarator = cDeclarator.compile(cIterableAdapter.itemType, mutVarFacts)
         val iterFactsCtx = loopCtx.updateFacts(mutVarFacts.toVarFacts())
 
         val bodyCtx = iterFactsCtx.updateFacts(loop.condFacts.postFacts)
@@ -501,7 +502,7 @@ class S_ForStatement(pos: S_Pos, val declarator: S_VarDeclarator, val expr: S_Ex
         val rBodyStmt = cBodyStmt.rStmt
 
         val cBlock = loopBlkCtx.buildBlock()
-        val rStmt = R_ForStatement(rDeclarator, rExpr, cIterator.rIterator, rBodyStmt, cBlock.rBlock)
+        val rStmt = R_ForStatement(rDeclarator, rExpr, cIterableAdapter.rAdapter, rBodyStmt, cBlock.rBlock)
 
         val varFacts = loop.postFacts.and(S_WhileStatement.calcVarFacts(ctx, cBodyStmt))
         return C_Statement(rStmt, false, varFacts)

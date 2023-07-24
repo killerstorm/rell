@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.expr
@@ -19,7 +19,7 @@ import net.postchain.rell.base.compiler.vexpr.V_DbAtWhat
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
-import net.postchain.rell.base.model.stmt.R_ForIterator
+import net.postchain.rell.base.model.stmt.R_IterableAdapter
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.toImmList
 
@@ -36,15 +36,19 @@ abstract class C_AtFromBase {
     abstract fun compile(pos: S_Pos): V_Expr
 }
 
-class C_AtFromMember(private val base: C_AtFromBase, private val member: C_TypeValueMember) {
+class C_AtFromMember(
+    private val base: C_AtFromBase,
+    private val selfType: R_Type,
+    private val member: C_TypeValueMember,
+) {
     fun nameMsg(): String = member.nameMsg().msg
     fun ownerMsg(): C_CodeMsg = base.nameMsg()
+    fun isValue() = member.isValue()
     fun isCallable() = member.isCallable()
-    fun valueType() = member.valueType
 
     fun compile(ctx: C_ExprContext, cName: C_Name): C_ExprMember {
         val baseExpr = base.compile(cName.pos)
-        val link = C_MemberLink(baseExpr, cName.pos, cName, false)
+        val link = C_MemberLink(baseExpr, selfType, cName.pos, cName, false)
         return member.compile(ctx, link)
     }
 }
@@ -77,10 +81,10 @@ class C_AtFromItem_Iterable(
         pos: S_Pos,
         val vExpr: V_Expr,
         val elemType: R_Type,
-        val rIterator: R_ForIterator
+        val rIterableAdapter: R_IterableAdapter
 ): C_AtFromItem(pos) {
     fun compile(): V_ColAtFrom {
-        return V_ColAtFrom(rIterator, vExpr)
+        return V_ColAtFrom(rIterableAdapter, vExpr)
     }
 }
 
@@ -209,8 +213,8 @@ class C_AtSummarization_Aggregate_MinMax(
 }
 
 class C_AtContextMember(private val member: C_AtFromMember, private val outerAtExpr: Boolean) {
-    val callable = member.isCallable()
-    val valueType = member.valueType()
+    fun isValue() = member.isValue()
+    fun isCallable() = member.isCallable()
 
     fun fullNameMsg(): C_CodeMsg {
         val name = member.nameMsg()
@@ -231,6 +235,7 @@ class C_AtContextMember(private val member: C_AtFromMember, private val outerAtE
 
 class C_AtFromImplicitAttr(
     private val base: C_AtFromBase,
+    private val selfType: R_Type,
     private val attr: C_AtTypeImplicitAttr,
 ) {
     val type = attr.type
@@ -246,7 +251,7 @@ class C_AtFromImplicitAttr(
 
     fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
         val vBase = base.compile(pos)
-        val link = C_MemberLink(vBase, pos, null, false)
+        val link = C_MemberLink(vBase, selfType, pos, null, false)
         val cExpr = attr.member.compile(ctx, link).expr
         return cExpr.value()
     }

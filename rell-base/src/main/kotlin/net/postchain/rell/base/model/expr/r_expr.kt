@@ -1,22 +1,19 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.model.expr
 
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
-import net.postchain.rell.base.compiler.base.utils.toCodeMsg
-import net.postchain.rell.base.lib.type.C_Lib_Type_BigInteger
-import net.postchain.rell.base.lib.type.C_Lib_Type_Decimal
+import net.postchain.rell.base.lib.type.Lib_Type_BigInteger
+import net.postchain.rell.base.lib.type.Lib_Type_Decimal
 import net.postchain.rell.base.model.*
-import net.postchain.rell.base.model.stmt.R_ForIterator
 import net.postchain.rell.base.model.stmt.R_Statement
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.sql.SqlGen
 import net.postchain.rell.base.utils.checkEquals
-import net.postchain.rell.base.utils.immListOf
 import java.math.BigDecimal
 
 abstract class R_Expr(val type: R_Type) {
@@ -133,7 +130,10 @@ class R_ListLiteralExpr(type: R_ListType, val exprs: List<R_Expr>): R_Expr(type)
     }
 }
 
-class R_MapLiteralExpr(type: R_MapType, private val entries: List<Pair<R_Expr, R_Expr>>): R_Expr(type) {
+class R_MapLiteralExpr(
+    private val mapType: R_MapType,
+    private val entries: List<Pair<R_Expr, R_Expr>>,
+): R_Expr(mapType) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val map = mutableMapOf<Rt_Value, Rt_Value>()
         for ((keyExpr, valueExpr) in entries) {
@@ -142,84 +142,9 @@ class R_MapLiteralExpr(type: R_MapType, private val entries: List<Pair<R_Expr, R
             if (key in map) {
                 throw Rt_Exception.common("expr_map_dupkey:${key.strCode()}", "Duplicate map key: ${key.str()}")
             }
-            map.put(key, value)
+            map[key] = value
         }
-        return Rt_MapValue(type, map)
-    }
-}
-
-sealed class R_CollectionKind(val type: R_Type) {
-    abstract fun makeRtValue(col: Iterable<Rt_Value>): Rt_Value
-}
-
-class R_CollectionKind_List(type: R_Type): R_CollectionKind(type) {
-    override fun makeRtValue(col: Iterable<Rt_Value>): Rt_Value {
-        val list = mutableListOf<Rt_Value>()
-        list.addAll(col)
-        return Rt_ListValue(type, list)
-    }
-}
-
-class R_CollectionKind_Set(type: R_Type): R_CollectionKind(type) {
-    override fun makeRtValue(col: Iterable<Rt_Value>): Rt_Value {
-        val set = mutableSetOf<Rt_Value>()
-        set.addAll(col)
-        return Rt_SetValue(type, set)
-    }
-}
-
-class R_EmptyCollectionConstructorExpr(
-        private val kind: R_CollectionKind
-): R_Expr(kind.type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        return kind.makeRtValue(immListOf())
-    }
-}
-
-class R_CopyCollectionConstructorExpr(
-        private val kind: R_CollectionKind,
-        private val arg: R_Expr,
-        private val rIterator: R_ForIterator
-): R_Expr(kind.type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val value = arg.evaluate(frame)
-        val iterable = rIterator.list(value)
-        return kind.makeRtValue(iterable)
-    }
-}
-
-class R_EmptyMapConstructorExpr(type: R_Type): R_Expr(type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        return Rt_MapValue(type, mutableMapOf())
-    }
-}
-
-class R_MapCopyMapConstructorExpr(type: R_Type, private val arg: R_Expr): R_Expr(type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val map = mutableMapOf<Rt_Value, Rt_Value>()
-        val m = arg.evaluate(frame).asMap()
-        map.putAll(m)
-        return Rt_MapValue(type, map)
-    }
-}
-
-class R_IteratorCopyMapConstructorExpr(
-        type: R_Type,
-        private val arg: R_Expr,
-        private val rIterator: R_ForIterator
-): R_Expr(type) {
-    override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
-        val map = mutableMapOf<Rt_Value, Rt_Value>()
-        val value = arg.evaluate(frame)
-        val iterable = rIterator.list(value)
-        for (item in iterable) {
-            val tuple = item.asTuple()
-            val k = tuple.get(0)
-            val v = tuple.get(1)
-            val v0 = map.put(k, v)
-            Rt_Utils.check(v0 == null) { "map:new:iterator:dupkey:${k.strCode()}" toCodeMsg "Duplicate key: ${k.str()}" }
-        }
-        return Rt_MapValue(type, map)
+        return Rt_MapValue(mapType, map)
     }
 }
 
@@ -615,14 +540,14 @@ object R_TypeAdapter_Direct: R_TypeAdapter() {
 
 object R_TypeAdapter_IntegerToBigInteger: R_TypeAdapter() {
     override fun adaptValue(value: Rt_Value): Rt_Value {
-        val r = C_Lib_Type_BigInteger.calcFromInteger(value)
+        val r = Lib_Type_BigInteger.calcFromInteger(value)
         return r
     }
 }
 
 object R_TypeAdapter_IntegerToDecimal: R_TypeAdapter() {
     override fun adaptValue(value: Rt_Value): Rt_Value {
-        val r = C_Lib_Type_Decimal.calcFromInteger(value)
+        val r = Lib_Type_Decimal.calcFromInteger(value)
         return r
     }
 }
@@ -636,7 +561,7 @@ object R_TypeAdapter_BigIntegerToDecimal: R_TypeAdapter() {
     }
 }
 
-class R_TypeAdapter_Nullable(private val dstType: R_Type, private val innerAdapter: R_TypeAdapter): R_TypeAdapter() {
+class R_TypeAdapter_Nullable(private val innerAdapter: R_TypeAdapter): R_TypeAdapter() {
     override fun adaptValue(value: Rt_Value): Rt_Value {
         return if (value == Rt_NullValue) {
             Rt_NullValue

@@ -223,6 +223,14 @@ object Rt_Utils {
         }
     }
 
+    fun <T: Comparable<T>> checkRange(actual: T, min: T, max: T) {
+        check(actual in min .. max) {
+            val code = "check_range:$min:$max:$actual"
+            val msg = "expected <$min>..<$max> actual <$actual>"
+            code toCodeMsg msg
+        }
+    }
+
     fun evaluateInNewFrame(
             defCtx: Rt_DefinitionContext,
             frame: Rt_CallFrame?,

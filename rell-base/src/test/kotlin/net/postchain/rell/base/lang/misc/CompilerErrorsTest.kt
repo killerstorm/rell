@@ -377,5 +377,10 @@ class CompilerErrorsTest: BaseRellTest(false) {
         chk("$badExpr1.foo($badExpr2)", "ct_err:[$badError1][$badError2]")
     }
 
+    @Test fun testAssignErrorType() {
+        //TODO fix error message - must not report <error> type (but must make sure that the root error is always reported)
+        chkEx("{ val x: integer; x = foo(); return 0; }", "ct_err:[stmt_assign_type:[integer]:[<error>]][unknown_name:foo]")
+    }
+
     private fun chkStmt(code: String, expected: String) = chkCompile("function f() { $code }", expected)
 }

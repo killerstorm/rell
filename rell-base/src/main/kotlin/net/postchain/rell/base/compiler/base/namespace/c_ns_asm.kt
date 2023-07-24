@@ -797,7 +797,7 @@ private class C_NsAsm_ConflictsProcessor(
 
 private data class C_NsAsm_NamespaceKey(val container: C_ContainerKey, val path: C_RNamePath = C_RNamePath.EMPTY) {
     fun sub(name: R_Name): C_NsAsm_NamespaceKey {
-        val subPath = path.child(name)
+        val subPath = path.append(name)
         return C_NsAsm_NamespaceKey(container, subPath)
     }
 

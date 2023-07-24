@@ -333,27 +333,27 @@ class FunctionTypeTest: BaseRellTest(false) {
         chkOut("f:5")
 
         chk("_type_of(s().p(0))", "text[integer]")
-        chk("_type_of(make_s(false).p(0))", "ct_err:expr_mem_null:p")
+        chk("_type_of(make_s(false).p(0))", "ct_err:expr_mem_null:s?:p")
         chk("_type_of(make_s(false)?.p(0))", "text[integer?]")
         chkOut()
 
         chk("_type_of(v().u.s.p(0))", "text[integer]")
-        chk("_type_of(make_v(false).u.s.p(0))", "ct_err:expr_mem_null:u")
-        chk("_type_of(make_v(false)?.u.s.p(0))", "ct_err:expr_mem_null:s")
-        chk("_type_of(make_v(false)?.u?.s.p(0))", "ct_err:expr_mem_null:p")
+        chk("_type_of(make_v(false).u.s.p(0))", "ct_err:expr_mem_null:v?:u")
+        chk("_type_of(make_v(false)?.u.s.p(0))", "ct_err:expr_mem_null:u?:s")
+        chk("_type_of(make_v(false)?.u?.s.p(0))", "ct_err:expr_mem_null:s?:p")
         chk("_type_of(make_v(false)?.u?.s?.p(0))", "text[integer?]")
         chkOut()
 
-        chkEx("{ val t: s? = make_s(false); return t.p(5); }", "ct_err:expr_mem_null:p")
+        chkEx("{ val t: s? = make_s(false); return t.p(5); }", "ct_err:expr_mem_null:s?:p")
         chkEx("{ val t: s? = make_s(false); return t?.p(5); }", "null")
         chkOut()
 
         chkEx("{ val t: s? = make_s(true); return t?.p(5); }", "int[25]")
         chkOut("f:5")
 
-        chkEx("{ val t: v? = make_v(false); return t.u.s.p(5); }", "ct_err:expr_mem_null:u")
-        chkEx("{ val t: v? = make_v(false); return t?.u.s.p(5); }", "ct_err:expr_mem_null:s")
-        chkEx("{ val t: v? = make_v(false); return t?.u?.s.p(5); }", "ct_err:expr_mem_null:p")
+        chkEx("{ val t: v? = make_v(false); return t.u.s.p(5); }", "ct_err:expr_mem_null:v?:u")
+        chkEx("{ val t: v? = make_v(false); return t?.u.s.p(5); }", "ct_err:expr_mem_null:u?:s")
+        chkEx("{ val t: v? = make_v(false); return t?.u?.s.p(5); }", "ct_err:expr_mem_null:s?:p")
         chkEx("{ val t: v? = make_v(false); return t?.u?.s?.p(5); }", "null")
         chkOut()
 
@@ -406,8 +406,13 @@ class FunctionTypeTest: BaseRellTest(false) {
         chk("s1().to_gtv", "int[123]")
         chk("s1().to_gtv()", "gtv[[123]]")
         chk("s2().to_gtv", "fn[integer.from_hex(text[7b])]")
-        chk("s2().to_gtv()", "ct_err:name:ambig:to_gtv:[attribute,function]")
+        chk("s2().to_gtv()", "ct_err:type_value_member:ambig:to_gtv:[attribute,function]")
         chk("s3().to_gtv", "fn[g()]")
-        chk("s3().to_gtv()", "ct_err:name:ambig:to_gtv:[attribute,function]")
+        chk("s3().to_gtv()", "ct_err:type_value_member:ambig:to_gtv:[attribute,function]")
+    }
+
+    @Test fun testDefaultMemberFunctions() {
+        chkEx("{ val f = integer.from_hex(*); return f.hash(); }", "ct_err:fn:invalid:(text)->integer:hash")
+        chkEx("{ val f = integer.from_hex(*); return f.to_gtv(); }", "ct_err:fn:invalid:(text)->integer:to_gtv")
     }
 }

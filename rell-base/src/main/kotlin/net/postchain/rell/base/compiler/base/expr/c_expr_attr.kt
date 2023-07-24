@@ -10,7 +10,6 @@ import com.google.common.collect.Sets
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_MessageContext
 import net.postchain.rell.base.compiler.base.core.C_Name
-import net.postchain.rell.base.compiler.base.fn.C_ArgTypeMatcher_Simple
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
@@ -177,14 +176,13 @@ object C_AttributeResolver {
             val vExpr = arg.vExpr
             val type = vExpr.type
 
-            val matcher = C_ArgTypeMatcher_Simple(attrMatch.attr.type)
-            val m = matcher.match(type)
+            val adapter = attrMatch.attr.type.getTypeAdapter(type)
 
-            val vExpr2 = if (m == null) {
+            val vExpr2 = if (adapter == null) {
                 errWrongType(ctx.msgCtx, vExpr.pos, arg.index, attrMatch.attr, type)
                 vExpr
             } else {
-                m.adaptExpr(ctx, vExpr)
+                adapter.adaptExpr(ctx, vExpr)
             }
 
             C_AttrMatch(attrMatch.attr, vExpr2)

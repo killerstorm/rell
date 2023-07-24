@@ -250,18 +250,18 @@ class VirtualTest: BaseRellTest(false) {
         val args = argToGtv("[123,'Hello',[456,[789]]]", "[[0],[1],[2]]")
 
         chkVirtual("virtual<rec>?", "_type_of(x)", args, "'virtual<rec>?'")
-        chkVirtual("virtual<rec>?", "_type_of(x.to_full())", args, "ct_err:expr_mem_null:to_full")
+        chkVirtual("virtual<rec>?", "_type_of(x.to_full())", args, "ct_err:expr_mem_null:virtual<rec>?:to_full")
         chkVirtual("virtual<rec>?", "_type_of(x?.to_full())", args, "'rec?'")
-        chkVirtual("virtual<rec>?", "_type_of(x.i)", args, "ct_err:expr_mem_null:i")
-        chkVirtual("virtual<rec>?", "_type_of(x.t)", args, "ct_err:expr_mem_null:t")
-        chkVirtual("virtual<rec>?", "_type_of(x.s)", args, "ct_err:expr_mem_null:s")
+        chkVirtual("virtual<rec>?", "_type_of(x.i)", args, "ct_err:expr_mem_null:virtual<rec>?:i")
+        chkVirtual("virtual<rec>?", "_type_of(x.t)", args, "ct_err:expr_mem_null:virtual<rec>?:t")
+        chkVirtual("virtual<rec>?", "_type_of(x.s)", args, "ct_err:expr_mem_null:virtual<rec>?:s")
         chkVirtual("virtual<rec>?", "_type_of(x?.i)", args, "'integer?'")
         chkVirtual("virtual<rec>?", "_type_of(x?.t)", args, "'text?'")
         chkVirtual("virtual<rec>?", "_type_of(x?.s)", args, "'virtual<sub>?'")
-        chkVirtual("virtual<rec>?", "_type_of(x?.s.to_full())", args, "ct_err:expr_mem_null:to_full")
+        chkVirtual("virtual<rec>?", "_type_of(x?.s.to_full())", args, "ct_err:expr_mem_null:virtual<sub>?:to_full")
         chkVirtual("virtual<rec>?", "_type_of(x?.s?.to_full())", args, "'sub?'")
-        chkVirtual("virtual<rec>?", "_type_of(x?.s.q)", args, "ct_err:expr_mem_null:q")
-        chkVirtual("virtual<rec>?", "_type_of(x?.s.p)", args, "ct_err:expr_mem_null:p")
+        chkVirtual("virtual<rec>?", "_type_of(x?.s.q)", args, "ct_err:expr_mem_null:virtual<sub>?:q")
+        chkVirtual("virtual<rec>?", "_type_of(x?.s.p)", args, "ct_err:expr_mem_null:virtual<sub>?:p")
         chkVirtual("virtual<rec>?", "_type_of(x?.s?.q)", args, "'integer?'")
         chkVirtual("virtual<rec>?", "_type_of(x?.s?.p)", args, "'virtual<sub2>?'")
         chkVirtual("virtual<rec>?", "_type_of(x?.s?.p?.to_full())", args, "'sub2?'")
@@ -271,10 +271,10 @@ class VirtualTest: BaseRellTest(false) {
         chkVirtual("virtual<rec>", "_type_of(x.i)", args, "'integer'")
         chkVirtual("virtual<rec>", "_type_of(x.t)", args, "'text'")
         chkVirtual("virtual<rec>", "_type_of(x.s)", args, "'virtual<sub>?'")
-        chkVirtual("virtual<rec>", "_type_of(x.s.to_full())", args, "ct_err:expr_mem_null:to_full")
+        chkVirtual("virtual<rec>", "_type_of(x.s.to_full())", args, "ct_err:expr_mem_null:virtual<sub>?:to_full")
         chkVirtual("virtual<rec>", "_type_of(x.s?.to_full())", args, "'sub?'")
-        chkVirtual("virtual<rec>", "_type_of(x.s.q)", args, "ct_err:expr_mem_null:q")
-        chkVirtual("virtual<rec>", "_type_of(x.s.p)", args, "ct_err:expr_mem_null:p")
+        chkVirtual("virtual<rec>", "_type_of(x.s.q)", args, "ct_err:expr_mem_null:virtual<sub>?:q")
+        chkVirtual("virtual<rec>", "_type_of(x.s.p)", args, "ct_err:expr_mem_null:virtual<sub>?:p")
         chkVirtual("virtual<rec>", "_type_of(x.s?.q)", args, "'integer?'")
         chkVirtual("virtual<rec>", "_type_of(x.s?.p)", args, "'virtual<sub2>?'")
         chkVirtual("virtual<rec>", "_type_of(x.s?.p?.to_full())", args, "'sub2?'")
@@ -288,8 +288,8 @@ class VirtualTest: BaseRellTest(false) {
 
         var args: Gtv = GtvNull
         chkVirtual("virtual<rec>?", "_strict_str(x)", args, "'null'")
-        chkVirtual("virtual<rec>?", "x.i", args, "ct_err:expr_mem_null:i")
-        chkVirtual("virtual<rec>?", "x.to_full()", args, "ct_err:expr_mem_null:to_full")
+        chkVirtual("virtual<rec>?", "x.i", args, "ct_err:expr_mem_null:virtual<rec>?:i")
+        chkVirtual("virtual<rec>?", "x.to_full()", args, "ct_err:expr_mem_null:virtual<rec>?:to_full")
 
         args = argToGtv("[123,'Hello',[456,[789]]]", "[[2]]")
         chkVirtual("virtual<rec>?", "_strict_str(x)", args,
@@ -297,8 +297,8 @@ class VirtualTest: BaseRellTest(false) {
         chkVirtual("virtual<rec>?", "x?.i", args, "rt_err:virtual_struct:get:novalue:rec:i")
         chkVirtual("virtual<rec>?", "x?.t", args, "rt_err:virtual_struct:get:novalue:rec:t")
         chkVirtual("virtual<rec>?", "_strict_str(x?.s)", args, "'virtual<sub>[q=int[456],p=virtual<sub2>[r=int[789]]]'")
-        chkVirtual("virtual<rec>?", "_strict_str(x?.s.q)", args, "ct_err:expr_mem_null:q")
-        chkVirtual("virtual<rec>?", "_strict_str(x?.s.p)", args, "ct_err:expr_mem_null:p")
+        chkVirtual("virtual<rec>?", "_strict_str(x?.s.q)", args, "ct_err:expr_mem_null:virtual<sub>?:q")
+        chkVirtual("virtual<rec>?", "_strict_str(x?.s.p)", args, "ct_err:expr_mem_null:virtual<sub>?:p")
         chkVirtual("virtual<rec>?", "_strict_str(x?.s?.q)", args, "'int[456]'")
         chkVirtual("virtual<rec>?", "_strict_str(x?.s?.p)", args, "'virtual<sub2>[r=int[789]]'")
 
@@ -343,7 +343,7 @@ class VirtualTest: BaseRellTest(false) {
 
     @Test fun testListType() {
         val type = "virtual<list<integer>>"
-        var args = argToGtv("[123,456]", "[[0],[1]]")
+        val args = argToGtv("[123,456]", "[[0],[1]]")
         chkVirtual(type, "_type_of(x)", args, "'virtual<list<integer>>'")
         chkVirtual(type, "_type_of(x[0])", args, "'integer'")
         chkVirtual(type, "_type_of(x[1])", args, "'integer'")
@@ -452,6 +452,7 @@ class VirtualTest: BaseRellTest(false) {
         var args = argToGtv("[[123,'Hello'],[456,'Bye']]", "[[0],[1]]")
         chkVirtual(type, "_type_of(x)", args, "'virtual<list<rec>>'")
         chkVirtual(type, "_type_of(x[0])", args, "'virtual<rec>'")
+        chkVirtual(type, "_type_of(x.get(0))", args, "'virtual<rec>'")
 
         args = argToGtv("[[123,'Hello'],[456,'Bye']]", "[[0],[1]]")
         chkVirtual(type, "_strict_str(x)", args,
@@ -484,6 +485,7 @@ class VirtualTest: BaseRellTest(false) {
         var args = argToGtv("[[123,456],[654,321]]", "[[0],[1]]")
         chkVirtual(type, "_type_of(x)", args, "'virtual<list<list<integer>>>'")
         chkVirtual(type, "_type_of(x[0])", args, "'virtual<list<integer>>'")
+        chkVirtual(type, "_type_of(x.get(0))", args, "'virtual<list<integer>>'")
 
         args = argToGtv("[[123,456],[654,321]]", "[[0],[1]]")
         chkVirtual(type, "_strict_str(x)", args,
@@ -518,6 +520,7 @@ class VirtualTest: BaseRellTest(false) {
         var args = argToGtv("[[123,456],[654,321]]", "[[0],[1]]")
         chkVirtual(type, "_type_of(x)", args, "'virtual<list<set<integer>>>'")
         chkVirtual(type, "_type_of(x[0])", args, "'virtual<set<integer>>'")
+        chkVirtual(type, "_type_of(x.get(0))", args, "'virtual<set<integer>>'")
 
         args = argToGtv("[[123,456],[654,321]]", "[[0],[1]]")
         chkVirtual(type, "_strict_str(x)", args,
@@ -552,6 +555,7 @@ class VirtualTest: BaseRellTest(false) {
         var args = argToGtv("[{'Hello':123},{'Bye':456}]", "[[0],[1]]")
         chkVirtual(type, "_type_of(x)", args, "'virtual<list<map<text,integer>>>'")
         chkVirtual(type, "_type_of(x[0])", args, "'virtual<map<text,integer>>'")
+        chkVirtual(type, "_type_of(x.get(0))", args, "'virtual<map<text,integer>>'")
 
         args = argToGtv("[{'Hello':123},{'Bye':456}]", "[[0],[1]]")
         chkVirtual(type, "_strict_str(x)", args,
@@ -576,6 +580,7 @@ class VirtualTest: BaseRellTest(false) {
         var args = argToGtv("[[123,'Hello'],[456,'Bye']]", "[[0],[1]]")
         chkVirtual(type, "_type_of(x)", args, "'virtual<list<(a:integer,b:text)>>'")
         chkVirtual(type, "_type_of(x[0])", args, "'virtual<(a:integer,b:text)>'")
+        chkVirtual(type, "_type_of(x.get(0))", args, "'virtual<(a:integer,b:text)>'")
 
         args = argToGtv("[[123,'Hello'],[456,'Bye']]", "[[0],[1]]")
         chkVirtual(type, "_strict_str(x)", args,
@@ -891,23 +896,38 @@ class VirtualTest: BaseRellTest(false) {
     }
 
     @Test fun testMapIterator() {
-        def("struct rec { i: integer; }")
+        def("struct rec { i: integer; j: integer; }")
 
         val type = "virtual<map<text, rec>>"
-        var args = argToGtv("{'Hello':[123],'Bye':[456]}", "[['Hello'],['Bye']]")
+        var args = argToGtv("{'Hello':[123,321],'Bye':[456,654]}", "[['Hello'],['Bye']]")
+        chkVirtualEx(type, "{ for (e in x) return _type_of(e); return ''; }", args, "'(text,virtual<rec>)'")
+        chkVirtualEx(type, "= x @ {} ( _type_of($) ) limit 1;", args, "'(text,virtual<rec>)'")
         chkVirtualEx(type, "{ for ((k, v) in x) return _type_of(k); return ''; }", args, "'text'")
         chkVirtualEx(type, "{ for ((k, v) in x) return _type_of(v); return ''; }", args, "'virtual<rec>'")
+        chkVirtualEx(type, "{ for (e in x) return _strict_str(e); return ''; }", args,
+            "'(text[Bye],virtual<rec>[i=int[456],j=int[654]])'")
+        chkVirtualEx(type, "= x @ {} ( _strict_str($) ) limit 1;", args,
+            "'(text[Bye],virtual<rec>[i=int[456],j=int[654]])'")
         chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(k); return ''; }", args, "'text[Bye]'")
-        chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(v); return ''; }", args, "'virtual<rec>[i=int[456]]'")
-        chkVirtualEx(type, "{ for (v in x.values()) return _strict_str(v); return ''; }", args, "'virtual<rec>[i=int[456]]'")
+        chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(v); return ''; }", args,
+            "'virtual<rec>[i=int[456],j=int[654]]'")
+        chkVirtualEx(type, "{ for (v in x.values()) return _strict_str(v); return ''; }", args,
+            "'virtual<rec>[i=int[456],j=int[654]]'")
 
-        args = argToGtv("{'Hello':[123],'Bye':[456]}", "[['Hello']]")
+        args = argToGtv("{'Hello':[123,321],'Bye':[456,654]}", "[['Hello']]")
         chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(k); return ''; }", args, "'text[Hello]'")
-        chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(v); return ''; }", args, "'virtual<rec>[i=int[123]]'")
+        chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(v); return ''; }", args,
+            "'virtual<rec>[i=int[123],j=int[321]]'")
 
-        args = argToGtv("{'Hello':[123],'Bye':[456]}", "[['Bye']]")
+        args = argToGtv("{'Hello':[123,321],'Bye':[456,654]}", "[['Bye']]")
         chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(k); return ''; }", args, "'text[Bye]'")
-        chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(v); return ''; }", args, "'virtual<rec>[i=int[456]]'")
+        chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(v); return ''; }", args,
+            "'virtual<rec>[i=int[456],j=int[654]]'")
+
+        args = argToGtv("{'Hello':[123,321],'Bye':[456,654]}", "[['Hello',1]]")
+        chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(k); return ''; }", args, "'text[Hello]'")
+        chkVirtualEx(type, "{ for ((k, v) in x) return _strict_str(v); return ''; }", args,
+            "'virtual<rec>[i=null,j=int[321]]'")
     }
 
     @Test fun testMapOfStruct() {
@@ -920,6 +940,9 @@ class VirtualTest: BaseRellTest(false) {
         chkVirtual(type, "_strict_str(x['A'])", args, "'virtual<rec>[i=int[123],t=text[Hello]]'")
         chkVirtual(type, "_type_of(x.keys())", args, "'set<text>'")
         chkVirtual(type, "_type_of(x.values())", args, "'list<virtual<rec>>'")
+        chkVirtual(type, "_type_of(x.get('A'))", args, "'virtual<rec>'")
+        chkVirtual(type, "_type_of(x.get_or_null('A'))", args, "'virtual<rec>?'")
+        chkVirtual(type, "_type_of(x.get_or_default('A', null))", args, "'virtual<rec>?'")
 
         args = argToGtv("{'A':[123,'Hello'],'B':[456,'Bye']}", "[['B',0]]")
         chkVirtual(type, "_strict_str(x)", args, "'virtual<map<text,rec>>[text[B]=virtual<rec>[i=int[456],t=null]]'")
@@ -927,6 +950,13 @@ class VirtualTest: BaseRellTest(false) {
         chkVirtual(type, "_strict_str(x['B'])", args, "'virtual<rec>[i=int[456],t=null]'")
         chkVirtual(type, "_strict_str(x['B'].i)", args, "'int[456]'")
         chkVirtual(type, "_strict_str(x['B'].t)", args, "rt_err:virtual_struct:get:novalue:rec:t")
+        chkVirtual(type, "_strict_str(x.get('B'))", args, "'virtual<rec>[i=int[456],t=null]'")
+        chkVirtual(type, "_strict_str(x.get_or_null('A'))", args, "'null'")
+        chkVirtual(type, "_strict_str(x.get_or_null('B'))", args, "'virtual<rec>[i=int[456],t=null]'")
+        chkVirtual(type, "_strict_str(x.get_or_default('A', null))", args, "'null'")
+        chkVirtual(type, "_strict_str(x.get_or_default('B', null))", args, "'virtual<rec>[i=int[456],t=null]'")
+        chkVirtual(type, "_strict_str(x.keys())", args, "'set<text>[text[B]]'")
+        chkVirtual(type, "_strict_str(x.values())", args, "'list<virtual<rec>>[virtual<rec>[i=int[456],t=null]]'")
     }
 
     @Test fun testTupleType() {
@@ -1111,7 +1141,7 @@ class VirtualTest: BaseRellTest(false) {
         def("struct rec { i: integer; t: text; }")
 
         chkVirtual("gtv", "_strict_str(virtual<rec>.from_gtv_pretty(x))", argToGtv("[123,'Hello']", "[[0],[1]]"),
-                "ct_err:unknown_name:[virtual<rec>]:from_gtv_pretty")
+                "ct_err:fn:invalid:virtual<rec>:from_gtv_pretty")
 
         chkFromGtv("rec", "[123,'Hello']", "[[0],[1]]", "'virtual<rec>[i=int[123],t=text[Hello]]'")
         chkFromGtv("rec", "[123,'Hello']", "[[0]]", "'virtual<rec>[i=int[123],t=null]'")
@@ -1313,6 +1343,8 @@ class VirtualTest: BaseRellTest(false) {
         chkHash(type, "x[0].hash()", "[[123,456],[654,321]]", "[[0],[1]]",
                 "B3E8532E5A7DAD8C8B159CC47A894263D45975527AFCF72746CCB600716B34A1")
         chkHash(type, "x[1].hash()", "[[123,456],[654,321]]", "[[0],[1]]",
+                "0F655912BCF53057732DFAB9CD35895F471053FF214C5661C7DB279A2984CB41")
+        chkHash(type, "x.get(1).hash()", "[[123,456],[654,321]]", "[[0],[1]]",
                 "0F655912BCF53057732DFAB9CD35895F471053FF214C5661C7DB279A2984CB41")
 
         chkHash(type, "x.hash()", "[[654,321],[123,456]]", "[[0],[1]]",

@@ -87,6 +87,7 @@ class C_ValueMemberExpr(
     private val member: C_TypeValueMember,
 ): C_Expr() {
     private val vBase = memberLink.base
+    private val selfType = memberLink.selfType
     private val memberPos = memberLink.linkPos
     private val memberName = memberLink.linkName
     private val safe = memberLink.safe
@@ -100,7 +101,7 @@ class C_ValueMemberExpr(
     }
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
-        val vMember = member.call(exprCtx, memberPos, args, resTypeHint)
+        val vMember = member.call(exprCtx, selfType, memberPos, args, resTypeHint)
         vMember ?: return super.call(ctx, pos, args, resTypeHint)
         val vExpr = makeMemberExpr(vMember)
         return C_ValueExpr(vExpr)

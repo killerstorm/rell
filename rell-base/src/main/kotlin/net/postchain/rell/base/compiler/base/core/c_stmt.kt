@@ -6,13 +6,17 @@ package net.postchain.rell.base.compiler.base.core
 
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.ast.S_Statement
-import net.postchain.rell.base.compiler.ast.S_VirtualType
 import net.postchain.rell.base.compiler.base.def.C_AttrHeader
 import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
+import net.postchain.rell.base.lib.Lib_Rell
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.stmt.*
+import net.postchain.rell.base.mtype.M_Type
+import net.postchain.rell.base.mtype.M_TypeParamsResolver
+import net.postchain.rell.base.mtype.M_Types
 import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.toImmList
 
@@ -126,17 +130,15 @@ class C_BlockCodeBuilder(
 }
 
 sealed class C_VarDeclarator(protected val ctx: C_StmtContext, protected val mutable: Boolean) {
-    abstract fun getTypeHint(): C_TypeHint
+    abstract fun getHintType(): M_Type
     abstract fun compile(rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator
 }
 
 class C_WildcardVarDeclarator(
         ctx: C_StmtContext,
         mutable: Boolean,
-        private val name: C_Name,
-        private val explicitType: Boolean
 ): C_VarDeclarator(ctx, mutable) {
-    override fun getTypeHint() = C_TypeHint.NONE
+    override fun getHintType() = M_Types.NOTHING
 
     override fun compile(rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
         return R_WildcardVarDeclarator
@@ -151,7 +153,7 @@ class C_SimpleVarDeclarator(
         private val explicitType: R_Type?,
         private val ideInfo: IdeSymbolInfo
 ): C_VarDeclarator(ctx, mutable) {
-    override fun getTypeHint() = C_TypeHint.ofType(explicitType)
+    override fun getHintType() = explicitType?.mType ?: M_Types.NOTHING
 
     override fun compile(rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
         val rType = explicitType ?: (if (rExprType == null) attrHeader.type else null)
@@ -200,9 +202,9 @@ class C_TupleVarDeclarator(
         subDeclarators: List<C_VarDeclarator>
 ): C_VarDeclarator(ctx, mutable) {
     private val subDeclarators = subDeclarators.toImmList()
-    private val typeHint = C_TypeHint.tuple(subDeclarators.map { it.getTypeHint() })
+    private val hintType = M_Types.tuple(subDeclarators.map { it.getHintType() })
 
-    override fun getTypeHint() = typeHint
+    override fun getHintType() = hintType
 
     override fun compile(rExprType: R_Type?, varFacts: C_MutableVarFacts): R_VarDeclarator {
         val rSubDeclarators = compileSub(rExprType, varFacts)
@@ -238,47 +240,42 @@ class C_TupleVarDeclarator(
     }
 }
 
-class C_ForIterator(val itemType: R_Type, val rIterator: R_ForIterator) {
+class C_IterableAdapter(val itemType: R_Type, val rAdapter: R_IterableAdapter) {
     companion object {
-        fun compile(ctx: C_ExprContext, exprType: R_Type, atExpr: Boolean): C_ForIterator? {
-            return when (exprType) {
-                is R_ByteArrayType -> C_ForIterator(R_IntegerType, R_ForIterator_ByteArray)
-                is R_CollectionType -> C_ForIterator(exprType.elementType, R_ForIterator_Collection)
-                is R_VirtualCollectionType -> C_ForIterator(
-                        S_VirtualType.virtualMemberType(exprType.elementType()),
-                        R_ForIterator_VirtualCollection
-                )
-                is R_MapType -> makeMapIterator(ctx, exprType.keyType, exprType.valueType, atExpr)
-                is R_VirtualMapType -> {
-                    val mapType = exprType.innerType
-                    val keyType = S_VirtualType.virtualMemberType(mapType.keyType)
-                    val valueType = S_VirtualType.virtualMemberType(mapType.valueType)
-                    makeMapIterator(ctx, keyType, valueType, atExpr)
-                }
-                is R_RangeType -> C_ForIterator(R_IntegerType, R_ForIterator_Range)
-                is R_CtErrorType -> C_ForIterator(exprType, R_ForIterator_Collection)
-                else -> null
+        fun compile(ctx: C_ExprContext, exprType: R_Type, atExpr: Boolean): C_IterableAdapter? {
+            return if (exprType.isError()) {
+                C_IterableAdapter(exprType, R_IterableAdapter_Direct)
+            } else if (exprType is R_MapType && isMapCompatibilityMode(ctx, atExpr)) {
+                C_IterableAdapter(exprType.legacyEntryType, R_IterableAdapter_LegacyMap)
+            } else {
+                val rItemType = getItemType(exprType)
+                if (rItemType == null) null else C_IterableAdapter(rItemType, R_IterableAdapter_Direct)
             }
+        }
+
+        private fun getItemType(exprType: R_Type): R_Type? {
+            val genType = Lib_Rell.ITERABLE_TYPE.mGenericType
+            val resolver = M_TypeParamsResolver(genType.params)
+            val match = resolver.matchTypeParamsIn(genType.commonType, exprType.mType)
+            if (!match) {
+                return null
+            }
+
+            val map = resolver.resolve()
+            map ?: return null
+
+            val mItemType = map.values.singleOrNull()
+            mItemType ?: return null
+
+            val rItemType = L_TypeUtils.getRType(mItemType)
+            return rItemType
         }
 
         private val LANG_VER_UNNAMED_MAP_FIELDS = R_LangVersion.of("0.10.6")
 
-        private fun makeMapIterator(
-                ctx: C_ExprContext,
-                keyType: R_Type,
-                valueType: R_Type,
-                atExpr: Boolean
-        ): C_ForIterator {
+        private fun isMapCompatibilityMode(ctx: C_ExprContext, atExpr: Boolean): Boolean {
             val opts = ctx.globalCtx.compilerOptions
-
-            val itemType = if (atExpr && opts.compatibility != null && opts.compatibility < LANG_VER_UNNAMED_MAP_FIELDS) {
-                // Map element type used to be (k:K,v:V) for collection-at in 0.10.5 and earlier.
-                R_TupleType.createNamed("k" to keyType, "v" to valueType)
-            } else {
-                R_TupleType.create(keyType, valueType)
-            }
-
-            return C_ForIterator(itemType, R_ForIterator_Map(itemType))
+            return atExpr && opts.compatibility != null && opts.compatibility < LANG_VER_UNNAMED_MAP_FIELDS
         }
     }
 }

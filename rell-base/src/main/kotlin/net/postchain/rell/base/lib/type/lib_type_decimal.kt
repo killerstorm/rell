@@ -1,20 +1,17 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
 
-import net.postchain.rell.base.compiler.base.utils.C_GlobalFuncBuilder
-import net.postchain.rell.base.compiler.base.utils.C_LibUtils
-import net.postchain.rell.base.compiler.base.utils.C_LibUtils.depError
-import net.postchain.rell.base.compiler.base.utils.C_MemberFuncBuilder
-import net.postchain.rell.base.compiler.base.utils.C_SysFunction
-import net.postchain.rell.base.lib.C_Lib_Math
-import net.postchain.rell.base.model.*
+import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.compiler.base.utils.C_MessageType
+import net.postchain.rell.base.lib.Lib_Math
+import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
+import net.postchain.rell.base.model.R_DecimalType
 import net.postchain.rell.base.model.expr.Db_SysFunction
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.sql.SqlConstants
-import net.postchain.rell.base.utils.immListOf
 import org.jooq.DataType
 import org.jooq.impl.SQLDataType
 import java.math.BigDecimal
@@ -22,48 +19,149 @@ import java.math.BigInteger
 import java.math.MathContext
 import java.math.RoundingMode
 
-object C_Lib_Type_Decimal: C_Lib_Type("decimal", R_DecimalType) {
+object Lib_Type_Decimal {
     val ToInteger = DecFns.ToInteger
     val FromInteger = DecFns.FromInteger
     val FromInteger_Db = DecFns.FromInteger_Db
     val FromBigInteger = DecFns.FromBigInteger
     val FromBigInteger_Db = DecFns.FromBigInteger_Db
-    val ToText_Db: Db_SysFunction = DecFns.ToText_1_Db
 
-    override fun bindConstructors(b: C_GlobalFuncBuilder) {
-        b.add(typeName.str, type, listOf(R_TextType), DecFns.FromText)
-        b.add(typeName.str, type, listOf(R_IntegerType), DecFns.FromInteger)
-        b.add(typeName.str, type, listOf(R_BigIntegerType), DecFns.FromBigInteger)
-    }
+    // Using regexp (in a stored procedure) to remove trailing zeros.
+    val ToText_Db: Db_SysFunction = Db_SysFunction.simple("decimal.to_text", SqlConstants.FN_DECIMAL_TO_TEXT)
 
-    override fun bindConstants() = immListOf(
-        C_LibUtils.constValue("PRECISION", (Lib_DecimalMath.DECIMAL_INT_DIGITS + Lib_DecimalMath.DECIMAL_FRAC_DIGITS).toLong()),
-        C_LibUtils.constValue("SCALE", Lib_DecimalMath.DECIMAL_FRAC_DIGITS.toLong()),
-        C_LibUtils.constValue("INT_DIGITS", Lib_DecimalMath.DECIMAL_INT_DIGITS.toLong()),
-        C_LibUtils.constValue("MIN_VALUE", Lib_DecimalMath.DECIMAL_MIN_VALUE),
-        C_LibUtils.constValue("MAX_VALUE", Lib_DecimalMath.DECIMAL_MAX_VALUE)
-    )
+    val NAMESPACE = Ld_NamespaceDsl.make {
+        type("decimal", rType = R_DecimalType) {
+            constant("PRECISION", (Lib_DecimalMath.DECIMAL_INT_DIGITS + Lib_DecimalMath.DECIMAL_FRAC_DIGITS).toLong())
+            constant("SCALE", Lib_DecimalMath.DECIMAL_FRAC_DIGITS.toLong())
+            constant("INT_DIGITS", Lib_DecimalMath.DECIMAL_INT_DIGITS.toLong())
+            constant("MIN_VALUE", Lib_DecimalMath.DECIMAL_MIN_VALUE)
+            constant("MAX_VALUE", Lib_DecimalMath.DECIMAL_MAX_VALUE)
 
-    override fun bindStaticFunctions(b: C_GlobalFuncBuilder) {
-        b.add("from_text", R_DecimalType, listOf(R_TextType), DecFns.FromText)
-    }
+            constructor {
+                param("text")
+                bodyFunction(DecFns.FromText)
+            }
 
-    override fun bindMemberFunctions(b: C_MemberFuncBuilder) {
-        b.add("abs", R_DecimalType, listOf(), C_Lib_Math.Abs_Decimal)
-        b.add("ceil", R_DecimalType, listOf(), DecFns.Ceil)
-        b.add("floor", R_DecimalType, listOf(), DecFns.Floor)
-        b.add("min", R_DecimalType, listOf(R_DecimalType), C_Lib_Math.Min_Decimal)
-        b.add("max", R_DecimalType, listOf(R_DecimalType), C_Lib_Math.Max_Decimal)
-        b.add("round", R_DecimalType, listOf(), DecFns.Round_1)
-        b.add("round", R_DecimalType, listOf(R_IntegerType), DecFns.Round_2)
-        //b.add("pow", R_DecimalType, listOf(R_IntegerType), R_SysFn_Decimal.Pow)
-        b.add("signum", R_IntegerType, listOf(), DecFns.Sign, depError("sign"))
-        b.add("sign", R_IntegerType, listOf(), DecFns.Sign)
-        //b.add("sqrt", R_DecimalType, listOf(), R_SysFn_Decimal.Sqrt)
-        b.add("to_big_integer", R_BigIntegerType, listOf(), DecFns.ToBigInteger)
-        b.add("to_integer", R_IntegerType, listOf(), DecFns.ToInteger)
-        b.add("to_text", R_TextType, listOf(), DecFns.ToText_1)
-        b.add("to_text", R_TextType, listOf(R_BooleanType), DecFns.ToText_2)
+            constructor {
+                param("integer")
+                bodyFunction(DecFns.FromInteger)
+            }
+
+            constructor {
+                param("big_integer")
+                bodyFunction(DecFns.FromBigInteger)
+            }
+
+            staticFunction("from_text", "decimal") {
+                param("text")
+                bodyFunction(DecFns.FromText)
+            }
+
+            function("abs", "decimal") {
+                bodyFunction(Lib_Math.Abs_Decimal)
+            }
+
+            function("ceil", "decimal", pure = true) {
+                dbFunctionSimple("decimal.ceil", "CEIL")
+                body { a ->
+                    val v = a.asDecimal()
+                    val r = v.setScale(0, RoundingMode.CEILING)
+                    Rt_DecimalValue.of(r)
+                }
+            }
+
+            function("floor", "decimal", pure = true) {
+                dbFunctionSimple("decimal.floor", "FLOOR")
+                body { a ->
+                    val v = a.asDecimal()
+                    val r = v.setScale(0, RoundingMode.FLOOR)
+                    Rt_DecimalValue.of(r)
+                }
+            }
+
+            function("min", "decimal") {
+                param("decimal")
+                bodyFunction(Lib_Math.Min_Decimal)
+            }
+
+            function("max", "decimal") {
+                param("decimal")
+                bodyFunction(Lib_Math.Max_Decimal)
+            }
+
+            function("round", "decimal", pure = true) {
+                dbFunctionTemplate("decimal.round", 1, "ROUND(#0)")
+                body { a ->
+                    val v = a.asDecimal()
+                    val r = v.setScale(0, RoundingMode.HALF_UP)
+                    Rt_DecimalValue.of(r)
+                }
+            }
+
+            function("round", "decimal", pure = true) {
+                param("integer")
+                // Argument #2 has to be casted to INT, as PostgreSQL doesn't allow BIGINT.
+                dbFunctionTemplate("decimal.round", 2, "ROUND(#0,(#1)::INT)")
+                body { a, b ->
+                    val v = a.asDecimal()
+                    var scale = b.asInteger()
+                    scale = Math.max(scale, -Lib_DecimalMath.DECIMAL_INT_DIGITS.toLong())
+                    scale = Math.min(scale, Lib_DecimalMath.DECIMAL_FRAC_DIGITS.toLong())
+                    val r = v.setScale(scale.toInt(), RoundingMode.HALF_UP)
+                    Rt_DecimalValue.of(r)
+                }
+            }
+
+            //function("pow", "decimal", listOf("integer"), R_SysFn_Decimal.Pow)
+
+            function("sign", "integer", pure = true) {
+                alias("signum", C_MessageType.ERROR)
+                dbFunctionSimple("decimal.sign", "SIGN")
+                body { a ->
+                    val v = a.asDecimal()
+                    val r = v.signum()
+                    Rt_IntValue(r.toLong())
+                }
+            }
+
+            //function("sqrt", "decimal", listOf(), R_SysFn_Decimal.Sqrt)
+
+            function("to_big_integer", "big_integer", pure = true) {
+                dbFunctionTemplate("decimal.to_big_integer", 1, "TRUNC(#0)")
+                body { a ->
+                    val v = a.asDecimal()
+                    val bi = v.toBigInteger()
+                    Rt_BigIntegerValue.of(bi)
+                }
+            }
+
+            function("to_integer", "integer") {
+                bodyFunction(DecFns.ToInteger)
+            }
+
+            function("to_text", "text", pure = true) {
+                dbFunction(ToText_Db)
+                body { a ->
+                    val v = a.asDecimal()
+                    val r = Lib_DecimalMath.toString(v)
+                    Rt_TextValue(r)
+                }
+            }
+
+            function("to_text", "text", pure = true) {
+                param("boolean")
+                body { a, b ->
+                    val v = a.asDecimal()
+                    val sci = b.asBoolean()
+                    val r = if (sci) {
+                        Lib_DecimalMath.toSciString(v)
+                    } else {
+                        Lib_DecimalMath.toString(v)
+                    }
+                    Rt_TextValue(r)
+                }
+            }
+        }
     }
 
     fun calcFromInteger(a: Rt_Value): Rt_Value = DecFns.calcFromInteger(a)
@@ -252,35 +350,7 @@ object Lib_DecimalMath {
 }
 
 private object DecFns {
-    val Ceil = C_SysFunction.simple1(Db_SysFunction.simple("decimal.ceil", "CEIL"), pure = true) { a ->
-        val v = a.asDecimal()
-        val r = v.setScale(0, RoundingMode.CEILING)
-        Rt_DecimalValue.of(r)
-    }
-
-    val Floor = C_SysFunction.simple1(Db_SysFunction.simple("decimal.floor", "FLOOR"), pure = true) { a ->
-        val v = a.asDecimal()
-        val r = v.setScale(0, RoundingMode.FLOOR)
-        Rt_DecimalValue.of(r)
-    }
-
-    val Round_1 = C_SysFunction.simple1(Db_SysFunction.template("decimal.round", 1, "ROUND(#0)"), pure = true) { a ->
-        val v = a.asDecimal()
-        val r = v.setScale(0, RoundingMode.HALF_UP)
-        Rt_DecimalValue.of(r)
-    }
-
-    // Argument #2 has to be casted to INT, PostgreSQL doesn't allow BIGINT.
-    val Round_2 = C_SysFunction.simple2(Db_SysFunction.template("decimal.round", 2, "ROUND(#0,(#1)::INT)"), pure = true) { a, b ->
-        val v = a.asDecimal()
-        var scale = b.asInteger()
-        scale = Math.max(scale, -Lib_DecimalMath.DECIMAL_INT_DIGITS.toLong())
-        scale = Math.min(scale, Lib_DecimalMath.DECIMAL_FRAC_DIGITS.toLong())
-        val r = v.setScale(scale.toInt(), RoundingMode.HALF_UP)
-        Rt_DecimalValue.of(r)
-    }
-
-    val Pow = C_SysFunction.simple2(Db_SysFunction.simple("decimal.pow", "POW"), pure = true) { a, b ->
+    val Pow = C_SysFunction.simple(Db_SysFunction.simple("decimal.pow", "POW"), pure = true) { a, b ->
         val v = a.asDecimal()
         val power = b.asInteger()
         if (power < 0) {
@@ -291,7 +361,7 @@ private object DecFns {
         Rt_DecimalValue.of(r)
     }
 
-    val Sqrt = C_SysFunction.simple1(Db_SysFunction.simple("decimal.sqrt", "SQRT"), pure = true) { a ->
+    val Sqrt = C_SysFunction.simple(Db_SysFunction.simple("decimal.sqrt", "SQRT"), pure = true) { a ->
         val v = a.asDecimal()
         if (v < BigDecimal.ZERO) {
             throw Rt_Exception.common("decimal.sqrt:negative:$v", "Negative value")
@@ -299,22 +369,10 @@ private object DecFns {
         TODO()
     }
 
-    val Sign = C_SysFunction.simple1(Db_SysFunction.simple("decimal.sign", "SIGN"), pure = true) { a ->
-        val v = a.asDecimal()
-        val r = v.signum()
-        Rt_IntValue(r.toLong())
-    }
-
-    val ToBigInteger = C_SysFunction.simple1(Db_SysFunction.template("decimal.to_big_integer", 1, "TRUNC(#0)"), pure = true) { a ->
-        val v = a.asDecimal()
-        val bi = v.toBigInteger()
-        Rt_BigIntegerValue.of(bi)
-    }
-
     private val BIG_INT_MIN = BigInteger.valueOf(Long.MIN_VALUE)
     private val BIG_INT_MAX = BigInteger.valueOf(Long.MAX_VALUE)
 
-    val ToInteger = C_SysFunction.simple1(Db_SysFunction.template("decimal.to_integer", 1, "TRUNC(#0)::BIGINT"), pure = true) { a ->
+    val ToInteger = C_SysFunction.simple(Db_SysFunction.template("decimal.to_integer", 1, "TRUNC(#0)::BIGINT"), pure = true) { a ->
         val v = a.asDecimal()
         val bi = v.toBigInteger()
         if (bi < BIG_INT_MIN || bi > BIG_INT_MAX) {
@@ -325,27 +383,6 @@ private object DecFns {
         Rt_IntValue(r)
     }
 
-    // Using regexp to remove trailing zeros.
-    // Clever regexp: can handle special cases like "0.0", "0.000000", etc.
-    val ToText_1_Db = Db_SysFunction.simple("decimal.to_text", SqlConstants.FN_DECIMAL_TO_TEXT)
-
-    val ToText_1 = C_SysFunction.simple1(ToText_1_Db, pure = true) { a ->
-        val v = a.asDecimal()
-        val r = Lib_DecimalMath.toString(v)
-        Rt_TextValue(r)
-    }
-
-    val ToText_2 = C_SysFunction.simple2(pure = true) { a, b ->
-        val v = a.asDecimal()
-        val sci = b.asBoolean()
-        val r = if (sci) {
-            Lib_DecimalMath.toSciString(v)
-        } else {
-            Lib_DecimalMath.toString(v)
-        }
-        Rt_TextValue(r)
-    }
-
     fun calcFromInteger(a: Rt_Value): Rt_Value {
         val i = a.asInteger()
         return Rt_DecimalValue.of(i)
@@ -353,19 +390,19 @@ private object DecFns {
 
     val FromInteger_Db = Db_SysFunction.cast("decimal(integer)", Lib_DecimalMath.DECIMAL_SQL_TYPE_STR)
 
-    val FromInteger = C_SysFunction.simple1(FromInteger_Db, pure = true) { a ->
+    val FromInteger = C_SysFunction.simple(FromInteger_Db, pure = true) { a ->
         calcFromInteger(a)
     }
 
     val FromBigInteger_Db = Db_SysFunction.template("decimal(big_integer)", 1, "#0")
 
-    val FromBigInteger = C_SysFunction.simple1(FromBigInteger_Db, pure = true) { a ->
+    val FromBigInteger = C_SysFunction.simple(FromBigInteger_Db, pure = true) { a ->
         val bigInt = a.asBigInteger()
         val bigDec = bigInt.toBigDecimal()
         Rt_DecimalValue.of(bigDec)
     }
 
-    val FromText = C_SysFunction.simple1(
+    val FromText = C_SysFunction.simple(
         Db_SysFunction.simple("decimal(text)", SqlConstants.FN_DECIMAL_FROM_TEXT),
         pure = true
     ) { a ->

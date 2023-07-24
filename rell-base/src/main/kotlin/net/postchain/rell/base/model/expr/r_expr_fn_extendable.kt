@@ -6,6 +6,7 @@ package net.postchain.rell.base.model.expr
 
 import net.postchain.rell.base.model.R_FunctionBase
 import net.postchain.rell.base.model.R_FunctionDefinition
+import net.postchain.rell.base.model.R_MapType
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.utils.checkEquals
@@ -70,8 +71,8 @@ class R_ExtendableFunctionCombiner_List(private val type: R_Type): R_ExtendableF
     override fun createRtCombiner(): Rt_ExtendableFunctionCombiner = Rt_ExtendableFunctionCombiner_List(type)
 }
 
-class R_ExtendableFunctionCombiner_Map(private val type: R_Type): R_ExtendableFunctionCombiner() {
-    override fun createRtCombiner(): Rt_ExtendableFunctionCombiner = Rt_ExtendableFunctionCombiner_Map(type)
+class R_ExtendableFunctionCombiner_Map(private val mapType: R_MapType): R_ExtendableFunctionCombiner() {
+    override fun createRtCombiner(): Rt_ExtendableFunctionCombiner = Rt_ExtendableFunctionCombiner_Map(mapType)
 }
 
 sealed class Rt_ExtendableFunctionCombiner {
@@ -125,7 +126,7 @@ private class Rt_ExtendableFunctionCombiner_List(private val type: R_Type): Rt_E
     }
 }
 
-private class Rt_ExtendableFunctionCombiner_Map(private val type: R_Type): Rt_ExtendableFunctionCombiner() {
+private class Rt_ExtendableFunctionCombiner_Map(private val mapType: R_MapType): Rt_ExtendableFunctionCombiner() {
     private val result = mutableMapOf<Rt_Value, Rt_Value>()
     private var done = false
 
@@ -146,7 +147,7 @@ private class Rt_ExtendableFunctionCombiner_Map(private val type: R_Type): Rt_Ex
     override fun getCombinedResult(): Rt_Value {
         check(!done)
         done = true
-        return Rt_MapValue(type, result)
+        return Rt_MapValue(mapType, result)
     }
 }
 

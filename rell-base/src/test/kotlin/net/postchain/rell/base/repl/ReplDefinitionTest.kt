@@ -88,7 +88,7 @@ class ReplDefinitionTest: BaseRellTest(false) {
         repl.chk("f()", "RES:int[123]")
         repl.chk("g()", "RES:int[456]")
         repl.chk("import other.*;")
-        repl.chk("f()", "CTE:<console>:name:ambig:f:[FUNCTION:lib:f,FUNCTION:other:f]")
+        repl.chk("f()", "CTE:<console>:namespace:ambig:f:[FUNCTION:lib:f,FUNCTION:other:f]")
         repl.chk("g()", "RES:int[456]")
     }
 

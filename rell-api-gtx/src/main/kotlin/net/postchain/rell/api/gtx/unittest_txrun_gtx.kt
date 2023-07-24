@@ -25,7 +25,7 @@ import net.postchain.rell.api.base.RellApiCompile
 import net.postchain.rell.api.base.RellCliException
 import net.postchain.rell.api.base.RellConfigGen
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
-import net.postchain.rell.base.lib.test.C_Lib_Test_Events
+import net.postchain.rell.base.lib.test.Lib_Test_Events
 import net.postchain.rell.base.lib.test.RawTestTxValue
 import net.postchain.rell.base.lib.test.Rt_TestBlockValue
 import net.postchain.rell.base.model.R_ModuleName
@@ -243,7 +243,7 @@ private class Rt_UnitTestPostchainTxContextFactory: Rt_PostchainTxContextFactory
         override fun emitEvent(type: String, data: Gtv) {
             val rtType = Rt_TextValue(type)
             val rtData = Rt_GtvValue(data)
-            val v = Rt_TupleValue(C_Lib_Test_Events.EVENT_TUPLE_TYPE, immListOf(rtType, rtData))
+            val v = Rt_TupleValue(Lib_Test_Events.EVENT_TUPLE_TYPE, immListOf(rtType, rtData))
             events.add(v)
         }
     }

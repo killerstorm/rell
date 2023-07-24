@@ -8,9 +8,15 @@ import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_Name
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
-import net.postchain.rell.base.compiler.base.core.C_Types
-import net.postchain.rell.base.compiler.base.fn.*
-import net.postchain.rell.base.compiler.base.utils.*
+import net.postchain.rell.base.compiler.base.fn.C_FullCallArguments
+import net.postchain.rell.base.compiler.base.fn.C_FunctionCallArgsUtils
+import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTargetInfo
+import net.postchain.rell.base.compiler.base.fn.C_PartialCallArguments
+import net.postchain.rell.base.compiler.base.lib.*
+import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
+import net.postchain.rell.base.compiler.base.utils.C_Errors
+import net.postchain.rell.base.compiler.base.utils.C_Utils
+import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.compiler.vexpr.V_MemberFunctionCall
 import net.postchain.rell.base.compiler.vexpr.V_TypeValueMember
@@ -23,73 +29,67 @@ import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
 
-class C_MemberLink(val base: V_Expr, val linkPos: S_Pos, val linkName: C_Name?, val safe: Boolean)
+class C_MemberLink(
+    val base: V_Expr,
+    val selfType: R_Type,
+    val linkPos: S_Pos,
+    val linkName: C_Name?,
+    val safe: Boolean,
+)
 
-abstract class C_TypeValueMember(
-    val ideName: R_IdeName?,
-    val valueType: R_Type?,
-) {
-    abstract fun kindMsg(): String
+abstract class C_TypeValueMember(private val ideName: R_IdeName?): C_TypeMember(ideName?.rName) {
     abstract fun nameMsg(): C_CodeMsg
-
-    open fun isCallable(): Boolean = valueType is R_FunctionType
+    abstract override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_TypeValueMember
 
     open fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember {
         throw C_NoValueExpr.errNoValue(linkPos, kindMsg(), nameMsg().msg)
     }
 
-    open fun call(ctx: C_ExprContext, linkPos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_TypeValueMember? = null
+    open fun call(
+        ctx: C_ExprContext,
+        selfType: R_Type,
+        linkPos: S_Pos,
+        args: List<S_CallArgument>,
+        resTypeHint: C_TypeHint,
+    ): V_TypeValueMember? = null
 
     fun compile(ctx: C_ExprContext, link: C_MemberLink): C_ExprMember {
         val expr: C_Expr = C_ValueMemberExpr(ctx, link, this)
         val ideInfo = ideName?.ideInfo ?: IdeSymbolInfo.UNKNOWN
         return C_ExprMember(expr, ideInfo)
     }
+}
 
-    companion object {
-        fun getTypeMember(ctx: C_ExprContext, baseType: R_Type, memberName: C_Name, hint: C_ExprHint): C_TypeValueMember? {
-            val effectiveBaseType = C_Types.removeNullable(baseType)
+abstract class C_TypeValueMember_Value(
+    ideName: R_IdeName?,
+    val valueType: R_Type,
+): C_TypeValueMember(ideName) {
+    final override fun isValue() = true
+    final override fun isCallable() = valueType is R_FunctionType
 
-            val members = effectiveBaseType.getValueMembers(memberName.rName)
-            if (members.isEmpty()) {
-                C_Errors.errUnknownMember(ctx.msgCtx, effectiveBaseType, memberName)
-                return null
-            }
-
-            var filteredMembers = members.filter { if (hint.callable) it.isCallable() else it.valueType != null }
-            if (filteredMembers.isEmpty()) {
-                filteredMembers = members
-            }
-
-            if (filteredMembers.size > 1) {
-                val kinds = filteredMembers.map { it.kindMsg() }
-                val listCode = kinds.joinToString(",")
-                val listMsg = kinds.joinToString()
-                ctx.msgCtx.error(memberName.pos, "name:ambig:$memberName:[$listCode]", "Name '$memberName' is ambiguous: $listMsg")
-            }
-
-            return filteredMembers[0]
-        }
-    }
+    // Not supported yet.
+    final override fun replaceTypeParams(rep: C_TypeMemberReplacement) = this
 }
 
 class C_TypeValueMember_BasicAttr(
     private val attr: C_MemberAttr,
-): C_TypeValueMember(attr.ideName, attr.type) {
+): C_TypeValueMember_Value(attr.ideName, attr.type) {
     override fun kindMsg() = "attribute"
     override fun nameMsg() = attr.nameMsg()
 
     override fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember {
-        return V_TypeValueMember_BasicAttr(attr, linkPos, linkName)
+        val vAttr = attr.vAttr(ctx, linkPos)
+        return V_TypeValueMember_BasicAttr(attr.ideName, vAttr, linkPos, linkName)
     }
 
     private class V_TypeValueMember_BasicAttr(
-        private val attr: C_MemberAttr,
+        private val ideName: R_IdeName?,
+        private val attr: V_MemberAttr,
         private val memberPos: S_Pos,
         private val memberName: C_Name?,
     ): V_TypeValueMember(attr.type) {
         override fun implicitAttrName() = memberName
-        override fun ideInfo() = attr.ideName?.ideInfo ?: IdeSymbolInfo.UNKNOWN
+        override fun ideInfo() = ideName?.ideInfo ?: IdeSymbolInfo.UNKNOWN
         override fun vExprs() = immListOf<V_Expr>()
         override fun calculator() = attr.calculator()
 
@@ -105,30 +105,44 @@ class C_TypeValueMember_BasicAttr(
 }
 
 class C_TypeValueMember_Function(
-    private val realName: R_Name,
-    private val baseType: R_Type,
-    private val fn: C_SysMemberFunction
-): C_TypeValueMember(R_IdeName(realName, fn.ideInfo), null) {
+    ideName: R_IdeName,
+    private val fn: C_LibMemberFunction,
+): C_TypeValueMember(ideName) {
+    private val realIdeName = ideName
+    private val rName: R_Name = ideName.rName
+
     override fun kindMsg() = "function"
-    override fun nameMsg() = realName.str toCodeMsg realName.str
+    override fun nameMsg() = rName.str toCodeMsg rName.str
+    override fun isValue() = false
     override fun isCallable() = true
 
-    override fun call(ctx: C_ExprContext, linkPos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_TypeValueMember {
-        val callTargetInfo = C_FunctionCallTargetInfo_MemberFunction(fn)
+    override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_TypeValueMember {
+        val fn2 = fn.replaceTypeParams(rep)
+        return if (fn2 === fn) this else C_TypeValueMember_Function(realIdeName, fn2)
+    }
+
+    override fun call(
+        ctx: C_ExprContext,
+        selfType: R_Type,
+        linkPos: S_Pos,
+        args: List<S_CallArgument>,
+        resTypeHint: C_TypeHint,
+    ): V_TypeValueMember {
+        val callTargetInfo = C_FunctionCallTargetInfo_SysMemberFunction(selfType, fn)
         val callArgs = C_FunctionCallArgsUtils.compileCallArgs(ctx, args, callTargetInfo)
-        val fullName = C_Utils.getFullNameLazy(baseType, realName)
+        val fullName = C_Utils.getFullNameLazy(selfType, rName)
 
         val vCall = when (callArgs) {
             null -> null
             is C_FullCallArguments -> {
                 val vArgs = callArgs.compileSimpleArgs(fullName)
-                val callCtx = C_MemberFuncCaseCtx(linkPos, realName, fullName)
-                fn.compileCallFull(ctx, callCtx, vArgs)
+                val callCtx = C_LibFuncCaseCtx(linkPos, fullName)
+                fn.compileCallFull(ctx, callCtx, selfType, vArgs, resTypeHint)
             }
             is C_PartialCallArguments -> {
-                val callCtx = C_MemberFuncCaseCtx(linkPos, realName, fullName)
+                val callCtx = C_LibFuncCaseCtx(linkPos, fullName)
                 val fnType = resTypeHint.getFunctionType()
-                fn.compileCallPartial(ctx, callCtx, callArgs, fnType)
+                fn.compileCallPartial(ctx, callCtx, selfType, callArgs, fnType)
             }
         }
 
@@ -146,6 +160,7 @@ class C_TypeValueMember_Function(
     ): V_TypeValueMember(type) {
         override fun implicitAttrName() = null
         override fun ideInfo() = ideInfo
+        override fun postVarFacts() = call.postVarFacts()
         override fun vExprs() = call.vExprs()
         override fun globalConstantRestriction() = call.globalConstantRestriction()
         override fun safeCallable() = false
@@ -158,15 +173,22 @@ class C_TypeValueMember_Function(
         override fun dbExprWhat(base: V_Expr, safe: Boolean) = call.dbExprWhat(base, safe)
     }
 
-    private class C_FunctionCallTargetInfo_MemberFunction(val fn: C_SysMemberFunction): C_FunctionCallTargetInfo() {
+    private class C_FunctionCallTargetInfo_SysMemberFunction(
+        val selfType: R_Type,
+        val fn: C_LibMemberFunction,
+    ): C_FunctionCallTargetInfo() {
         override fun retType() = null
-        override fun typeHints() = fn.getParamsHints()
+        override fun typeHints() = fn.getCallTypeHints(selfType)
         override fun getParameter(name: R_Name) = null
     }
 }
 
 abstract class C_MemberAttr(val ideName: R_IdeName?, val type: R_Type) {
     abstract fun nameMsg(): C_CodeMsg
+    abstract fun vAttr(exprCtx: C_ExprContext, pos: S_Pos): V_MemberAttr
+}
+
+abstract class V_MemberAttr(val type: R_Type) {
     abstract fun calculator(): R_MemberCalculator
     abstract fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr
     open fun canBeDbExpr(): Boolean = false
@@ -174,9 +196,9 @@ abstract class C_MemberAttr(val ideName: R_IdeName?, val type: R_Type) {
 }
 
 abstract class C_MemberAttr_TupleAttr(
-        type: R_Type,
-        protected val fieldIndex: Int,
-        protected val field: R_TupleField
+    type: R_Type,
+    protected val fieldIndex: Int,
+    protected val field: R_TupleField,
 ): C_MemberAttr(field.name, type) {
     final override fun nameMsg(): C_CodeMsg {
         return if (field.name != null) {
@@ -186,42 +208,64 @@ abstract class C_MemberAttr_TupleAttr(
         }
     }
 
-    final override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errBadDestination(pos)
+    protected abstract class V_MemberAttr_TupleAttr(
+        type: R_Type,
+        protected val fieldIndex: Int,
+    ): V_MemberAttr(type) {
+        final override fun destination(pos: S_Pos, base: R_Expr) = throw C_Errors.errBadDestination(pos)
+    }
 }
 
 abstract class C_MemberAttr_StructAttr(type: R_Type, protected val attr: R_Attribute): C_MemberAttr(attr.ideName, type) {
     final override fun nameMsg() = attr.rName.str toCodeMsg attr.rName.str
+
+    protected abstract class V_MemberAttr_StructAttr(type: R_Type, protected val attr: R_Attribute): V_MemberAttr(type)
 }
 
 class C_MemberAttr_SysProperty(
     ideName: R_IdeName,
-    private val prop: C_SysMemberProperty,
-): C_MemberAttr(ideName, prop.type) {
+    type: R_Type,
+    private val fn: C_SysFunction,
+): C_MemberAttr(ideName, type) {
     private val name = ideName.rName
 
     override fun nameMsg() = name.str toCodeMsg name.str
 
-    override fun calculator(): R_MemberCalculator {
-        return R_MemberCalculator_SysProperty(prop)
+    override fun vAttr(exprCtx: C_ExprContext, pos: S_Pos): V_MemberAttr {
+        val cBody = fn.compileCall(C_SysFunctionCtx(exprCtx, pos))
+        return V_MemberAttr_SysProperty(type, name, cBody)
     }
 
-    override fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr {
-        throw C_Errors.errAttrNotMutable(pos, name.str)
+    private class V_MemberAttr_SysProperty(
+        type: R_Type,
+        private val name: R_Name,
+        private val cBody: C_SysFunctionBody,
+    ): V_MemberAttr(type) {
+        override fun calculator(): R_MemberCalculator {
+            return R_MemberCalculator_SysProperty(type, cBody)
+        }
+
+        override fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr {
+            throw C_Errors.errAttrNotMutable(pos, name.str)
+        }
+
+        override fun canBeDbExpr() = cBody.dbFn != null
+
+        override fun dbExpr(base: Db_Expr): Db_Expr? {
+            val dbFn = cBody.dbFn
+            dbFn ?: return null
+            return Db_CallExpr(type, dbFn, immListOf(base))
+        }
     }
 
-    override fun canBeDbExpr() = prop.fn.dbFn != null
-
-    override fun dbExpr(base: Db_Expr): Db_Expr? {
-        val dbFn = prop.fn.dbFn
-        dbFn ?: return null
-        return Db_CallExpr(prop.type, dbFn, immListOf(base))
-    }
-
-    private class R_MemberCalculator_SysProperty(private val prop: C_SysMemberProperty): R_MemberCalculator(prop.type) {
+    private class R_MemberCalculator_SysProperty(
+        type: R_Type,
+        private val cBody: C_SysFunctionBody,
+    ): R_MemberCalculator(type) {
         override fun calculate(frame: Rt_CallFrame, baseValue: Rt_Value): Rt_Value {
             val args = immListOf(baseValue)
             val callCtx = frame.callCtx()
-            return prop.fn.rFn.call(callCtx, args)
+            return cBody.rFn.call(callCtx, args)
         }
     }
 }

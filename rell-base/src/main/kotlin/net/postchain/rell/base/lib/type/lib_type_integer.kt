@@ -1,154 +1,184 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
 
-import net.postchain.rell.base.compiler.base.namespace.C_SysNsProtoBuilder
-import net.postchain.rell.base.compiler.base.utils.C_GlobalFuncBuilder
-import net.postchain.rell.base.compiler.base.utils.C_LibUtils
-import net.postchain.rell.base.compiler.base.utils.C_LibUtils.depError
-import net.postchain.rell.base.compiler.base.utils.C_MemberFuncBuilder
-import net.postchain.rell.base.compiler.base.utils.C_SysFunction
-import net.postchain.rell.base.lib.C_Lib_Math
-import net.postchain.rell.base.model.R_BigIntegerType
-import net.postchain.rell.base.model.R_DecimalType
+import net.postchain.rell.base.compiler.base.utils.C_MessageType
+import net.postchain.rell.base.lib.Lib_Math
+import net.postchain.rell.base.lmodel.L_ParamArity
+import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.model.R_IntegerType
-import net.postchain.rell.base.model.R_TextType
-import net.postchain.rell.base.model.expr.Db_SysFunction
 import net.postchain.rell.base.runtime.*
-import net.postchain.rell.base.utils.immListOf
 import java.math.BigDecimal
 import java.math.BigInteger
 
-object C_Lib_Type_Integer: C_Lib_Type("integer", R_IntegerType) {
-    override fun bindConstructors(b: C_GlobalFuncBuilder) {
-        b.add(typeName.str, type, listOf(R_TextType), IntFns.FromText_1)
-        b.add(typeName.str, type, listOf(R_TextType, R_IntegerType), IntFns.FromText_2)
-        b.add(typeName.str, type, listOf(R_DecimalType), C_Lib_Type_Decimal.ToInteger)
-    }
+object Lib_Type_Integer {
+    val NAMESPACE = Ld_NamespaceDsl.make {
+        type("integer", rType = R_IntegerType) {
+            alias("timestamp")
 
-    override fun bindConstants() = immListOf(
-        C_LibUtils.constValue("MIN_VALUE", Long.MIN_VALUE),
-        C_LibUtils.constValue("MAX_VALUE", Long.MAX_VALUE),
-    )
+            constant("MIN_VALUE", Long.MIN_VALUE)
+            constant("MAX_VALUE", Long.MAX_VALUE)
 
-    override fun bindStaticFunctions(b: C_GlobalFuncBuilder) {
-        b.add("parseHex", R_IntegerType, listOf(R_TextType), IntFns.FromHex, depError("from_hex"))
-        b.add("from_text", R_IntegerType, listOf(R_TextType), IntFns.FromText_1)
-        b.add("from_text", R_IntegerType, listOf(R_TextType, R_IntegerType), IntFns.FromText_2)
-        b.add("from_hex", R_IntegerType, listOf(R_TextType), IntFns.FromHex)
-    }
+            constructor(pure = true) {
+                param("text")
+                param("integer", arity = L_ParamArity.ZERO_ONE)
+                bodyOpt1 { a, b ->
+                    val r = b?.asInteger() ?: 10
+                    calcFromText(a, r)
+                }
+            }
 
-    override fun bindMemberFunctions(b: C_MemberFuncBuilder) {
-        b.add("abs", R_IntegerType, listOf(), C_Lib_Math.Abs_Integer)
-        b.add("min", R_IntegerType, listOf(R_IntegerType), C_Lib_Math.Min_Integer)
-        b.add("min", R_BigIntegerType, listOf(R_BigIntegerType), IntFns.Min_BigInteger)
-        b.add("min", R_DecimalType, listOf(R_DecimalType), IntFns.Min_Decimal)
-        b.add("max", R_IntegerType, listOf(R_IntegerType), C_Lib_Math.Max_Integer)
-        b.add("max", R_BigIntegerType, listOf(R_BigIntegerType), IntFns.Max_BigInteger)
-        b.add("max", R_DecimalType, listOf(R_DecimalType), IntFns.Max_Decimal)
-        b.add("str", R_TextType, listOf(), IntFns.ToText_1)
-        b.add("str", R_TextType, listOf(R_IntegerType), IntFns.ToText_2)
-        b.add("hex", R_TextType, listOf(), IntFns.ToHex, depError("to_hex"))
-        b.add("to_big_integer", R_BigIntegerType, listOf(), C_Lib_Type_BigInteger.FromInteger)
-        b.add("to_decimal", R_DecimalType, listOf(), C_Lib_Type_Decimal.FromInteger)
-        b.add("to_text", R_TextType, listOf(), IntFns.ToText_1)
-        b.add("to_text", R_TextType, listOf(R_IntegerType), IntFns.ToText_2)
-        b.add("to_hex", R_TextType, listOf(), IntFns.ToHex)
-        b.add("signum", R_IntegerType, listOf(), IntFns.Sign, depError("sign"))
-        b.add("sign", R_IntegerType, listOf(), IntFns.Sign)
-    }
+            constructor {
+                param("decimal")
+                bodyFunction(Lib_Type_Decimal.ToInteger)
+            }
 
-    override fun bindAliases(b: C_SysNsProtoBuilder) {
-        bindAlias(b, "timestamp")
-    }
-}
+            staticFunction("from_text", "integer", pure = true) {
+                param("text")
+                param("integer", arity = L_ParamArity.ZERO_ONE)
+                bodyOpt1 { a, b ->
+                    val r = b?.asInteger() ?: 10
+                    calcFromText(a, r)
+                }
+            }
 
-private object IntFns {
-    val Min_BigInteger = C_SysFunction.simple2(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
-        val v1 = a.asInteger()
-        val v2 = b.asBigInteger()
-        val r = BigInteger.valueOf(v1).min(v2)
-        Rt_BigIntegerValue.of(r)
-    }
+            staticFunction("from_hex", "integer", pure = true) {
+                alias("parseHex", C_MessageType.ERROR)
+                param("text")
+                body { a ->
+                    val s = a.asString()
+                    val r = try {
+                        java.lang.Long.parseUnsignedLong(s, 16)
+                    } catch (e: NumberFormatException) {
+                        throw Rt_Exception.common("fn:integer.from_hex:$s", "Invalid hex number: '$s'")
+                    }
+                    Rt_IntValue(r)
+                }
+            }
 
-    val Max_BigInteger = C_SysFunction.simple2(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
-        val v1 = a.asInteger()
-        val v2 = b.asBigInteger()
-        val r = BigInteger.valueOf(v1).max(v2)
-        Rt_BigIntegerValue.of(r)
-    }
+            function("abs", "integer") {
+                bodyFunction(Lib_Math.Abs_Integer)
+            }
 
-    val Min_Decimal = C_SysFunction.simple2(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
-        val v1 = a.asInteger()
-        val v2 = b.asDecimal()
-        val r = BigDecimal(v1).min(v2)
-        Rt_DecimalValue.of(r)
-    }
+            function("min", "integer") {
+                param("integer")
+                bodyFunction(Lib_Math.Min_Integer)
+            }
 
-    val Max_Decimal = C_SysFunction.simple2(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
-        val v1 = a.asInteger()
-        val v2 = b.asDecimal()
-        val r = BigDecimal(v1).max(v2)
-        Rt_DecimalValue.of(r)
-    }
+            function("min", "big_integer", pure = true) {
+                param("big_integer")
+                dbFunctionSimple("min", "LEAST")
+                body { a, b ->
+                    val v1 = a.asInteger()
+                    val v2 = b.asBigInteger()
+                    val r = BigInteger.valueOf(v1).min(v2)
+                    Rt_BigIntegerValue.of(r)
+                }
+            }
 
-    val ToText_1 = C_SysFunction.simple1(Db_SysFunction.cast("int.to_text", "TEXT"), pure = true) { a ->
-        val v = a.asInteger()
-        Rt_TextValue(v.toString())
-    }
+            function("min", "decimal", pure = true) {
+                param("decimal")
+                dbFunctionSimple("min", "LEAST")
+                body { a, b ->
+                    val v1 = a.asInteger()
+                    val v2 = b.asDecimal()
+                    val r = BigDecimal(v1).min(v2)
+                    Rt_DecimalValue.of(r)
+                }
+            }
 
-    val ToText_2 = C_SysFunction.simple2(pure = true) { a, b ->
-        val v = a.asInteger()
-        val r = b.asInteger()
-        if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
-            throw Rt_Exception.common("fn_int_str_radix:$r", "Invalid radix: $r")
+            function("max", "integer") {
+                param("integer")
+                bodyFunction(Lib_Math.Max_Integer)
+            }
+
+            function("max", "big_integer", pure = true) {
+                param("big_integer")
+                dbFunctionSimple("max", "GREATEST")
+                body { a, b ->
+                    val v1 = a.asInteger()
+                    val v2 = b.asBigInteger()
+                    val r = BigInteger.valueOf(v1).max(v2)
+                    Rt_BigIntegerValue.of(r)
+                }
+            }
+
+            function("max", "decimal", pure = true) {
+                param("decimal")
+                dbFunctionSimple("max", "GREATEST")
+                body { a, b ->
+                    val v1 = a.asInteger()
+                    val v2 = b.asDecimal()
+                    val r = BigDecimal(v1).max(v2)
+                    Rt_DecimalValue.of(r)
+                }
+            }
+
+            function("to_big_integer", "big_integer") {
+                bodyFunction(Lib_Type_BigInteger.FromInteger)
+            }
+
+            function("to_decimal", "decimal") {
+                bodyFunction(Lib_Type_Decimal.FromInteger)
+            }
+
+            function("to_text", "text", pure = true) {
+                alias("str")
+                dbFunctionCast("int.to_text", "TEXT")
+                body { a ->
+                    val v = a.asInteger()
+                    Rt_TextValue(v.toString())
+                }
+            }
+
+            function("to_text", "text", pure = true) {
+                alias("str")
+                param("integer")
+                body { a, b ->
+                    val v = a.asInteger()
+                    val r = b.asInteger()
+                    if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
+                        throw Rt_Exception.common("fn_int_str_radix:$r", "Invalid radix: $r")
+                    }
+                    val s = v.toString(r.toInt())
+                    Rt_TextValue(s)
+                }
+            }
+
+            function("to_hex", "text", pure = true) {
+                alias("hex", C_MessageType.ERROR)
+                body { a ->
+                    val v = a.asInteger()
+                    Rt_TextValue(java.lang.Long.toHexString(v))
+                }
+            }
+
+            function("sign", "integer", pure = true) {
+                alias("signum", C_MessageType.ERROR)
+                dbFunctionSimple("sign", "SIGN")
+                body { a ->
+                    val v = a.asInteger()
+                    val r = java.lang.Long.signum(v).toLong()
+                    Rt_IntValue(r)
+                }
+            }
         }
-        val s = v.toString(r.toInt())
-        Rt_TextValue(s)
     }
 
-    val ToHex = C_SysFunction.simple1(pure = true) { a ->
-        val v = a.asInteger()
-        Rt_TextValue(java.lang.Long.toHexString(v))
-    }
-
-    val Sign = C_SysFunction.simple1(Db_SysFunction.simple("sign", "SIGN"), pure = true) { a ->
-        val v = a.asInteger()
-        val r = java.lang.Long.signum(v).toLong()
-        Rt_IntValue(r)
-    }
-
-    val FromText_1 = C_SysFunction.simple1(pure = true) { a ->
-        calcFromText(a, 10)
-    }
-
-    val FromText_2 = C_SysFunction.simple2(pure = true) { a, b ->
-        val r = b.asInteger()
-        if (r < Character.MIN_RADIX || r > Character.MAX_RADIX) {
-            throw Rt_Exception.common("fn:integer.from_text:radix:$r", "Invalid radix: $r")
+    private fun calcFromText(a: Rt_Value, radix: Long): Rt_Value {
+        if (radix < Character.MIN_RADIX || radix > Character.MAX_RADIX) {
+            throw Rt_Exception.common("fn:integer.from_text:radix:$radix", "Invalid radix: $radix")
         }
-        calcFromText(a, r.toInt())
-    }
 
-    private fun calcFromText(a: Rt_Value, radix: Int): Rt_Value {
         val s = a.asString()
         val r = try {
-            java.lang.Long.parseLong(s, radix)
+            java.lang.Long.parseLong(s, radix.toInt())
         } catch (e: NumberFormatException) {
             throw Rt_Exception.common("fn:integer.from_text:$s", "Invalid number: '$s'")
         }
-        return Rt_IntValue(r)
-    }
 
-    val FromHex = C_SysFunction.simple1(pure = true) { a ->
-        val s = a.asString()
-        val r = try {
-            java.lang.Long.parseUnsignedLong(s, 16)
-        } catch (e: NumberFormatException) {
-            throw Rt_Exception.common("fn:integer.from_hex:$s", "Invalid hex number: '$s'")
-        }
-        Rt_IntValue(r)
+        return Rt_IntValue(r)
     }
 }

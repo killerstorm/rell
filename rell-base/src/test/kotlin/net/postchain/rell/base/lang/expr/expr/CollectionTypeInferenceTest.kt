@@ -178,23 +178,32 @@ class CollectionTypeInferenceTest: BaseRellTest(false) {
         chkEx("{ val m = [33:[123]]; m[33] = []; return m; }", "map<integer,list<integer>>[int[33]=list<integer>[]]")
         chkEx("{ val m = [33:[123]]; m[33] = list(); return m; }", "map<integer,list<integer>>[int[33]=list<integer>[]]")
         chkEx("{ val m = [33:set([123])]; m[33] = set(); return m; }", "map<integer,set<integer>>[int[33]=set<integer>[]]")
-        chkEx("{ val m = [33:[123:'abc']]; m[33] = [:]; return m; }", "map<integer,map<integer,text>>[int[33]=map<integer,text>[]]")
-        chkEx("{ val m = [33:[123:'abc']]; m[33] = map(); return m; }", "map<integer,map<integer,text>>[int[33]=map<integer,text>[]]")
+        chkEx("{ val m = [33:[123:'abc']]; m[33] = [:]; return m; }",
+            "map<integer,map<integer,text>>[int[33]=map<integer,text>[]]")
+        chkEx("{ val m = [33:[123:'abc']]; m[33] = map(); return m; }",
+            "map<integer,map<integer,text>>[int[33]=map<integer,text>[]]")
     }
 
     @Test fun testListMethods() {
         chkEx("{ val l = list<list<integer>>(); l.add([]); return l; }", "list<list<integer>>[list<integer>[]]")
         chkEx("{ val l = list<list<integer>>(); l.add(list()); return l; }", "list<list<integer>>[list<integer>[]]")
         chkEx("{ val l = list<set<integer>>(); l.add(set()); return l; }", "list<set<integer>>[set<integer>[]]")
-        chkEx("{ val l = list<map<integer,text>>(); l.add([:]); return l; }", "list<map<integer,text>>[map<integer,text>[]]")
-        chkEx("{ val l = list<map<integer,text>>(); l.add(map()); return l; }", "list<map<integer,text>>[map<integer,text>[]]")
+        chkEx("{ val l = list<map<integer,text>>(); l.add([:]); return l; }",
+            "list<map<integer,text>>[map<integer,text>[]]")
+        chkEx("{ val l = list<map<integer,text>>(); l.add(map()); return l; }",
+            "list<map<integer,text>>[map<integer,text>[]]")
     }
 
     @Test fun testMapMethods() {
-        chkEx("{ val m = map<integer,list<integer>>(); m.put(33, []); return m; }", "map<integer,list<integer>>[int[33]=list<integer>[]]")
-        chkEx("{ val m = map<integer,list<integer>>(); m.put(33, list()); return m; }", "map<integer,list<integer>>[int[33]=list<integer>[]]")
-        chkEx("{ val m = map<integer,set<integer>>(); m.put(33, set()); return m; }", "map<integer,set<integer>>[int[33]=set<integer>[]]")
-        chkEx("{ val m = map<integer,map<integer,text>>(); m.put(33, [:]); return m; }", "map<integer,map<integer,text>>[int[33]=map<integer,text>[]]")
-        chkEx("{ val m = map<integer,map<integer,text>>(); m.put(33, map()); return m; }", "map<integer,map<integer,text>>[int[33]=map<integer,text>[]]")
+        chkEx("{ val m = map<integer,list<integer>>(); m.put(33, []); return m; }",
+            "map<integer,list<integer>>[int[33]=list<integer>[]]")
+        chkEx("{ val m = map<integer,list<integer>>(); m.put(33, list()); return m; }",
+            "map<integer,list<integer>>[int[33]=list<integer>[]]")
+        chkEx("{ val m = map<integer,set<integer>>(); m.put(33, set()); return m; }",
+            "map<integer,set<integer>>[int[33]=set<integer>[]]")
+        chkEx("{ val m = map<integer,map<integer,text>>(); m.put(33, [:]); return m; }",
+            "map<integer,map<integer,text>>[int[33]=map<integer,text>[]]")
+        chkEx("{ val m = map<integer,map<integer,text>>(); m.put(33, map()); return m; }",
+            "map<integer,map<integer,text>>[int[33]=map<integer,text>[]]")
     }
 }

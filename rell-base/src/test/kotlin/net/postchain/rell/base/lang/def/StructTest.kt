@@ -110,13 +110,13 @@ class StructTest: BaseRellTest(false) {
         def("struct foo { mutable x: integer; }")
         def("function nop(x: foo?): foo? = x;")
 
-        chkEx("{ val r: foo? = nop(foo(123)); return r.x; }", "ct_err:expr_mem_null:x")
+        chkEx("{ val r: foo? = nop(foo(123)); return r.x; }", "ct_err:expr_mem_null:foo?:x")
         chkEx("{ val r: foo? = nop(foo(123)); return r!!.x; }", "int[123]")
         chkEx("{ val r: foo? = nop(null); return r!!.x; }", "rt_err:null_value")
         chkEx("{ val r: foo? = nop(foo(123)); return r?.x; }", "int[123]")
         chkEx("{ val r: foo? = nop(null); return r?.x; }", "null")
 
-        chkEx("{ val r: foo? = nop(foo(123)); r.x = 456; return r; }", "ct_err:expr_mem_null:x")
+        chkEx("{ val r: foo? = nop(foo(123)); r.x = 456; return r; }", "ct_err:expr_mem_null:foo?:x")
 
         chkEx("{ val r: foo? = nop(foo(123)); r!!.x = 456; return r; }", "foo[x=int[456]]")
         chkEx("{ val r: foo? = nop(null); r!!.x = 456; return r; }", "rt_err:null_value")
@@ -291,12 +291,12 @@ class StructTest: BaseRellTest(false) {
 
     @Test fun testMutableStructAsMapSetKey() {
         def("struct foo { mutable x: integer; }")
-        chk("set<foo>()", "ct_err:expr_set_type:foo")
-        chk("map<foo,text>()", "ct_err:expr_map_keytype:foo")
+        chk("set<foo>()", "ct_err:[param_bounds:set:T:-immutable:foo][param_bounds:set:T:-immutable:foo]")
+        chk("map<foo,text>()", "ct_err:[param_bounds:map:K:-immutable:foo][param_bounds:map:K:-immutable:foo]")
         chk("map<text,foo>()", "map<text,foo>[]")
         chk("[ foo(123) : 'Hello' ]", "ct_err:expr_map_keytype:foo")
         chk("[ 'Hello' : foo(123) ]", "map<text,foo>[text[Hello]=foo[x=int[123]]]")
-        chk("set([foo(123)])", "ct_err:expr_set_type:foo")
+        chk("set([foo(123)])", "ct_err:expr_call_argtypes:[set]:list<foo>")
         chk("[foo(123)]", "list<foo>[foo[x=int[123]]]")
     }
 
@@ -332,6 +332,13 @@ class StructTest: BaseRellTest(false) {
                 "rt_err:fn_map_get_novalue:foo[x=text[ABC],b=bar[p=int[123],q=int[789]]]")
         chkEx("{ var m = [foo('ABC', bar(p=123,q=456)) : 'X']; return m[foo('DEF', bar(p=123,q=456))]; }",
                 "rt_err:fn_map_get_novalue:foo[x=text[DEF],b=bar[p=int[123],q=int[456]]]")
+    }
+
+    @Test fun testStructAsMapSetKeyRecursive() {
+        chkCompile("""
+            struct foo { a: set<bar>; }
+            struct bar { b: set<foo>; }
+        """, "ct_err:[param_bounds:set:T:-immutable:bar][param_bounds:set:T:-immutable:foo]")
     }
 
     @Test fun testEqSimple() {

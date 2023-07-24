@@ -48,13 +48,13 @@ sealed class R_GenericQualifiedName<T: R_GenericQualifiedName<T>>(parts: List<R_
         return true
     }
 
-    fun child(name: R_Name): T {
+    fun append(name: R_Name): T {
         return create(parts + name)
     }
 
-    fun child(name: String): T {
+    fun append(name: String): T {
         val rName = R_Name.of(name)
-        return child(rName)
+        return append(rName)
     }
 
     protected abstract fun self(): T
@@ -87,12 +87,22 @@ class R_QualifiedName(parts: List<R_Name>): R_GenericQualifiedName<R_QualifiedNa
         check(parts.isNotEmpty())
     }
 
+    val first: R_Name = this.parts.first()
+    val last: R_Name = this.parts.last()
+
     override fun self() = this
     override fun create(parts: List<R_Name>) = R_QualifiedName(parts)
+
+    fun replaceLast(name: R_Name): R_QualifiedName {
+        if (name == last) return this
+        val resParts = parts.subList(0, parts.size - 1) + listOf(name)
+        return R_QualifiedName(resParts)
+    }
 
     companion object {
         fun of(s: String): R_QualifiedName = requireNotNull(ofOpt(s)) { s }
         fun ofOpt(s: String): R_QualifiedName? = qNameOfOpt0(s, null) { R_QualifiedName(it) }
+        fun of(vararg parts: R_Name): R_QualifiedName = R_QualifiedName(parts.toImmList())
     }
 }
 

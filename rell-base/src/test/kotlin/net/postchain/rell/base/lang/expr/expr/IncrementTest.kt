@@ -177,10 +177,10 @@ class IncrementTest: BaseRellTest(false) {
         def("struct r { mutable x: integer; }")
         val init = "val r: r? = _nullable(r(123))"
 
-        chkEx("{ $init; r.x++; return r; }", "ct_err:expr_mem_null:x")
-        chkEx("{ $init; r.x--; return r; }", "ct_err:expr_mem_null:x")
-        chkEx("{ $init; ++r.x; return r; }", "ct_err:expr_mem_null:x")
-        chkEx("{ $init; --r.x; return r; }", "ct_err:expr_mem_null:x")
+        chkEx("{ $init; r.x++; return r; }", "ct_err:expr_mem_null:r?:x")
+        chkEx("{ $init; r.x--; return r; }", "ct_err:expr_mem_null:r?:x")
+        chkEx("{ $init; ++r.x; return r; }", "ct_err:expr_mem_null:r?:x")
+        chkEx("{ $init; --r.x; return r; }", "ct_err:expr_mem_null:r?:x")
 
         chkEx("{ $init; r?.x++; return r; }", "r[x=int[124]]")
         chkEx("{ $init; r?.x--; return r; }", "r[x=int[122]]")
@@ -214,10 +214,10 @@ class IncrementTest: BaseRellTest(false) {
         insert("c0.user", "x", "1,123")
         val init = "val u: user? = user@?{}"
 
-        chkOp("$init; val y = u.x++;", "ct_err:[stmt_var_unit:y][expr_mem_null:x]")
-        chkOp("$init; val y = u.x--;", "ct_err:[stmt_var_unit:y][expr_mem_null:x]")
-        chkOp("$init; val y = ++u.x;", "ct_err:[stmt_var_unit:y][expr_mem_null:x]")
-        chkOp("$init; val y = --u.x;", "ct_err:[stmt_var_unit:y][expr_mem_null:x]")
+        chkOp("$init; val y = u.x++;", "ct_err:[stmt_var_unit:y][expr_mem_null:user?:x]")
+        chkOp("$init; val y = u.x--;", "ct_err:[stmt_var_unit:y][expr_mem_null:user?:x]")
+        chkOp("$init; val y = ++u.x;", "ct_err:[stmt_var_unit:y][expr_mem_null:user?:x]")
+        chkOp("$init; val y = --u.x;", "ct_err:[stmt_var_unit:y][expr_mem_null:user?:x]")
 
         chkOp("$init; print(u?.x++);", "ct_err:expr_arg_unit")
         chkOp("$init; print(u?.x--);", "ct_err:expr_arg_unit")

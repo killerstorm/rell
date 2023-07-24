@@ -9,7 +9,7 @@ import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.ast.S_UpdateWhat
 import net.postchain.rell.base.compiler.base.core.C_LambdaBlock
 import net.postchain.rell.base.compiler.vexpr.V_Expr
-import net.postchain.rell.base.lib.type.C_Lib_Type_Entity
+import net.postchain.rell.base.lib.type.Lib_Type_Entity
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.model.stmt.*
@@ -123,7 +123,7 @@ class C_Destination_EntityAttr(
         val where1 = C_ExprUtils.makeDbBinaryExprEq(left1, right1)
 
         val left2 = Db_EntityExpr(lastAtEntity)
-        val right2 = C_Lib_Type_Entity.pathToDbExpr(ctx, firstAtEntity, path, rEntity.type, base.pos) //TODO base.pos is a bit wrong
+        val right2 = Lib_Type_Entity.pathToDbExpr(ctx, firstAtEntity, path, rEntity.type, base.pos) //TODO base.pos is a bit wrong
         val where2 = C_ExprUtils.makeDbBinaryExprEq(left2, right2)
 
         return C_ExprUtils.makeDbBinaryExpr(R_BooleanType, R_BinaryOp_And, Db_BinaryOp_And, where1, where2)

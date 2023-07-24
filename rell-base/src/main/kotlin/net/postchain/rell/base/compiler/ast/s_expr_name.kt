@@ -10,9 +10,10 @@ import net.postchain.rell.base.compiler.base.namespace.C_NamespaceMemberTag
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.vexpr.V_ConstantValueExpr
-import net.postchain.rell.base.lib.type.C_Lib_Type_Null
+import net.postchain.rell.base.lib.Lib_Rell
 import net.postchain.rell.base.model.R_EnumType
 import net.postchain.rell.base.model.R_Name
+import net.postchain.rell.base.model.R_NullType
 import net.postchain.rell.base.runtime.Rt_EnumValue
 import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.toImmList
@@ -168,7 +169,7 @@ class S_AttrExpr(pos: S_Pos, private val name: S_Name): S_Expr(pos) {
         private fun findMembers(ctx: C_ExprContext, hint: C_ExprHint, name: R_Name): List<C_AtContextMember> {
             val members = ctx.blkCtx.lookupAtMembers(name)
             return members
-                .filter { if (hint.callable) it.callable else it.valueType != null }
+                .filter { if (hint.callable) it.isCallable() else it.isValue() }
                 .ifEmpty { members }
                 .toImmList()
         }
@@ -193,12 +194,12 @@ class S_MemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos) {
     private fun compileNullMember(ctx: C_ExprContext, cName: C_Name): C_ExprMember? {
         if (base !is S_NullLiteralExpr) return null
 
-        val members = C_Lib_Type_Null.valueMembers.filter { it.ideName?.rName == cName.rName }
+        val members = Lib_Rell.NULL_EXTENSION_TYPE.valueMembers.getByName(cName.rName)
         if (members.size != 1) return null
         val member = members[0]
 
         val vBase = base.compileSafe(ctx, C_ExprHint.DEFAULT).value()
-        val link = C_MemberLink(vBase, cName.pos, cName, false)
+        val link = C_MemberLink(vBase, R_NullType, cName.pos, cName, false)
         return member.compile(ctx, link)
     }
 }

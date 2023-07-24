@@ -8,14 +8,10 @@ import com.github.h0tk3y.betterParse.combinators.*
 import com.github.h0tk3y.betterParse.grammar.Grammar
 import com.github.h0tk3y.betterParse.grammar.parseToEnd
 import com.github.h0tk3y.betterParse.grammar.parser
-import com.github.h0tk3y.betterParse.lexer.Token
-import com.github.h0tk3y.betterParse.lexer.TokenMatch
 import com.github.h0tk3y.betterParse.lexer.Tokenizer
-import com.github.h0tk3y.betterParse.lexer.noneMatched
 import com.github.h0tk3y.betterParse.parser.Parser
+import net.postchain.rell.base.utils.FixedDefaultTokenizer
 import org.junit.Test
-import java.io.InputStream
-import java.util.*
 import kotlin.test.assertEquals
 
 class BetterParseExperimentalTest {
@@ -38,6 +34,12 @@ class BetterParseExperimentalTest {
         assertEquals("tuple[(foo,num[123]),(bar,num[456])]", TupleGrammar.parseToEnd("(foo=123,bar=456,)"))
         assertEquals("tuple[(foo,num[123]),(bar,num[456]),(baz,num[789])]", TupleGrammar.parseToEnd("(foo=123,bar=456,baz=789)"))
         assertEquals("tuple[(foo,num[123]),(bar,num[456]),(baz,num[789])]", TupleGrammar.parseToEnd("(foo=123,bar=456,baz=789,)"))
+    }
+
+    @Test fun testExternalGrammarRules() {
+        assertEquals("() : unit", FunGrammar.parseToEnd("():unit"))
+        assertEquals("(list<integer>, map<text,decimal>) : set<text>",
+            FunGrammar.parseToEnd("(list<integer>,map<text,decimal>):set<text>"))
     }
 
     private object TestGrammar: Grammar<String>() {
@@ -104,42 +106,38 @@ class BetterParseExperimentalTest {
         override val rootParser by expr
     }
 
-    // Copy of the com.github.h0tk3y.betterParse.lexer.DefaultTokenizer class (a bit reduced):
-    // the old library class did not work after upgrading to Kotlin 1.4.30 (was failing with NoClassDefFoundError).
-    private class FixedDefaultTokenizer(override val tokens: List<Token>) : Tokenizer {
-        private val patterns = tokens.map { it to (it.regex?.toPattern() ?: it.pattern.toPattern()) }
+    private object TypeGrammar: Grammar<String>() {
+        override val tokenizer: Tokenizer by lazy { FixedDefaultTokenizer(tokens) }
 
-        override fun tokenize(input: String) = tokenize(Scanner(input))
-        override fun tokenize(input: InputStream) = tokenize(Scanner(input))
-        override fun tokenize(input: Readable) = tokenize(Scanner(input))
+        private val ID by token("[A-ZA-z][A-Za-z0-9]*")
+        private val LT by token("<")
+        private val GT by token(">")
+        val COMMA by token(",")
 
-        override fun tokenize(input: Scanner): Sequence<TokenMatch> {
-            input.useDelimiter("")
-            var pos = 0
-            val res = mutableListOf<TokenMatch>()
-
-            while (input.hasNext()) {
-                val matchedToken = patterns.firstOrNull { (_, pattern) ->
-                    try {
-                        input.skip(pattern)
-                        true
-                    } catch (_: NoSuchElementException) {
-                        false
-                    }
-                }
-
-                if (matchedToken == null) {
-                    res.add(TokenMatch(noneMatched, input.next(), pos, 1, pos + 1))
-                    break
-                }
-
-                val match = input.match().group()
-                pos += match.length
-                val result = TokenMatch(matchedToken.first, match, pos, 1, pos + 1)
-                res.add(result)
-            }
-
-            return res.asSequence()
+        private val nameType: Parser<String> by ID * optional(-LT * separatedTerms(parser(this::type), COMMA) * -GT) map {
+            (name, args) -> if (args == null) name.text else "${name.text}<${args.joinToString(",")}>"
         }
+
+        val type: Parser<String> by nameType
+
+        override val rootParser by type
+    }
+
+    private object FunGrammar: Grammar<String>() {
+        override val tokenizer: Tokenizer by lazy { FixedDefaultTokenizer(TypeGrammar.tokens + tokens) }
+
+        private val LPAREN by token("\\(")
+        private val RPAREN by token("\\)")
+        private val COLON by token(":")
+
+        private val params by separatedTerms(TypeGrammar.type, TypeGrammar.COMMA, true) map {
+            it.joinToString(", ", "(", ")")
+        }
+
+        val funHeader: Parser<String> by -LPAREN * params * -RPAREN * -COLON * TypeGrammar.type map {
+            (params, res) -> "$params : $res"
+        }
+
+        override val rootParser by funHeader
     }
 }

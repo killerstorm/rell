@@ -423,9 +423,9 @@ class NullableTest: BaseRellTest(false) {
 
     @Test fun testCollectionConstructor() {
         chk("list<integer>(list<integer>())", "list<integer>[]")
-        chk("list<integer>(list<integer?>())", "ct_err:expr_list_typemiss:integer:integer?")
+        chk("list<integer>(list<integer?>())", "ct_err:expr_call_argtypes:[list<integer>]:list<integer?>")
         chk("list<integer>(set<integer>())", "list<integer>[]")
-        chk("list<integer>(set<integer?>())", "ct_err:expr_list_typemiss:integer:integer?")
+        chk("list<integer>(set<integer?>())", "ct_err:expr_call_argtypes:[list<integer>]:set<integer?>")
 
         chk("list<integer?>(list<integer>())", "list<integer?>[]")
         chk("list<integer?>(list<integer?>())", "list<integer?>[]")
@@ -433,9 +433,9 @@ class NullableTest: BaseRellTest(false) {
         chk("list<integer?>(set<integer?>())", "list<integer?>[]")
 
         chk("set<integer>(list<integer>())", "set<integer>[]")
-        chk("set<integer>(list<integer?>())", "ct_err:expr_set_typemiss:integer:integer?")
+        chk("set<integer>(list<integer?>())", "ct_err:expr_call_argtypes:[set<integer>]:list<integer?>")
         chk("set<integer>(set<integer>())", "set<integer>[]")
-        chk("set<integer>(set<integer?>())", "ct_err:expr_set_typemiss:integer:integer?")
+        chk("set<integer>(set<integer?>())", "ct_err:expr_call_argtypes:[set<integer>]:set<integer?>")
 
         chk("set<integer?>(list<integer>())", "set<integer?>[]")
         chk("set<integer?>(list<integer?>())", "set<integer?>[]")
@@ -444,36 +444,40 @@ class NullableTest: BaseRellTest(false) {
 
         tst.strictToString = false
 
-        chkEx("{ val x = list<integer?>([123]); val y = list<integer>(x); return 0; }", "ct_err:expr_list_typemiss:integer:integer?")
+        chkEx("{ val x = list<integer?>([123]); val y = list<integer>(x); return 0; }",
+            "ct_err:expr_call_argtypes:[list<integer>]:list<integer?>")
         chkEx("{ val x = list<integer>([123]); val y = list<integer?>(x); return ''+y; }", "[123]")
         chkEx("{ val x = list<integer?>([123]); val y = list<integer?>(x); return ''+y; }", "[123]")
-        chkEx("{ val x = set<integer?>([123]); val y = list<integer>(x); return 0; }", "ct_err:expr_list_typemiss:integer:integer?")
+        chkEx("{ val x = set<integer?>([123]); val y = list<integer>(x); return 0; }",
+            "ct_err:expr_call_argtypes:[list<integer>]:set<integer?>")
         chkEx("{ val x = set<integer>([123]); val y = list<integer?>(x); return ''+y; }", "[123]")
         chkEx("{ val x = set<integer?>([123]); val y = list<integer?>(x); return ''+y; }", "[123]")
 
-        chkEx("{ val x = list<integer?>([123]); val y = set<integer>(x); return 0; }", "ct_err:expr_set_typemiss:integer:integer?")
+        chkEx("{ val x = list<integer?>([123]); val y = set<integer>(x); return 0; }",
+            "ct_err:expr_call_argtypes:[set<integer>]:list<integer?>")
         chkEx("{ val x = list<integer>([123]); val y = set<integer?>(x); return ''+y; }", "[123]")
         chkEx("{ val x = list<integer?>([123]); val y = set<integer?>(x); return ''+y; }", "[123]")
-        chkEx("{ val x = set<integer?>([123]); val y = set<integer>(x); return 0; }", "ct_err:expr_set_typemiss:integer:integer?")
+        chkEx("{ val x = set<integer?>([123]); val y = set<integer>(x); return 0; }",
+            "ct_err:expr_call_argtypes:[set<integer>]:set<integer?>")
         chkEx("{ val x = set<integer>([123]); val y = set<integer?>(x); return ''+y; }", "[123]")
         chkEx("{ val x = set<integer?>([123]); val y = set<integer?>(x); return ''+y; }", "[123]")
     }
 
     @Test fun testMapConstructor() {
         chk("map<integer,text>(map<integer,text>())", "map<integer,text>[]")
-        chk("map<integer,text>(map<integer?,text>())", "ct_err:expr_map_key_typemiss:integer:integer?")
-        chk("map<integer,text>(map<integer,text?>())", "ct_err:expr_map_value_typemiss:text:text?")
-        chk("map<integer,text>(map<integer?,text?>())", "ct_err:expr_map_key_typemiss:integer:integer?")
+        chk("map<integer,text>(map<integer?,text>())", "ct_err:expr_call_argtypes:[map<integer,text>]:map<integer?,text>")
+        chk("map<integer,text>(map<integer,text?>())", "ct_err:expr_call_argtypes:[map<integer,text>]:map<integer,text?>")
+        chk("map<integer,text>(map<integer?,text?>())", "ct_err:expr_call_argtypes:[map<integer,text>]:map<integer?,text?>")
 
         chk("map<integer?,text>(map<integer,text>())", "map<integer?,text>[]")
         chk("map<integer?,text>(map<integer?,text>())", "map<integer?,text>[]")
-        chk("map<integer?,text>(map<integer,text?>())", "ct_err:expr_map_value_typemiss:text:text?")
-        chk("map<integer?,text>(map<integer?,text?>())", "ct_err:expr_map_value_typemiss:text:text?")
+        chk("map<integer?,text>(map<integer,text?>())", "ct_err:expr_call_argtypes:[map<integer?,text>]:map<integer,text?>")
+        chk("map<integer?,text>(map<integer?,text?>())", "ct_err:expr_call_argtypes:[map<integer?,text>]:map<integer?,text?>")
 
         chk("map<integer,text?>(map<integer,text>())", "map<integer,text?>[]")
-        chk("map<integer,text?>(map<integer?,text>())", "ct_err:expr_map_key_typemiss:integer:integer?")
+        chk("map<integer,text?>(map<integer?,text>())", "ct_err:expr_call_argtypes:[map<integer,text?>]:map<integer?,text>")
         chk("map<integer,text?>(map<integer,text?>())", "map<integer,text?>[]")
-        chk("map<integer,text?>(map<integer?,text?>())", "ct_err:expr_map_key_typemiss:integer:integer?")
+        chk("map<integer,text?>(map<integer?,text?>())", "ct_err:expr_call_argtypes:[map<integer,text?>]:map<integer?,text?>")
 
         chk("map<integer?,text?>(map<integer,text>())", "map<integer?,text?>[]")
         chk("map<integer?,text?>(map<integer?,text>())", "map<integer?,text?>[]")
@@ -484,25 +488,25 @@ class NullableTest: BaseRellTest(false) {
 
         chkEx("{ val x = map<integer,text>([123:'Hello']); val y = map<integer,text>(x); return ''+y; }", "{123=Hello}")
         chkEx("{ val x = map<integer?,text>([123:'Hello']); val y = map<integer,text>(x); return 0; }",
-                "ct_err:expr_map_key_typemiss:integer:integer?")
+                "ct_err:expr_call_argtypes:[map<integer,text>]:map<integer?,text>")
         chkEx("{ val x = map<integer,text?>([123:'Hello']); val y = map<integer,text>(x); return 0; }",
-                "ct_err:expr_map_value_typemiss:text:text?")
+                "ct_err:expr_call_argtypes:[map<integer,text>]:map<integer,text?>")
         chkEx("{ val x = map<integer?,text?>([123:'Hello']); val y = map<integer,text>(x); return 0; }",
-                "ct_err:expr_map_key_typemiss:integer:integer?")
+                "ct_err:expr_call_argtypes:[map<integer,text>]:map<integer?,text?>")
 
         chkEx("{ val x = map<integer,text>([123:'Hello']); val y = map<integer?,text>(x); return ''+y; }", "{123=Hello}")
         chkEx("{ val x = map<integer?,text>([123:'Hello']); val y = map<integer?,text>(x); return ''+y; }", "{123=Hello}")
         chkEx("{ val x = map<integer,text?>([123:'Hello']); val y = map<integer?,text>(x); return 0; }",
-                "ct_err:expr_map_value_typemiss:text:text?")
+                "ct_err:expr_call_argtypes:[map<integer?,text>]:map<integer,text?>")
         chkEx("{ val x = map<integer?,text?>([123:'Hello']); val y = map<integer?,text>(x); return 0; }",
-                "ct_err:expr_map_value_typemiss:text:text?")
+                "ct_err:expr_call_argtypes:[map<integer?,text>]:map<integer?,text?>")
 
         chkEx("{ val x = map<integer,text>([123:'Hello']); val y = map<integer,text?>(x); return ''+y; }", "{123=Hello}")
         chkEx("{ val x = map<integer?,text>([123:'Hello']); val y = map<integer,text?>(x); return 0; }",
-                "ct_err:expr_map_key_typemiss:integer:integer?")
+                "ct_err:expr_call_argtypes:[map<integer,text?>]:map<integer?,text>")
         chkEx("{ val x = map<integer,text?>([123:'Hello']); val y = map<integer,text?>(x); return ''+y; }", "{123=Hello}")
         chkEx("{ val x = map<integer?,text?>([123:'Hello']); val y = map<integer,text?>(x); return 0; }",
-                "ct_err:expr_map_key_typemiss:integer:integer?")
+                "ct_err:expr_call_argtypes:[map<integer,text?>]:map<integer?,text?>")
 
         chkEx("{ val x = map<integer,text>([123:'Hello']); val y = map<integer?,text?>(x); return ''+y; }", "{123=Hello}")
         chkEx("{ val x = map<integer?,text>([123:'Hello']); val y = map<integer?,text?>(x); return ''+y; }", "{123=Hello}")
@@ -579,14 +583,14 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testMemberAccess() {
-        chkEx("{ var x: text?; return x.size(); }", "ct_err:[expr_var_uninit:x][expr_mem_null:size]")
-        chkEx("{ var x: (a:integer)?; return x.a; }", "ct_err:[expr_var_uninit:x][expr_mem_null:a]")
-        chkEx("{ var x: (a:integer)?; return x.b; }", "ct_err:[expr_mem_null:b][unknown_member:[(a:integer)]:b]")
+        chkEx("{ var x: text?; return x.size(); }", "ct_err:[expr_var_uninit:x][expr_mem_null:text?:size]")
+        chkEx("{ var x: (a:integer)?; return x.a; }", "ct_err:[expr_var_uninit:x][expr_mem_null:(a:integer)?:a]")
+        chkEx("{ var x: (a:integer)?; return x.b; }", "ct_err:[expr_mem_null:(a:integer)?:b][unknown_member:[(a:integer)]:b]")
         chkEx("{ var x: (a:integer); return x.a; }", "ct_err:expr_var_uninit:x")
         chkEx("{ var x: list<integer>? = _nullable([1]); return x[0]; }", "ct_err:expr_subscript_null")
         chkEx("{ var x: integer? = _nullable(123); val y = [1, 2, 3]; return y[x]; }",
                 "ct_err:expr_subscript_keytype:[integer]:[integer?]")
-        chkEx("{ val x: integer? = _nullable(123); return x.to_hex(); }", "ct_err:expr_mem_null:to_hex")
+        chkEx("{ val x: integer? = _nullable(123); return x.to_hex(); }", "ct_err:expr_mem_null:integer?:to_hex")
     }
 
     private fun tstOperErr(type: String, op: String) {
@@ -632,7 +636,7 @@ class NullableTest: BaseRellTest(false) {
 
         chkEx("{ val x: integer? = nop(123); return x!!; }", "int[123]")
         chkEx("{ val x: integer? = nop(null); return x!!; }", "rt_err:null_value")
-        chkEx("{ val x: integer? = nop(123); return x.to_hex(); }", "ct_err:expr_mem_null:to_hex")
+        chkEx("{ val x: integer? = nop(123); return x.to_hex(); }", "ct_err:expr_mem_null:integer?:to_hex")
         chkEx("{ val x: integer? = nop(123); return x!!.to_hex(); }", "text[7b]")
         chkEx("{ val x: integer? = nop(null); return x!!.to_hex(); }", "rt_err:null_value")
         chkEx("{ val x: integer = 123; return x!!; }", "ct_err:unop_operand_type:!!:[integer]")
@@ -640,7 +644,7 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testSpecOpSafeField() {
-        chkEx("{ val x: (a:integer)? = _nullable((a=123)); return x.a; }", "ct_err:expr_mem_null:a")
+        chkEx("{ val x: (a:integer)? = _nullable((a=123)); return x.a; }", "ct_err:expr_mem_null:(a:integer)?:a")
         chkEx("{ val x: (a:integer)? = _nullable((a=123)); return x?.a; }", "int[123]")
         chkEx("{ val x: (a:integer)? = null; return x?.a; }", "null")
 
@@ -650,14 +654,18 @@ class NullableTest: BaseRellTest(false) {
         chkEx("{ val x: (a:(b:(c:integer)?)?)? = null; return x?.a?.b?.c; }", "null")
 
         chkEx("{ val x: (a:(b:(c:integer)?)?)? = _nullable((a=(b=(c=123)))); return x.a.b.c; }",
-                "ct_err:[expr_mem_null:a][expr_mem_null:b][expr_mem_null:c]")
+                "ct_err:[expr_mem_null:(a:(b:(c:integer)?)?)?:a][expr_mem_null:(b:(c:integer)?)?:b][expr_mem_null:(c:integer)?:c]")
         chkEx("{ val x: (a:(b:(c:integer)?)?)? = _nullable((a=(b=(c=123)))); return x?.a.b.c; }",
-                "ct_err:[expr_mem_null:b][expr_mem_null:c]")
-        chkEx("{ val x: (a:(b:(c:integer)?)?)? = _nullable((a=(b=(c=123)))); return x?.a?.b.c; }", "ct_err:expr_mem_null:c")
+                "ct_err:[expr_mem_null:(b:(c:integer)?)?:b][expr_mem_null:(c:integer)?:c]")
+        chkEx("{ val x: (a:(b:(c:integer)?)?)? = _nullable((a=(b=(c=123)))); return x?.a?.b.c; }",
+            "ct_err:expr_mem_null:(c:integer)?:c")
 
-        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return x.a.b.c; }", "ct_err:expr_mem_null:a")
-        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return x?.a.b.c; }", "ct_err:expr_mem_null:b")
-        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return x?.a?.b.c; }", "ct_err:expr_mem_null:c")
+        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return x.a.b.c; }",
+            "ct_err:expr_mem_null:(a:(b:(c:integer)))?:a")
+        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return x?.a.b.c; }",
+            "ct_err:expr_mem_null:(b:(c:integer))?:b")
+        chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return x?.a?.b.c; }",
+            "ct_err:expr_mem_null:(c:integer)?:c")
         chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return x?.a?.b?.c; }", "int[123]")
 
         chkEx("{ val x: (a:(b:(c:integer)))? = _nullable((a=(b=(c=123)))); return _type_of(x?.a); }", "text[(b:(c:integer))?]")
@@ -679,21 +687,21 @@ class NullableTest: BaseRellTest(false) {
     }
 
     @Test fun testSpecOpSafeCall() {
-        chkEx("{ val x: integer? = _nullable(123); return x.to_hex(); }", "ct_err:expr_mem_null:to_hex")
+        chkEx("{ val x: integer? = _nullable(123); return x.to_hex(); }", "ct_err:expr_mem_null:integer?:to_hex")
         chkEx("{ val x: integer? = _nullable(123); return x?.to_hex(); }", "text[7b]")
         chkEx("{ val x: integer? = _nullable(123); return _type_of(x?.to_hex()); }", "text[text?]")
         chkEx("{ val x: integer? = null; return x?.to_hex(); }", "null")
         chkEx("{ val x: integer = 123; return x?.to_hex(); }", "ct_err:expr_safemem_type:[integer]")
 
-        chkEx("{ val x: text? = _nullable('Hello'); return x.upper_case(); }", "ct_err:expr_mem_null:upper_case")
+        chkEx("{ val x: text? = _nullable('Hello'); return x.upper_case(); }", "ct_err:expr_mem_null:text?:upper_case")
         chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case(); }", "text[HELLO]")
         chkEx("{ val x: text? = _nullable('Hello'); return _type_of(x?.upper_case()); }", "text[text?]")
         chkEx("{ val x: text? = null; return x?.upper_case(); }", "null")
-        chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case().lower_case(); }", "ct_err:expr_mem_null:lower_case")
+        chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case().lower_case(); }", "ct_err:expr_mem_null:text?:lower_case")
         chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case()?.lower_case(); }", "text[hello]")
         chkEx("{ val x: text? = _nullable('Hello'); return _type_of(x?.upper_case()?.lower_case()); }", "text[text?]")
         chkEx("{ val x: text? = null; return x?.upper_case()?.lower_case(); }", "null")
-        chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case()?.lower_case().size(); }", "ct_err:expr_mem_null:size")
+        chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case()?.lower_case().size(); }", "ct_err:expr_mem_null:text?:size")
         chkEx("{ val x: text? = _nullable('Hello'); return x?.upper_case()?.lower_case()?.size(); }", "int[5]")
         chkEx("{ val x: text? = _nullable('Hello'); return _type_of(x?.upper_case()?.lower_case()?.size()); }", "text[integer?]")
 
@@ -720,8 +728,8 @@ class NullableTest: BaseRellTest(false) {
         """)
 
         chkEx("{ val u = user@{.name=='Bob'}; return u.company.name; }", "text[Microsoft]")
-        chkEx("{ val u = user@?{.name=='Bob'}; return u.company.name; }", "ct_err:expr_mem_null:company")
-        chkEx("{ val u = user@?{.name=='Bob'}; return u?.company.name; }", "ct_err:expr_mem_null:name")
+        chkEx("{ val u = user@?{.name=='Bob'}; return u.company.name; }", "ct_err:expr_mem_null:user?:company")
+        chkEx("{ val u = user@?{.name=='Bob'}; return u?.company.name; }", "ct_err:expr_mem_null:company?:name")
         chkEx("{ val u = user@?{.name=='Bob'}; return u?.company?.name; }", "text[Microsoft]")
         chkEx("{ val u = user@?{.name=='Alice'}; return u?.company?.name; }", "text[Apple]")
         chkEx("{ val u = user@?{.name=='Trudy'}; return u?.company?.name; }", "null")

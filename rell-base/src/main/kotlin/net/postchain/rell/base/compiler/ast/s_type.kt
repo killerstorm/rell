@@ -8,8 +8,6 @@ import net.postchain.rell.base.compiler.base.core.C_CompilerPass
 import net.postchain.rell.base.compiler.base.core.C_DefinitionContext
 import net.postchain.rell.base.compiler.base.core.C_IdeSymbolDef
 import net.postchain.rell.base.compiler.base.core.C_Types
-import net.postchain.rell.base.compiler.base.def.C_TypeDef_Generic
-import net.postchain.rell.base.compiler.base.def.C_TypeDef_Normal
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceMemberTag
 import net.postchain.rell.base.compiler.base.utils.C_Error
@@ -17,6 +15,8 @@ import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
+import net.postchain.rell.base.utils.immListOf
+import net.postchain.rell.base.utils.mapNotNullAllOrNull
 
 sealed class S_Type(val pos: S_Pos) {
     protected abstract fun compile0(ctx: C_DefinitionContext): R_Type
@@ -58,7 +58,7 @@ class S_NameType(private val name: S_QualifiedName): S_Type(name.pos) {
     override fun compile0(ctx: C_DefinitionContext): R_Type {
         val nameHand = name.compile(ctx)
         val typeDef = ctx.nsCtx.getType(nameHand)
-        return typeDef?.toRType(ctx.msgCtx, name.pos) ?: R_CtErrorType
+        return typeDef?.compileType(ctx.appCtx, name.pos, immListOf()) ?: R_CtErrorType
     }
 
     override fun compileMirrorStructType(ctx: C_DefinitionContext, mutable: Boolean): R_StructType? {
@@ -80,7 +80,7 @@ class S_NameType(private val name: S_QualifiedName): S_Type(name.pos) {
 
         val typeDef = nameRes.getType()
         if (typeDef != null) {
-            val rParamType = typeDef.toRType(ctx.msgCtx, name.pos)
+            val rParamType = typeDef.compileType(ctx.appCtx, name.pos, immListOf())
             return compileMirrorStructType0(ctx, rParamType, mutable)
         }
 
@@ -90,30 +90,19 @@ class S_NameType(private val name: S_QualifiedName): S_Type(name.pos) {
 
 class S_GenericType(private val name: S_QualifiedName, private val args: List<S_Type>): S_Type(name.pos) {
     override fun compile0(ctx: C_DefinitionContext): R_Type {
-        val rPosArgs = args.mapNotNull {
+        val rPosArgs = args.mapNotNullAllOrNull {
             val rType = it.compileOpt(ctx)
             if (rType == null) null else S_PosValue(it.pos, rType)
         }
 
         val nameHand = name.compile(ctx)
-        val typeDef = ctx.nsCtx.getType(nameHand)
 
-        return when (typeDef) {
-            null -> R_CtErrorType
-            is C_TypeDef_Normal -> {
-                val type = typeDef.type
-                ctx.msgCtx.error(name.pos, "type:not_generic:${type.strCode()}", "Type '${type.str()}' is not generic")
-                R_CtErrorType
-            }
-            is C_TypeDef_Generic -> {
-                if (rPosArgs.size != args.size) {
-                    // Some args failed to compile.
-                    R_CtErrorType
-                } else {
-                    typeDef.type.compileType(ctx, name.pos, rPosArgs)
-                }
-            }
+        val typeDef = ctx.nsCtx.getType(nameHand)
+        if (typeDef == null || rPosArgs == null) {
+            return R_CtErrorType
         }
+
+        return typeDef.compileType(ctx.appCtx, name.pos, rPosArgs)
     }
 }
 
@@ -186,7 +175,7 @@ class S_VirtualType(pos: S_Pos, val innerType: S_Type): S_Type(pos) {
     }
 
     companion object {
-        private fun virtualType(type: R_Type): R_Type? {
+        fun virtualType(type: R_Type): R_Type? {
             return when (type) {
                 is R_ListType -> type.virtualType
                 is R_SetType -> type.virtualType

@@ -63,7 +63,9 @@ class CliSnippetsTest {
     }
 
     private fun chkModules(modSel: C_CompilerModuleSelection) {
-        val dir = File("../work/testproj/src")
+        // When run from IntelliJ as "All_tests", the working directory is the repository root, not the sub-project.
+        val dir = listOf(".", "..").map { File(it, "work/testproj/src") }.firstOrNull { it.isDirectory }
+        dir ?: throw IllegalStateException("Sources not found: ${File(".").absolutePath}")
         val sourceDir = C_SourceDir.diskDir(dir)
         val res = RellTestUtils.compileApp(sourceDir, modSel, C_CompilerOptions.DEFAULT)
         assertEquals(0, res.messages.size, res.messages.toString())

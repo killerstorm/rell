@@ -142,7 +142,7 @@ sealed class S_ImportTarget {
 
     protected fun aliasNamespaceIdeDef(ctx: S_DefinitionContext, explicitAlias: C_Name?): C_IdeSymbolDef {
         val aliasIdeId = if (explicitAlias == null) null else {
-            val fullName = ctx.namespacePath.fullName(explicitAlias.rName)
+            val fullName = ctx.namespacePath.qualifiedName(explicitAlias.rName)
             val id = IdeSymbolId(IdeSymbolCategory.NAMESPACE, fullName.str())
             IdeSymbolGlobalId(ctx.fileCtx.idePath, id)
         }
@@ -159,7 +159,7 @@ object S_DefaultImportTarget: S_ImportTarget() {
 
     private fun aliasIdeDefId(ctx: S_DefinitionContext, alias: C_Name?): IdeSymbolId? {
         return if (alias == null) null else {
-            val fullName = ctx.namespacePath.fullName(alias.rName)
+            val fullName = ctx.namespacePath.qualifiedName(alias.rName)
             val nameStr = fullName.str()
             IdeSymbolId(IdeSymbolCategory.IMPORT, nameStr, immListOf())
         }
@@ -215,7 +215,7 @@ class S_ExactImportTargetItem(
 
     companion object {
         fun makeAliasIdeId(nsPath: C_RNamePath, alias: C_Name, category: IdeSymbolCategory): IdeSymbolGlobalId {
-            val fullName = nsPath.fullName(alias.rName)
+            val fullName = nsPath.qualifiedName(alias.rName)
             val ideId = IdeSymbolId(category, fullName.str())
             return IdeSymbolGlobalId(alias.pos.idePath(), ideId)
         }

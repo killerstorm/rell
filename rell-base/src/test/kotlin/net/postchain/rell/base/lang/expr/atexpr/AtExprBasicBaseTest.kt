@@ -85,7 +85,7 @@ abstract class AtExprBasicBaseTest: AtExprBaseTest() {
     @Test fun testSingleEntityAlias() {
         initDataUserCompany()
         chk("(u: $fromUser) @ { u.firstName == 'Bill' }", "user[40]")
-        chk("(u: $fromUser) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:[user]:firstName")
+        chk("(u: $fromUser) @ { user.firstName == 'Bill' }", "ct_err:unknown_member:[user]:firstName")
     }
 
     @Test fun testNameResolutionLocalVsAttr() {

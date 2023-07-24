@@ -5,20 +5,16 @@
 package net.postchain.rell.base.compiler.vexpr
 
 import net.postchain.rell.base.compiler.ast.S_Pos
-import net.postchain.rell.base.compiler.base.core.C_ForIterator
 import net.postchain.rell.base.compiler.base.expr.C_DbAtWhatValue
 import net.postchain.rell.base.compiler.base.expr.C_DbAtWhatValue_Complex
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.model.R_ListType
 import net.postchain.rell.base.model.R_MapType
-import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.runtime.Rt_CallFrame
 import net.postchain.rell.base.runtime.Rt_ListValue
 import net.postchain.rell.base.runtime.Rt_MapValue
 import net.postchain.rell.base.runtime.Rt_Value
-import net.postchain.rell.base.utils.checkEquals
-import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
 
 class V_ListLiteralExpr(
@@ -92,79 +88,5 @@ class V_MapLiteralExpr(
         val values = entries.map { (k, v) -> Pair(k.constantValue(ctx), v.constantValue(ctx)) }
         if (values.any { (k, v) -> k == null || v == null }) return null
         return Rt_MapValue(mapType, values.associate { (k, v) -> k!! to v!! }.toMutableMap())
-    }
-}
-
-class V_EmptyCollectionConstructorExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        private val kind: R_CollectionKind
-): V_Expr(exprCtx, pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(kind.type)
-    override fun toRExpr0(): R_Expr = R_EmptyCollectionConstructorExpr(kind)
-}
-
-class V_CopyCollectionConstructorExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        private val kind: R_CollectionKind,
-        private val arg: V_Expr,
-        private val cIterator: C_ForIterator
-): V_Expr(exprCtx, pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(kind.type, arg, canBeDbExpr = false)
-
-    override fun toRExpr0(): R_Expr {
-        val rArg = arg.toRExpr()
-        return R_CopyCollectionConstructorExpr(kind, rArg, cIterator.rIterator)
-    }
-
-    override fun toDbExprWhat0(): C_DbAtWhatValue {
-        val evaluator = object: Db_ComplexAtWhatEvaluator() {
-            override fun evaluate(frame: Rt_CallFrame, values: List<Rt_AtWhatItem>): Rt_Value {
-                checkEquals(values.size, 1)
-                val col = values.first().value().asCollection()
-                return kind.makeRtValue(col)
-            }
-        }
-
-        return C_DbAtWhatValue_Complex(immListOf(arg), evaluator)
-    }
-}
-
-class V_EmptyMapConstructorExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        private val resType: R_Type
-): V_Expr(exprCtx, pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(resType)
-    override fun toRExpr0(): R_Expr = R_EmptyMapConstructorExpr(resType)
-}
-
-class V_MapCopyMapConstructorExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        private val resType: R_Type,
-        private val arg: V_Expr
-): V_Expr(exprCtx, pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(resType, arg, canBeDbExpr = false)
-
-    override fun toRExpr0(): R_Expr {
-        val rArg = arg.toRExpr()
-        return R_MapCopyMapConstructorExpr(resType, rArg)
-    }
-}
-
-class V_IteratorCopyMapConstructorExpr(
-        exprCtx: C_ExprContext,
-        pos: S_Pos,
-        private val resType: R_Type,
-        private val arg: V_Expr,
-        private val cIterator: C_ForIterator
-): V_Expr(exprCtx, pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(resType, arg, canBeDbExpr = false)
-
-    override fun toRExpr0(): R_Expr {
-        val rArg = arg.toRExpr()
-        return R_IteratorCopyMapConstructorExpr(resType, rArg, cIterator.rIterator)
     }
 }

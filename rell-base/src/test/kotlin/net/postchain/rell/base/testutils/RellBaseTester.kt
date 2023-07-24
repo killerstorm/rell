@@ -6,6 +6,7 @@ package net.postchain.rell.base.testutils
 
 import net.postchain.rell.base.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.base.compiler.base.lib.C_LibModule
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Message
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
@@ -16,6 +17,7 @@ import net.postchain.rell.base.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.base.runtime.Rt_Printer
 import net.postchain.rell.base.sql.SqlExecutor
 import net.postchain.rell.base.utils.immMapOf
+import net.postchain.rell.base.lmodel.L_Module
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
 import kotlin.test.assertEquals
@@ -38,6 +40,7 @@ abstract class RellBaseTester(
     var atAttrShadowing = C_CompilerOptions.DEFAULT.atAttrShadowing
     var testLib = false
     var hiddenLib = true
+    var extraMod: C_LibModule? = null
     var allowDbModificationsInObjectExprs = C_CompilerOptions.DEFAULT.allowDbModificationsInObjectExprs
     var complexWhatEnabled = true
     var ideDefIdConflictError = true
@@ -323,7 +326,15 @@ abstract class RellBaseTester(
         val sourceDir = createSourceDir(code)
         val mainMods = mainModules()
         val testMods = testModules()
-        return RellTestUtils.processApp(sourceDir, errMsgPos, compilerOptions(), messages, mainMods, testMods) {
+        return RellTestUtils.processApp(
+            sourceDir,
+            errMsgPos,
+            compilerOptions(),
+            messages,
+            mainMods,
+            testModules = testMods,
+            extraLibMod = extraMod,
+        ) {
             processor(it.rApp)
         }
     }

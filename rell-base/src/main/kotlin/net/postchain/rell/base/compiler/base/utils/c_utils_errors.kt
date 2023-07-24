@@ -72,7 +72,7 @@ object C_Errors {
         return C_Error.stop(pos, "expr_call_nosql:$name", "Function '$name' cannot be converted to SQL")
     }
 
-    fun errSysFunctionNamedArg(msgCtx: C_MessageContext, fnName: String, arg: S_Name) {
+    fun errLibFunctionNamedArg(msgCtx: C_MessageContext, fnName: String, arg: S_Name) {
         val msg = msgSysFunctionNamedArg(fnName, arg)
         msgCtx.error(arg.pos, msg)
     }

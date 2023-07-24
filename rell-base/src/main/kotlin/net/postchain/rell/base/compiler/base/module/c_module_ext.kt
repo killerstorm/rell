@@ -148,7 +148,7 @@ class C_ExtModuleMember_Namespace(
 
         for (ideName in qualifiedName.parts) {
             nsBuilder = nsBuilder.addNamespace(ideName.name, true, ideName.ideInfo, deprecated = deprecated)
-            val nsPath = nsCtx.namespacePath.child(ideName.name.rName)
+            val nsPath = nsCtx.namespacePath.append(ideName.name.rName)
             val subScopeBuilder = nsCtx.scopeBuilder.nested(nsBuilder.futureNs())
             nsCtx = C_NamespaceContext(mntCtx.modCtx, mntCtx.symCtx, nsPath, subScopeBuilder)
         }

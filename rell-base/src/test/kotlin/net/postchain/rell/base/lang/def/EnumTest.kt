@@ -13,7 +13,7 @@ class EnumTest: BaseRellTest() {
         chk("foo.A", "foo[A]")
         chk("foo.B", "foo[B]")
         chk("foo.C", "foo[C]")
-        chk("foo.X", "ct_err:unknown_name:[foo]:X")
+        chk("foo.X", "ct_err:unknown_member:[foo]:X")
 
         chk("foo", "ct_err:expr_novalue:enum:[foo]")
         chk("'' + foo", "ct_err:expr_novalue:enum:[foo]")
@@ -200,7 +200,7 @@ class EnumTest: BaseRellTest() {
         chkEx("{ val f: foo = foo.A; return f!!.name; }", "ct_err:unop_operand_type:!!:[foo]")
         chkEx("{ val f: foo = foo.A; return f ?: foo.C; }", "ct_err:binop_operand_type:?::[foo]:[foo]")
 
-        chkEx("{ val f: foo? = nop(foo.A); return f.name; }", "ct_err:expr_mem_null:name")
+        chkEx("{ val f: foo? = nop(foo.A); return f.name; }", "ct_err:expr_mem_null:foo?:name")
         chkEx("{ val f: foo? = nop(foo.A); return f?.name; }", "text[A]")
         chkEx("{ val f: foo? = nop(foo.A); return f!!.name; }", "text[A]")
         chkEx("{ val f: foo? = nop(foo.A); return f ?: foo.C; }", "foo[A]")

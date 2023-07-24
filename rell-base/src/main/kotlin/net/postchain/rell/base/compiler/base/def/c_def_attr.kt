@@ -12,6 +12,7 @@ import net.postchain.rell.base.compiler.base.utils.C_LateGetter
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.R_Expr
 import net.postchain.rell.base.utils.ide.*
+import net.postchain.rell.base.utils.immListOf
 
 class C_AttrHeader(
         val pos: S_Pos,
@@ -106,7 +107,7 @@ class C_AnonAttrHeaderHandle(
             ctx.symCtx.setDefId(typeNameHand.last.pos, ideDefId)
         }
 
-        val baseType = typeDef?.toRType(ctx.msgCtx, typeNameHand.pos)
+        val baseType = typeDef?.compileType(ctx.appCtx, typeNameHand.pos, immListOf())
 
         var type = when {
             baseType == null -> null

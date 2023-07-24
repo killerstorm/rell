@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.ast
@@ -118,30 +118,30 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
 
 object S_UnaryOp_NotNull: S_UnaryOp("!!") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
-        val value = expr.asNullable()
-        val type = value.type
+        val exprN = expr.asNullable().unwrap()
+        val type = exprN.type
         val valueType = if (type is R_NullableType) type.valueType else {
             errTypeMismatch(ctx, opPos, type)
             type
         }
 
-        val preFacts = value.varFacts.postFacts
-        val varFacts = C_ExprVarFacts.forNullCast(preFacts, value)
-        return V_UnaryExpr(ctx, startPos, V_UnaryOp_NotNull(valueType), expr, varFacts)
+        val preFacts = exprN.varFacts.postFacts
+        val varFacts = C_ExprVarFacts.forNullCast(preFacts, exprN)
+        return V_UnaryExpr(ctx, startPos, V_UnaryOp_NotNull(valueType), exprN, varFacts)
     }
 }
 
 object S_UnaryOp_IsNull: S_UnaryOp("??") {
     override fun compile(ctx: C_ExprContext, startPos: S_Pos, opPos: S_Pos, expr: V_Expr): V_Expr {
-        val value = expr.asNullable()
-        val type = value.type
+        val exprN = expr.asNullable().unwrap()
+        val type = exprN.type
         if (type !is R_NullableType) {
             errTypeMismatch(ctx, opPos, type)
         }
 
-        val preFacts = value.varFacts
-        val varFacts = C_ExprVarFacts.forNullCheck(value, false).update(postFacts = preFacts.postFacts)
-        return V_UnaryExpr(ctx, startPos, V_UnaryOp_IsNull(), expr, varFacts)
+        val preFacts = exprN.varFacts
+        val varFacts = C_ExprVarFacts.forNullCheck(exprN, false).update(postFacts = preFacts.postFacts)
+        return V_UnaryExpr(ctx, startPos, V_UnaryOp_IsNull(), exprN, varFacts)
     }
 }
 

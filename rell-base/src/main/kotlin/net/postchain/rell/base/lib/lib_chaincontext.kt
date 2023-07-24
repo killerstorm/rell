@@ -8,26 +8,35 @@ import net.postchain.rell.base.compiler.base.core.C_QualifiedName
 import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty
 import net.postchain.rell.base.compiler.base.namespace.C_NamespacePropertyContext
-import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty_SysFunction
-import net.postchain.rell.base.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.base.compiler.base.utils.C_Constants
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.vexpr.V_Expr
-import net.postchain.rell.base.model.*
+import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
+import net.postchain.rell.base.model.R_ModuleName
+import net.postchain.rell.base.model.R_SysFunctionEx_N
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.utils.checkEquals
 import net.postchain.rell.base.utils.ide.IdeSymbolInfo
+import net.postchain.rell.base.utils.ide.IdeSymbolKind
 
-object C_Lib_ChainContext {
-    fun bind(nsBuilder: C_SysNsProtoBuilder) {
-        val nsName = "chain_context"
-        val b = C_SysNsProtoBuilder(nsBuilder.basePath.subPath(nsName))
+object Lib_ChainContext {
+    val NAMESPACE = Ld_NamespaceDsl.make {
+        namespace("chain_context") {
+            property("raw_config", type = "gtv", pure = false, ideKind = IdeSymbolKind.DEF_CONSTANT) {
+                bodyContext { ctx ->
+                    Rt_GtvValue(ctx.chainCtx.rawConfig)
+                }
+            }
 
-        b.addProperty("raw_config", makeProperty(R_GtvType, ChainCtxFns.RawConfig))
-        b.addProperty("blockchain_rid", makeProperty(R_ByteArrayType, ChainCtxFns.BlockchainRid))
-        b.addProperty("args", C_NsProperty_ChainContext_Args)
+            property("blockchain_rid", type = "byte_array", pure = false, ideKind = IdeSymbolKind.DEF_CONSTANT) {
+                bodyContext { ctx ->
+                    val bcRid = ctx.chainCtx.blockchainRid
+                    Rt_ByteArrayValue(bcRid.toByteArray())
+                }
+            }
 
-        nsBuilder.addNamespace(nsName, b.build().toNamespace())
+            property("args", C_NsProperty_ChainContext_Args)
+        }
     }
 }
 
@@ -46,38 +55,19 @@ private object C_NsProperty_ChainContext_Args: C_NamespaceProperty(IdeSymbolInfo
         }
 
         val moduleName = ctx.modCtx.moduleName
-        val rFn = ChainCtxFns.Args(moduleName)
+        val rFn = FnArgs(moduleName)
 
         return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, struct.structDef.type, rFn, name, pure = true)
     }
-}
 
-private object ChainCtxFns {
-    object RawConfig: R_SysFunction {
-        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            checkEquals(args.size, 0)
-            return Rt_GtvValue(ctx.chainCtx.rawConfig)
-        }
-    }
-
-    object BlockchainRid: R_SysFunction {
-        override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
-            checkEquals(args.size, 0)
-            val bcRid = ctx.chainCtx.blockchainRid
-            return Rt_ByteArrayValue(bcRid.toByteArray())
-        }
-    }
-
-    class Args(private val moduleName: R_ModuleName): R_SysFunction {
+    private class FnArgs(private val moduleName: R_ModuleName): R_SysFunctionEx_N() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
             val res = ctx.chainCtx.moduleArgs[moduleName]
-            return res ?: throw Rt_Exception.common("chain_context.args:no_module_args:$moduleName", "No module args for module '$moduleName'")
+            return res ?: throw Rt_Exception.common(
+                "chain_context.args:no_module_args:$moduleName",
+                "No module args for module '$moduleName'",
+            )
         }
     }
-}
-
-private fun makeProperty(type: R_Type, fn: R_SysFunction, pure: Boolean = false): C_NamespaceProperty {
-    val ideInfo = IdeSymbolInfo.DEF_CONSTANT
-    return C_NamespaceProperty_SysFunction(ideInfo, type, fn, pure = pure)
 }

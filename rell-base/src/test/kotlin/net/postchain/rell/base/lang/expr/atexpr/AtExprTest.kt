@@ -100,7 +100,7 @@ class AtExprTest: BaseRellTest() {
     @Test fun testNameResolutionEntityVsAlias() {
         chk("(user) @ { user.firstName == 'Bill' }", "user[40]")
         chk("(u: user) @ { u.firstName == 'Bill' }", "user[40]")
-        chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_name:[user]:firstName")
+        chk("(u: user) @ { user.firstName == 'Bill' }", "ct_err:unknown_member:[user]:firstName")
     }
 
     @Test fun testNameResolutionEntityVsLocal() {
@@ -316,9 +316,9 @@ class AtExprTest: BaseRellTest() {
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
         chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map([123:'Hello']))", "(text[Gates],text[{123=Hello}])")
 
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + list(.firstName))", "ct_err:expr_list_badtype:text")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set(.firstName))", "ct_err:expr_set_badtype:text")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map(.firstName))", "ct_err:expr_map_badtype:text")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + list(.firstName))", "ct_err:expr_call_argtypes:[list]:text")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set(.firstName))", "ct_err:expr_call_argtypes:[set]:text")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map(.firstName))", "ct_err:expr_call_argtypes:[map]:text")
     }
 
     @Test fun testOrConditionBug() {

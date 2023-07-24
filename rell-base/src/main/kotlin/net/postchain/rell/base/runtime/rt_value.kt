@@ -6,6 +6,7 @@ package net.postchain.rell.base.runtime
 
 import com.fasterxml.jackson.core.JsonProcessingException
 import com.fasterxml.jackson.databind.ObjectMapper
+import com.google.common.collect.Iterables
 import com.google.common.math.LongMath
 import mu.KLogging
 import net.postchain.gtv.Gtv
@@ -17,10 +18,7 @@ import net.postchain.rell.base.model.expr.R_FunctionCallTarget
 import net.postchain.rell.base.model.expr.R_PartialArgMapping
 import net.postchain.rell.base.model.expr.R_PartialCallMapping
 import net.postchain.rell.base.runtime.utils.Rt_ValueRecursionDetector
-import net.postchain.rell.base.utils.CommonUtils
-import net.postchain.rell.base.utils.PostchainGtvUtils
-import net.postchain.rell.base.utils.checkEquals
-import net.postchain.rell.base.utils.toImmList
+import net.postchain.rell.base.utils.*
 import java.math.BigDecimal
 import java.math.BigInteger
 import java.util.*
@@ -46,6 +44,7 @@ enum class Rt_CoreValueTypes {
     ROWID,
     ENTITY,
     NULL,
+    ITERABLE,
     COLLECTION,
     LIST,
     SET,
@@ -66,6 +65,7 @@ enum class Rt_CoreValueTypes {
     VIRTUAL_MAP,
     VIRTUAL_TUPLE,
     VIRTUAL_STRUCT,
+    LAZY,
     ;
 
     fun type(): Rt_ValueType = Rt_CoreValueType(this)
@@ -97,6 +97,7 @@ abstract class Rt_Value {
     open fun asString(): String = throw errType(Rt_CoreValueTypes.TEXT)
     open fun asByteArray(): ByteArray = throw errType(Rt_CoreValueTypes.BYTE_ARRAY)
     open fun asJsonString(): String = throw errType(Rt_CoreValueTypes.JSON)
+    open fun asIterable(): Iterable<Rt_Value> = throw errType(Rt_CoreValueTypes.ITERABLE)
     open fun asCollection(): MutableCollection<Rt_Value> = throw errType(Rt_CoreValueTypes.COLLECTION)
     open fun asList(): MutableList<Rt_Value> = throw errType(Rt_CoreValueTypes.LIST)
     open fun asVirtualCollection(): Rt_VirtualCollectionValue = throw errType(Rt_CoreValueTypes.VIRTUAL_COLLECTION)
@@ -105,6 +106,7 @@ abstract class Rt_Value {
     open fun asSet(): MutableSet<Rt_Value> = throw errType(Rt_CoreValueTypes.SET)
     open fun asMap(): Map<Rt_Value, Rt_Value> = throw errType(Rt_CoreValueTypes.MAP)
     open fun asMutableMap(): MutableMap<Rt_Value, Rt_Value> = throw errType(Rt_CoreValueTypes.MUTABLE_MAP)
+    open fun asMapValue(): Rt_MapValue = throw errType(Rt_CoreValueTypes.MAP)
     open fun asTuple(): List<Rt_Value> = throw errType(Rt_CoreValueTypes.TUPLE)
     open fun asVirtualTuple(): Rt_VirtualTupleValue = throw errType(Rt_CoreValueTypes.VIRTUAL_TUPLE)
     open fun asStruct(): Rt_StructValue = throw errType(Rt_CoreValueTypes.STRUCT)
@@ -115,6 +117,8 @@ abstract class Rt_Value {
     open fun asObjectId(): Long = throw errType(Rt_CoreValueTypes.ENTITY)
     open fun asGtv(): Gtv = throw errType(Rt_CoreValueTypes.GTV)
     open fun asFunction(): Rt_FunctionValue = throw errType(Rt_CoreValueTypes.FUNCTION)
+    open fun asLazyValue(): Rt_Value = throw errType(Rt_CoreValueTypes.LAZY)
+
     open fun asFormatArg(): Any = toString()
 
     abstract fun str(): String
@@ -380,7 +384,15 @@ class Rt_ByteArrayValue(private val value: ByteArray): Rt_Value() {
     override fun strCode(showTupleFieldNames: Boolean) = "byte_array[${CommonUtils.bytesToHex(value)}]"
     override fun str() = "0x" + CommonUtils.bytesToHex(value)
     override fun equals(other: Any?) = other === this || (other is Rt_ByteArrayValue && value.contentEquals(other.value))
-    override fun hashCode() = Arrays.hashCode(value)
+    override fun hashCode() = value.contentHashCode()
+
+    override fun asIterable(): Iterable<Rt_Value> {
+        return Iterables.transform(value.asIterable()) {
+            val signed = it!!.toInt()
+            val unsigned = if (signed >= 0) signed else (signed + 256)
+            Rt_IntValue(unsigned.toLong())
+        }
+    }
 }
 
 class Rt_RowidValue(val value: Long): Rt_Value() {
@@ -428,6 +440,7 @@ class Rt_ListValue(private val type: R_Type, private val elements: MutableList<R
     override val valueType = Rt_CoreValueTypes.LIST.type()
 
     override fun type() = type
+    override fun asIterable(): Iterable<Rt_Value> = elements
     override fun asCollection() = elements
     override fun asList() = elements
     override fun asFormatArg() = elements
@@ -454,7 +467,7 @@ class Rt_ListValue(private val type: R_Type, private val elements: MutableList<R
 sealed class Rt_VirtualCollectionValue(gtv: Gtv): Rt_VirtualValue(gtv) {
     override fun asVirtualCollection() = this
     abstract fun size(): Int
-    abstract fun iterable(): Iterable<Rt_Value>
+    abstract override fun asIterable(): Iterable<Rt_Value>
 }
 
 class Rt_VirtualListValue(
@@ -479,7 +492,7 @@ class Rt_VirtualListValue(
     }
 
     override fun size() = elements.size
-    override fun iterable() = elements.filterNotNull()
+    override fun asIterable() = elements.filterNotNull()
 
     fun contains(index: Long) = index >= 0 && index < elements.size && elements[index.toInt()] != null
 
@@ -501,6 +514,7 @@ class Rt_SetValue(private val type: R_Type, private val elements: MutableSet<Rt_
     override val valueType = Rt_CoreValueTypes.SET.type()
 
     override fun type() = type
+    override fun asIterable(): Iterable<Rt_Value> = elements
     override fun asCollection() = elements
     override fun asSet() = elements
     override fun asFormatArg() = elements
@@ -537,22 +551,38 @@ class Rt_VirtualSetValue(
     }
 
     override fun size() = elements.size
-    override fun iterable() = elements
+    override fun asIterable() = elements
 
     fun contains(value: Rt_Value) = elements.contains(value)
 }
 
-class Rt_MapValue(private val type: R_Type, private val map: MutableMap<Rt_Value, Rt_Value>): Rt_Value() {
+class Rt_MapValue(val type: R_MapType, map: MutableMap<Rt_Value, Rt_Value>): Rt_Value() {
+    val map: Map<Rt_Value, Rt_Value> = map
+
+    private val mutableMap = map
+
     override val valueType = Rt_CoreValueTypes.MAP.type()
 
     override fun type() = type
     override fun asMap() = map
-    override fun asMutableMap() = map
+    override fun asMutableMap() = mutableMap
+    override fun asMapValue() = this
     override fun asFormatArg() = map
     override fun strCode(showTupleFieldNames: Boolean) = strCode(type, showTupleFieldNames, map)
     override fun str() = map.entries.joinToString(", ", "{", "}") { "${it.key.str()}=${it.value.str()}" }
     override fun equals(other: Any?) = other === this || (other is Rt_MapValue && map == other.map)
     override fun hashCode() = map.hashCode()
+
+    override fun asIterable(): Iterable<Rt_Value> {
+        return asIterable(false)
+    }
+
+    fun asIterable(legacy: Boolean): Iterable<Rt_Value> {
+        val entryType = if (legacy) type.legacyEntryType else type.entryType
+        return Iterables.transform(map.entries) { entry ->
+            Rt_TupleValue(entryType, immListOf(entry.key, entry.value))
+        }
+    }
 
     companion object {
         fun strCode(type: R_Type, showTupleFieldNames: Boolean, map: Map<Rt_Value, Rt_Value>): String {
@@ -565,9 +595,9 @@ class Rt_MapValue(private val type: R_Type, private val map: MutableMap<Rt_Value
 }
 
 class Rt_VirtualMapValue(
-        gtv: Gtv,
-        private val type: R_VirtualMapType,
-        private val map: Map<Rt_Value, Rt_Value>
+    gtv: Gtv,
+    private val type: R_VirtualMapType,
+    private val map: Map<Rt_Value, Rt_Value>,
 ): Rt_VirtualValue(gtv) {
     override val valueType = Rt_CoreValueTypes.VIRTUAL_MAP.type()
 
@@ -578,6 +608,12 @@ class Rt_VirtualMapValue(
     override fun str() = map.entries.joinToString(", ", "{", "}") { "${it.key.str()}=${it.value.str()}" }
     override fun equals(other: Any?) = other === this || (other is Rt_VirtualMapValue && map == other.map)
     override fun hashCode() = map.hashCode()
+
+    override fun asIterable(): Iterable<Rt_Value> {
+        return Iterables.transform(map.entries) { entry ->
+            Rt_TupleValue(type.virtualEntryType, immListOf(entry.key, entry.value))
+        }
+    }
 
     override fun toFull0(): Rt_Value {
         val resMap = map
@@ -605,6 +641,10 @@ class Rt_TupleValue(val type: R_TupleType, val elements: List<Rt_Value>): Rt_Val
     override fun strCode(showTupleFieldNames: Boolean) = strCode("", type, elements, showTupleFieldNames)
 
     companion object {
+        fun make(type: R_TupleType, vararg elements: Rt_Value): Rt_Value {
+            return Rt_TupleValue(type, elements.toImmList())
+        }
+
         fun str(prefix: String, type: R_TupleType, elements: List<Rt_Value?>): String {
             val elems = elements.indices.joinToString(",") { elementStr(type, elements, it) }
             return "$prefix($elems)"
@@ -625,10 +665,10 @@ class Rt_TupleValue(val type: R_TupleType, val elements: List<Rt_Value>): Rt_Val
         }
 
         private fun elementStrCode(
-                type: R_TupleType,
-                elements: List<Rt_Value?>,
-                showTupleFieldNames: Boolean,
-                idx: Int
+            type: R_TupleType,
+            elements: List<Rt_Value?>,
+            showTupleFieldNames: Boolean,
+            idx: Int,
         ): String {
             val name = type.fields[idx].name
             val value = elements[idx]
@@ -841,6 +881,7 @@ class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(),
     override fun str() = "range($start,$end,$step)"
     override fun strCode(showTupleFieldNames: Boolean) = "range[$start,$end,$step]"
 
+    override fun asIterable(): Iterable<Rt_Value> = this
     override fun iterator(): Iterator<Rt_Value> = RangeIterator(this)
 
     override fun equals(other: Any?) = other is Rt_RangeValue && start == other.start && end == other.end && step == other.step

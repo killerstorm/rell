@@ -15,6 +15,7 @@ import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.def.C_AttrUtils
 import net.postchain.rell.base.compiler.base.def.C_SysAttribute
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
+import net.postchain.rell.base.compiler.base.lib.C_LibUtils
 import net.postchain.rell.base.compiler.base.module.C_ModuleKey
 import net.postchain.rell.base.compiler.parser.RellTokenizerException
 import net.postchain.rell.base.compiler.parser.RellTokenizerState
@@ -142,11 +143,6 @@ object C_Utils {
     fun checkMapKeyType(ctx: C_DefinitionContext, pos: S_Pos, type: R_Type) {
         checkMapKeyType0(ctx.appCtx, pos, type, "expr_map_keytype", "as a map key")
     }
-
-    fun checkSetElementType(ctx: C_DefinitionContext, pos: S_Pos, type: R_Type) {
-        checkMapKeyType0(ctx.appCtx, pos, type, "expr_set_type", "as a set element")
-    }
-
     fun checkGroupValueType(appCtx: C_AppContext, pos: S_Pos, type: R_Type) {
         checkMapKeyType0(appCtx, pos, type, "expr_at_group_type", "for grouping")
     }
@@ -227,29 +223,19 @@ object C_Utils {
     }
 
     fun createEntity(
-            appCtx: C_AppContext,
-            defType: C_DefinitionType,
-            defBase: R_DefinitionBase,
-            name: R_Name,
-            mountName: R_MountName,
-            flags: R_EntityFlags,
-            sqlMapping: R_EntitySqlMapping,
-            externalEntity: R_ExternalEntity?
+        appCtx: C_AppContext,
+        defType: C_DefinitionType,
+        defBase: R_DefinitionBase,
+        name: R_Name,
+        mountName: R_MountName,
+        flags: R_EntityFlags,
+        sqlMapping: R_EntitySqlMapping,
+        externalEntity: R_ExternalEntity?,
     ): R_EntityDefinition {
-        val mirrorStructs = createMirrorStructs(appCtx, defBase, defType)
-        return R_EntityDefinition(defBase, name, mountName, flags, sqlMapping, externalEntity, mirrorStructs)
-    }
-
-    fun createMirrorStructs(
-            appCtx: C_AppContext,
-            defBase: R_DefinitionBase,
-            defType: C_DefinitionType,
-            operation: R_MountName? = null,
-    ): R_MirrorStructs {
-        val res = R_MirrorStructs(defBase, defType.name, operation)
-        appCtx.defsAdder.addStruct(res.immutable)
-        appCtx.defsAdder.addStruct(res.mutable)
-        return res
+        val rEntity = R_EntityDefinition(defBase, defType, name, mountName, flags, sqlMapping, externalEntity)
+        appCtx.defsAdder.addStruct(rEntity.mirrorStructs.immutable)
+        appCtx.defsAdder.addStruct(rEntity.mirrorStructs.mutable)
+        return rEntity
     }
 
     fun setEntityBody(entity: R_EntityDefinition, body: R_EntityBody) {
@@ -270,20 +256,13 @@ object C_Utils {
         struct.setAttributes(structAttrs)
     }
 
-    fun createSysStruct(name: String, attrs: List<C_SysAttribute>): R_Struct {
-        val rStruct = R_Struct(
+    fun createSysStruct(name: String): R_Struct {
+        return R_Struct(
                 name,
                 name.toGtv(),
                 mirrorStructs = null,
                 initFrameGetter = R_CallFrame.NONE_INIT_FRAME_GETTER,
         )
-        val rAttrs = attrs.mapIndexed { i, attr -> attr.name to attr.compile(i, false) }.toMap().toImmMap()
-        rStruct.setAttributes(rAttrs)
-        return rStruct
-    }
-
-    fun createSysStruct(name: String, vararg attrs: C_SysAttribute): R_Struct {
-        return createSysStruct(name, attrs.toList())
     }
 
     private val RELL_MODULE_NAME = R_ModuleName.of("rell")
@@ -622,25 +601,25 @@ private class C_LateInitContext(executor: C_CompilerExecutor) {
     }
 }
 
-sealed class C_LateGetter<T> {
+sealed class C_LateGetter<T: Any> {
     abstract fun get(): T
 
-    fun <R> transform(transformer: (T) -> R): C_LateGetter<R> = C_TransformingLateGetter(this, transformer)
+    fun <R: Any> transform(transformer: (T) -> R): C_LateGetter<R> = C_TransformingLateGetter(this, transformer)
 
     companion object {
-        fun <T> const(value: T): C_LateGetter<T> = C_ConstLateGetter(value)
+        fun <T: Any> const(value: T): C_LateGetter<T> = C_ConstLateGetter(value)
     }
 }
 
-private class C_ConstLateGetter<T>(private val value: T): C_LateGetter<T>() {
+private class C_ConstLateGetter<T: Any>(private val value: T): C_LateGetter<T>() {
     override fun get() = value
 }
 
-private class C_DirectLateGetter<T>(private val init: C_LateInit<T>): C_LateGetter<T>() {
+private class C_DirectLateGetter<T: Any>(private val init: C_LateInit<T>): C_LateGetter<T>() {
     override fun get() = init.get()
 }
 
-private class C_TransformingLateGetter<T, R>(
+private class C_TransformingLateGetter<T: Any, R: Any>(
         private val getter: C_LateGetter<T>,
         private val transformer: (T) -> R
 ): C_LateGetter<R>() {
@@ -650,7 +629,7 @@ private class C_TransformingLateGetter<T, R>(
     }
 }
 
-class C_LateInit<T>(val pass: C_CompilerPass, fallback: T) {
+class C_LateInit<T: Any>(val pass: C_CompilerPass, fallback: T) {
     private val ctx = C_LateInitContext.getContext()
     private var value: T? = null
     private var fallback: T? = fallback

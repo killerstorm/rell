@@ -674,7 +674,7 @@ class ExternalTest: BaseRellTest() {
         )
     }
 
-    @Test fun testMetaAttributeSubset() {
+    @Test fun testMetaAttributeSubSet() {
         tstCtx.blockchain(333, "deadbeef")
 
         chkMetaEntity(

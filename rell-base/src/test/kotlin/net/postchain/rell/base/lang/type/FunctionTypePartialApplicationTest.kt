@@ -217,8 +217,14 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
 
         chkSysGlobalFn("json(*)", "'[0,{},1]'", "(text)->json", "fn[json(*)]", "json[[0,{},1]]")
 
-        chkSysGlobalFn("sha256(*)", "'abc'.to_bytes()", "(byte_array)->byte_array", "fn[sha256(*)]",
+        chkSysGlobalFn("sha256(*)", "'abc'.to_bytes()", "(byte_array)->byte_array", "fn[crypto.sha256(*)]",
                 "byte_array[ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad]")
+    }
+
+    private fun chkSysGlobalFn(expr: String, args: String, type: String, ref: String, res: String) {
+        chkEx("{ val f = $expr; return _type_of(f); }", "text[$type]")
+        chkEx("{ val f = $expr; return f; }", ref)
+        chkEx("{ val f = $expr; return f($args); }", res)
     }
 
     @Test fun testSysGlobalFunctionNaming() {
@@ -250,7 +256,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
 
         chk("assert_equals(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_equals")
         chk("assert_not_equals(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_not_equals")
-        chk("assert_null(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_null")
+        chk("assert_null(*)", "ct_err:expr:call:partial_bad_case:rell.test.assert_null(anything):unit")
         chk("assert_not_null(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_not_null")
 
         chk("assert_lt(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_lt")
@@ -279,10 +285,6 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chkSysFnOver("integer", "(decimal)->integer", "*", "123", "int[123]")
         chkSysFnOverErr("integer", "(text)->decimal")
 
-        chkSysFnOver("integer.from_text", "(text)->integer", "*", "'123'", "int[123]")
-        chkSysFnOver("integer.from_text", "(text,integer)->integer", "*,*", "'beef',16", "int[48879]")
-        chkSysFnOverErr("integer.from_text", "(decimal)->integer")
-
         chkSysFnOver("decimal", "(text)->decimal", "*", "'123'", "dec[123]")
         chkSysFnOver("decimal", "(integer)->decimal", "*", "123", "dec[123]")
         chkSysFnOverErr("decimal", "(text)->integer")
@@ -295,6 +297,17 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chkSysFnOver("gtv.from_json", "(text)->gtv", "*", "'[]'", "gtv[[]]")
         chkSysFnOver("gtv.from_json", "(json)->gtv", "*", "json('[]')", "gtv[[]]")
         chkSysFnOverErr("gtv.from_json", "(byte_array)->gtv")
+    }
+
+    private fun chkSysFnOver(fn: String, type: String, wildArgs: String, args: String, expRes: String) {
+        chk("$fn(*)", "ct_err:expr:call:partial_ambiguous:$fn")
+        chkEx("{ val f: $type = $fn(*); return _type_of(f); }", "text[$type]")
+        chkEx("{ val f: $type = $fn(*); return f; }", "fn[$fn($wildArgs)]")
+        chkEx("{ val f: $type = $fn(*); return f($args); }", expRes)
+    }
+
+    private fun chkSysFnOverErr(fn: String, type: String) {
+        chkEx("{ val f: $type = $fn(*); return f; }", "ct_err:expr:call:partial_ambiguous:$fn")
     }
 
     @Test fun testSysGlobalFunctionOverloadContexts() {
@@ -341,6 +354,25 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chkEx("{ val m = map<integer,(decimal)->decimal>(); m[7] = abs(*); return m[7](123); }", "dec[123]")
         chkEx("{ val m = [7:stub(*)]; m[7] = abs(*); return m[7]; }", "fn[abs(*)]")
         chkEx("{ val m = [7:stub(*)]; m[7] = abs(*); return m[7](123); }", "dec[123]")
+    }
+
+    @Test fun testSysGlobalFunctionOptionalParams() {
+        val fn = "integer.from_text"
+
+        chkEx("{ val f = $fn(*); return _type_of(f); }", "text[(text,integer)->integer]")
+        chkEx("{ val f = $fn(*); return f; }", "fn[$fn(*,*)]")
+        chkEx("{ val f = $fn(*); return f('beef',16); }", "int[48879]")
+
+        chkEx("{ val f: (text)->integer = $fn(*); return _type_of(f); }", "text[(text)->integer]")
+        chkEx("{ val f: (text)->integer = $fn(*); return f; }", "fn[$fn(*)]")
+        chkEx("{ val f: (text)->integer = $fn(*); return f('123'); }", "int[123]")
+
+        chkEx("{ val f: (text,integer)->integer = $fn(*); return _type_of(f); }", "text[(text,integer)->integer]")
+        chkEx("{ val f: (text,integer)->integer = $fn(*); return f; }", "fn[$fn(*,*)]")
+        chkEx("{ val f: (text,integer)->integer = $fn(*); return f('beef',16); }", "int[48879]")
+
+        chkEx("{ val f: (decimal)->integer = $fn(*); return f; }",
+            "ct_err:stmt_var_type:f:[(decimal)->integer]:[(text,integer)->integer]")
     }
 
     @Test fun testSysGlobalFunctionDeprecated() {
@@ -402,6 +434,12 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chkSysMemFn("[1,2,3].index_of(*)", "3", "(integer)->integer", "fn[list<integer>.index_of(*)]", "int[2]")
     }
 
+    private fun chkSysMemFn(expr: String, args: String, type: String, ref: String, res: String) {
+        chkEx("{ val f = $expr; return _type_of(f); }", "text[$type]")
+        chkEx("{ val f = $expr; return f; }", ref)
+        chkEx("{ val f = $expr; return f($args); }", res)
+    }
+
     @Test fun testSysMemberFunctionOverload() {
         chkSysMemFnOver("integer", "min", "(123)", "(integer)->integer", "*", "456", "int[123]")
         chkSysMemFnOver("integer", "min", "(123)", "(decimal)->decimal", "*", "456", "dec[123]")
@@ -422,6 +460,21 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
                 "list<integer>[int[3],int[4],int[5]]")
         chkSysMemFnOver("list<integer>", "sub", "[1,2,3,4,5]", "(integer,integer)->list<integer>", "*,*", "1,4",
                 "list<integer>[int[2],int[3],int[4]]")
+    }
+
+    private fun chkSysMemFnOver(
+        baseType: String,
+        fn: String,
+        baseExpr: String,
+        type: String,
+        wildArgs: String,
+        args: String,
+        expRes: String,
+    ) {
+        chk("$baseExpr.$fn(*)", "ct_err:expr:call:partial_ambiguous:$baseType.$fn")
+        chkEx("{ val f: $type = $baseExpr.$fn(*); return _type_of(f); }", "text[$type]")
+        chkEx("{ val f: $type = $baseExpr.$fn(*); return f; }", "fn[$baseType.$fn($wildArgs)]")
+        chkEx("{ val f: $type = $baseExpr.$fn(*); return f($args); }", expRes)
     }
 
     @Test fun testSysMemberFunctionPartial() {
@@ -611,7 +664,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("f(123).replace('f',*)", "fn[text.replace(text[f],*)]")
         chk("f(123).replace('f',*)('A')", "text[A:123]")
 
-        chk("_type_of(g(123).replace('g',*))", "ct_err:expr_mem_null:replace")
+        chk("_type_of(g(123).replace('g',*))", "ct_err:expr_mem_null:text?:replace")
         chk("_type_of(g(123)?.replace('g',*))", "text[((text)->text)?]")
         chk("g(123)?.replace('g',*)", "fn[text.replace(text[g],*)]")
         chk("g(456)?.replace('g',*)", "null")
@@ -622,43 +675,5 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
 
         chk("g(si(456))?.replace(st('g'),*)", "null")
         chkOut("i:456")
-    }
-
-    private fun chkSysGlobalFn(expr: String, args: String, type: String, ref: String, res: String) {
-        chkEx("{ val f = $expr; return _type_of(f); }", "text[$type]")
-        chkEx("{ val f = $expr; return f; }", ref)
-        chkEx("{ val f = $expr; return f($args); }", res)
-    }
-
-    private fun chkSysFnOver(fn: String, type: String, wildArgs: String, args: String, expRes: String) {
-        chk("$fn(*)", "ct_err:expr:call:partial_ambiguous:$fn")
-        chkEx("{ val f: $type = $fn(*); return _type_of(f); }", "text[$type]")
-        chkEx("{ val f: $type = $fn(*); return f; }", "fn[$fn($wildArgs)]")
-        chkEx("{ val f: $type = $fn(*); return f($args); }", expRes)
-    }
-
-    private fun chkSysFnOverErr(fn: String, type: String) {
-        chkEx("{ val f: $type = $fn(*); return f; }", "ct_err:expr:call:partial_ambiguous:$fn")
-    }
-
-    private fun chkSysMemFn(expr: String, args: String, type: String, ref: String, res: String) {
-        chkEx("{ val f = $expr; return _type_of(f); }", "text[$type]")
-        chkEx("{ val f = $expr; return f; }", ref)
-        chkEx("{ val f = $expr; return f($args); }", res)
-    }
-
-    private fun chkSysMemFnOver(
-            baseType: String,
-            fn: String,
-            baseExpr: String,
-            type: String,
-            wildArgs: String,
-            args: String,
-            expRes: String
-    ) {
-        chk("$baseExpr.$fn(*)", "ct_err:expr:call:partial_ambiguous:$baseType.$fn")
-        chkEx("{ val f: $type = $baseExpr.$fn(*); return _type_of(f); }", "text[$type]")
-        chkEx("{ val f: $type = $baseExpr.$fn(*); return f; }", "fn[$baseType.$fn($wildArgs)]")
-        chkEx("{ val f: $type = $baseExpr.$fn(*); return f($args); }", expRes)
     }
 }

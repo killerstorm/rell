@@ -140,14 +140,14 @@ object C_ReplCompiler {
     }
 
     private fun compileExt(
-            msgCtx: C_MessageContext,
-            controller: C_CompilerController,
-            extCommand: C_ExtReplCommand,
-            oldDefsState: C_ReplDefsState,
-            oldCodeState: ReplCodeState
+        msgCtx: C_MessageContext,
+        controller: C_CompilerController,
+        extCommand: C_ExtReplCommand,
+        oldDefsState: C_ReplDefsState,
+        oldCodeState: ReplCodeState,
     ): C_ReplResult {
         val executor = controller.executor
-        val appCtx = C_AppContext(msgCtx, executor, true, oldDefsState.appState)
+        val appCtx = C_AppContext(msgCtx, executor, true, oldDefsState.appState, extraLibMod = null)
 
         val codeGetter = msgCtx.consumeError {
             extCommand.compile(appCtx, oldCodeState)

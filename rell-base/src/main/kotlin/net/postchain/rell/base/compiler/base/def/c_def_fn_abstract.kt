@@ -83,13 +83,13 @@ class C_AbstractFunctionDescriptor(
 }
 
 class C_OverrideFunctionDescriptor(val fnPos: S_Pos, private val rFnBase: R_FunctionBase) {
-    private val abstractLate = C_LateInit(C_CompilerPass.MEMBERS, Nullable<C_AbstractFunctionDescriptor>())
+    private val abstractLate = C_LateInit(C_CompilerPass.MEMBERS, Nullable.of<C_AbstractFunctionDescriptor>())
     private var bind = false
 
     fun abstract() = abstractLate.get().value
 
     fun setAbstract(abstract: C_AbstractFunctionDescriptor?) {
-        abstractLate.set(Nullable(abstract))
+        abstractLate.set(Nullable.of(abstract))
     }
 
     fun bind(): C_AbstractFunctionDescriptor? {

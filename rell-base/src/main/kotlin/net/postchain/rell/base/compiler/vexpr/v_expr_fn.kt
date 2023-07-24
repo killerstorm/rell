@@ -5,15 +5,9 @@
 package net.postchain.rell.base.compiler.vexpr
 
 import net.postchain.rell.base.compiler.ast.S_Pos
-import net.postchain.rell.base.compiler.base.expr.C_DbAtWhatValue
-import net.postchain.rell.base.compiler.base.expr.C_DbAtWhatValue_Complex
-import net.postchain.rell.base.compiler.base.expr.C_ExprContext
-import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
-import net.postchain.rell.base.compiler.base.fn.C_BasicGlobalFuncCaseMatch
-import net.postchain.rell.base.compiler.base.fn.C_GlobalFuncCaseCtx
+import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
-import net.postchain.rell.base.compiler.base.utils.C_SpecialGlobalFuncCaseMatch
 import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
@@ -26,44 +20,9 @@ import net.postchain.rell.base.utils.checkEquals
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
 
-class V_SysBasicGlobalCaseCallExpr(
-        exprCtx: C_ExprContext,
-        private val caseCtx: C_GlobalFuncCaseCtx,
-        private val match: C_BasicGlobalFuncCaseMatch
-): V_Expr(exprCtx, caseCtx.linkPos) {
-    override fun exprInfo0() = V_ExprInfo.simple(
-            match.resType,
-            match.args,
-            canBeDbExpr = match.canBeDb
-    )
-
-    override fun globalConstantRestriction() = match.globalConstantRestriction(caseCtx)
-
-    override fun toRExpr0() = match.compileCallR(caseCtx)
-    override fun toDbExpr0() = match.compileCallDb(caseCtx)
-}
-
-class V_SysSpecialGlobalCaseCallExpr(
-        exprCtx: C_ExprContext,
-        private val caseCtx: C_GlobalFuncCaseCtx,
-        private val match: C_SpecialGlobalFuncCaseMatch
-): V_Expr(exprCtx, caseCtx.linkPos) {
-    override fun exprInfo0() = V_ExprInfo.simple(
-            match.resType,
-            match.subExprs(),
-            canBeDbExpr = false
-    )
-
-    override fun varFacts0() = match.varFacts()
-
-    override fun globalConstantRestriction() = match.globalConstantRestriction(caseCtx)
-
-    override fun toRExpr0() = match.compileCallR(exprCtx, caseCtx)
-}
-
 class V_FunctionCallArgs(
-        exprs: List<V_Expr>,
-        mapping: List<Int>
+    exprs: List<V_Expr>,
+    mapping: List<Int>,
 ) {
     val exprs = exprs.toImmList()
     val mapping = mapping.toImmList()
@@ -97,6 +56,14 @@ class V_FunctionCallExpr(
         canBeDbExpr = call.canBeDbExpr()
     )
 
+    override fun varFacts0(): C_ExprVarFacts {
+        var postFacts = call.postVarFacts()
+        if (base != null) {
+            postFacts = postFacts.and(base.varFacts.postFacts)
+        }
+        return C_ExprVarFacts.of(postFacts = postFacts)
+    }
+
     override fun globalConstantRestriction() = call.globalConstantRestriction()
 
     override fun toRExpr0(): R_Expr {
@@ -123,6 +90,7 @@ sealed class V_CommonFunctionCall(
 ) {
     val args = args.toImmList()
 
+    abstract fun postVarFacts(): C_VarFacts
     abstract fun globalConstantRestriction(): V_GlobalConstantRestriction?
 
     fun canBeDbExpr() = target.canBeDb()
@@ -170,13 +138,20 @@ class V_CommonFunctionCall_Full(
     callPos: S_Pos,
     returnType: R_Type,
     target: V_FunctionCallTarget,
-    private val callArgs: V_FunctionCallArgs
+    private val callArgs: V_FunctionCallArgs,
+    private val argsPostVarFacts: C_VarFacts = C_VarFacts.andPostFacts(callArgs.exprs)
 ): V_CommonFunctionCall(pos, returnType, target, callArgs.exprs) {
     private val callFilePos = callPos.toFilePos()
 
+    override fun postVarFacts() = argsPostVarFacts
     override fun globalConstantRestriction() = target.globalConstantRestriction()
 
-    override fun callTarget(callCtx: Rt_CallContext, rTarget: R_FunctionCallTarget, baseValue: Rt_Value?, argValues: List<Rt_Value>): Rt_Value {
+    override fun callTarget(
+        callCtx: Rt_CallContext,
+        rTarget: R_FunctionCallTarget,
+        baseValue: Rt_Value?,
+        argValues: List<Rt_Value>,
+    ): Rt_Value {
         val values2 = callArgs.mapping.map { argValues[it] }
         val subCallCtx = callCtx.subContext(callFilePos)
         return rTarget.call(subCallCtx, baseValue, values2)
@@ -197,15 +172,21 @@ class V_CommonFunctionCall_Partial(
     returnType: R_Type,
     target: V_FunctionCallTarget,
     args: List<V_Expr>,
-    private val mapping: R_PartialCallMapping
+    private val mapping: R_PartialCallMapping,
 ): V_CommonFunctionCall(pos, returnType, target, args) {
+    override fun postVarFacts(): C_VarFacts = C_VarFacts.andPostFacts(args)
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("partial_call", null)
 
     override fun rCall0(rTarget: R_FunctionCallTarget, rArgExprs: List<R_Expr>): R_FunctionCall {
         return R_PartialFunctionCall(returnType, rTarget, mapping, rArgExprs)
     }
 
-    override fun callTarget(callCtx: Rt_CallContext, rTarget: R_FunctionCallTarget, baseValue: Rt_Value?, argValues: List<Rt_Value>): Rt_Value {
+    override fun callTarget(
+        callCtx: Rt_CallContext,
+        rTarget: R_FunctionCallTarget,
+        baseValue: Rt_Value?,
+        argValues: List<Rt_Value>,
+    ): Rt_Value {
         return rTarget.createFunctionValue(returnType, mapping, baseValue, argValues)
     }
 }
@@ -262,16 +243,16 @@ object V_FunctionCallTarget_FunctionValue: V_FunctionCallTarget() {
 }
 
 class V_SysFunctionTargetDescriptor(
-        val resType: R_Type,
-        val rFn: R_SysFunction,
-        val dbFn: Db_SysFunction?,
-        val fullName: LazyString,
-        val pure: Boolean,
-        val synth: Boolean = false
+    val resType: R_Type,
+    val rFn: R_SysFunction,
+    val dbFn: Db_SysFunction?,
+    val fullName: LazyString,
+    val pure: Boolean,
+    val synth: Boolean = false,
 )
 
 abstract class V_FunctionCallTarget_SysFunction(
-        protected val desc: V_SysFunctionTargetDescriptor
+    protected val desc: V_SysFunctionTargetDescriptor,
 ): V_FunctionCallTarget() {
     final override fun canBeDb() = desc.dbFn != null
 
@@ -286,7 +267,7 @@ abstract class V_FunctionCallTarget_SysFunction(
 }
 
 class V_FunctionCallTarget_SysGlobalFunction(
-        desc: V_SysFunctionTargetDescriptor
+    desc: V_SysFunctionTargetDescriptor,
 ): V_FunctionCallTarget_SysFunction(desc) {
     override fun toRTarget(): R_FunctionCallTarget = R_FunctionCallTarget_SysGlobalFunction(desc.rFn, desc.fullName)
 
@@ -299,12 +280,15 @@ class V_FunctionCallTarget_SysGlobalFunction(
     }
 }
 
-class V_GlobalFunctionCall(private val expr: V_Expr) {
+sealed class V_FunctionCall
+
+class V_GlobalFunctionCall(private val expr: V_Expr): V_FunctionCall() {
     fun vExpr() = expr
 }
 
-abstract class V_MemberFunctionCall(protected val exprCtx: C_ExprContext) {
+abstract class V_MemberFunctionCall(protected val exprCtx: C_ExprContext): V_FunctionCall() {
     abstract fun vExprs(): List<V_Expr>
+    open fun postVarFacts(): C_VarFacts = C_VarFacts.andPostFacts(vExprs())
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
 
     abstract fun returnType(): R_Type
@@ -321,6 +305,7 @@ class V_MemberFunctionCall_CommonCall(
     private val returnType: R_Type,
 ): V_MemberFunctionCall(exprCtx) {
     override fun vExprs() = call.args
+    override fun postVarFacts() = call.postVarFacts()
     override fun globalConstantRestriction() = call.globalConstantRestriction()
     override fun returnType() = returnType
 
@@ -342,8 +327,8 @@ class V_MemberFunctionCall_CommonCall(
 
 class V_MemberFunctionCall_Error(
     exprCtx: C_ExprContext,
-    private val returnType: R_Type,
-    private val msg: String,
+    private val returnType: R_Type = R_CtErrorType,
+    private val msg: String = "Compilation error",
 ): V_MemberFunctionCall(exprCtx) {
     override fun vExprs() = immListOf<V_Expr>()
     override fun returnType() = returnType

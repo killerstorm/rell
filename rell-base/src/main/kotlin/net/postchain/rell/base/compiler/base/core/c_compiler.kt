@@ -7,13 +7,15 @@ package net.postchain.rell.base.compiler.base.core
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.def.C_MountTables
 import net.postchain.rell.base.compiler.base.def.C_MountTablesBuilder
+import net.postchain.rell.base.compiler.base.lib.C_LibModule
 import net.postchain.rell.base.compiler.base.module.*
 import net.postchain.rell.base.compiler.base.namespace.C_Namespace
 import net.postchain.rell.base.compiler.base.namespace.C_SysNsProto
 import net.postchain.rell.base.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.base.compiler.base.utils.*
-import net.postchain.rell.base.lib.C_Lib_SysQueries
-import net.postchain.rell.base.lib.C_SystemLibraryProvider
+import net.postchain.rell.base.lib.C_SystemLibrary
+import net.postchain.rell.base.lib.Lib_SysQueries
+import net.postchain.rell.base.lmodel.L_Module
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.*
 import net.postchain.rell.base.utils.ide.IdeSymbolInfo
@@ -78,64 +80,76 @@ class C_StatementVarsBlock {
     fun modified() = modified.toSet()
 }
 
-class C_SystemDefs private constructor(
-        val nsProto: C_SysNsProto,
-        val appNs: C_Namespace,
-        val testNs: C_Namespace,
-        val blockEntity: R_EntityDefinition,
-        val transactionEntity: R_EntityDefinition,
-        val mntTables: C_MountTables,
-        entities: List<R_EntityDefinition>,
-        queries: List<R_QueryDefinition>
+class C_SystemDefsScope(
+    val nsProto: C_SysNsProto,
+    val ns: C_Namespace,
+    val modules: List<C_LibModule>,
+)
+
+class C_SystemDefsCommon(
+    val blockEntity: R_EntityDefinition,
+    val transactionEntity: R_EntityDefinition,
+    val mntTables: C_MountTables,
+    entities: List<R_EntityDefinition>,
+    queries: List<R_QueryDefinition>,
 ) {
     val entities = entities.toImmList()
     val queries = queries.toImmList()
+}
 
+class C_SystemDefs private constructor(
+    val common: C_SystemDefsCommon,
+    val appScope: C_SystemDefsScope,
+    val testScope: C_SystemDefsScope,
+) {
     companion object {
-        fun create(appCtx: C_AppContext, stamp: R_AppUid): C_SystemDefs {
+        fun create(appCtx: C_AppContext, stamp: R_AppUid, extraMod: C_LibModule?): C_SystemDefs {
             val blockEntity = C_Utils.createBlockEntity(appCtx, null)
             val transactionEntity = C_Utils.createTransactionEntity(appCtx, null, blockEntity)
-            val queries = C_Lib_SysQueries.createQueries(appCtx.executor)
-            return create(appCtx.globalCtx, stamp, blockEntity, transactionEntity, queries)
+            val queries = Lib_SysQueries.createQueries(appCtx.executor)
+            return create(appCtx.globalCtx, stamp, blockEntity, transactionEntity, queries, extraMod)
         }
 
         fun create(
-                globalCtx: C_GlobalContext,
-                stamp: R_AppUid,
-                blockEntity: R_EntityDefinition,
-                transactionEntity: R_EntityDefinition,
-                queries: List<R_QueryDefinition>
+            globalCtx: C_GlobalContext,
+            stamp: R_AppUid,
+            blockEntity: R_EntityDefinition,
+            transactionEntity: R_EntityDefinition,
+            queries: List<R_QueryDefinition>,
+            extraMod: C_LibModule?,
         ): C_SystemDefs {
             val sysEntities = listOf(blockEntity, transactionEntity)
 
-            val nsProto = createNsProto(globalCtx, sysEntities, false)
-            val appNs = nsProto.toNamespace()
-            val testNsProto = createNsProto(globalCtx, sysEntities, true)
-            val testNs = testNsProto.toNamespace()
+            val appScope = createNsScope(globalCtx, sysEntities, extraMod, false)
+            val testScope = createNsScope(globalCtx, sysEntities, extraMod, true)
 
             val mntBuilder = C_MountTablesBuilder(stamp)
             for (entity in sysEntities) mntBuilder.addSysEntity(entity)
             for (query in queries) mntBuilder.addQuery(query)
             val mntTables = mntBuilder.build()
 
-            return C_SystemDefs(nsProto, appNs, testNs, blockEntity, transactionEntity, mntTables, sysEntities, queries)
+            val common = C_SystemDefsCommon(blockEntity, transactionEntity, mntTables, sysEntities, queries)
+            return C_SystemDefs(common, appScope, testScope)
         }
 
-        private fun createNsProto(
-                globalCtx: C_GlobalContext,
-                sysEntities: List<R_EntityDefinition>,
-                test: Boolean
-        ): C_SysNsProto {
-            val libNs = C_SystemLibraryProvider.getNsProto(test, globalCtx.compilerOptions.hiddenLib)
+        private fun createNsScope(
+            globalCtx: C_GlobalContext,
+            sysEntities: List<R_EntityDefinition>,
+            extraMod: C_LibModule?,
+            test: Boolean,
+        ): C_SystemDefsScope {
+            val libScope = C_SystemLibrary.getScope(test, globalCtx.compilerOptions.hiddenLib, extraMod)
 
-            val nsBuilder = C_SysNsProtoBuilder(libNs.basePath)
-            nsBuilder.addAll(libNs)
+            val nsBuilder = C_SysNsProtoBuilder(libScope.nsProto.basePath)
+            nsBuilder.addAll(libScope.nsProto)
 
             for (entity in sysEntities) {
                 nsBuilder.addEntity(entity.rName, entity, IdeSymbolInfo.get(IdeSymbolKind.DEF_ENTITY))
             }
 
-            return nsBuilder.build()
+            val nsProto = nsBuilder.build()
+            val ns = nsProto.toNamespace()
+            return C_SystemDefsScope(nsProto, ns, libScope.modules)
         }
     }
 }
@@ -299,35 +313,45 @@ class C_CompilerModuleSelection(
 
 object C_Compiler {
     fun compile(
-            sourceDir: C_SourceDir,
-            modules: List<R_ModuleName>,
-            options: C_CompilerOptions = C_CompilerOptions.DEFAULT
+        sourceDir: C_SourceDir,
+        modules: List<R_ModuleName>,
+        options: C_CompilerOptions = C_CompilerOptions.DEFAULT,
     ): C_CompilationResult {
         val modSel = C_CompilerModuleSelection(modules, listOf())
         return compile(sourceDir, modSel, options)
     }
 
     fun compile(
-            sourceDir: C_SourceDir,
-            moduleSelection: C_CompilerModuleSelection,
-            options: C_CompilerOptions
+        sourceDir: C_SourceDir,
+        moduleSelection: C_CompilerModuleSelection,
+        options: C_CompilerOptions,
+    ): C_CompilationResult {
+        return compileInternal(sourceDir, moduleSelection, options, extraLibMod = null)
+    }
+
+    internal fun compileInternal(
+        sourceDir: C_SourceDir,
+        moduleSelection: C_CompilerModuleSelection,
+        options: C_CompilerOptions,
+        extraLibMod: C_LibModule?,
     ): C_CompilationResult {
         val globalCtx = C_GlobalContext(options, sourceDir)
         val msgCtx = C_MessageContext(globalCtx)
         val controller = C_CompilerController(msgCtx)
 
         val res = C_LateInit.context(controller.executor) {
-            compile0(sourceDir, msgCtx, controller, moduleSelection)
+            compile0(sourceDir, msgCtx, controller, moduleSelection, extraLibMod)
         }
 
         return res
     }
 
     private fun compile0(
-            sourceDir: C_SourceDir,
-            msgCtx: C_MessageContext,
-            controller: C_CompilerController,
-            moduleSelection: C_CompilerModuleSelection
+        sourceDir: C_SourceDir,
+        msgCtx: C_MessageContext,
+        controller: C_CompilerController,
+        moduleSelection: C_CompilerModuleSelection,
+        extraLibMod: C_LibModule?,
     ): C_CompilationResult {
         val symCtxManager = C_SymbolContextManager(msgCtx.globalCtx.compilerOptions)
         val symCtxProvider = symCtxManager.provider
@@ -336,7 +360,7 @@ object C_Compiler {
             compileMidModules(msgCtx, sourceDir, moduleSelection, symCtxProvider)
         } ?: immListOf()
 
-        val appCtx = C_AppContext(msgCtx, controller.executor, false, C_ReplAppState.EMPTY)
+        val appCtx = C_AppContext(msgCtx, controller.executor, false, C_ReplAppState.EMPTY, extraLibMod)
 
         msgCtx.consumeError {
             val extCompiler = C_ExtModuleCompiler(appCtx, extModules, immMapOf())

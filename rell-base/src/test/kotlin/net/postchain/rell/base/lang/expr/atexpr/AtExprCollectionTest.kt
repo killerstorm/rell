@@ -273,10 +273,22 @@ class AtExprCollectionTest: BaseRellTest(false) {
     }
 
     @Test fun testWhatAttributesFunction() {
-        tst.strictToString = false
         val from = "['Bob', 'Alice']"
-        chk("$from @*{} ( .size() )", "[3, 5]")
-        chk("$from @*{} ( $.size() )", "[3, 5]")
+        chk("$from @*{} ( .size() )", "list<integer>[int[3],int[5]]")
+        chk("$from @*{} ( $.size() )", "list<integer>[int[3],int[5]]")
+        chk("$from @*{} ( .to_gtv() )", """list<gtv>[gtv["Bob"],gtv["Alice"]]""")
+    }
+
+    @Test fun testWhatAttributesFunctionToTestOp() {
+        tst.testLib = true
+        def("operation op(x: integer) {}")
+        chk("[op(123), op(456)] @* {} ( $ )", "list<rell.test.op>[op[op(123)],op[op(456)]]")
+        chk("[struct<op>(123), struct<op>(456)] @* {} ( $ )",
+            "list<struct<op>>[struct<op>[x=int[123]],struct<op>[x=int[456]]]")
+        chk("[struct<op>(123), struct<op>(456)] @* {} ( .to_mutable() )",
+            "list<struct<mutable op>>[struct<mutable op>[x=int[123]],struct<mutable op>[x=int[456]]]")
+        chk("[struct<op>(123), struct<op>(456)] @* {} ( $.to_test_op() )", "list<rell.test.op>[op[op(123)],op[op(456)]]")
+        chk("[struct<op>(123), struct<op>(456)] @* {} ( .to_test_op() )", "list<rell.test.op>[op[op(123)],op[op(456)]]")
     }
 
     @Test fun testWhatOmit() {
@@ -364,7 +376,7 @@ class AtExprCollectionTest: BaseRellTest(false) {
         chkWhatSortTypeOK("['A','B','C']", "A", "B", "C")
         chkWhatSortTypeOK("[x'1234',x'5678',x'abcd']", "0x1234", "0x5678", "0xabcd")
         chkWhatSortTypeOK("[color.red,color.green,color.blue]", "red", "green", "blue")
-        chkWhatSortTypeOK("((v:[123,456,789])@*{}(_int_to_rowid(v)))", "123", "456", "789")
+        chkWhatSortTypeOK("((v:[123,456,789])@*{}(rowid(v)))", "123", "456", "789")
         chkWhatSortTypeOK("(user @* {})", "user[101]", "user[102]", "user[103]")
         chkWhatSortTypeOK("[(123,'Bob'),(456,'Alice'),(789,'Trudy')]", "(123,Bob)", "(456,Alice)", "(789,Trudy)")
         chkWhatSortTypeOK("[[123],[456],[789]]", "[123]", "[456]", "[789]")

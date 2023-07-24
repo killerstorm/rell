@@ -4,7 +4,6 @@
 
 package net.postchain.rell.base.testutils
 
-import com.google.common.collect.Sets
 import net.postchain.common.BlockchainRid
 import net.postchain.common.hexStringToByteArray
 import net.postchain.common.toHex
@@ -17,7 +16,6 @@ import net.postchain.rell.base.model.*
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.sql.*
 import net.postchain.rell.base.utils.*
-import org.junit.Assert
 import kotlin.test.assertEquals
 
 class RellCodeTester(
@@ -41,6 +39,8 @@ class RellCodeTester(
     var opContext: Rt_OpContext = Rt_NullOpContext
     var sqlUpdatePortionSize = 1000
     var replModule: String? = null
+    var typeCheck: Boolean = true
+    var wrapFunctionCallErrors = true
 
     private val chainDependencies = mutableMapOf<String, TestChainDependency>()
     private val postInitOps = mutableListOf<String>()
@@ -181,7 +181,7 @@ class RellCodeTester(
     private fun callFn(code: String): String {
         init()
         val moduleCode = moduleCode(code)
-        return processWithExeCtx(moduleCode, false) { modCtx ->
+        return processWithExeCtx(moduleCode) { modCtx ->
             RellTestUtils.callFn(modCtx, "f", listOf(), strictToString)
         }
     }
@@ -223,7 +223,7 @@ class RellCodeTester(
 
             val moduleCode = moduleCode(code)
 
-            processWithExeCtx(moduleCode, false) { appCtx ->
+            processWithExeCtx(moduleCode) { appCtx ->
                 RellTestUtils.callQueryGeneric(eval, appCtx, name, args, decoder, encoder)
             }
         }
@@ -253,17 +253,9 @@ class RellCodeTester(
     }
 
     fun chkWarn(vararg msgs: String) {
-        val actual = messages.filter { it.type == C_MessageType.WARNING }.map { it.code }.toSet()
-        val expected = msgs.toSet()
-        if (actual != expected) {
-            val diffAct = Sets.difference(actual, expected)
-            val diffExp = Sets.difference(expected, actual)
-            val list = mutableListOf<String>()
-            if (!diffExp.isEmpty()) list.add("missing: $diffExp")
-            if (!diffAct.isEmpty()) list.add("extra: $diffAct")
-            val msg = list.joinToString()
-            Assert.fail(msg)
-        }
+        val actual = messages.filter { it.type == C_MessageType.WARNING }.map { it.code }.sorted()
+        val expected = msgs.toList()
+        assertEquals(expected, actual)
     }
 
     fun chkStack(vararg expected: String) {
@@ -299,11 +291,11 @@ class RellCodeTester(
         return RellReplTester(tstCtx.projExt, globalCtx, sourceDir, sqlMgr, module)
     }
 
-    private fun processWithExeCtx(code: String, tx: Boolean, processor: (Rt_ExecutionContext) -> String): String {
+    private fun processWithExeCtx(code: String, processor: (Rt_ExecutionContext) -> String): String {
         val globalCtx = createGlobalCtx()
         return processApp(code) { app ->
             RellTestUtils.catchRtErr {
-                tstCtx.sqlMgr().execute(tx) { sqlExec ->
+                tstCtx.sqlMgr().access { sqlExec ->
                     val exeCtx = createExeCtx(globalCtx, sqlExec, app)
                     processor(exeCtx)
                 }
@@ -392,7 +384,8 @@ class RellCodeTester(
                 logPrinter,
                 logSqlErrors = true,
                 sqlUpdatePortionSize = sqlUpdatePortionSize,
-                typeCheck = true,
+                typeCheck = typeCheck,
+                wrapFunctionCallErrors = wrapFunctionCallErrors,
         )
     }
 

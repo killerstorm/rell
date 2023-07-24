@@ -9,8 +9,6 @@ import net.postchain.rell.base.compiler.base.def.C_GlobalAttrHeaderIdeData
 import net.postchain.rell.base.compiler.base.expr.C_ExprHint
 import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.base.compiler.base.expr.C_StmtContext
-import net.postchain.rell.base.compiler.base.fn.C_ArgTypeMatcher
-import net.postchain.rell.base.compiler.base.fn.C_ArgTypeMatcher_Simple
 import net.postchain.rell.base.compiler.base.fn.C_FormalParameter
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.compiler.vexpr.V_Expr
@@ -57,9 +55,8 @@ class S_FormalParameter(private val attr: S_AttrHeader, private val expr: S_Expr
 
         return if (paramType.isError()) vExpr else {
             val valueType = vExpr.type
-            val matcher: C_ArgTypeMatcher = C_ArgTypeMatcher_Simple(paramType)
-            val m = matcher.match(valueType)
-            if (m != null) m.adaptExpr(exprCtx, vExpr) else {
+            val adapter = paramType.getTypeAdapter(valueType)
+            if (adapter != null) adapter.adaptExpr(exprCtx, vExpr) else {
                 val code = "def:param:type:$paramName:${paramType.strCode()}:${valueType.strCode()}"
                 val msg = "Wrong type of default value of parameter '$paramName': ${valueType.str()} instead of ${paramType.str()}"
                 defCtx.msgCtx.error(expr.startPos, code, msg)
