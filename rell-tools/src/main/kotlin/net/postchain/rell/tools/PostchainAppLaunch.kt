@@ -34,7 +34,7 @@ private val log = run {
 }
 
 fun main(args: Array<String>) {
-    RellToolsUtils.runCli(args, RunPostchainAppArgs())
+    RellToolsUtils.runCli(args, RunPostchainAppArgs(), ::main0)
 }
 
 private fun main0(args: RunPostchainAppArgs) {
@@ -106,8 +106,4 @@ class RunPostchainAppArgs: RellBaseCliArgs() {
 
     @CommandLine.Option(names = ["--sqllog"], description = ["Enable SQL logging"])
     var sqlLog = false
-
-    override fun execute() {
-        main0(this)
-    }
 }

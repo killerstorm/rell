@@ -23,12 +23,12 @@ import java.io.File
 import kotlin.system.exitProcess
 
 object RellToolsUtils: KLogging() {
-    fun <T: RellCliArgs> runCli(args: Array<String>, argsObj: T) {
+    fun <T: RellCliArgs> runCli(args: Array<String>, argsObj: T, block: (T) -> Unit) {
         CommonUtils.failIfUnitTest() // Make sure unit test check works
 
         parseCliArgs(args, argsObj)
         try {
-            argsObj.execute()
+            block(argsObj)
         } catch (e: RellCliExitException) {
             exitProcess(e.code)
         } catch (e: RellCliException) {
@@ -154,9 +154,7 @@ object RellToolsUtils: KLogging() {
     }
 }
 
-abstract class RellCliArgs {
-    abstract fun execute()
-}
+abstract class RellCliArgs
 
 abstract class RellBaseCliArgs: RellCliArgs() {
     @CommandLine.Option(names = ["-d", "--source-dir"], paramLabel = "SOURCE_DIR",

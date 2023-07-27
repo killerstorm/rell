@@ -32,7 +32,7 @@ private val INIT = run {
 }
 
 fun main(args: Array<String>) {
-    RellToolsUtils.runCli(args, RellInterpreterCliArgs())
+    RellToolsUtils.runCli(args, RellInterpreterCliArgs(), ::main0)
 }
 
 private fun main0(args: RellInterpreterCliArgs) {
@@ -569,8 +569,4 @@ class RellInterpreterCliArgs: RellBaseCliArgs() {
 
     @CommandLine.Parameters(index = "2..*", paramLabel = "ARGS", description = ["Entry point arguments"])
     var args: List<String>? = null
-
-    override fun execute() {
-        main0(this)
-    }
 }

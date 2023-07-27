@@ -66,14 +66,14 @@ private fun parserToJavascript(nameMap: Map<Any, String>, parser: Any, top: Bool
         is MapCombinator<*, *> -> parserToJavascript(nameMap, parser.innerParser, false)
         is SkipParser -> parserToJavascript(nameMap, parser.innerParser, false)
         is AndCombinator<*> -> {
-            var subs = GrammarUtils.andParsers(parser)
+            val subs = GrammarUtils.andParsers(parser)
             val ps = subs.joinToString(",") { parserToJavascript(nameMap, it, false) }
-            """{"type":"and",parsers:[$ps]}"""
+            """{"type":"and","parsers":[$ps]}"""
         }
         is OrCombinator<*> -> {
-            var subs = GrammarUtils.orParsers(parser)
+            val subs = GrammarUtils.orParsers(parser)
             val ps = subs.joinToString(",") { parserToJavascript(nameMap, it, false) }
-            """{"type":"or",parsers:[$ps]}"""
+            """{"type":"or","parsers":[$ps]}"""
         }
         is RepeatCombinator<*> -> {
             check(parser.atLeast >= 0)
@@ -89,7 +89,7 @@ private fun parserToJavascript(nameMap: Map<Any, String>, parser: Any, top: Bool
         }
         is OptionalCombinator<*> -> {
             val sub = parserToJavascript(nameMap, parser.parser, false)
-            """{"type":"opt",parser:$sub}"""
+            """{"type":"opt","parser":$sub}"""
         }
         is ParserReference<*> -> parserToJavascript(nameMap, parser.parser, false)
         else -> throw IllegalStateException(parser::class.java.simpleName)

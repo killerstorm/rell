@@ -13,7 +13,7 @@ import java.io.File
 
 fun main(args: Array<String>) {
     RellToolsLogUtils.initLogging()
-    RellToolsUtils.runCli(args, RellRunConfigGenCliArgs())
+    RellToolsUtils.runCli(args, RellRunConfigGenCliArgs(), ::main0)
 }
 
 private fun main0(args: RellRunConfigGenCliArgs) {
@@ -72,8 +72,4 @@ class RellRunConfigGenCliArgs: RellRunConfigCliArgs() {
 
     @CommandLine.Option(names = ["--dry-run"], description = ["Do not create files"])
     var dryRun: Boolean = false
-
-    override fun execute() {
-        main0(this)
-    }
 }

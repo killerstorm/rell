@@ -43,7 +43,7 @@ private val MIGRATION_MAP = mapOf(
 
 fun main(args: Array<String>) {
     RellToolsLogUtils.initLogging()
-    RellToolsUtils.runCli(args, RellMigratorCliArgs())
+    RellToolsUtils.runCli(args, RellMigratorCliArgs(), ::main0)
 }
 
 private fun main0(args: RellMigratorCliArgs) {
@@ -124,8 +124,4 @@ private class RellMigratorCliArgs: RellCliArgs() {
 
     @CommandLine.Parameters(index = "0", paramLabel = "DIRECTORY", description = ["Directory"])
     var directory: String = ""
-
-    override fun execute() {
-        main0(this)
-    }
 }

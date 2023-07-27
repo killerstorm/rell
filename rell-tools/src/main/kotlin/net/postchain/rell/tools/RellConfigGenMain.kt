@@ -16,7 +16,7 @@ import java.io.OutputStream
 
 fun main(args: Array<String>) {
     RellToolsLogUtils.initLogging()
-    RellToolsUtils.runCli(args, RellConfigGenCliArgs())
+    RellToolsUtils.runCli(args, RellConfigGenCliArgs(), ::main0)
 }
 
 private fun main0(args: RellConfigGenCliArgs) {
@@ -74,8 +74,4 @@ class RellConfigGenCliArgs: RellBaseCliArgs() {
 
     @CommandLine.Option(names = ["--binary-output"], paramLabel = "BINARY_OUTPUT", description = ["Write output as binary"])
     var binaryOutput: Boolean = false
-
-    override fun execute() {
-        main0(this)
-    }
 }

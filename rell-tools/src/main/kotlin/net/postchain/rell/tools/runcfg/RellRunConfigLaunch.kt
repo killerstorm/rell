@@ -49,7 +49,7 @@ private val log = run {
 }
 
 fun main(args: Array<String>) {
-    RellToolsUtils.runCli(args, RellRunConfigLaunchCliArgs())
+    RellToolsUtils.runCli(args, RellRunConfigLaunchCliArgs(), ::main0)
 }
 
 private fun main0(args: RellRunConfigLaunchCliArgs) {
@@ -273,9 +273,5 @@ class RellRunConfigLaunchCliArgs: RellRunConfigCliArgs() {
     fun getTargetChains(): Set<String>? {
         val s = testChain
         return if (s == null) null else s.split(",").map { it.trim() }.toImmSet()
-    }
-
-    override fun execute() {
-        main0(this)
     }
 }
