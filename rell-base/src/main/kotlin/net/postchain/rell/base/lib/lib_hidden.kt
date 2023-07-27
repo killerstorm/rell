@@ -9,8 +9,8 @@ import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.lib.C_LibModule
 import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunction
 import net.postchain.rell.base.compiler.vexpr.V_ConstantValueExpr
+import net.postchain.rell.base.compiler.vexpr.V_ExprInfo
 import net.postchain.rell.base.compiler.vexpr.V_GlobalFunctionCall
-import net.postchain.rell.base.lmodel.dsl.Ld_ModuleDsl
 import net.postchain.rell.base.runtime.Rt_Exception
 import net.postchain.rell.base.runtime.Rt_TextValue
 import net.postchain.rell.base.runtime.utils.RellInterpreterCrashException
@@ -101,7 +101,8 @@ private object C_SysFn_TypeOf: C_SpecialLibGlobalFunction() {
         val str = type.strCode()
         val value = Rt_TextValue(str)
 
-        val vExpr = V_ConstantValueExpr(ctx, name.pos, value)
+        val exprInfo = V_ExprInfo.simple(value.type(), dependsOnAtExprs = vArg.info.dependsOnAtExprs)
+        val vExpr = V_ConstantValueExpr(ctx, name.pos, value, exprInfo)
         return V_GlobalFunctionCall(vExpr)
     }
 }

@@ -662,4 +662,11 @@ abstract class AtExprCommonBaseTest: AtExprBaseTest() {
         impCreateObjs("outer0", "outer_id = id@{'O0'}, in_id = id@{'X'}, b = false, b1 = false, b2 = false")
         impCreateObjs("outer1", "outer_id = id@{'O1'}, in_id = id@{'X'}, b = true,  b1 = true,  b2 = true")
     }
+
+    @Test fun testTypeOfInWhere() {
+        initDataUserCompany()
+        chk("$fromCompany @* { $.name }", "ct_err:at_where:type:0:[boolean]:[text]")
+        chk("$fromCompany @* { _type_of($) }", "ct_err:at_where:type:0:[boolean]:[text]")
+        chk("$fromCompany @* { _type_of($.name) }", "ct_err:at_where:type:0:[boolean]:[text]")
+    }
 }

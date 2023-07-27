@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.vexpr
@@ -33,8 +33,13 @@ class V_ErrorExpr(
     override fun toRExpr0() = R_ErrorExpr(type, message)
 }
 
-class V_ConstantValueExpr(exprCtx: C_ExprContext, pos: S_Pos, private val value: Rt_Value): V_Expr(exprCtx, pos) {
-    override fun exprInfo0() = V_ExprInfo.simple(value.type())
+class V_ConstantValueExpr(
+    exprCtx: C_ExprContext,
+    pos: S_Pos,
+    private val value: Rt_Value,
+    private val exprInfo: V_ExprInfo = V_ExprInfo.simple(value.type()),
+): V_Expr(exprCtx, pos) {
+    override fun exprInfo0() = exprInfo
     override fun toRExpr0() = R_ConstantValueExpr(value)
     override fun constantValue(ctx: V_ConstantValueEvalContext) = value
 }

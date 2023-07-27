@@ -38,27 +38,30 @@ class V_ExprInfo(
 
     companion object {
         fun simple(
-                type: R_Type,
-                vararg subExprs: V_Expr,
-                hasDbModifications: Boolean = false,
-                canBeDbExpr: Boolean = true,
-                dependsOnDbAtEntity: Boolean = false
+            type: R_Type,
+            vararg subExprs: V_Expr,
+            hasDbModifications: Boolean = false,
+            canBeDbExpr: Boolean = true,
+            dependsOnDbAtEntity: Boolean = false,
+            dependsOnAtExprs: Set<R_AtExprId> = immSetOf(),
         ): V_ExprInfo {
             return simple(
-                    type,
-                    subExprs.toImmList(),
-                    hasDbModifications = hasDbModifications,
-                    canBeDbExpr = canBeDbExpr,
-                    dependsOnDbAtEntity = dependsOnDbAtEntity
+                type,
+                subExprs.toImmList(),
+                hasDbModifications = hasDbModifications,
+                canBeDbExpr = canBeDbExpr,
+                dependsOnDbAtEntity = dependsOnDbAtEntity,
+                dependsOnAtExprs = dependsOnAtExprs,
             )
         }
 
         fun simple(
-                type: R_Type,
-                subExprs: List<V_Expr>,
-                hasDbModifications: Boolean = false,
-                canBeDbExpr: Boolean = true,
-                dependsOnDbAtEntity: Boolean = false
+            type: R_Type,
+            subExprs: List<V_Expr>,
+            hasDbModifications: Boolean = false,
+            canBeDbExpr: Boolean = true,
+            dependsOnDbAtEntity: Boolean = false,
+            dependsOnAtExprs: Set<R_AtExprId> = immSetOf(),
         ): V_ExprInfo {
             val depsOnDbAtEnt = dependsOnDbAtEntity || subExprs.any { it.info.dependsOnDbAtEntity }
             val canBeDb = !depsOnDbAtEnt || (canBeDbExpr && subExprs.all { it.info.canBeDbExpr })
@@ -68,7 +71,7 @@ class V_ExprInfo(
                     hasDbModifications = hasDbModifications || subExprs.any { it.info.hasDbModifications },
                     canBeDbExpr = canBeDb,
                     dependsOnDbAtEntity = depsOnDbAtEnt,
-                    dependsOnAtExprs = subExprs.flatMap { it.info.dependsOnAtExprs }.toImmSet()
+                    dependsOnAtExprs = (dependsOnAtExprs + subExprs.flatMap { it.info.dependsOnAtExprs }).toImmSet(),
             )
         }
     }

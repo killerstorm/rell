@@ -269,4 +269,22 @@ class CLibFunctionTest: BaseCLibTest() {
         chk("ns.data().f()", "text[ns.data.f]")
         chk("ns.data.g()", "text[ns.data.g]")
     }
+
+    @Test fun testTypeInfiniteRecursion() {
+        class R_TestType: R_SimpleType("data", C_DefinitionName("", "data")) {
+            override fun isReference() = true
+            override fun isDirectPure() = false
+            override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_None
+            override fun getLibType0(): C_LibType = getLibType0()
+        }
+
+        tst.extraMod = makeModule {
+            type("data", rType = R_TestType()) {
+                constructor { body { -> Rt_UnitValue } }
+            }
+        }
+
+        //TODO right error message on stack overflow
+        //chk("data()", "...")
+    }
 }
