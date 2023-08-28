@@ -69,7 +69,7 @@ object RellToolsUtils: KLogging() {
         quiet: Boolean,
         compilerOptions: C_CompilerOptions
     ): R_App {
-        val res = compile(MainRellCliEnv, sourceDir, modSel, quiet, compilerOptions)
+        val res = compile(RellCliEnv.DEFAULT, sourceDir, modSel, quiet, compilerOptions)
         return res.app!!
     }
 

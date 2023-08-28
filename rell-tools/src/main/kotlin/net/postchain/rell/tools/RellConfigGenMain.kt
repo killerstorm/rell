@@ -5,8 +5,8 @@
 package net.postchain.rell.tools
 
 import net.postchain.gtv.Gtv
-import net.postchain.rell.api.base.MainRellCliEnv
 import net.postchain.rell.api.base.RellCliBasicException
+import net.postchain.rell.api.base.RellCliEnv
 import net.postchain.rell.api.base.RellConfigGen
 import net.postchain.rell.base.utils.PostchainGtvUtils
 import picocli.CommandLine
@@ -26,7 +26,7 @@ private fun main0(args: RellConfigGenCliArgs) {
         readFile(File(args.configTemplateFile))
     }
 
-    val configGen = RellConfigGen.create(MainRellCliEnv, target)
+    val configGen = RellConfigGen.create(RellCliEnv.DEFAULT, target)
     val config = configGen.makeConfig(template)
 
     if (args.outputFile != null) {

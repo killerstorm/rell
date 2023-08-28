@@ -7,7 +7,6 @@ package net.postchain.rell.tools.runcfg
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvEncoder
 import net.postchain.gtv.builder.GtvBuilder
-import net.postchain.rell.api.base.MainRellCliEnv
 import net.postchain.rell.api.base.RellCliEnv
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.model.R_LangVersion
@@ -98,7 +97,7 @@ object RellRunConfigGenerator {
         val params = RellRunConfigParams(cSourceDir, generalConfigDir, sourceVersion, unitTest)
 
         val runConfText = runConfFile.readText()
-        val config = generate(MainRellCliEnv, params, runConfFile.path, runConfText)
+        val config = generate(RellCliEnv.DEFAULT, params, runConfFile.path, runConfText)
 
         return RellPostAppCliConfig(cSourceDir, configDir, config)
     }

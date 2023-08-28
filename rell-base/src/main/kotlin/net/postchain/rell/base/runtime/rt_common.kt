@@ -16,7 +16,7 @@ class Rt_ExternalChain(val chainId: Long, val rid: ByteArray, val height: Long) 
     val sqlMapping = Rt_ChainSqlMapping(chainId)
 }
 
-interface Rt_Printer {
+fun interface Rt_Printer {
     fun print(str: String)
 }
 

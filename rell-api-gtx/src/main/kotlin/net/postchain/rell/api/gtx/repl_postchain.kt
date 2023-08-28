@@ -4,8 +4,8 @@
 
 package net.postchain.rell.api.gtx
 
-import net.postchain.rell.api.base.NullRellCliEnv
 import net.postchain.rell.api.base.RellApiCompile
+import net.postchain.rell.api.base.RellCliEnv
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.lib.test.Lib_RellTest
 import net.postchain.rell.base.model.R_ModuleName
@@ -21,7 +21,7 @@ class PostchainReplInterpreterProjExt(
 
     override fun createBlockRunner(sourceDir: C_SourceDir, modules: List<R_ModuleName>): Rt_UnitTestBlockRunner {
         val keyPair = Lib_RellTest.BLOCK_RUNNER_KEYPAIR
-        val compileConfig = RellApiCompile.Config.Builder().cliEnv(NullRellCliEnv).build()
+        val compileConfig = RellApiCompile.Config.Builder().cliEnv(RellCliEnv.NULL).build()
         val runnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, modules, compileConfig)
         return Rt_PostchainUnitTestBlockRunner(keyPair, runnerConfig, runnerStrategy)
     }

@@ -18,7 +18,7 @@ import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.logging.BLOCKCHAIN_RID_TAG
 import net.postchain.logging.CHAIN_IID_TAG
 import net.postchain.logging.NODE_PUBKEY_TAG
-import net.postchain.rell.api.base.MainRellCliEnv
+import net.postchain.rell.api.base.RellCliEnv
 import net.postchain.rell.api.base.RellConfigGen
 import net.postchain.rell.api.gtx.RellApiGtxUtils
 import net.postchain.rell.base.runtime.Rt_LogPrinter
@@ -49,7 +49,7 @@ private fun main0(args: RunPostchainAppArgs) {
 
     RellToolsUtils.printVersionInfo()
 
-    val configGen = RellConfigGen.create(MainRellCliEnv, target)
+    val configGen = RellConfigGen.create(RellCliEnv.DEFAULT, target)
 
     val nodeAppConf = AppConfig.fromPropertiesFile(args.nodeConfigFile)
     val template = genBlockchainConfigTemplate(nodeAppConf.pubKeyByteArray)

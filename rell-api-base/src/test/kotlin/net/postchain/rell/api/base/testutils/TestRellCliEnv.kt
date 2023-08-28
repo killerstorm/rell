@@ -5,13 +5,6 @@
 package net.postchain.rell.api.base.testutils
 
 import net.postchain.rell.api.base.RellCliEnv
+import net.postchain.rell.api.base.PrinterRellCliEnv
 
-class TestRellCliEnv: RellCliEnv() {
-    override fun print(msg: String) {
-        println(msg)
-    }
-
-    override fun error(msg: String) {
-        println(msg)
-    }
-}
+class TestRellCliEnv: RellCliEnv by PrinterRellCliEnv(::println)

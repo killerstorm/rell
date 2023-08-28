@@ -187,7 +187,7 @@ private fun createBlockRunner(args: RellCliArgsEx, sourceDir: C_SourceDir, app: 
 
     val blockRunnerModules = RellApiBaseUtils.getMainModules(app)
     val compileConfig = RellApiCompile.Config.Builder()
-        .cliEnv(NullRellCliEnv)
+        .cliEnv(RellCliEnv.NULL)
         .build()
     val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, blockRunnerModules, compileConfig)
 

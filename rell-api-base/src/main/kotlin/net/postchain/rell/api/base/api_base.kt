@@ -89,7 +89,7 @@ object RellApiCompile {
 
         companion object {
             val DEFAULT = Config(
-                cliEnv = MainRellCliEnv,
+                cliEnv = RellCliEnv.DEFAULT,
                 version = RellVersions.VERSION,
                 moduleArgs = immMapOf(),
                 includeTestSubModules = true,

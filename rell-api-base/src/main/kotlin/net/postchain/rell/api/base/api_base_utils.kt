@@ -87,31 +87,21 @@ class RellCliExitException(val code: Int, msg: String = "exit $code"): RellCliEx
 
 class RellCliTarget(val sourcePath: File, val sourceDir: C_SourceDir, val modules: List<R_ModuleName>)
 
-abstract class RellCliEnv {
-    abstract fun print(msg: String)
-    abstract fun error(msg: String)
-}
-
-object NullRellCliEnv: RellCliEnv() {
-    override fun print(msg: String) {
-    }
-
-    override fun error(msg: String) {
+interface RellCliEnv {
+    fun print(msg: String)
+    fun error(msg: String)
+    companion object {
+        @JvmStatic
+        val NULL: RellCliEnv = NullRellCliEnv
+        @JvmStatic
+        val DEFAULT: RellCliEnv = MainRellCliEnv
     }
 }
 
-object MainRellCliEnv: RellCliEnv() {
-    override fun print(msg: String) {
-        println(msg)
-    }
+internal object NullRellCliEnv: RellCliEnv by PrinterRellCliEnv({}, {})
+internal object MainRellCliEnv: RellCliEnv by PrinterRellCliEnv(::println, System.err::println)
 
-    override fun error(msg: String) {
-        System.err.println(msg)
-    }
-}
-
-class Rt_CliEnvPrinter(private val cliEnv: RellCliEnv): Rt_Printer {
-    override fun print(str: String) {
-        cliEnv.print(str)
-    }
+class PrinterRellCliEnv(private val printer: Rt_Printer, private val errorPrinter: Rt_Printer = printer): RellCliEnv {
+    override fun print(msg: String) = printer.print(msg)
+    override fun error(msg: String) = errorPrinter.print(msg)
 }

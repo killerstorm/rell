@@ -85,7 +85,7 @@ object RellApiRunTests {
         companion object {
             val DEFAULT = Config(
                 compileConfig = RellApiCompile.Config.DEFAULT,
-                cliEnv = MainRellCliEnv,
+                cliEnv = RellCliEnv.DEFAULT,
                 stopOnError = false,
                 databaseUrl = null,
                 sqlLog = false,
@@ -208,7 +208,7 @@ object RellApiGtxInternal {
         ) { sqlMgr ->
             val testCtx = UnitTestRunnerContext(
                 app = app,
-                printer = Rt_CliEnvPrinter(config.cliEnv),
+                printer = config.cliEnv::print,
                 sqlCtx = sqlCtx,
                 sqlMgr = sqlMgr,
                 sqlInitProjExt = PostchainSqlInitProjExt,
