@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 
 class DatabaseCollationIT {
     @Test fun testCollationTestPass() {
-        PostgreSQLContainer(DockerImageName.parse("postgres:14.7-alpine3.17")).apply { start() }.use { postgres ->
+        PostgreSQLContainer(DockerImageName.parse("postgres:14.9-alpine3.18")).apply { start() }.use { postgres ->
             val databaseUrlWithUserAndPassword =
                 buildDatabaseUrl(postgres.jdbcUrl, postgres.username, postgres.password)
             chkRunTests(databaseUrlWithUserAndPassword)
@@ -22,7 +22,7 @@ class DatabaseCollationIT {
     }
 
     @Test fun testCollationTestFail() {
-        PostgreSQLContainer(DockerImageName.parse("postgres:14.7")).apply { start() }.use { postgres ->
+        PostgreSQLContainer(DockerImageName.parse("postgres:14.9")).apply { start() }.use { postgres ->
             val databaseUrlWithUserAndPassword =
                 buildDatabaseUrl(postgres.jdbcUrl, postgres.username, postgres.password)
 

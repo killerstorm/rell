@@ -12,7 +12,7 @@ image: registry.gitlab.com/chromaway/core-tools/chromia-images/maven-docker:1.1.
       --env PGDATA=/pgtmpfs
       --tmpfs=/pgtmpfs:size=1000m
       --publish 5432:5432
-      postgres:14.7-alpine3.17
+      postgres:14.9-alpine3.18
   artifacts:
     when: always
     reports:
