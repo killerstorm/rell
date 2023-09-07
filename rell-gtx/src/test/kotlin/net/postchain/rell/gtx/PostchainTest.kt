@@ -76,6 +76,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,configuration_hash:bytea,height:int8)",
                 "c123.sys.faulty_configuration(configuration_hash:bytea,report_height:int8)",
+                "c123.sys.transaction_signers(signer:bytea,tx_iid:int8)",
                 "c123.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_number:int8,tx_rid:bytea)",
                 "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
@@ -91,6 +92,7 @@ class PostchainTest: BaseResourcefulTest() {
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,configuration_hash:bytea,height:int8)",
                 "c123.sys.faulty_configuration(configuration_hash:bytea,report_height:int8)",
+                "c123.sys.transaction_signers(signer:bytea,tx_iid:int8)",
                 "c123.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_number:int8,tx_rid:bytea)",
                 "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
@@ -107,10 +109,12 @@ class PostchainTest: BaseResourcefulTest() {
                 "c123.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c123.configurations(configuration_data:bytea,configuration_hash:bytea,height:int8)",
                 "c123.sys.faulty_configuration(configuration_hash:bytea,report_height:int8)",
+                "c123.sys.transaction_signers(signer:bytea,tx_iid:int8)",
                 "c123.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_number:int8,tx_rid:bytea)",
                 "c456.blocks(block_header_data:bytea,block_height:int8,block_iid:bigserial,block_rid:bytea,block_witness:bytea,timestamp:int8)",
                 "c456.configurations(configuration_data:bytea,configuration_hash:bytea,height:int8)",
                 "c456.sys.faulty_configuration(configuration_hash:bytea,report_height:int8)",
+                "c456.sys.transaction_signers(signer:bytea,tx_iid:int8)",
                 "c456.transactions(block_iid:int8,tx_data:bytea,tx_hash:bytea,tx_iid:bigserial,tx_number:int8,tx_rid:bytea)",
                 "containers(container_iid:serial,name:text)",
                 "meta(key:text,value:text)",
@@ -164,6 +168,7 @@ class PostchainTest: BaseResourcefulTest() {
         val ignoredTables = listOf(
             "c0.configurations",
             "c0.sys.faulty_configuration",
+            "c0.sys.transaction_signers"
         )
 
         chkRellPostchainTables(rellTables, postchainTables, "c0.", ignoredTables)

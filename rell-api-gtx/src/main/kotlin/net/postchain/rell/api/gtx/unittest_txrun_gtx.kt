@@ -102,7 +102,7 @@ class Rt_PostchainUnitTestBlockRunner(
     private fun processBlock(bcConfig: BlockchainConfiguration, eCtx: EContext, block: Rt_TestBlockValue) {
         val txFactory = bcConfig.getTransactionFactory()
 
-        val blockBuilder = bcConfig.makeBlockBuilder(eCtx)
+        val blockBuilder = bcConfig.makeBlockBuilder(eCtx, false)
 
         blockBuilder.begin(null)
 

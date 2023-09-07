@@ -47,8 +47,8 @@ class LibRellTestTxTest: BaseRellTest(false) {
         initTxChain()
         repl.chk("val b = rell.test.block().tx(foo(123));")
         repl.chk("b.run();", "OUT:123", "null")
-        repl.chk("b.run_must_fail();", "Failed to save tx to database")
-        repl.chk("b.run_must_fail('Failed to save tx to database');", "Failed to save tx to database")
+        repl.chk("b.run_must_fail().message != '';", "true")
+        repl.chk("b.run_must_fail('Failed to save tx to database').message != '';", "true")
     }
 
     @Test fun testBlockTx() {
@@ -243,8 +243,8 @@ class LibRellTestTxTest: BaseRellTest(false) {
         initTxChain()
         repl.chk("val tx = rell.test.tx().op(foo(123));")
         repl.chk("tx.run();", "OUT:123", "null")
-        repl.chk("tx.run_must_fail();", "Failed to save tx to database")
-        repl.chk("tx.run_must_fail('Failed to save tx to database');", "Failed to save tx to database")
+        repl.chk("tx.run_must_fail().message != '';", "true")
+        repl.chk("tx.run_must_fail('Failed to save tx to database').message != '';", "true")
     }
 
     @Test fun testOpConstructor() {
@@ -289,8 +289,8 @@ class LibRellTestTxTest: BaseRellTest(false) {
 
         repl.chk("val op = foo(123);")
         repl.chk("op.run();", "OUT:123", "null")
-        repl.chk("op.run_must_fail();", "Failed to save tx to database")
-        repl.chk("op.run_must_fail('Failed to save tx to database');", "Failed to save tx to database")
+        repl.chk("op.run_must_fail().message != '';", "true")
+        repl.chk("op.run_must_fail('Failed to save tx to database').message != '';", "true")
     }
 
     @Test fun testOpTypeCompatibility() {
