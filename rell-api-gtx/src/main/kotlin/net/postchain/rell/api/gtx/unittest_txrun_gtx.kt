@@ -57,7 +57,7 @@ class Rt_PostchainUnitTestBlockRunner(
             RellPostchainModuleEnvironment.set(pcEnv) {
                 ctx.exeCtx.sqlExec.connection { con ->
                     val eCtx = createEContext(con, bcCtx)
-                    val bcConfig = bcConfigFactory.makeBlockchainConfiguration(bcData, bcCtx, sigMaker, eCtx)
+                    val bcConfig = bcConfigFactory.makeBlockchainConfiguration(bcData, bcCtx, sigMaker, eCtx, PostchainGtvUtils.cryptoSystem)
                     withSavepoint(con) {
                         processBlock(bcConfig, eCtx, block)
                     }
@@ -130,7 +130,7 @@ class Rt_PostchainUnitTestBlockRunner(
         for (keyPair in tx.signers) {
             val pubKey = keyPair.pub.toByteArray()
             val privKey = keyPair.priv.toByteArray()
-            val sigMaker = PostchainGtvUtils.cryptoSystem.buildSigMaker(pubKey, privKey)
+            val sigMaker = PostchainGtvUtils.cryptoSystem.buildSigMaker(KeyPair(pubKey, privKey))
             sigBuilder.sign(sigMaker)
         }
 
