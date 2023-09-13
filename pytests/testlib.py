@@ -38,6 +38,12 @@ RELL_VERSION = (lambda s: s if '-' not in s else s[:s.index('-')])(RELL_MAVEN_VE
 
 MSG_META_TABLE_DOES_NOT_EXIST = '<LOG:INFO>SQLDatabaseAccess - Meta table does not exist. Assume database does not exist and create it (version: 2).'
 
+STDOUT_IGNORE = [
+    '<LOG:INFO><RE>SQLDatabaseAccess - Upgrading to version [0-9]+',
+    '<LOG:INFO><RE>SQLDatabaseAccess - Database version has been updated to version: [0-9]+',
+    '<LOG:INFO><RE>FluentPropertyBeanIntrospector - Error when creating PropertyDescriptor .*',
+]
+
 class LogFormat:
     __LOG_TIME_PATTERN = '####-##-## ##:##:##.###'
     __LOG_TIME_REGEX_STR = __LOG_TIME_PATTERN.replace('#', '[0-9]').replace('.', '[.]')

@@ -74,9 +74,10 @@ class AppRunner:
         self.__process.stdin.write(text)
         self.__process.stdin.flush()
 
-    def ignore_output(self, expected):
-        matcher = self.__matcher_factory.matcher(expected)
-        self.__ignored_lines.append(matcher)
+    def ignore_output(self, *expected):
+        for s in expected:
+            matcher = self.__matcher_factory.matcher(s)
+            self.__ignored_lines.append(matcher)
 
     def check_output(self, expected, ignore_rest = False):
         if type(expected) == str:

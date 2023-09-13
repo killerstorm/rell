@@ -46,6 +46,7 @@ def test__company_user__no_tables():
     app = apprunner.ReplRunner('rell.sh --resetdb --db-properties work/testproj/config/node-config.properties -d work/testproj/src')
     try:
         app.ignore_output(testlib.MSG_META_TABLE_DOES_NOT_EXIST)
+        app.ignore_output(*testlib.STDOUT_IGNORE)
 
         app.check_output([
             '<LOG:INFO>SqlInit - Initializing database (chain_iid = 0)',
@@ -133,8 +134,7 @@ def test__company_user__existing_tables():
     try:
         app.ignore_output(testlib.MSG_META_TABLE_DOES_NOT_EXIST)
         app.ignore_output('<LOG:INFO><RE>SqlInit - .+')
-        app.ignore_output('<LOG:INFO><RE>SQLDatabaseAccess - Upgrading to version [0-9]+')
-        app.ignore_output('<LOG:INFO><RE>SQLDatabaseAccess - Database version has been updated to version: [0-9]+')
+        app.ignore_output(*testlib.STDOUT_IGNORE)
         check_intro(app)
         app.input('import repl.company; import repl.user;\n')
         app.check_output(['>>> '])
@@ -147,8 +147,7 @@ def test__company_user__existing_tables():
     app = apprunner.ReplRunner('rell.sh --db-properties work/testproj/config/node-config.properties -d work/testproj/src')
     try:
         app.ignore_output(testlib.MSG_META_TABLE_DOES_NOT_EXIST)
-        app.ignore_output('<LOG:INFO><RE>SQLDatabaseAccess - Upgrading to version [0-9]+')
-        app.ignore_output('<LOG:INFO><RE>SQLDatabaseAccess - Database version has been updated to version: [0-9]+')
+        app.ignore_output(*testlib.STDOUT_IGNORE)
         app.check_output([
             '<LOG:INFO>SqlInit - Initializing database (chain_iid = 0)',
             '<LOG:WARN>SqlInit - Table for undefined entity \'company\' found',

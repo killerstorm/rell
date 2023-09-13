@@ -399,10 +399,7 @@ def test__run_extend__test():
             '',
             '***** OK *****',
         ],
-        stdout_ignore = [
-            '<LOG:INFO><RE>SQLDatabaseAccess - Upgrading to version [0-9]+',
-            '<LOG:INFO><RE>SQLDatabaseAccess - Database version has been updated to version: [0-9]+',
-        ]
+        stdout_ignore = testlib.STDOUT_IGNORE,
     )
 
 def test__run_extend_g__test():
@@ -423,10 +420,7 @@ def test__run_extend_g__test():
             '',
             '***** OK *****',
         ],
-        stdout_ignore = [
-            '<LOG:INFO><RE>SQLDatabaseAccess - Upgrading to version [0-9]+',
-            '<LOG:INFO><RE>SQLDatabaseAccess - Database version has been updated to version: [0-9]+',
-        ]
+        stdout_ignore = testlib.STDOUT_IGNORE,
     )
 
 def test__run_extend_h__test():
@@ -447,10 +441,7 @@ def test__run_extend_h__test():
             '',
             '***** OK *****',
         ],
-        stdout_ignore = [
-            '<LOG:INFO><RE>SQLDatabaseAccess - Upgrading to version [0-9]+',
-            '<LOG:INFO><RE>SQLDatabaseAccess - Database version has been updated to version: [0-9]+',
-        ]
+        stdout_ignore = testlib.STDOUT_IGNORE
     )
 
 def test__run_tests_simple__test():
@@ -484,7 +475,10 @@ def test__modargs_ok():
         app.stop()
 
 def test__modargs_ok__test():
-    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-ok.xml --test', stdout = NO_TESTS_STDOUT)
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-ok.xml --test',
+        stdout = NO_TESTS_STDOUT,
+        stdout_ignore = testlib.STDOUT_IGNORE,
+    )
 
 def test__modargs_extra():
     app = apprunner.Multirun('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-extra.xml')
@@ -496,7 +490,10 @@ def test__modargs_extra():
         app.stop()
 
 def test__modargs_extra__test():
-    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-extra.xml --test', stdout = NO_TESTS_STDOUT)
+    testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-extra.xml --test',
+        stdout = NO_TESTS_STDOUT,
+        stdout_ignore = testlib.STDOUT_IGNORE,
+    )
 
 def test__modargs_missing():
     testlib.check_command('multirun.sh -d work/testproj/src work/testproj/config/run-modargs-missing.xml', code = 2, stdout = CTE_STDOUT,

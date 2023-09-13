@@ -91,10 +91,7 @@ def test__stack_trace__error__abs():
 
 def test__stack_trace__entities__ent_main():
     check_command('rell.sh --resetdb --db-properties work/testproj/config/node-config.properties -d work/testproj/src -- stack_trace.entities ent_main', code = 1,
-        stdout_ignore = [
-            '<LOG:INFO><RE>SQLDatabaseAccess - Upgrading to version [0-9]+',
-            '<LOG:INFO><RE>SQLDatabaseAccess - Database version has been updated to version: [0-9]+',
-        ],
+        stdout_ignore = testlib.STDOUT_IGNORE,
         stderr = [
             'ERROR No records found',
             '\tat stack_trace.entities:ent_main(stack_trace/entities.rell:6)',
