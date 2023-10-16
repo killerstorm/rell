@@ -67,6 +67,7 @@
                             <failBuildOnAnyVulnerability>true</failBuildOnAnyVulnerability>
                             <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
                             <suppressionFiles>
+                                <suppressionFile>https://gitlab.com/chromaway/chromia-parent/-/raw/dev/common-dependencies-suppression.xml?ref_type=heads</suppressionFile>
                                 <suppressionFile>dependencies-suppression.xml</suppressionFile>
                             </suppressionFiles>
                         </configuration>
