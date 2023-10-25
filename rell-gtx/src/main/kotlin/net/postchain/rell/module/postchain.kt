@@ -133,22 +133,13 @@ private class RellGTXOperation(
         private val errorHandler: ErrorHandler,
         opData: ExtOpData
 ): GTXOperation(opData) {
-    private val gtvToRtCtx = LateInit<GtvToRtContext>()
-    private val args = LateInit<List<Rt_Value>>()
+    private val gtvArgs = data.args.toImmList()
+
+    private var mOpArgs: Rt_OperationArgs? = null
 
     override fun checkCorrectness() {
         handleError {
-            val params = rOperation.params()
-            if (data.args.size != params.size) {
-                throw Rt_Exception.common("operation:[${rOperation.appLevelName}]:arg_count:${data.args.size}:${params.size}",
-                                    "Wrong argument count: ${data.args.size} instead of ${params.size}")
-            }
-            if (!gtvToRtCtx.isSet()) {
-                gtvToRtCtx.set(GtvToRtContext.make(GTV_OPERATION_PRETTY))
-            }
-            if (!args.isSet()) {
-                args.set(convertArgs(gtvToRtCtx.get(), params, data.args.toList()))
-            }
+            getOpArgs()
         }
     }
 
@@ -169,10 +160,41 @@ private class RellGTXOperation(
 
             val heightProvider = Rt_TxChainHeightProvider(ctx)
             val exeCtx = module.createExecutionContext(ctx, opCtx, heightProvider)
-            gtvToRtCtx.get().finish(exeCtx)
-            rOperation.call(exeCtx, args.get())
+
+            val opArgs = getOpArgs()
+
+            // It's important to not reuse old Rt args: function apply() may be called multiple times, and args may
+            // be mutable, thus every call must use a new copy of Rt args.
+            mOpArgs = null
+
+            opArgs.gtvCtx.finish(exeCtx)
+            rOperation.call(exeCtx, opArgs.args)
         }
+
         return true
+    }
+
+    private fun getOpArgs(): Rt_OperationArgs {
+        var opArgs = mOpArgs
+        if (opArgs != null) {
+            return opArgs
+        }
+
+        val params = rOperation.params()
+
+        if (data.args.size != params.size) {
+            throw Rt_Exception.common(
+                "operation:[${rOperation.appLevelName}]:arg_count:${data.args.size}:${params.size}",
+                "Wrong argument count: ${data.args.size} instead of ${params.size}",
+            )
+        }
+
+        val gtvCtx = GtvToRtContext.make(GTV_OPERATION_PRETTY)
+        val rtArgs = convertArgs(gtvCtx, params, gtvArgs)
+
+        opArgs = Rt_OperationArgs(gtvCtx, rtArgs)
+        mOpArgs = opArgs
+        return opArgs
     }
 
     private fun <T> handleError(code: () -> T): T {
@@ -180,6 +202,8 @@ private class RellGTXOperation(
             code()
         }
     }
+
+    private class Rt_OperationArgs(val gtvCtx: GtvToRtContext, val args: List<Rt_Value>)
 
     private class Rt_TxChainHeightProvider(private val ctx: TxEContext): Rt_ChainHeightProvider {
         override fun getChainHeight(rid: WrappedByteArray, id: Long): Long? {
