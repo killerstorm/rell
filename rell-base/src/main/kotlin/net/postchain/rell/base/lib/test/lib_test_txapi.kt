@@ -51,13 +51,14 @@ object Lib_RellTest {
     val MODULE = C_LibModule.make("rell.test", Lib_Rell.MODULE) {
         include(Lib_Test_Assert.NAMESPACE)
         include(Lib_Test_Events.NAMESPACE)
-        include(Lib_Nop.NAMESPACE)
+        include(Lib_Test_BlockClock.NAMESPACE)
+        include(Lib_Test_KeyPairs.NAMESPACE)
 
         include(Lib_Type_Block.NAMESPACE)
         include(Lib_Type_Tx.NAMESPACE)
         include(Lib_Type_Op.NAMESPACE)
 
-        include(Lib_Test_KeyPairs.NAMESPACE)
+        include(Lib_Nop.NAMESPACE)
     }
 
     private val KEYPAIR_STRUCT: R_Struct = MODULE.lModule.getStruct("rell.test.keypair").rStruct

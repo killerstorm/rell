@@ -11,6 +11,7 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
+import net.postchain.rell.base.lib.test.Rt_TestBlockClock
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.repl.ReplOutputChannel
 import net.postchain.rell.base.runtime.utils.Rt_Messages
@@ -405,11 +406,11 @@ private class Rt_GlobalConstants(private val appCtx: Rt_AppContext, oldStates: L
 }
 
 class Rt_ExecutionContext(
-        val appCtx: Rt_AppContext,
-        val opCtx: Rt_OpContext,
-        val sqlCtx: Rt_SqlContext,
-        val sqlExec: SqlExecutor,
-        state: State? = null,
+    val appCtx: Rt_AppContext,
+    val opCtx: Rt_OpContext,
+    val sqlCtx: Rt_SqlContext,
+    val sqlExec: SqlExecutor,
+    state: State? = null,
 ) {
     val globalCtx = appCtx.globalCtx
 
@@ -424,11 +425,14 @@ class Rt_ExecutionContext(
     var emittedEvents: List<Rt_Value> = state?.emittedEvents ?: immListOf()
         set(value) { field = value.toImmList() }
 
+    val testBlockClock: Rt_TestBlockClock = Rt_TestBlockClock(state?.testBlockClock ?: Rt_TestBlockClock.DEFAULT_STATE)
+
     fun toState() = State(this)
 
     class State(ctx: Rt_ExecutionContext) {
         val nextNopNonce = ctx.nextNopNonce
         val emittedEvents = ctx.emittedEvents
+        val testBlockClock = ctx.testBlockClock.toState()
     }
 }
 

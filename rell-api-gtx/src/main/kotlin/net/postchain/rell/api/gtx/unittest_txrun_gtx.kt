@@ -42,6 +42,9 @@ class Rt_PostchainUnitTestBlockRunner(
     private val runnerStrategy: Rt_BlockRunnerStrategy,
 ): Rt_UnitTestBlockRunner() {
     override fun runBlock(ctx: Rt_CallContext, block: Rt_TestBlockValue) {
+        val blockClock = ctx.exeCtx.testBlockClock
+        val nextBlockTime = blockClock.getNextBlockTime()
+
         val gtvConfig = runnerStrategy.getGtvConfig()
         val bcData = GtvObjectMapper.fromGtv(gtvConfig, BlockchainConfigurationData::class)
 
@@ -59,7 +62,7 @@ class Rt_PostchainUnitTestBlockRunner(
                     val eCtx = createEContext(con, bcCtx)
                     val bcConfig = bcConfigFactory.makeBlockchainConfiguration(bcData, bcCtx, sigMaker, eCtx, PostchainGtvUtils.cryptoSystem)
                     withSavepoint(con) {
-                        processBlock(bcConfig, eCtx, block)
+                        processBlock(bcConfig, eCtx, block, nextBlockTime)
                     }
                 }
             }
@@ -67,6 +70,8 @@ class Rt_PostchainUnitTestBlockRunner(
             val events = txContextFactory.getEvents()
             ctx.exeCtx.emittedEvents = events
         }
+
+        blockClock.setLastBlockTime(nextBlockTime)
     }
 
     private fun makeSigMaker(): SigMaker {
@@ -99,7 +104,7 @@ class Rt_PostchainUnitTestBlockRunner(
         }
     }
 
-    private fun processBlock(bcConfig: BlockchainConfiguration, eCtx: EContext, block: Rt_TestBlockValue) {
+    private fun processBlock(bcConfig: BlockchainConfiguration, eCtx: EContext, block: Rt_TestBlockValue, time: Long) {
         val txFactory = bcConfig.getTransactionFactory()
 
         val blockBuilder = bcConfig.makeBlockBuilder(eCtx, false)
@@ -112,7 +117,8 @@ class Rt_PostchainUnitTestBlockRunner(
             blockBuilder.appendTransaction(psTx)
         }
 
-        blockBuilder.finalizeBlock()
+        blockBuilder.finalizeBlock(time)
+
         val bwb = blockBuilder.getBlockWitnessBuilder()!!
         val bw = bwb.getWitness()
         blockBuilder.commit(bw)
