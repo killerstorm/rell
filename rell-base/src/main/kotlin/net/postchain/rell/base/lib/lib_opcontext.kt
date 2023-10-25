@@ -124,6 +124,13 @@ object Lib_OpContext {
                 }
             }
 
+            function("get_current_operation", result = "gtx_operation") {
+                validate(::checkCtx)
+                bodyContext { ctx ->
+                    ctx.exeCtx.opCtx.currentOperation()
+                }
+            }
+
             function("emit_event", result = "unit") {
                 param(type = "text")
                 param(type = "gtv")

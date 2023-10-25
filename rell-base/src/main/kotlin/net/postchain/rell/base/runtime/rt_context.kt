@@ -471,6 +471,7 @@ abstract class Rt_OpContext {
     abstract fun isSigner(pubKey: Bytes): Boolean
     abstract fun signers(): List<Bytes>
     abstract fun allOperations(): List<Rt_Value>
+    abstract fun currentOperation(): Rt_Value
     abstract fun emitEvent(type: String, data: Gtv)
 }
 
@@ -483,6 +484,7 @@ object Rt_NullOpContext: Rt_OpContext() {
     override fun isSigner(pubKey: Bytes) = false
     override fun signers() = throw errNoOp()
     override fun allOperations() = throw errNoOp()
+    override fun currentOperation() = throw errNoOp()
     override fun emitEvent(type: String, data: Gtv) = throw errNoOp()
 
     private fun errNoOp(): Rt_Exception {

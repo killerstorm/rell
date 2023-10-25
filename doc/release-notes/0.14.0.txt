@@ -80,3 +80,11 @@ set_next_block_time_delta(delta: integer);
 
     Equivalent of set_next_block_time(last_block_time + delta), except that the call has no effect if the last block
     doesn't exist.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Library: op_context.get_current_operation()
+
+op_context.get_current_operation(): gtx_operation;
+
+    Returns the current operation. Equivalent of op_context.get_all_operations()[op_context.op_index], but faster - does
+    not create a list of all operations.
