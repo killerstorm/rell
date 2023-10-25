@@ -93,8 +93,8 @@ class R_EntityDefinition(
 
     fun toMetaGtv(full: Boolean): Gtv {
         val map = mutableMapOf(
-                "mount" to mountName.str().toGtv(),
-                "attributes" to strAttributes.mapValues { it.value.toMetaGtv() }.toGtv()
+            "mount" to mountName.str().toGtv(),
+            "attributes" to attributes.values.map { it.toMetaGtv() }.toGtv(),
         )
 
         if (full) {
@@ -168,7 +168,7 @@ class R_Struct(
 
     fun toMetaGtv(): Gtv {
         return mapOf(
-                "attributes" to strAttributes.mapValues { it.value.toMetaGtv() }.toGtv()
+            "attributes" to attributesList.map { it.toMetaGtv() }.toGtv()
         ).toGtv()
     }
 
@@ -234,9 +234,8 @@ class R_StructDefinition(base: R_DefinitionBase, val struct: R_Struct): R_Defini
 class R_EnumAttr(val rName: R_Name, val value: Int, val ideInfo: IdeSymbolInfo) {
     val name = rName.str
 
-    // Currently returning an empty map, in the future there may be some values.
     fun toMetaGtv() = mapOf(
-            "value" to value.toGtv()
+        "name" to name.toGtv(),
     ).toGtv()
 }
 
@@ -266,7 +265,7 @@ class R_EnumDefinition(
 
     override fun toMetaGtv(): Gtv {
         return mapOf(
-                "values" to attrMap.mapValues { it.value.toMetaGtv() }.toGtv()
+            "values" to attrs.map { it.toMetaGtv() }.toGtv(),
         ).toGtv()
     }
 }

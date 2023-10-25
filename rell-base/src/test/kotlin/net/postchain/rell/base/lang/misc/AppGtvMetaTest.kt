@@ -57,7 +57,7 @@ class AppGtvMetaTest: BaseRellTest(false) {
         chkMetaDef("entity user { name; }", "entities", "user", """{
             "mount":"user",
             "log":0,
-            "attributes": {"name":{"type":"text", "mutable":0}},
+            "attributes": [{"mutable":0, "name":"name", "type":"text"}],
             "keys": [],
             "indexes": []
         }""")
@@ -65,10 +65,10 @@ class AppGtvMetaTest: BaseRellTest(false) {
         chkMetaDef("entity user { name; value: integer; key name, value; }", "entities", "user", """{
             "mount":"user",
             "log":0,
-            "attributes": {
-                "name":{"type":"text", "mutable":0},
-                "value":{"type":"integer", "mutable":0}
-            },
+            "attributes": [
+                {"mutable":0, "name":"name", "type":"text"},
+                {"mutable":0, "name":"value", "type":"integer"}
+            ],
             "keys": [{"attributes":["name","value"]}],
             "indexes": []
         }""")
@@ -76,10 +76,10 @@ class AppGtvMetaTest: BaseRellTest(false) {
         chkMetaDef("entity user { name; value: integer; index name, value; }", "entities", "user", """{
             "mount":"user",
             "log":0,
-            "attributes": {
-                "name":{"type":"text", "mutable":0},
-                "value":{"type":"integer", "mutable":0}
-            },
+            "attributes": [
+                {"mutable":0, "name":"name", "type":"text"},
+                {"mutable":0, "name":"value", "type":"integer"}
+            ],
             "keys": [],
             "indexes": [{"attributes":["name","value"]}]
         }""")
@@ -87,7 +87,7 @@ class AppGtvMetaTest: BaseRellTest(false) {
         chkMetaDef("@mount('foo.bar.') entity user { name; }", "entities", "user", """{
             "mount":"foo.bar.user",
             "log":0,
-            "attributes": {"name":{"type":"text", "mutable":0}},
+            "attributes": [{"mutable":0, "name":"name", "type":"text"}],
             "keys": [],
             "indexes": []
         }""")
@@ -96,13 +96,13 @@ class AppGtvMetaTest: BaseRellTest(false) {
     @Test fun testDefObject() {
         chkMetaDef("object state { mutable value: integer = 0; }", "objects", "state", """{
             "mount":"state",
-            "attributes": {"value":{"type":"integer", "mutable":1}}
+            "attributes": [{"mutable":1, "name":"value", "type":"integer"}]
         }""")
     }
 
     @Test fun testDefStruct() {
         chkMetaDef("struct data { value: integer; }", "structs", "data", """{
-            "attributes": {"value":{"type":"integer", "mutable":0}}
+            "attributes": [{"name":"value", "type":"integer", "mutable":0}]
         }""")
     }
 
@@ -137,11 +137,11 @@ class AppGtvMetaTest: BaseRellTest(false) {
 
     @Test fun testDefEnum() {
         chkMetaDef("enum e {A, B, C}", "enums", "e", """{
-            "values":{
-                "A":{"value":0},
-                "B":{"value":1},
-                "C":{"value":2}
-            }
+            "values":[
+                {"name":"A"},
+                {"name":"B"},
+                {"name":"C"}
+            ]
         }""")
     }
 
@@ -300,11 +300,11 @@ class AppGtvMetaTest: BaseRellTest(false) {
             },
             "lib":{
                 "name":"lib",
-                "entities":{"user":{"attributes":{},"indexes":[],"keys":[],"log":0,"mount":"user"}},
+                "entities":{"user":{"attributes":[],"indexes":[],"keys":[],"log":0,"mount":"user"}},
                 "operations":{"op":{"mount":"op","parameters":[]}},
-                "structs":{"rec":{"attributes":{}}},
-                "objects":{"state":{"attributes":{},"mount":"state"}},
-                "enums":{"kind":{"values":{"A":{"value":0}}}}
+                "structs":{"rec":{"attributes":[]}},
+                "objects":{"state":{"attributes":[],"mount":"state"}},
+                "enums":{"kind":{"values":[{"name":"A"}]}}
             }
         }}""")
     }

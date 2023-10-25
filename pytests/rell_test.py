@@ -1,3 +1,5 @@
+#  Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+
 import re
 import pytest
 
@@ -192,28 +194,31 @@ def test__app_structure__rell_get_app_structure():
                     "name": "app_structure",
                     "entities": {
                         "company": {
-                            "attributes": {
-                                "name": {
+                            "attributes": [
+                                {
                                     "mutable": 0,
+                                    "name": "name",
                                     "type": "text"
                                 }
-                            },
+                            ],
                             "indexes": [],
                             "keys": [],
                             "log": 0,
                             "mount": "company"
                         },
                         "user": {
-                            "attributes": {
-                                "company": {
+                            "attributes": [
+                                {
                                     "mutable": 0,
-                                    "type": "app_structure:company"
-                                },
-                                "name": {
-                                    "mutable": 0,
+                                    "name": "name",
                                     "type": "text"
+                                },
+                                {
+                                    "mutable": 0,
+                                    "name": "company",
+                                    "type": "app_structure:company"
                                 }
-                            },
+                            ],
                             "indexes": [],
                             "keys": [],
                             "log": 0,

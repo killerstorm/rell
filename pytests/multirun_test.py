@@ -107,9 +107,9 @@ def test__run_simple__get_app_structure():
                     },
                     'structs': {
                         'module_args': {
-                            'attributes': {
-                                'message': { 'mutable': 0, 'type': 'text' },
-                            }
+                            'attributes': [
+                                { 'name': 'message', 'mutable': 0, 'type': 'text' },
+                            ]
                         }
                     }
                 },
@@ -127,10 +127,10 @@ def test__run_simple__get_app_structure():
                     },
                     'structs': {
                         'module_args': {
-                            'attributes': {
-                                'x': { 'mutable': 0, 'type': 'integer' },
-                                'y': { 'mutable': 0, 'type': 'text' },
-                            }
+                            'attributes': [
+                                { 'name': 'x', 'mutable': 0, 'type': 'integer' },
+                                { 'name': 'y', 'mutable': 0, 'type': 'text' },
+                            ]
                         }
                     }
                 }

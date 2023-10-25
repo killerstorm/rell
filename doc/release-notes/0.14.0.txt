@@ -4,3 +4,30 @@ RELEASE NOTES 0.14.0 (2023-??-??)
 1. Tools: postchain.sh removed
 
 Obsolete script postchain.sh removed from distribution archive.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Runtime: changed the structure of the rell.get_app_structure query result
+
+Attributes (values) of entities, objects, structs and enums are now returned as an array instead of a dictionary.
+Reason: to preserve the order of attributes. Particularly important for structs (values must use same order as
+attributes).
+
+Rell code example:
+
+    struct module_args {
+        x: integer;
+        y: text;
+    }
+
+Corresponding app structure example (fragment):
+
+    {
+        "structs": {
+            "module_args": {
+                "attributes": [
+                    { "mutable": 0, "name": "x", "type": "integer" },
+                    { "mutable": 0, "name": "y", "type": "text" }
+                ]
+            }
+        }
+    }

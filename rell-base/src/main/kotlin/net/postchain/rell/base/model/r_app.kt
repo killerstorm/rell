@@ -116,8 +116,9 @@ class R_Attribute(
 
     fun toMetaGtv(): Gtv {
         return mapOf(
-                "type" to type.toMetaGtv(),
-                "mutable" to mutable.toGtv()
+            "name" to name.toGtv(),
+            "type" to type.toMetaGtv(),
+            "mutable" to mutable.toGtv(),
         ).toGtv()
     }
 
