@@ -486,6 +486,29 @@ class LTypeTest: BaseLTest() {
         chkDefs(mod, "@extension type data1<A>")
     }
 
+    @Test fun testExtensionOfStruct() {
+        val mod = makeModule("test") {
+            struct("data") {}
+            type("data_ext", extension = true) {
+                generic("T", subOf = "data")
+            }
+        }
+        chkDefs(mod, "struct data", "@extension type data_ext<T:-data>")
+    }
+
+    @Test fun testExtensionOfStructImported() {
+        val mod = makeModule("test") {
+            struct("data") {}
+        }
+        val mod2 = makeModule("client") {
+            imports(mod)
+            type("data_ext", extension = true) {
+                generic("T", subOf = "data")
+            }
+        }
+        chkDefs(mod2, "@extension type data_ext<T:-data>")
+    }
+
     @Test fun testAliasConflict() {
         val mod = makeModule("test") {
             type("data") {

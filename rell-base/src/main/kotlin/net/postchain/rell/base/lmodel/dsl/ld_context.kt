@@ -99,17 +99,48 @@ class Ld_NamespaceFinishContext(
     val moduleName = tables.moduleName
     val typeCtx = Ld_TypeFinishContext(this, typeParams = immMapOf())
 
-    fun getType(fullName: Ld_FullName, errPos: Exception? = null): M_Type {
-        if (fullName.moduleName == null) {
-            var mType = if (fullName.qName.size() != 1) null else tables.predefTypes[fullName.qName.last.str]
-            if (mType == null) mType = tables.mTypes[fullName.qName]
-            if (mType != null) {
-                return mType
+    fun getMType(fullName: Ld_FullName, errPos: Exception? = null): M_Type {
+        val mType = getMTypeOrNull(fullName)
+        mType ?: throw IllegalStateException("Type not found: $fullName", errPos)
+        return mType
+    }
+
+    private fun getMTypeOrNull(fullName: Ld_FullName): M_Type? {
+        if (fullName.moduleName != null) {
+            val mod = tables.imports[fullName.moduleName]
+            val mType = mod?.getMTypeOrNull(fullName.qName)
+            return mType
+        }
+
+        val found = mutableListOf<Pair<M_Type, R_ModuleName?>>()
+
+        if (fullName.qName.size() == 1) {
+            val predef = tables.predefTypes[fullName.qName.last.str]
+            if (predef != null) {
+                found.add(predef to null)
             }
         }
 
-        val lTypeDef = getTypeDef(fullName, errPos)
-        return lTypeDef.getMType()
+        val localMType = tables.mTypes[fullName.qName]
+        if (localMType != null) {
+            found.add(localMType to moduleName)
+        }
+
+        val localTypeDef = tables.typeDefs[fullName.qName]?.getTypeDef(this)
+        if (localTypeDef != null) {
+            found.add(localTypeDef.getMType() to moduleName)
+        }
+
+        val imported = tables.imports.values
+            .mapNotNull {
+                val mType = it.getMTypeOrNull(fullName.qName)
+                if (mType == null) null else (mType to it.moduleName)
+            }
+        found.addAll(imported)
+
+        checkTypeAmbiguity(fullName.qName, found) { it.second?.str() ?: "<built-in>" }
+
+        return found.singleOrNull()?.first
     }
 
     fun getTypeDef(fullName: Ld_FullName, errPos: Exception? = null): L_TypeDef {
@@ -125,18 +156,22 @@ class Ld_NamespaceFinishContext(
             return modDef
         }
 
-        val modDefs = tables.imports.values.mapNotNull { it.getTypeDefOrNull(fullName.qName) }
+        val importedDefs = tables.imports.values.mapNotNull { it.getTypeDefOrNull(fullName.qName) }
         val ldDef = tables.typeDefs[fullName.qName]
         val lDef = ldDef?.getTypeDef(this)
 
-        val allDefs = modDefs + listOfNotNull(lDef)
-        Ld_Exception.check(allDefs.size <= 1) {
-            val mods = allDefs.map { it.fullName.moduleName }.sorted()
-            "type_ambiguous:${fullName.qName}:${mods.joinToString(",")}" to
-                    "Type name ${fullName.qName} is ambiguous, defined in modules: ${mods.joinToString()}"
-        }
+        val allDefs = importedDefs + listOfNotNull(lDef)
+        checkTypeAmbiguity(fullName.qName, allDefs) { it.fullName.moduleName.str() }
 
         return allDefs.singleOrNull()
+    }
+
+    private fun <T> checkTypeAmbiguity(qualifiedName: R_QualifiedName, types: List<T>, moduleGetter: (T) -> String) {
+        Ld_Exception.check(types.size <= 1) {
+            val mods = types.map { moduleGetter(it) }.sorted()
+            "type_ambiguous:$qualifiedName:${mods.joinToString(",")}" to
+                    "Type name $qualifiedName is ambiguous, defined in modules: ${mods.joinToString()}"
+        }
     }
 
     fun pushType(typeDef: R_QualifiedName): Ld_NamespaceFinishContext {
@@ -169,7 +204,7 @@ class Ld_TypeFinishContext(
                 return mType
             }
         }
-        return defCtx.getType(fullName, errPos)
+        return defCtx.getMType(fullName, errPos)
     }
 
     fun getTypeDef(fullName: Ld_FullName, errPos: Exception? = null): L_TypeDef {

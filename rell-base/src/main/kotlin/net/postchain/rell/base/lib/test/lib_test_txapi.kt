@@ -14,6 +14,8 @@ import net.postchain.rell.base.compiler.base.lib.C_LibType
 import net.postchain.rell.base.compiler.base.utils.C_StringQualifiedName
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.lib.Lib_Rell
+import net.postchain.rell.base.lib.type.Lib_Type_Gtv
+import net.postchain.rell.base.lib.type.Lib_Type_Struct
 import net.postchain.rell.base.lmodel.L_ParamArity
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.lmodel.dsl.Ld_TypeDefDsl
@@ -21,6 +23,7 @@ import net.postchain.rell.base.model.*
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.utils.BytesKeyPair
+import net.postchain.rell.base.utils.checkEquals
 import net.postchain.rell.base.utils.toImmList
 import java.util.*
 
@@ -475,18 +478,8 @@ private object Lib_Type_Tx {
     private fun structToOpRaw(v: Rt_Value): RawTestOpValue = structToOp(v).toRaw()
 
     fun structToOp(a: Rt_Value): Rt_TestOpValue {
-        val v = a.asStruct()
-
-        val structType = v.type()
-        val op = Rt_Utils.checkNotNull(structType.struct.mirrorStructs?.operation) {
-            // Must not happen, checking for extra safety.
-            "to_test_op:bad_type:${v.type()}" toCodeMsg "Wrong struct type: ${v.type()}"
-        }
-
-        val rtArgs = structType.struct.attributesList.map { v.get(it.index) }
-        val gtvArgs = rtArgs.map { it.type().rtToGtv(it, false) }
-
-        return Rt_TestOpValue(op.mountName, gtvArgs)
+        val (mountName, args) = Lib_Type_Struct.decodeOperation(a)
+        return Rt_TestOpValue(mountName, args)
     }
 }
 
@@ -499,7 +492,7 @@ private object Lib_Type_Op {
 
     val NAMESPACE = Ld_NamespaceDsl.make {
         namespace("rell.test") {
-            type("struct_of_operation_extension", abstract = true, extension = true, hidden = true) {
+            type("struct_of_operation_test_extension", abstract = true, extension = true, hidden = true) {
                 generic("T", subOf = "mirror_struct<-operation>")
 
                 function("to_test_op", "rell.test.op") {
@@ -514,6 +507,31 @@ private object Lib_Type_Op {
                     }
                     body { a ->
                         Lib_Type_Tx.structToOp(a)
+                    }
+                }
+            }
+
+            type("gtx_operation_test_extension", abstract = true, extension = true, hidden = true) {
+                generic("T", subOf = "gtx_operation")
+
+                function("to_test_op", "rell.test.op") {
+                    validate { ctx ->
+                        if (!ctx.exprCtx.modCtx.isTestLib()) {
+                            val fnName = this.fnSimpleName
+                            ctx.exprCtx.msgCtx.error(ctx.callPos,
+                                "expr:fn:$fnName:no_test",
+                                "Function '$fnName' can be called only in tests or REPL"
+                            )
+                        }
+                    }
+                    body { a ->
+                        val sv = a.asStruct()
+                        checkEquals(sv.type(), Lib_Rell.GTX_OPERATION_STRUCT_TYPE)
+                        val rtName = sv.get(0)
+                        val rtArgs = sv.get(1).asList()
+                        val mountName = R_MountName.of(rtName.asString())
+                        val gtvArgs = rtArgs.map { it.asGtv() }
+                        Rt_TestOpValue(mountName, gtvArgs)
                     }
                 }
             }
@@ -541,10 +559,26 @@ private object Lib_Type_Op {
                     }
                 }
 
+                property("name", type = "text", pure = true) { self ->
+                    asTestOp(self).nameValue
+                }
+
+                property("args", type = "list<gtv>", pure = true) { self ->
+                    asTestOp(self).argsValue()
+                }
+
                 function("tx", result = "rell.test.tx") {
                     body { arg ->
                         val op = asTestOp(arg).toRaw()
                         Rt_TestTxValue(listOf(op), listOf())
+                    }
+                }
+
+                function("to_gtx_operation", result = "gtx_operation", pure = true) {
+                    body { self ->
+                        val op = asTestOp(self)
+                        val attrs = mutableListOf(op.nameValue, op.argsValue())
+                        Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, attrs)
                     }
                 }
             }
@@ -694,7 +728,11 @@ class Rt_TestTxValue(
 }
 
 class Rt_TestOpValue(private val name: R_MountName, args: List<Gtv>): Rt_Value() {
-    private val args = args.toImmList()
+    val args = args.toImmList()
+
+    val nameValue: Rt_Value by lazy {
+        Rt_TextValue(name.str())
+    }
 
     override val valueType = VALUE_TYPE
 
@@ -707,6 +745,11 @@ class Rt_TestOpValue(private val name: R_MountName, args: List<Gtv>): Rt_Value()
     override fun hashCode() = Objects.hash(name, args)
 
     fun toRaw() = RawTestOpValue(name, args)
+
+    fun argsValue(): Rt_Value {
+        val argValues: MutableList<Rt_Value> = args.map { Rt_GtvValue(it) }.toMutableList()
+        return Rt_ListValue(Lib_Type_Gtv.LIST_OF_GTV_TYPE, argValues)
+    }
 
     companion object {
         private val VALUE_TYPE = Rt_LibValueType.of("TEST_OP")

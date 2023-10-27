@@ -14,6 +14,8 @@ import net.postchain.rell.base.compiler.base.lib.C_SysFunctionCtx
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty
 import net.postchain.rell.base.compiler.base.namespace.C_NamespacePropertyContext
 import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.lib.type.Lib_Type_Gtv
+import net.postchain.rell.base.lib.type.Lib_Type_Struct
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.R_Expr
@@ -63,6 +65,21 @@ object Lib_OpContext {
                 val bytes = a.asByteArray().toBytes()
                 val r = ctx.exeCtx.opCtx.isSigner(bytes)
                 Rt_BooleanValue(r)
+            }
+        }
+
+        type("struct_of_operation_opcontext_extension", abstract = true, extension = true, hidden = true) {
+            generic("T", subOf = "mirror_struct<-operation>")
+
+            function("to_gtx_operation", "gtx_operation") {
+                body { a ->
+                    val (mountName, gtvArgs) = Lib_Type_Struct.decodeOperation(a)
+                    val nameValue = Rt_TextValue(mountName.str())
+                    val rtArgs = gtvArgs.map<Gtv, Rt_Value> { Rt_GtvValue(it) }.toMutableList()
+                    val argsValue = Rt_ListValue(Lib_Type_Gtv.LIST_OF_GTV_TYPE, rtArgs)
+                    val attrs = mutableListOf(nameValue, argsValue)
+                    Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, attrs)
+                }
             }
         }
 

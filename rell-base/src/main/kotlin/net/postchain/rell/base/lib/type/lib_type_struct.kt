@@ -4,6 +4,7 @@
 
 package net.postchain.rell.base.lib.type
 
+import net.postchain.gtv.Gtv
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.utils.C_Errors
@@ -163,6 +164,21 @@ object Lib_Type_Struct {
             val mem = C_MemberAttr_RegularStructAttr(it)
             C_TypeValueMember_BasicAttr(mem)
         }.toImmList()
+    }
+
+    fun decodeOperation(v: Rt_Value): Pair<R_MountName, List<Gtv>> {
+        val sv = v.asStruct()
+
+        val structType = sv.type()
+        val op = Rt_Utils.checkNotNull(structType.struct.mirrorStructs?.operation) {
+            // Must not happen, checking for extra safety.
+            "bad_struct_type:${sv.type()}" toCodeMsg "Wrong struct type: ${sv.type()}"
+        }
+
+        val rtArgs = structType.struct.attributesList.map { sv.get(it.index) }
+        val gtvArgs = rtArgs.map { it.type().rtToGtv(it, false) }
+
+        return op.mountName to gtvArgs
     }
 
     private class C_MemberAttr_RegularStructAttr(attr: R_Attribute): C_MemberAttr_StructAttr(attr.type, attr) {

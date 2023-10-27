@@ -327,11 +327,41 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chk("foo(123,'Hello') >= foo(123,'Hello')", "ct_err:binop_operand_type:>=:[rell.test.op]:[rell.test.op]")
     }
 
+    @Test fun testOpTypeMemberName() {
+        def("@mount('a.b.my_op') operation foo(x: integer, y: text){}")
+        chk("foo(123,'Hello').name", "text[a.b.my_op]")
+        chkEx("{ val op = foo(123,'Hello'); op.name = 'bar'; return 0; }", "ct_err:attr_not_mutable:name")
+    }
+
+    @Test fun testOpTypeMemberArgs() {
+        def("@mount('a.b.my_op') operation foo(x: integer, y: text){}")
+
+        chk("foo(123,'Hello').args", "list<gtv>[gtv[123],gtv[\"Hello\"]]")
+        chkEx("{ val op = foo(123,'Hello'); op.args.clear(); return op.args; }", "list<gtv>[gtv[123],gtv[\"Hello\"]]")
+        chkEx("{ val op = foo(123,'Hello'); op.args = list<gtv>(); return 0; }", "ct_err:attr_not_mutable:args")
+
+        chkEx("{ val op = foo(123,'Hello'); val args = op.args; args.clear(); return (args, op.args); }",
+            "(list<gtv>[],list<gtv>[gtv[123],gtv[\"Hello\"]])")
+    }
+
+    @Test fun testOpTypeMemberToGtxOperation() {
+        def("@mount('a.b.my_op') operation foo(x: integer, y: text){}")
+        chk("_type_of(foo(123,'Hello').to_gtx_operation())", "text[gtx_operation]")
+        chk("foo(123,'Hello').to_gtx_operation()",
+            "gtx_operation[name=text[a.b.my_op],args=list<gtv>[gtv[123],gtv[\"Hello\"]]]")
+    }
+
     @Test fun testOpTypeAsMapKey() {
         def("operation foo(x: integer, y: text){}")
         def("operation bar(p: text, q: integer){}")
         chk("[ foo(123,'Hello') : 'Bob', bar('Bye', 456) : 'Alice' ]",
                 """map<rell.test.op,text>[op[foo(123,"Hello")]=text[Bob],op[bar("Bye",456)]=text[Alice]]""")
+    }
+
+    @Test fun testGtxOperationToTestOp() {
+        chk("_type_of(gtx_operation('foo', list<gtv>()).to_test_op())", "text[rell.test.op]")
+        chk("gtx_operation('foo', list<gtv>()).to_test_op()", "op[foo()]")
+        chk("gtx_operation('foo', [(123).to_gtv(),'Hello'.to_gtv()]).to_test_op()", "op[foo(123,\"Hello\")]")
     }
 
     @Test fun testSignAndRun() {

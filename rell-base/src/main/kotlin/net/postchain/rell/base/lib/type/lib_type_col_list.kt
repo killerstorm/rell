@@ -7,6 +7,7 @@ package net.postchain.rell.base.lib.type
 import com.google.common.math.LongMath
 import net.postchain.rell.base.compiler.base.utils.C_MessageType
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
+import net.postchain.rell.base.model.R_GtvType
 import net.postchain.rell.base.model.R_ListType
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.runtime.*

@@ -6,6 +6,7 @@ package net.postchain.rell.base.lmodel
 
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.model.R_QualifiedName
+import net.postchain.rell.base.mtype.M_Type
 import net.postchain.rell.base.utils.immListOf
 
 class L_Module(
@@ -37,6 +38,15 @@ class L_Module(
         val qName = R_QualifiedName.of(qualifiedName)
         val def = namespace.getDef(qName)
         return (def as L_NamespaceMember_Struct).struct
+    }
+
+    fun getMTypeOrNull(qualifiedName: R_QualifiedName): M_Type? {
+        val def = namespace.getDefOrNull(qualifiedName)
+        return when (def) {
+            is L_NamespaceMember_Type -> def.typeDef.mGenericType.getTypeSimple()
+            is L_NamespaceMember_Struct -> def.struct.rStruct.type.mType
+            else -> null
+        }
     }
 
     companion object {
