@@ -59,6 +59,8 @@ object RellApiRunShell {
         val inputChannelFactory: ReplInputChannelFactory,
         /** Output channel factory (used to print command execution results). */
         val outputChannelFactory: ReplOutputChannelFactory,
+        /** Print Rell version, help shortcut and current module (if any) on shell start. */
+        val printIntroMessage: Boolean,
     ) {
         fun toBuilder() = Builder(this)
 
@@ -73,6 +75,7 @@ object RellApiRunShell {
                 historyFile = RellApiShellInternal.getDefaultReplHistoryFile(),
                 inputChannelFactory = ReplIo.DEFAULT_INPUT_FACTORY,
                 outputChannelFactory = ReplIo.DEFAULT_OUTPUT_FACTORY,
+                printIntroMessage = true,
             )
         }
 
@@ -86,6 +89,7 @@ object RellApiRunShell {
             private var historyFile = proto.historyFile
             private var inputChannelFactory = proto.inputChannelFactory
             private var outputChannelFactory = proto.outputChannelFactory
+            private var printIntroMessage = proto.printIntroMessage
 
             /** @see [Config.compileConfig] */
             fun compileConfig(v: RellApiCompile.Config) = apply { compileConfig = v }
@@ -114,6 +118,9 @@ object RellApiRunShell {
             /** @see [Config.outputChannelFactory] */
             fun outputChannelFactory(v: ReplOutputChannelFactory) = apply { outputChannelFactory = v }
 
+            /** @see [Config.printIntroMessage] */
+            fun printIntroMessage(v: Boolean) = apply { printIntroMessage = v }
+
             fun build(): Config {
                 return Config(
                     compileConfig = compileConfig,
@@ -125,6 +132,7 @@ object RellApiRunShell {
                     historyFile = historyFile,
                     inputChannelFactory = inputChannelFactory,
                     outputChannelFactory = outputChannelFactory,
+                    printIntroMessage = printIntroMessage,
                 )
             }
         }
@@ -137,10 +145,10 @@ object RellApiShellInternal {
         sourceDir: C_SourceDir,
         module: R_ModuleName?,
     ) {
-        val options = RellApiBaseInternal.makeCompilerOptions(config.compileConfig)
+        val compilerOptions = RellApiBaseInternal.makeCompilerOptions(config.compileConfig)
 
         val globalCtx = RellApiBaseUtils.createGlobalContext(
-            options,
+            compilerOptions,
             typeCheck = false,
             outPrinter = config.outPrinter,
             logPrinter = config.logPrinter,
@@ -153,6 +161,14 @@ object RellApiShellInternal {
         )
         val projExt = PostchainReplInterpreterProjExt(PostchainSqlInitProjExt, blockRunnerCfg)
 
+        val shellOptions = ReplShellOptions(
+            compilerOptions = compilerOptions,
+            inputChannelFactory = config.inputChannelFactory,
+            outputChannelFactory = config.outputChannelFactory,
+            historyFile = config.historyFile,
+            printIntroMessage = config.printIntroMessage,
+        )
+
         RellApiGtxUtils.runWithSqlManager(
             dbUrl = config.databaseUrl,
             dbProperties = null,
@@ -164,11 +180,8 @@ object RellApiShellInternal {
                 module,
                 globalCtx,
                 sqlMgr,
-                options,
                 projExt,
-                config.inputChannelFactory,
-                config.outputChannelFactory,
-                historyFile = config.historyFile,
+                shellOptions,
             )
         }
     }

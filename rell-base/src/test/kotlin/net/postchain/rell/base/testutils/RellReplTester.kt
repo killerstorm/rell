@@ -115,6 +115,10 @@ class RellReplTester(
         private inner class TestReplOutputChannel: ReplOutputChannel {
             private var format = ReplValueFormat.DEFAULT
 
+            override fun printInfo(msg: String) {
+                // Do nothing (add handling if needed).
+            }
+
             override fun printCompilerError(code: String, msg: String) {
                 output.add("CTE:$code")
             }

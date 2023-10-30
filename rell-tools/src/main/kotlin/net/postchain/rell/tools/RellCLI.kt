@@ -10,6 +10,7 @@ import net.postchain.rell.api.gtx.*
 import net.postchain.rell.api.shell.RellApiShellInternal
 import net.postchain.rell.api.shell.ReplIo
 import net.postchain.rell.api.shell.ReplShell
+import net.postchain.rell.api.shell.ReplShellOptions
 import net.postchain.rell.base.compiler.base.core.C_AtAttrShadowing
 import net.postchain.rell.base.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
@@ -209,16 +210,21 @@ private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Bool
 
         val historyFile = if (args.raw.noHistory) null else RellApiShellInternal.getDefaultReplHistoryFile()
 
+        val shellOptions = ReplShellOptions(
+            compilerOptions = args.compilerOptions,
+            inputChannelFactory = ReplIo.DEFAULT_INPUT_FACTORY,
+            outputChannelFactory = ReplIo.DEFAULT_OUTPUT_FACTORY,
+            historyFile = historyFile,
+            printIntroMessage = true,
+        )
+
         ReplShell.start(
             sourceDir,
             moduleName,
             globalCtx,
             sqlMgr,
-            args.compilerOptions,
             projExt,
-            ReplIo.DEFAULT_INPUT_FACTORY,
-            ReplIo.DEFAULT_OUTPUT_FACTORY,
-            historyFile = historyFile,
+            shellOptions,
         )
     }
 }

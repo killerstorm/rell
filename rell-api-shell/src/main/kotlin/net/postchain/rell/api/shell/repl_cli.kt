@@ -7,10 +7,7 @@ package net.postchain.rell.api.shell
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.model.R_ModuleName
-import net.postchain.rell.base.repl.ReplInputChannelFactory
-import net.postchain.rell.base.repl.ReplInterpreter
-import net.postchain.rell.base.repl.ReplInterpreterProjExt
-import net.postchain.rell.base.repl.ReplOutputChannelFactory
+import net.postchain.rell.base.repl.*
 import net.postchain.rell.base.runtime.Rt_GlobalContext
 import net.postchain.rell.base.runtime.Rt_RellVersion
 import net.postchain.rell.base.runtime.Rt_RellVersionProperty
@@ -18,22 +15,27 @@ import net.postchain.rell.base.sql.SqlManager
 import org.apache.commons.lang3.StringUtils
 import java.io.File
 
+class ReplShellOptions(
+    val compilerOptions: C_CompilerOptions,
+    val inputChannelFactory: ReplInputChannelFactory,
+    val outputChannelFactory: ReplOutputChannelFactory,
+    val historyFile: File?,
+    val printIntroMessage: Boolean,
+)
+
 object ReplShell {
     fun start(
         sourceDir: C_SourceDir,
         module: R_ModuleName?,
         globalCtx: Rt_GlobalContext,
         sqlMgr: SqlManager,
-        compilerOptions: C_CompilerOptions,
         projExt: ReplInterpreterProjExt,
-        inChannelFactory: ReplInputChannelFactory,
-        outChannelFactory: ReplOutputChannelFactory,
-        historyFile: File?,
+        options: ReplShellOptions,
     ) {
-        val outChannel = outChannelFactory.createOutputChannel()
+        val outChannel = options.outputChannelFactory.createOutputChannel()
 
         val repl = ReplInterpreter.create(
-            compilerOptions,
+            options.compilerOptions,
             sourceDir,
             module,
             globalCtx,
@@ -46,9 +48,11 @@ object ReplShell {
             return
         }
 
-        printIntro(repl, module)
+        if (options.printIntroMessage) {
+            printIntro(outChannel, repl, module)
+        }
 
-        val inChannel = inChannelFactory.createInputChannel(historyFile)
+        val inChannel = options.inputChannelFactory.createInputChannel(options.historyFile)
 
         while (!repl.mustQuit()) {
             val line = inChannel.readLine(">>> ")
@@ -60,16 +64,16 @@ object ReplShell {
         }
     }
 
-    private fun printIntro(repl: ReplInterpreter, moduleName: R_ModuleName?) {
+    private fun printIntro(outChannel: ReplOutputChannel, repl: ReplInterpreter, moduleName: R_ModuleName?) {
         val ver = getVersionInfo()
-        println(ver)
+        outChannel.printInfo(ver)
 
         val quit = repl.getQuitCommand()
         val help = repl.getHelpCommand()
-        println("Type '$quit' to quit or '$help' for help.")
+        outChannel.printInfo("Type '$quit' to quit or '$help' for help.")
 
         if (moduleName != null) {
-            println("Current module: '$moduleName'")
+            outChannel.printInfo("Current module: '$moduleName'")
         }
     }
 

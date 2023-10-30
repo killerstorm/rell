@@ -27,6 +27,7 @@ abstract class ReplOutputChannelFactory {
 }
 
 interface ReplOutputChannel {
+    fun printInfo(msg: String)
     fun printCompilerError(code: String, msg: String)
     fun printCompilerMessage(message: C_Message)
     fun printRuntimeError(e: Rt_Exception)
