@@ -22,14 +22,18 @@ object SqlUtils {
 
     private fun dropTables(sqlExec: SqlExecutor, sysTables: Boolean) {
         val tables = getExistingTables(sqlExec)
-        val delTables = tables.filter { sysTables || it !in SqlConstants.SYSTEM_APP_TABLES }
+        val delTables = tables
+            .filter { sysTables || it !in SqlConstants.SYSTEM_APP_TABLES }
+            .filter { !it.startsWith("pg_") }
         val sql = delTables.joinToString("\n") { "DROP TABLE IF EXISTS \"$it\" CASCADE;" }
         sqlExec.execute(sql)
     }
 
     private fun dropFunctions(sqlExec: SqlExecutor) {
         val functions = getExistingFunctions(sqlExec)
-        val sql = functions.joinToString("\n") { "DROP FUNCTION \"$it\";" }
+        val delFunctions = functions
+            .filter { !it.startsWith("pg_") }
+        val sql = delFunctions.joinToString("\n") { "DROP FUNCTION \"$it\";" }
         sqlExec.execute(sql)
     }
 
