@@ -351,7 +351,7 @@ private fun parseArgs(entryPoint: RellEntryPoint, gtvCtx: GtvToRtContext, args: 
     return args.withIndex().map { (idx, arg) -> parseArg(gtvCtx, params[idx], arg, json) }
 }
 
-private fun parseArg(gtvCtx: GtvToRtContext, param: R_Param, arg: String, json: Boolean): Rt_Value {
+private fun parseArg(gtvCtx: GtvToRtContext, param: R_FunctionParam, arg: String, json: Boolean): Rt_Value {
     val type = param.type
 
     if (json) {

@@ -7,6 +7,7 @@ package net.postchain.rell.base.model
 import net.postchain.gtv.Gtv
 import net.postchain.rell.base.compiler.base.core.C_CompilerPass
 import net.postchain.rell.base.compiler.base.core.C_DefinitionType
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
 import net.postchain.rell.base.compiler.base.utils.C_LateInit
@@ -19,7 +20,8 @@ import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.runtime.utils.toGtv
 import net.postchain.rell.base.utils.*
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
+import net.postchain.rell.base.utils.doc.DocDefinition
+import net.postchain.rell.base.utils.doc.DocSymbol
 
 sealed class R_KeyIndex(attribs: List<R_Name>) {
     val attribs = attribs.toImmList()
@@ -59,16 +61,16 @@ class R_EntityDefinition(
     base: R_DefinitionBase,
     defType: C_DefinitionType,
     val rName: R_Name,
-    val mountName: R_MountName,
     val flags: R_EntityFlags,
     val sqlMapping: R_EntitySqlMapping,
     val external: R_ExternalEntity?,
 ): R_Definition(base) {
-    val metaName = mountName.str()
+    val mountName = sqlMapping.mountName
+    val metaName = sqlMapping.metaName
 
     val type = R_EntityType(this)
 
-    val mirrorStructs = R_MirrorStructs(base, defType.name, type)
+    val mirrorStructs = R_MirrorStructs(base, defType, type)
 
     private val bodyLate = C_LateInit(C_CompilerPass.MEMBERS, ERROR_BODY)
 
@@ -106,6 +108,11 @@ class R_EntityDefinition(
         return map.toGtv()
     }
 
+    override fun getDocMember(name: String): DocDefinition? {
+        val attr = attributes[R_Name.of(name)]
+        return attr
+    }
+
     companion object {
         private val ERROR_BODY = R_EntityBody(keys = listOf(), indexes = listOf(), attributes = mapOf())
     }
@@ -125,6 +132,10 @@ class R_ObjectDefinition(base: R_DefinitionBase, val rEntity: R_EntityDefinition
     }
 
     override fun toMetaGtv() = rEntity.toMetaGtv(false)
+
+    override fun getDocMember(name: String): DocDefinition? {
+        return rEntity.getDocMember(name)
+    }
 }
 
 class R_StructFlags(
@@ -196,7 +207,7 @@ class R_Struct(
 
 class R_MirrorStructs(
     defBase: R_DefinitionBase,
-    defType: String,
+    defType: C_DefinitionType,
     val innerType: R_Type,
 ) {
     val immutable = createStruct(defBase, defType, false)
@@ -208,7 +219,7 @@ class R_MirrorStructs(
 
     private fun createStruct(
         defBase: R_DefinitionBase,
-        defType: String,
+        defType: C_DefinitionType,
         mutable: Boolean,
     ): R_Struct {
         val mutableStr = if (mutable) "mutable " else ""
@@ -216,7 +227,7 @@ class R_MirrorStructs(
 
         val structMetaGtv = mapOf(
             "type" to "struct".toGtv(),
-            "definition_type" to defType.toGtv(),
+            "definition_type" to defType.name.toGtv(),
             "definition" to defBase.defName.appLevelName.toGtv(),
             "mutable" to mutable.toGtv(),
         ).toGtv()
@@ -229,10 +240,21 @@ class R_StructDefinition(base: R_DefinitionBase, val struct: R_Struct): R_Defini
     val type = struct.type
 
     override fun toMetaGtv() = struct.toMetaGtv()
+
+    override fun getDocMember(name: String): DocDefinition? {
+        val attr = struct.strAttributes[name]
+        return attr
+    }
 }
 
-class R_EnumAttr(val rName: R_Name, val value: Int, val ideInfo: IdeSymbolInfo) {
+class R_EnumAttr(
+    val rName: R_Name,
+    val value: Int,
+    val ideInfo: C_IdeSymbolInfo,
+): DocDefinition {
     val name = rName.str
+
+    override val docSymbol: DocSymbol = ideInfo.getIdeInfo().doc ?: DocSymbol.NONE
 
     fun toMetaGtv() = mapOf(
         "name" to name.toGtv(),
@@ -267,6 +289,11 @@ class R_EnumDefinition(
         return mapOf(
             "values" to attrs.map { it.toMetaGtv() }.toGtv(),
         ).toGtv()
+    }
+
+    override fun getDocMember(name: String): DocDefinition? {
+        val attr = attrMap[name]
+        return attr
     }
 }
 

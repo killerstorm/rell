@@ -6,6 +6,7 @@ package net.postchain.rell.base.utils.ide
 
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.model.R_Name
+import net.postchain.rell.base.utils.doc.DocSymbol
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
@@ -40,6 +41,7 @@ enum class IdeSymbolKind {
     MEM_STRUCT_ATTR,
     MEM_STRUCT_ATTR_VAR,
     MEM_SYS_PROPERTY,
+    MEM_SYS_PROPERTY_PURE,
     MEM_TUPLE_ATTR,
     MOD_ANNOTATION,
     MOD_ANNOTATION_LEGACY,
@@ -76,7 +78,10 @@ class IdeSymbolId(
 ) {
     private val members = members.toImmList()
 
-    fun encode(): String = (listOf(category to name) + members.map { it.first to it.second.str }).joinToString(".") { "${it.first.code}[${it.second}]" }
+    fun encode(): String {
+        val path = listOf(category to name) + members.map { it.first to it.second.str }
+        return path.joinToString(".") { "${it.first.code}[${it.second}]" }
+    }
 
     fun appendMember(memberCategory: IdeSymbolCategory, memberName: R_Name): IdeSymbolId {
         val members2 = (members + listOf(memberCategory to memberName)).toImmList()
@@ -117,10 +122,11 @@ class IdeGlobalSymbolLink(private val globalId: IdeSymbolGlobalId): IdeSymbolLin
     override fun globalId() = globalId
 }
 
-class IdeSymbolInfo(
+class IdeSymbolInfo private constructor(
     @JvmField val kind: IdeSymbolKind,
-    @JvmField val defId: IdeSymbolId? = null,
-    @JvmField val link: IdeSymbolLink? = null,
+    @JvmField val defId: IdeSymbolId?,
+    @JvmField val link: IdeSymbolLink?,
+    @JvmField val doc: DocSymbol?,
 ) {
     override fun toString() = kind.name
 
@@ -128,22 +134,31 @@ class IdeSymbolInfo(
         kind: IdeSymbolKind = this.kind,
         defId: IdeSymbolId? = this.defId,
         link: IdeSymbolLink? = this.link,
+        doc: DocSymbol? = this.doc,
     ): IdeSymbolInfo {
-        return if (kind == this.kind && defId === this.defId && link === this.link) this else {
-            IdeSymbolInfo(kind = kind, defId = defId, link = link)
+        return if (kind == this.kind && defId === this.defId && link === this.link && doc === this.doc) this else {
+            IdeSymbolInfo(kind = kind, defId = defId, link = link, doc = doc)
         }
     }
 
     companion object {
-        private val byKind: Map<IdeSymbolKind, IdeSymbolInfo> = IdeSymbolKind.values().map { it to IdeSymbolInfo(it) }.toImmMap()
+        private val byKind: Map<IdeSymbolKind, IdeSymbolInfo> = IdeSymbolKind.values()
+            .map { it to IdeSymbolInfo(it, defId = null, link = null, doc = null) }
+            .toImmMap()
 
         fun get(kind: IdeSymbolKind): IdeSymbolInfo = byKind.getValue(kind)
 
-        val UNKNOWN = get(IdeSymbolKind.UNKNOWN)
-        val DEF_CONSTANT = get(IdeSymbolKind.DEF_CONSTANT)
-        val DEF_FUNCTION_SYSTEM = get(IdeSymbolKind.DEF_FUNCTION_SYSTEM)
-        val DEF_TYPE = get(IdeSymbolKind.DEF_TYPE)
-        val DEF_STRUCT = get(IdeSymbolKind.DEF_STRUCT)
-        val MEM_TUPLE_ATTR = get(IdeSymbolKind.MEM_TUPLE_ATTR)
+        fun make(
+            kind: IdeSymbolKind,
+            defId: IdeSymbolId?,
+            link: IdeSymbolLink?,
+            doc: DocSymbol?,
+        ): IdeSymbolInfo {
+            return if (defId == null && link == null && doc == null) {
+                get(kind)
+            } else {
+                IdeSymbolInfo(kind = kind, defId = defId, link = link, doc = doc)
+            }
+        }
     }
 }

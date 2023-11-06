@@ -4,21 +4,19 @@
 
 package net.postchain.rell.base.compiler.lib
 
-import net.postchain.rell.base.compiler.base.core.C_DefinitionName
-import net.postchain.rell.base.compiler.base.lib.C_LibType
-import net.postchain.rell.base.compiler.base.lib.C_LibTypeDef
+import net.postchain.rell.base.lib.Lib_Rell
 import net.postchain.rell.base.lmodel.L_ParamImplication
 import net.postchain.rell.base.lmodel.dsl.Ld_FunctionBodyDsl
 import net.postchain.rell.base.model.R_IntegerType
-import net.postchain.rell.base.model.R_SimpleType
 import net.postchain.rell.base.model.R_TextType
-import net.postchain.rell.base.runtime.GtvRtConversion
-import net.postchain.rell.base.runtime.GtvRtConversion_None
 import net.postchain.rell.base.runtime.Rt_TextValue
 import net.postchain.rell.base.runtime.Rt_UnitValue
+import net.postchain.rell.base.testutils.LibModuleTester
 import org.junit.Test
 
 class CLibFunctionTest: BaseCLibTest() {
+    private val modTst = LibModuleTester(tst, Lib_Rell.MODULE)
+
     @Test fun testTypeHintOverload() {
         tst.extraMod = makeTypeHintNs()
         chk("_type_hint([])", "text[A:list<integer>[]]")
@@ -236,16 +234,6 @@ class CLibFunctionTest: BaseCLibTest() {
     @Test fun testTypeFunctionMetaBody() {
         tst.typeCheck = false
 
-        class R_TestType: R_SimpleType("data", C_DefinitionName("", "data")) {
-            var libTypeDef: C_LibTypeDef? = null
-            override fun isReference() = true
-            override fun isDirectPure() = false
-            override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_None
-            override fun getLibType0() = C_LibType.make(libTypeDef!!)
-        }
-
-        val testType = R_TestType()
-
         fun makeBody(d: Ld_FunctionBodyDsl) = with(d) {
             bodyMeta {
                 val name = this.fnQualifiedName
@@ -253,9 +241,10 @@ class CLibFunctionTest: BaseCLibTest() {
             }
         }
 
-        val mod = makeModule {
+        modTst.extraModule {
             namespace("ns") {
-                type("data", rType = testType) {
+                type("data") {
+                    modTst.setRTypeFactory(this, "ns.data")
                     constructor { makeBody(this) }
                     function("f", result = "text") { makeBody(this) }
                     staticFunction("g", result = "text") { makeBody(this) }
@@ -263,23 +252,15 @@ class CLibFunctionTest: BaseCLibTest() {
             }
         }
 
-        testType.libTypeDef = mod.getTypeDef("ns.data")
-        tst.extraMod = mod
         chk("ns.data()", "text[ns.data]")
         chk("ns.data().f()", "text[ns.data.f]")
         chk("ns.data.g()", "text[ns.data.g]")
     }
 
     @Test fun testTypeInfiniteRecursion() {
-        class R_TestType: R_SimpleType("data", C_DefinitionName("", "data")) {
-            override fun isReference() = true
-            override fun isDirectPure() = false
-            override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_None
-            override fun getLibType0(): C_LibType = getLibType0()
-        }
-
-        tst.extraMod = makeModule {
-            type("data", rType = R_TestType()) {
+        modTst.extraModule {
+            type("data") {
+                modTst.setRTypeFactory(this)
                 constructor { body { -> Rt_UnitValue } }
             }
         }

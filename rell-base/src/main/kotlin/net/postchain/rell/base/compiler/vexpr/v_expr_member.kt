@@ -6,7 +6,9 @@ package net.postchain.rell.base.compiler.vexpr
 
 import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_Pos
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.core.C_Name
+import net.postchain.rell.base.compiler.base.core.C_NameHandle
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.utils.C_Errors
@@ -19,12 +21,10 @@ import net.postchain.rell.base.runtime.Rt_CallFrame
 import net.postchain.rell.base.runtime.Rt_NullValue
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.checkEquals
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.immListOf
 
-abstract class V_TypeValueMember(val type: R_Type) {
+abstract class V_TypeValueMember(val type: R_Type, val ideInfo: C_IdeSymbolInfo) {
     abstract fun implicitAttrName(): C_Name?
-    abstract fun ideInfo(): IdeSymbolInfo
     abstract fun vExprs(): List<V_Expr>
     open fun postVarFacts(): C_VarFacts = C_VarFacts.andPostFacts(vExprs())
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
@@ -39,16 +39,20 @@ abstract class V_TypeValueMember(val type: R_Type) {
 
     open fun member(
         ctx: C_ExprContext,
-        memberName: C_Name,
+        memberNameHand: C_NameHandle,
         member: C_TypeValueMember,
         safe: Boolean,
         exprHint: C_ExprHint,
     ): V_TypeValueMember? = null
 }
 
-class V_TypeValueMember_Error(type: R_Type, private val pos: S_Pos, private val msg: String): V_TypeValueMember(type) {
+class V_TypeValueMember_Error(
+    type: R_Type,
+    ideInfo: C_IdeSymbolInfo,
+    private val pos: S_Pos,
+    private val msg: String,
+): V_TypeValueMember(type, ideInfo) {
     override fun implicitAttrName() = null
-    override fun ideInfo() = IdeSymbolInfo.UNKNOWN
     override fun vExprs() = immListOf<V_Expr>()
     override fun calculator() = R_MemberCalculator_Error(type, msg)
     override fun destination(base: V_Expr) = throw C_Errors.errBadDestination(pos)
@@ -129,16 +133,17 @@ class V_ValueMemberExpr(
     override fun member0(
         ctx: C_ExprContext,
         selfType: R_Type,
-        memberName: C_Name,
+        memberNameHand: C_NameHandle,
         memberValue: C_TypeValueMember,
         safe: Boolean,
         exprHint: C_ExprHint,
-    ): C_ExprMember {
-        val member2 = member.member(ctx, memberName, memberValue, safe, exprHint)
-        member2 ?: return super.member0(ctx, selfType, memberName, memberValue, safe, exprHint)
+    ): C_Expr {
+        val memberName = memberNameHand.name
+        val member2 = member.member(ctx, memberNameHand, memberValue, safe, exprHint)
+        member2 ?: return super.member0(ctx, selfType, memberNameHand, memberValue, safe, exprHint)
+
         val vExpr = V_ValueMemberExpr(ctx, base, member2, memberName.pos, safe)
-        val cExpr = C_ValueExpr(vExpr)
-        return C_ExprMember(cExpr, member2.ideInfo())
+        return C_ValueExpr(vExpr)
     }
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {

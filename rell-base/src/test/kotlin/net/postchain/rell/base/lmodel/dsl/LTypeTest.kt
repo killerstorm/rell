@@ -85,7 +85,7 @@ class LTypeTest: BaseLTest() {
     }
 
     @Test fun testRecursion() {
-        chkModuleErr("LDE:type_cycle:foo,bar,foo") {
+        chkModuleErr("LDE:type_cycle:test:foo,test:bar,test:foo") {
             type("foo") {
                 parent("bar")
             }
@@ -96,7 +96,7 @@ class LTypeTest: BaseLTest() {
     }
 
     @Test fun testRecursion2() {
-        chkModuleErr("LDE:type_cycle:b,c,b") {
+        chkModuleErr("LDE:type_cycle:test:b,test:c,test:b") {
             type("a") {
                 parent("b")
             }
@@ -154,6 +154,15 @@ class LTypeTest: BaseLTest() {
             }
         }
         chkTypeMems(mod, "data", "constructor (text)")
+    }
+
+    @Test fun testConstructorPure() {
+        val mod = makeModule("test") {
+            type("data") {
+                constructor(pure = true) { body { -> Rt_UnitValue } }
+            }
+        }
+        chkTypeMems(mod, "data", "pure constructor ()")
     }
 
     @Test fun testGenericTypeDef() {

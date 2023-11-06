@@ -192,7 +192,7 @@ class Rt_IntValue(val value: Long): Rt_Value() {
     override fun hashCode() = java.lang.Long.hashCode(value)
 }
 
-class Rt_BigIntegerValue private constructor(private val value: BigInteger): Rt_Value() {
+class Rt_BigIntegerValue private constructor(val value: BigInteger): Rt_Value() {
     override val valueType = Rt_CoreValueTypes.BIG_INTEGER.type()
 
     override fun type() = R_BigIntegerType

@@ -7,7 +7,6 @@ package net.postchain.rell.base.compiler.base.lib
 import net.postchain.rell.base.compiler.base.core.C_MessageContext
 import net.postchain.rell.base.compiler.base.core.C_Name
 import net.postchain.rell.base.compiler.base.expr.C_ExprHint
-import net.postchain.rell.base.compiler.base.expr.C_TypeValueMember
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_Type
@@ -71,9 +70,6 @@ sealed class C_LibTypeMembers<MemberT: C_TypeMember> {
     abstract fun getByName(name: R_Name): List<MemberT>
 
     companion object {
-        val EMPTY_STATIC: C_LibTypeMembers<C_TypeStaticMember> = C_LibTypeMembers_Simple(immListOf())
-        val EMPTY_VALUE: C_LibTypeMembers<C_TypeValueMember> = C_LibTypeMembers_Simple(immListOf())
-
         private val EMPTY: C_LibTypeMembers<C_TypeMember> = C_LibTypeMembers_Simple(immListOf())
 
         @Suppress("UNCHECKED_CAST")

@@ -8,6 +8,7 @@ import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.def.C_LocalAttrHeaderIdeData
 import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.utils.C_Error
+import net.postchain.rell.base.compiler.base.utils.C_LateInit
 import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.model.R_BooleanType
@@ -17,7 +18,9 @@ import net.postchain.rell.base.model.R_UnitType
 import net.postchain.rell.base.model.expr.R_Expr
 import net.postchain.rell.base.model.stmt.*
 import net.postchain.rell.base.utils.MutableTypedKeyMap
+import net.postchain.rell.base.utils.Nullable
 import net.postchain.rell.base.utils.TypedKey
+import net.postchain.rell.base.utils.doc.DocSymbol
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.immSetOf
 
@@ -72,7 +75,9 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
 
     override fun compile(ctx: C_StmtContext, mutable: Boolean, hasExpr: Boolean): C_VarDeclarator {
         val ideKind = if (mutable) IdeSymbolKind.LOC_VAR else IdeSymbolKind.LOC_VAL
-        val ideData = C_LocalAttrHeaderIdeData(ideKind)
+        val docLateInit = C_LateInit(C_CompilerPass.DOCS, Nullable.of<DocSymbol>())
+        val ideData = C_LocalAttrHeaderIdeData(ideKind, docLateInit.getter)
+
         val cAttrHeader = attrHeader.compile(ctx.defCtx, hasExpr, ideData)
         val cName = cAttrHeader.name
         val explicitType = if (cAttrHeader.isExplicitType) cAttrHeader.type else null
@@ -83,7 +88,7 @@ class S_SimpleVarDeclarator(private val attrHeader: S_AttrHeader): S_VarDeclarat
             }
             C_WildcardVarDeclarator(ctx, mutable)
         } else {
-            C_SimpleVarDeclarator(ctx, mutable, cAttrHeader, cName, explicitType, cAttrHeader.ideInfo)
+            C_SimpleVarDeclarator(ctx, mutable, cAttrHeader, cName, explicitType, cAttrHeader.ideInfo, docLateInit)
         }
     }
 }

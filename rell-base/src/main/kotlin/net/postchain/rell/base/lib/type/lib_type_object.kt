@@ -8,16 +8,17 @@ import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_Name
 import net.postchain.rell.base.compiler.base.core.C_QualifiedName
 import net.postchain.rell.base.compiler.base.expr.*
+import net.postchain.rell.base.compiler.base.lib.V_SpecialMemberFunctionCall
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
-import net.postchain.rell.base.compiler.vexpr.*
+import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.compiler.vexpr.V_ExprInfo
+import net.postchain.rell.base.compiler.vexpr.V_GlobalConstantRestriction
+import net.postchain.rell.base.compiler.vexpr.V_TypeValueMember
 import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
-import net.postchain.rell.base.model.R_Attribute
-import net.postchain.rell.base.model.R_ObjectDefinition
-import net.postchain.rell.base.model.R_ObjectType
-import net.postchain.rell.base.model.R_Type
+import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.runtime.Rt_CallFrame
 import net.postchain.rell.base.runtime.Rt_Exception
@@ -66,9 +67,8 @@ object Lib_Type_Object {
         private val memberName: C_Name?,
         private val rObject: R_ObjectDefinition,
         private val attr: R_Attribute,
-    ): V_TypeValueMember(attr.type) {
+    ): V_TypeValueMember(attr.type, attr.ideInfo) {
         override fun implicitAttrName() = memberName
-        override fun ideInfo() = attr.ideInfo
         override fun vExprs() = immListOf<V_Expr>()
         override fun globalConstantRestriction() = V_GlobalConstantRestriction("object_attr", null)
 
@@ -100,10 +100,11 @@ object Lib_Type_Object {
     private class C_Fn_ToStruct(
         private val mutable: Boolean
     ): Lib_Type_Entity.C_SysFn_ToStruct_Common() {
-        override fun compile0(ctx: C_ExprContext, selfType: R_Type): V_MemberFunctionCall? {
+        override fun compile0(ctx: C_ExprContext, selfType: R_Type): V_SpecialMemberFunctionCall? {
             val objectType = selfType as? R_ObjectType
             objectType ?: return null
-            return V_MemberFunctionCall_ObjectToStruct(ctx, objectType, mutable)
+            val struct = objectType.rObject.rEntity.mirrorStructs.getStruct(mutable)
+            return V_SpecialMemberFunctionCall_ObjectToStruct(ctx, objectType, struct)
         }
     }
 }
@@ -116,6 +117,10 @@ class V_ObjectExpr(
     override fun exprInfo0() = V_ExprInfo.simple(rObject.type)
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("object", null)
     override fun toRExpr0(): R_Expr = R_ObjectExpr(rObject.type)
+
+    override fun getDefMeta(): C_ExprDefMeta {
+        return C_ExprDefMeta(mountName = rObject.rEntity.mountName)
+    }
 }
 
 private class R_ObjectExpr(private val objType: R_ObjectType): R_Expr(objType) {
@@ -156,17 +161,14 @@ private class R_ObjectAttrExpr(
     }
 }
 
-private class V_MemberFunctionCall_ObjectToStruct(
+private class V_SpecialMemberFunctionCall_ObjectToStruct(
     exprCtx: C_ExprContext,
     private val objectType: R_ObjectType,
-    mutable: Boolean,
-): V_MemberFunctionCall(exprCtx) {
-    private val struct = objectType.rObject.rEntity.mirrorStructs.getStruct(mutable)
+    private val struct: R_Struct,
+): V_SpecialMemberFunctionCall(exprCtx, struct.type) {
     private val structType = struct.type
 
-    override fun vExprs() = immListOf<V_Expr>()
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("object_to_struct", null)
-    override fun returnType() = structType
 
     override fun calculator(): R_MemberCalculator {
         val atEntity = exprCtx.makeAtEntity(objectType.rObject.rEntity, exprCtx.appCtx.nextAtExprId())

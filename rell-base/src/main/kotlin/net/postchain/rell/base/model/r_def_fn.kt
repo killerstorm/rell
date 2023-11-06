@@ -8,30 +8,46 @@ import net.postchain.gtv.Gtv
 import net.postchain.rell.base.compiler.base.core.C_CompilerPass
 import net.postchain.rell.base.compiler.base.core.C_DefinitionType
 import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.base.compiler.base.utils.C_LateGetter
 import net.postchain.rell.base.compiler.base.utils.C_LateInit
 import net.postchain.rell.base.lib.type.R_OperationType
 import net.postchain.rell.base.model.stmt.R_Statement
 import net.postchain.rell.base.model.stmt.R_StatementResult_Return
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.runtime.utils.toGtv
+import net.postchain.rell.base.utils.Nullable
 import net.postchain.rell.base.utils.checkEquals
+import net.postchain.rell.base.utils.doc.DocDefinition
+import net.postchain.rell.base.utils.doc.DocSymbol
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
 
-class R_Param(val name: R_Name, val type: R_Type) {
+class R_FunctionParam(
+    val name: R_Name,
+    val type: R_Type,
+    private val docGetter: C_LateGetter<Nullable<DocSymbol>>,
+): DocDefinition {
+    override val docSymbol: DocSymbol get() = docGetter.get().value ?: DocSymbol.NONE
+
     fun toMetaGtv(): Gtv = mapOf(
-            "name" to name.str.toGtv(),
-            "type" to type.toMetaGtv()
+        "name" to name.str.toGtv(),
+        "type" to type.toMetaGtv(),
     ).toGtv()
 }
 
-class R_VarParam(val name: R_Name, val type: R_Type, val ptr: R_VarPtr) {
-    fun toParam() = R_Param(name, type)
-}
+class R_ParamVar(val type: R_Type, val ptr: R_VarPtr)
 
-sealed class R_RoutineDefinition(base: R_DefinitionBase): R_Definition(base) {
-    abstract fun params(): List<R_Param>
+sealed class R_RoutineDefinition(
+    base: R_DefinitionBase,
+): R_Definition(base) {
+    abstract fun params(): List<R_FunctionParam>
     abstract fun call(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value
+
+    override fun getDocMember(name: String): DocDefinition? {
+        val params = params()
+        val param = params.firstOrNull { it.name.str == name }
+        return param
+    }
 }
 
 sealed class R_MountedRoutineDefinition(
@@ -41,17 +57,16 @@ sealed class R_MountedRoutineDefinition(
 
 class R_OperationDefinition(
     base: R_DefinitionBase,
-    defType: C_DefinitionType,
     mountName: R_MountName,
 ): R_MountedRoutineDefinition(base, mountName) {
     val type: R_Type = R_OperationType(this)
-    val mirrorStructs = R_MirrorStructs(base, defType.name, type)
+    val mirrorStructs = R_MirrorStructs(base, C_DefinitionType.OPERATION, type)
 
     private val internals = C_LateInit(C_CompilerPass.EXPRESSIONS, ERROR_INTERNALS)
 
-    fun setInternals(varParams: List<R_VarParam>, body: R_Statement, frame: R_CallFrame) {
-        val params = varParams.map { it.toParam() }.toImmList()
-        internals.set(Internals(params, varParams, body, frame))
+    fun setInternals(params: List<R_FunctionParam>, paramVars: List<R_ParamVar>, body: R_Statement, frame: R_CallFrame) {
+        checkEquals(paramVars.size, params.size)
+        internals.set(Internals(params, paramVars, body, frame))
     }
 
     override fun params() = internals.get().params
@@ -73,7 +88,7 @@ class R_OperationDefinition(
         val rtFrame = ints.frame.createRtFrame(defCtx, null, null)
 
         checkCallArgs(this, ints.params, args)
-        processArgs(ints.varParams, args, rtFrame)
+        processArgs(ints.paramVars, args, rtFrame)
 
         return rtFrame
     }
@@ -94,25 +109,25 @@ class R_OperationDefinition(
     }
 
     private class Internals(
-            val params: List<R_Param>,
-            val varParams: List<R_VarParam>,
-            val body: R_Statement,
-            val frame: R_CallFrame
+        val params: List<R_FunctionParam>,
+        val paramVars: List<R_ParamVar>,
+        val body: R_Statement,
+        val frame: R_CallFrame,
     )
 
     companion object {
         private val ERROR_INTERNALS = Internals(
-                params = listOf(),
-                varParams = listOf(),
-                body = C_ExprUtils.ERROR_STATEMENT,
-                frame = R_CallFrame.ERROR
+            params = immListOf(),
+            paramVars = immListOf(),
+            body = C_ExprUtils.ERROR_STATEMENT,
+            frame = R_CallFrame.ERROR,
         )
     }
 }
 
 sealed class R_QueryBody(
-        val retType: R_Type,
-        params: List<R_Param>
+    val retType: R_Type,
+    params: List<R_FunctionParam>,
 ) {
     val params = params.toImmList()
 
@@ -120,17 +135,18 @@ sealed class R_QueryBody(
 }
 
 class R_UserQueryBody(
-        retType: R_Type,
-        varParams: List<R_VarParam>,
-        private val body: R_Statement,
-        private val frame: R_CallFrame
-): R_QueryBody(retType, varParams.map { it.toParam() }) {
-    private val varParams = varParams.toImmList()
+    retType: R_Type,
+    params: List<R_FunctionParam>,
+    paramVars: List<R_ParamVar>,
+    private val body: R_Statement,
+    private val frame: R_CallFrame
+): R_QueryBody(retType, params) {
+    private val paramVars = paramVars.toImmList()
 
     override fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, stack: Rt_CallStack?): Rt_Value {
         val rtFrame = frame.createRtFrame(defCtx, stack, null)
 
-        processArgs(varParams, args, rtFrame)
+        processArgs(paramVars, args, rtFrame)
 
         val res = body.execute(rtFrame)
         check(res is R_StatementResult_Return) { "${res?.javaClass?.name}" }
@@ -140,11 +156,17 @@ class R_UserQueryBody(
     }
 
     companion object {
-        val ERROR: R_QueryBody = R_UserQueryBody(R_CtErrorType, listOf(), C_ExprUtils.ERROR_STATEMENT, R_CallFrame.ERROR)
+        val ERROR: R_QueryBody = R_UserQueryBody(
+            R_CtErrorType,
+            immListOf(),
+            immListOf(),
+            C_ExprUtils.ERROR_STATEMENT,
+            R_CallFrame.ERROR,
+        )
     }
 }
 
-class R_SysQueryBody(retType: R_Type, params: List<R_Param>, private val fn: R_SysFunction): R_QueryBody(retType, params) {
+class R_SysQueryBody(retType: R_Type, params: List<R_FunctionParam>, private val fn: R_SysFunction): R_QueryBody(retType, params) {
     override fun call(defCtx: Rt_DefinitionContext, args: List<Rt_Value>, stack: Rt_CallStack?): Rt_Value {
         val callCtx = Rt_CallContext(defCtx, stack, dbUpdateAllowed = false)
         return fn.call(callCtx, args)
@@ -152,8 +174,8 @@ class R_SysQueryBody(retType: R_Type, params: List<R_Param>, private val fn: R_S
 }
 
 class R_QueryDefinition(
-        base: R_DefinitionBase,
-        mountName: R_MountName
+    base: R_DefinitionBase,
+    mountName: R_MountName,
 ): R_MountedRoutineDefinition(base, mountName) {
     private val bodyLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_UserQueryBody.ERROR)
 
@@ -190,26 +212,30 @@ class R_QueryDefinition(
     }
 }
 
-class R_FunctionHeader(val type: R_Type, val params: List<R_Param>) {
+class R_FunctionHeader(val type: R_Type, val params: List<R_FunctionParam>) {
     companion object {
         val ERROR = R_FunctionHeader(R_CtErrorType, immListOf())
     }
 }
 
 class R_FunctionBody(
-        val type: R_Type,
-        val varParams: List<R_VarParam>,
-        val body: R_Statement,
-        val frame: R_CallFrame
+    val type: R_Type,
+    val params: List<R_FunctionParam>,
+    val paramVars: List<R_ParamVar>,
+    val body: R_Statement,
+    val frame: R_CallFrame,
 ) {
-    val params = varParams.map { it.toParam() }.toImmList()
+    init {
+        checkEquals(paramVars.size, params.size)
+    }
 
     companion object {
         val ERROR = R_FunctionBody(
-                R_CtErrorType,
-                immListOf(),
-                C_ExprUtils.ERROR_STATEMENT,
-                R_CallFrame.ERROR
+            R_CtErrorType,
+            immListOf(),
+            immListOf(),
+            C_ExprUtils.ERROR_STATEMENT,
+            R_CallFrame.ERROR,
         )
     }
 }
@@ -244,7 +270,7 @@ class R_FunctionBase(private val defName: R_DefinitionName) {
     private fun call0(callCtx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
         val body = bodyLate.get()
         val rtSubFrame = createCallFrame(callCtx, body.frame)
-        processArgs(body.varParams, args, rtSubFrame)
+        processArgs(body.paramVars, args, rtSubFrame)
 
         val res = body.body.execute(rtSubFrame)
 
@@ -264,8 +290,8 @@ class R_FunctionBase(private val defName: R_DefinitionName) {
 }
 
 class R_FunctionDefinition(
-        base: R_DefinitionBase,
-        private val fnBase: R_FunctionBase
+    base: R_DefinitionBase,
+    private val fnBase: R_FunctionBase,
 ): R_RoutineDefinition(base) {
     override fun params() = fnBase.getBody().params
 
@@ -286,7 +312,7 @@ class R_FunctionDefinition(
     }
 }
 
-private fun checkCallArgs(routine: R_RoutineDefinition, params: List<R_Param>, args: List<Rt_Value>) {
+private fun checkCallArgs(routine: R_RoutineDefinition, params: List<R_FunctionParam>, args: List<Rt_Value>) {
     val name = routine.appLevelName
 
     if (args.size != params.size) {
@@ -305,7 +331,7 @@ private fun checkCallArgs(routine: R_RoutineDefinition, params: List<R_Param>, a
     }
 }
 
-private fun processArgs(params: List<R_VarParam>, args: List<Rt_Value>, frame: Rt_CallFrame) {
+private fun processArgs(params: List<R_ParamVar>, args: List<Rt_Value>, frame: Rt_CallFrame) {
     checkEquals(args.size, params.size)
     for (i in params.indices) {
         val param = params[i]

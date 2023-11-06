@@ -30,9 +30,7 @@ class C_LibTypeManager(modules: List<C_LibModule>) {
     }
 
     private fun getConstructor0(type: R_Type): C_GlobalFunction? {
-        val fn1 = type.getConstructorFunction()
-        val fn2 = fn1 ?: type.libType.getConstructor()
-        return fn2
+        return type.libType.getConstructor()
     }
 
     fun getStaticMembers(type: R_Type, name: R_Name): List<C_TypeStaticMember> {
@@ -59,18 +57,16 @@ class C_LibTypeManager(modules: List<C_LibModule>) {
     }
 
     private fun getStaticMembers0(type: R_Type): C_LibTypeMembers<C_TypeStaticMember> {
-        val typeMembers = type.getStaticMembers()
         val libTypeMembers = type.libType.getStaticMembers()
         val libExtMembers = allExtensionTypes.mapNotNull { it.getExtStaticMembers(type.mType) }
-        val allMembers = Iterables.concat(listOf(typeMembers, libTypeMembers), libExtMembers)
+        val allMembers = Iterables.concat(listOf(libTypeMembers), libExtMembers)
         return C_LibTypeMembers.combined(allMembers)
     }
 
     private fun getValueMembers0(type: R_Type): C_LibTypeMembers<C_TypeValueMember> {
-        val typeMembers = type.getValueMembers()
         val libTypeMembers = type.libType.getValueMembers()
         val libExtMembers = allExtensionTypes.mapNotNull { it.getExtValueMembers(type.mType) }
-        val allMembers = Iterables.concat(listOf(typeMembers, libTypeMembers), libExtMembers)
+        val allMembers = Iterables.concat(listOf(libTypeMembers), libExtMembers)
         return C_LibTypeMembers.combined(allMembers)
     }
 

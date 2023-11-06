@@ -114,8 +114,9 @@ class LibBlockTransactionTest: BaseRellTest() {
         tst.inserts = BLOCK_INSERTS_333
         tst.chainId = 333
 
-        chkCompile("entity transaction{}", "ct_err:name_conflict:sys:transaction:ENTITY")
-        chkCompile("entity block{}", "ct_err:name_conflict:sys:block:ENTITY")
+        chkCompile("entity block {}", "ct_err:[mnt_conflict:sys:[block]:block][name_conflict:sys:block:ENTITY]")
+        chkCompile("entity transaction {}",
+            "ct_err:[mnt_conflict:sys:[transaction]:transaction][name_conflict:sys:transaction:ENTITY]")
 
         chk("block @* {}", "list<block>[block[111]]")
         chk("transaction @* {}", "list<transaction>[transaction[444]]")
@@ -290,6 +291,13 @@ class LibBlockTransactionTest: BaseRellTest() {
         chk("transaction @* {}", "list<transaction>[transaction[201],transaction[202]]")
         chk("transaction @? { .block.block_height == 10 }", "transaction[201]")
         chk("transaction @? { .block.block_height == 20 }", "transaction[202]")
+    }
+
+    @Test fun testMountName() {
+        chkCompile("@mount('blocks') entity foo {}", "ct_err:mnt_conflict:sys:[foo]:blocks")
+        chkCompile("@mount('transactions') entity foo {}", "ct_err:mnt_conflict:sys:[foo]:transactions")
+        chkCompile("@mount('block') entity foo {}", "ct_err:mnt_conflict:sys:[foo]:block")
+        chkCompile("@mount('transaction') entity foo {}", "ct_err:mnt_conflict:sys:[foo]:transaction")
     }
 
     private fun createChainIdTester(chainId: Long, blockIid: Long, txIid: Long, inserts: List<String>): RellCodeTester {

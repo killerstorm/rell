@@ -67,6 +67,15 @@ class StructTest: BaseRellTest(false) {
         """)
     }
 
+    @Test fun testStructVsLocalNameConflict() {
+        def("struct data {}")
+        chkFull("function f(data: integer) = data; query q() = f(123);", "int[123]")
+        chkFull("function f(data: integer) = data(); query q() = f(123);", "data[]")
+        chkFull("function f(data: () -> integer) = data(); query q() = f(integer.from_hex('7b', *));", "int[123]")
+        chkFull("namespace ns { val data = 123; function f() = data; } query q() = ns.f();", "int[123]")
+        chkFull("namespace ns { val data = 123; function f() = data(); } query q() = ns.f();", "data[]")
+    }
+
     @Test fun testMutableAttributes() {
         def("struct foo { mutable a: integer; b: integer; }")
         chkEx("{ val r = foo(a = 123, b = 456); return r; }", "foo[a=int[123],b=int[456]]")

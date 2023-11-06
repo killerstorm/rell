@@ -97,12 +97,12 @@ object Lib_Type_Gtv {
         type("gtv_extension", abstract = true, extension = true, hidden = true) {
             generic("T", subOf = "any")
 
-            staticFunction("from_gtv", result = "T") {
+            staticFunction("from_gtv", result = "T", pure = true) {
                 param(type = "gtv")
                 makeFromGtvBody(this, pretty = false)
             }
 
-            staticFunction("from_gtv_pretty", result = "T") {
+            staticFunction("from_gtv_pretty", result = "T", pure = true) {
                 param(type = "gtv")
                 makeFromGtvBody(this, pretty = true, allowVirtual = false)
             }
@@ -170,8 +170,6 @@ object Lib_Type_Gtv {
         bodyMeta {
             val resType = fnBodyMeta.rResultType
             validateFromGtvBody(this, resType, allowVirtual = allowVirtual)
-
-            pure(resType.completeFlags().pure)
 
             bodyContext { ctx, a ->
                 val gtv = a.asGtv()

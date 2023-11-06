@@ -139,7 +139,7 @@ object Lib_Type_Map {
     fun defCommonFunctions(m: Ld_TypeDefDsl) = with(m) {
         function("to_text", result = "text") {
             alias("str")
-            bodyFunction(Lib_Type_Any.ToText_NoDb)
+            bodyRaw(Lib_Type_Any.ToText_NoDb)
         }
 
         function("empty", result = "boolean", pure = true) {

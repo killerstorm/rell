@@ -8,7 +8,7 @@ import net.postchain.rell.base.utils.toImmList
 
 object M_FunctionTypeUtils {
     fun makeType(resultType: M_Type, paramTypes: List<M_Type>): M_Type {
-        return M_Type_InternalFunction(resultType, paramTypes)
+        return M_Type_Function_Internal(resultType, paramTypes)
     }
 }
 
@@ -19,7 +19,7 @@ sealed class M_Type_Function(
     val paramTypes = paramTypes.toImmList()
 }
 
-private class M_Type_InternalFunction(
+private class M_Type_Function_Internal(
     resultType: M_Type,
     paramTypes: List<M_Type>,
 ): M_Type_Function(resultType, paramTypes) {
@@ -30,7 +30,7 @@ private class M_Type_InternalFunction(
         return "$paramsStr->${resultType.strCode()}"
     }
 
-    override fun equalsComposite0(other: M_Type_Composite): Boolean = other is M_Type_InternalFunction
+    override fun equalsComposite0(other: M_Type_Composite): Boolean = other is M_Type_Function_Internal
     override fun hashCodeComposite0() = 0
 
     override fun getTypeArgVariance(index: Int): M_TypeVariance {
@@ -43,11 +43,11 @@ private class M_Type_InternalFunction(
         check(newArgs.isNotEmpty())
         val newResultType = newArgs[0].canonicalOutType()
         val newParamTypes = newArgs.drop(1).map { it.canonicalInType() }
-        return M_Type_InternalFunction(newResultType, newParamTypes)
+        return M_Type_Function_Internal(newResultType, newParamTypes)
     }
 
     override fun getCorrespondingSuperType(otherType: M_Type_Composite): M_Type_Composite? {
-        return if (otherType is M_Type_InternalFunction) this else null
+        return if (otherType is M_Type_Function_Internal) this else null
     }
 
     override fun validate() {

@@ -15,9 +15,13 @@ import net.postchain.rell.base.compiler.base.modifier.C_ModifierValue
 import net.postchain.rell.base.compiler.base.namespace.*
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.model.*
+import net.postchain.rell.base.utils.Nullable
+import net.postchain.rell.base.utils.doc.DocDeclaration
+import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.doc.DocSymbolKind
+import net.postchain.rell.base.utils.doc.DocSymbolName
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
 import net.postchain.rell.base.utils.ide.IdeSymbolId
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
@@ -44,6 +48,11 @@ class C_NamespaceContext(
         return nameRes.getType()
     }
 
+    fun getTypeEx(name: C_QualifiedNameHandle): C_GlobalNameResDef<C_TypeDef>? {
+        val nameRes = resolveName(name, C_NamespaceMemberTag.TYPE.list)
+        return nameRes.getTypeEx()
+    }
+
     fun getEntity(name: C_QualifiedNameHandle, error: Boolean = true, unknownInfo: Boolean = true): R_EntityDefinition? {
         val nameRes = resolveName(name, C_NamespaceMemberTag.TYPE.list)
         return nameRes.getEntity(error = error, unknownInfo = unknownInfo)
@@ -53,23 +62,36 @@ class C_NamespaceContext(
         val nameRes = resolveName(name, C_NamespaceMemberTag.CALLABLE.list)
         return nameRes.getFunction()
     }
+
+    fun getFullName(simpleName: R_Name): R_FullName {
+        val qualifiedName = namespacePath.qualifiedName(simpleName)
+        return R_FullName(modCtx.moduleName, qualifiedName)
+    }
 }
 
-class C_DefinitionName(private val module: String, val qualifiedName: C_StringQualifiedName) {
-    constructor(module: String, name: String): this(module, C_StringQualifiedName.of(name))
+class C_DefinitionModuleName(val module: String, val chain: String? = null) {
+    fun str(): String = if (chain == null) module else "$module[$chain]"
+    override fun toString() = str()
+}
 
-    val appLevelName: String by lazy { R_DefinitionName.appLevelName(module, qualifiedName.str()) }
+class C_DefinitionName(val module: C_DefinitionModuleName, val qualifiedName: C_StringQualifiedName) {
+    constructor(module: String, name: String): this(C_DefinitionModuleName(module), C_StringQualifiedName.of(name))
+    constructor(module: String, qualifiedName: C_StringQualifiedName): this(C_DefinitionModuleName(module), qualifiedName)
+
+    val appLevelName: String by lazy { R_DefinitionName.appLevelName(module.str(), qualifiedName.str()) }
 
     fun toRDefName(): R_DefinitionName {
         val qName = qualifiedName.str()
-        return R_DefinitionName(module, qName, qualifiedName.last)
+        return R_DefinitionName(module.str(), qName, qualifiedName.last)
     }
 
     fun toPath() = C_DefinitionPath(module, qualifiedName.parts)
 }
 
-class C_DefinitionPath(private val module: String, path: List<String>) {
+class C_DefinitionPath(private val module: C_DefinitionModuleName, path: List<String>) {
     val path = path.toImmList()
+
+    constructor(module: String, path: List<String>): this(C_DefinitionModuleName(module), path)
 
     fun subName(name: R_Name): C_DefinitionName {
         val qName = C_StringQualifiedName.of(path + name.str)
@@ -87,110 +109,202 @@ class C_DefinitionPath(private val module: String, path: List<String>) {
 
     companion object {
         val ROOT = C_DefinitionPath(C_LibUtils.DEFAULT_MODULE_STR, immListOf())
-
-        fun make(module: String, vararg path: String): C_DefinitionPath {
-            return C_DefinitionPath(module, path.toList())
-        }
     }
 }
 
-class C_DefinitionBase(
+class C_CommonDefinitionBase(
+    private val defType: C_DefinitionType,
+    private val ideKind: IdeSymbolKind,
     val defId: R_DefinitionId,
     val cDefName: C_DefinitionName,
     val defName: R_DefinitionName,
+    private val mountName: R_MountName?,
 ) {
     val simpleName = defName.simpleName
     val appLevelName = defName.appLevelName
     val qualifiedName = defName.qualifiedName
 
-    fun rBase(initFrameGetter: C_LateGetter<R_CallFrame>) = R_DefinitionBase(defId, defName, cDefName, initFrameGetter)
+    private val ideId = IdeSymbolId(defType.ideCategory, defName.qualifiedName, immListOf())
 
-    fun ideId(defType: C_DefinitionType, member: Pair<IdeSymbolCategory, R_Name>? = null): IdeSymbolId {
-        return IdeSymbolId(defType.ideCategory, defName.qualifiedName, listOfNotNull(member))
+    fun rBase(
+        initFrameGetter: C_LateGetter<R_CallFrame>,
+        docGetter: C_LateGetter<DocSymbol>,
+    ): R_DefinitionBase {
+        return R_DefinitionBase(defId, defName, cDefName, initFrameGetter, docGetter)
     }
 
-    fun ideDef(pos: S_Pos, defType: C_DefinitionType, ideKind: IdeSymbolKind, member: Pair<IdeSymbolCategory, R_Name>? = null): C_IdeSymbolDef {
-        return ideDef(pos, defType, defName, ideKind, member)
+    fun nsMemBase(
+        deprecated: C_Deprecated? = null,
+        defName: C_DefinitionName = cDefName,
+        ideRefInfo: C_IdeSymbolInfo,
+    ): C_NamespaceMemberBase {
+        return C_NamespaceMemberBase(defName, ideRefInfo, deprecated)
     }
 
-    fun baseEx(pos: S_Pos, defType: C_DefinitionType, ideKind: IdeSymbolKind, ideId: IdeSymbolId): C_DefinitionBaseEx {
-        val ideDef = C_IdeSymbolDef.make(ideKind, pos.idePath(), ideId)
-        return C_DefinitionBaseEx(this, defType, ideId, ideDef)
+    fun memberIdeDef(
+        pos: S_Pos,
+        memberIdeCat: IdeSymbolCategory,
+        memberIdeKind: IdeSymbolKind,
+        memberDocKind: DocSymbolKind,
+        memberName: R_Name,
+        declaration: DocDeclaration,
+    ): C_IdeSymbolDef {
+        val memberIdeId = ideId(defType, defName, memberIdeCat to memberName)
+        val doc = makeDocSymbol(memberDocKind, memberName, null, declaration)
+        val docGetter = C_LateGetter.const(Nullable.of(doc))
+        return ideDef(pos, memberIdeKind, memberIdeId, docGetter)
     }
 
-    fun nsMemBase(ideInfo: IdeSymbolInfo, deprecatedValue: C_ModifierValue<C_Deprecated>): C_NamespaceMemberBase {
-        val deprecated = deprecatedValue.value()
-        return C_NamespaceMemberBase(cDefName, ideInfo, deprecated)
+    private fun makeDocSymbol(
+        kind: DocSymbolKind,
+        memberName: R_Name?,
+        mountName: R_MountName?,
+        declaration: DocDeclaration,
+    ): DocSymbol {
+        val fullDefName = if (memberName == null) cDefName else cDefName.toPath().subName(memberName)
+        val docName = DocSymbolName.global(cDefName.module.module, fullDefName.qualifiedName.str())
+
+        val chain = cDefName.module.chain
+        val mountNameStr = if (chain == null || mountName == null) mountName?.str() else "$chain:${mountName.str()}"
+
+        return DocSymbol(
+            kind = kind,
+            symbolName = docName,
+            mountName = mountNameStr,
+            declaration = declaration,
+            comment = null,
+        )
+    }
+
+    fun docGetter(docDeclarationGetter: C_LateGetter<DocDeclaration>): C_LateGetter<DocSymbol> {
+        return docDeclarationGetter.transform { docDec ->
+            makeDocSymbol(defType.docKind, null, mountName, docDec)
+        }
+    }
+
+    fun ideDef(pos: S_Pos, docGetter: C_LateGetter<DocSymbol>): C_IdeSymbolDef {
+        val docGetter2 = docGetter.transform { Nullable.of(it) }
+        return ideDef(pos, ideKind, ideId, docGetter2)
+    }
+
+    fun userBase(pos: S_Pos): C_UserDefinitionBase {
+        val docDecLate = C_LateInit(C_CompilerPass.DOCS, DocDeclaration.NONE)
+        val docSymGetter = docGetter(docDecLate.getter)
+        val ideDef = ideDef(pos, docSymGetter)
+        return C_UserDefinitionBase(this, ideDef, docSymGetter, docDecLate)
+    }
+
+    fun defCtx(mntCtx: C_MountContext): C_DefinitionContext {
+        return C_DefinitionContext(mntCtx, defType, defId, cDefName, defName, ideId)
     }
 
     companion object {
-        fun ideDef(
-            pos: S_Pos,
+        fun ideId(
             defType: C_DefinitionType,
             defName: R_DefinitionName,
-            ideKind: IdeSymbolKind,
             member: Pair<IdeSymbolCategory, R_Name>?,
+        ): IdeSymbolId {
+            return IdeSymbolId(defType.ideCategory, defName.qualifiedName, listOfNotNull(member))
+        }
+
+        fun ideDef(
+            pos: S_Pos,
+            ideKind: IdeSymbolKind,
+            ideId: IdeSymbolId,
+            docGetter: C_LateGetter<Nullable<DocSymbol>>,
         ): C_IdeSymbolDef {
-            val ideId = IdeSymbolId(defType.ideCategory, defName.qualifiedName, listOfNotNull(member))
-            return C_IdeSymbolDef.make(ideKind, pos.idePath(), ideId)
+            return C_IdeSymbolDef.makeLate(ideKind, pos.idePath(), ideId, docGetter)
         }
     }
 }
 
-class C_DefinitionBaseEx(
-    private val base: C_DefinitionBase,
-    private val defType: C_DefinitionType,
-    private val ideId: IdeSymbolId,
-    private val ideDef: C_IdeSymbolDef,
+class C_UserDefinitionBase(
+    private val comBase: C_CommonDefinitionBase,
+    ideDef: C_IdeSymbolDef,
+    private val docSymbolGetter: C_LateGetter<DocSymbol>,
+    private val docDeclarationLate: C_LateInit<DocDeclaration>,
 ) {
-    val defName = base.defName
+    val defName = comBase.defName
     val ideDefInfo = ideDef.defInfo
     val ideRefInfo = ideDef.refInfo
 
-    val simpleName = base.simpleName
-    val appLevelName = base.appLevelName
-    val qualifiedName = base.qualifiedName
+    val simpleName = comBase.simpleName
+    val appLevelName = comBase.appLevelName
+    val qualifiedName = comBase.qualifiedName
 
-    fun defCtx(mntCtx: C_MountContext): C_DefinitionContext {
-        return C_DefinitionContext(mntCtx, defType, base.defId, base.defName, ideId)
-    }
+    fun defCtx(mntCtx: C_MountContext) = comBase.defCtx(mntCtx)
 
-    fun rBase(initFrameGetter: C_LateGetter<R_CallFrame>) = base.rBase(initFrameGetter)
+    fun rBase(initFrameGetter: C_LateGetter<R_CallFrame>) = comBase.rBase(initFrameGetter, docSymbolGetter)
 
     fun nsMemBase(deprecatedValue: C_ModifierValue<C_Deprecated>): C_NamespaceMemberBase {
         val deprecated = deprecatedValue.value()
         return nsMemBase(deprecated = deprecated)
     }
 
-    fun nsMemBase(deprecated: C_Deprecated? = null, defName: C_DefinitionName = base.cDefName): C_NamespaceMemberBase {
-        return C_NamespaceMemberBase(defName, ideDef.refInfo, deprecated)
+    fun nsMemBase(
+        deprecated: C_Deprecated? = null,
+        defName: C_DefinitionName = comBase.cDefName,
+    ): C_NamespaceMemberBase {
+        return comBase.nsMemBase(deprecated, defName, ideRefInfo)
+    }
+
+    fun setDocDeclaration(declaration: DocDeclaration) {
+        docDeclarationLate.set(declaration, allowEarly = true)
+    }
+}
+
+private class C_NamePath(private val nodes: List<C_NameNode>) {
+    init {
+        check(nodes.isNotEmpty())
+    }
+
+    private val lastNode = nodes.last()
+    val lastElem = lastNode.elem
+    val lastIdeInfo = lastNode.ideInfo
+
+    fun access(msgCtx: C_MessageContext): C_IdeSymbolInfoHandle {
+        for ((i, node) in nodes.withIndex()) {
+            if (i < nodes.size - 1) {
+                node.nameHand.setIdeInfo(node.ideInfo)
+            }
+            node.elem?.access(msgCtx) { getQualifiedName(i + 1) }
+        }
+        return nodes.last().nameHand
+    }
+
+    fun getErrorName(): C_QualifiedName {
+        var n = nodes.size
+        for ((i, node) in nodes.withIndex()) {
+            if (!node.valid) {
+                n = i + 1
+                break
+            }
+        }
+        return getQualifiedName(n)
+    }
+
+    private fun getQualifiedName(n: Int = nodes.size): C_QualifiedName {
+        val names = nodes.asSequence().take(n).map { it.name }.toList()
+        return C_QualifiedName(names)
     }
 }
 
 private class C_NameNode(
-    val prev: C_NameNode?,
     val valid: Boolean,
     val nameHand: C_NameHandle,
     val elem: C_NamespaceElement?,
 ) {
-    fun qualifiedName(): C_QualifiedName {
-        val names = mutableListOf<C_Name>()
-        var ptr: C_NameNode? = this
-        while (ptr != null) {
-            names.add(ptr.nameHand.name)
-            ptr = ptr.prev
-        }
-        return C_QualifiedName(names.reversed())
-    }
-
-    fun access() {
-        val ideInfo = elem?.item?.ideInfo ?: IdeSymbolInfo.UNKNOWN
-        nameHand.setIdeInfo(ideInfo)
-    }
+    val name = nameHand.name
+    val ideInfo = elem?.item?.ideInfo ?: C_IdeSymbolInfo.UNKNOWN
 }
 
+class C_GlobalNameResDef<T>(
+    val def: T,
+    val ideInfoPtr: C_UniqueDefaultIdeInfoPtr,
+)
+
 sealed class C_GlobalNameRes(
-    private val msgCtx: C_MessageContext,
+    protected val msgCtx: C_MessageContext,
     private val qName: C_QualifiedName,
     private val elem: C_NamespaceElement?,
 ) {
@@ -198,50 +312,88 @@ sealed class C_GlobalNameRes(
     fun isCallable() = elem?.member?.isCallable() ?: false
 
     fun compile(ctx: C_ExprContext): C_Expr {
-        access()
-        val member = elem?.member
-        if (member == null) {
+        val ideInfoHand = access(false)
+
+        if (elem == null) {
             val nameStr = getErrorName().str()
+            ideInfoHand.setIdeInfo(C_IdeSymbolInfo.UNKNOWN)
             C_Errors.errUnknownName(msgCtx, qName.pos, nameStr, nameStr)
             return C_ExprUtils.errorExpr(ctx, qName.pos)
         }
-        return member.toExpr(ctx, qName)
+
+        val ideInfoPtr = C_UniqueDefaultIdeInfoPtr(ideInfoHand, elem.item.ideInfo)
+        val expr = elem.member.toExpr(ctx, qName, ideInfoPtr)
+
+        if (ideInfoPtr.isValid()) {
+            ideInfoPtr.setDefault()
+        }
+
+        return expr
     }
 
     fun getType(): C_TypeDef? {
-        return getDef(C_DeclarationType.TYPE) { it.getTypeOpt() }
+        val def = getDef(C_DeclarationType.TYPE) { it.getTypeOpt() }
+        return def?.def
+    }
+
+    fun getTypeEx(): C_GlobalNameResDef<C_TypeDef>? {
+        return getDef(C_DeclarationType.TYPE, bindLastIdeInfo = false) { it.getTypeOpt() }
     }
 
     fun getEntity(error: Boolean = true, unknownInfo: Boolean = true): R_EntityDefinition? {
-        return getDef(C_DeclarationType.ENTITY, error = error, unknownInfo = unknownInfo) { it.getEntityOpt() }
+        val def = getDef(C_DeclarationType.ENTITY, error = error, unknownInfo = unknownInfo) { it.getEntityOpt() }
+        return def?.def
     }
 
     fun getFunction(): C_GlobalFunction? {
-        return getDef(C_DeclarationType.FUNCTION) { it.getFunctionOpt() }
+        val def = getDef(C_DeclarationType.FUNCTION) { it.getFunctionOpt() }
+        return def?.def
     }
 
     fun getOperation(error: Boolean = true, unknownInfo: Boolean = true): R_OperationDefinition? {
-        return getDef(C_DeclarationType.OPERATION, error = error, unknownInfo = unknownInfo) { it.getOperationOpt() }
+        val def = getDef(C_DeclarationType.OPERATION, error = error, unknownInfo = unknownInfo) { it.getOperationOpt() }
+        return def?.def
     }
 
     fun getObject(error: Boolean = true, unknownInfo: Boolean = true): R_ObjectDefinition? {
-        return getDef(C_DeclarationType.OBJECT, error = error, unknownInfo = unknownInfo) { it.getObjectOpt() }
+        val def = getDef(C_DeclarationType.OBJECT, error = error, unknownInfo = unknownInfo) { it.getObjectOpt() }
+        return def?.def
     }
 
     private fun <T> getDef(
         expDecType: C_DeclarationType,
         error: Boolean = true,
         unknownInfo: Boolean = true,
+        bindLastIdeInfo: Boolean = true,
         getter: (C_NamespaceMember) -> T?,
-    ): T? {
-        val member = elem?.member
-        val res = if (member == null) null else getter(member)
-
-        if (res != null || unknownInfo) {
-            access()
+    ): C_GlobalNameResDef<T>? {
+        if (elem == null) {
+            defNotFound(expDecType, error, unknownInfo)
+            return null
         }
 
-        if (res == null && error) {
+        val res = getter(elem.member)
+        if (res == null) {
+            defNotFound(expDecType, error, unknownInfo)
+            return null
+        }
+
+        val ideInfoHand = access(bindLastIdeInfo)
+        val ideInfoPtr = C_UniqueDefaultIdeInfoPtr(ideInfoHand, elem.item.ideInfo)
+        return C_GlobalNameResDef(res, ideInfoPtr)
+    }
+
+    private fun defNotFound(
+        expDecType: C_DeclarationType,
+        error: Boolean,
+        unknownInfo: Boolean,
+    ) {
+        if (unknownInfo) {
+            access(true)
+        }
+
+        if (error) {
+            val member = elem?.member
             val fullMsg = if (member == null || member.declarationType() == expDecType) {
                 val errName = getErrorName()
                 "unknown_name:$errName" toCodeMsg "Unknown name: '$errName'"
@@ -253,41 +405,26 @@ sealed class C_GlobalNameRes(
             }
             msgCtx.error(qName.pos, fullMsg.code, fullMsg.msg)
         }
-
-        return res
     }
 
-    private fun access() {
-        return accessPrivate(msgCtx)
-    }
-
-    protected abstract fun accessPrivate(msgCtx: C_MessageContext)
+    protected abstract fun access(bindLast: Boolean): C_IdeSymbolInfoHandle
     protected abstract fun getErrorName(): C_QualifiedName
 }
 
 private class C_GlobalNameRes_Private(
     msgCtx: C_MessageContext,
     qName: C_QualifiedName,
-    private val node: C_NameNode,
-): C_GlobalNameRes(msgCtx, qName, node.elem) {
-    override fun accessPrivate(msgCtx: C_MessageContext) {
-        var nodePtr: C_NameNode? = node
-        while (nodePtr != null) {
-            nodePtr.access()
-            nodePtr.elem?.access(msgCtx, nodePtr::qualifiedName)
-            nodePtr = nodePtr.prev
+    private val path: C_NamePath,
+): C_GlobalNameRes(msgCtx, qName, path.lastElem) {
+    override fun access(bindLast: Boolean): C_IdeSymbolInfoHandle {
+        val ideInfoHand = path.access(msgCtx)
+        if (bindLast) {
+            ideInfoHand.setIdeInfo(path.lastIdeInfo)
         }
+        return ideInfoHand
     }
 
-    override fun getErrorName(): C_QualifiedName {
-        var nodePtr = node
-        while (true) {
-            val prev = nodePtr.prev
-            if (prev == null || prev.valid) break
-            nodePtr = prev
-        }
-        return nodePtr.qualifiedName()
-    }
+    override fun getErrorName() = path.getErrorName()
 }
 
 private object C_GlobalNameResolver {
@@ -299,26 +436,29 @@ private object C_GlobalNameResolver {
     ): C_GlobalNameRes {
         val firstTags = if (qName.size == 1) tags else C_NamespaceMemberTag.NAMESPACE.list
         val firstEntry = scope.findEntry(qName.first.rName, firstTags)
-        var node = entryToNode(qName.first, null, firstEntry, firstTags)
+
+        var node = entryToNode(qName.first, firstEntry, firstTags)
+        val nodes = mutableListOf(node)
 
         for ((i, name) in qName.parts.withIndex().drop(1)) {
             val ns = node.elem?.member?.getNamespaceOpt()
             val entry = ns?.getEntry(name.rName)
             val isLast = i == qName.parts.indices.last
             val curTags = if (isLast) tags else C_NamespaceMemberTag.NAMESPACE.list
-            node = entryToNode(name, node, entry, curTags)
+            node = entryToNode(name, entry, curTags)
+            nodes.add(node)
         }
 
-        return C_GlobalNameRes_Private(msgCtx, qName.qName, node)
+        val path = C_NamePath(nodes.toImmList())
+        return C_GlobalNameRes_Private(msgCtx, qName.cName, path)
     }
 
     private fun entryToNode(
         name: C_NameHandle,
-        prevNode: C_NameNode?,
         entry: C_NamespaceEntry?,
         tags: List<C_NamespaceMemberTag>,
     ): C_NameNode {
         val elem = entry?.element(tags)
-        return C_NameNode(prev = prevNode, valid = entry != null, nameHand = name, elem = elem)
+        return C_NameNode(valid = entry != null, nameHand = name, elem = elem)
     }
 }

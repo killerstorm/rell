@@ -41,7 +41,7 @@ import net.postchain.rell.gtx.Rt_PostchainOpContext
 import net.postchain.rell.gtx.Rt_PostchainTxContextFactory
 import org.apache.commons.lang3.time.FastDateFormat
 
-private fun convertArgs(ctx: GtvToRtContext, params: List<R_Param>, args: List<Gtv>): List<Rt_Value> {
+private fun convertArgs(ctx: GtvToRtContext, params: List<R_FunctionParam>, args: List<Gtv>): List<Rt_Value> {
     return args.mapIndexed { index, arg ->
         val param = params[index]
         val type = param.type

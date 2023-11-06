@@ -44,7 +44,7 @@ abstract class BaseRellApiTest {
 
     protected fun handleCompilationError(cRes: C_CompilationResult): String? {
         return when {
-            cRes.errors.isNotEmpty() -> "CTE:${RellTestUtils.errsToString(cRes.errors, false)}"
+            cRes.errors.isNotEmpty() -> "CTE:${RellTestUtils.msgsToString(cRes.errors, false)}"
             cRes.app == null -> "ERR:no_app"
             else -> null
         }

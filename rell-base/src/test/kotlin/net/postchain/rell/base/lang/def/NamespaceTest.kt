@@ -328,4 +328,57 @@ class NamespaceTest: BaseRellTest() {
         chk("a.e.f.f()", "int[789]")
         chk("a.g.h.f()", "int[987]")
     }
+
+    @Test fun testComplexNameMount() {
+        val def1 = "namespace a.b.c { entity data_c {} }"
+        val def2 = """
+            namespace a {
+                entity data_a {}
+                namespace b { entity data_b {} }
+            }
+        """
+
+        chkComplexNameMount("$def1 $def2", "a.data_a", "a.data_a")
+        chkComplexNameMount("$def1 $def2", "a.b.data_b", "a.b.data_b")
+        chkComplexNameMount("$def1 $def2", "a.b.c.data_c", "a.b.c.data_c")
+
+        chkComplexNameMount("@mount('foo') $def1 $def2", "a.data_a", "a.data_a")
+        chkComplexNameMount("@mount('foo') $def1 $def2", "a.b.data_b", "a.b.data_b")
+        chkComplexNameMount("@mount('foo') $def1 $def2", "a.b.c.data_c", "foo.data_c")
+
+        chkComplexNameMount("@mount('.foo') $def1 $def2", "a.data_a", "a.data_a")
+        chkComplexNameMount("@mount('.foo') $def1 $def2", "a.b.data_b", "a.b.data_b")
+        chkComplexNameMount("@mount('.foo') $def1 $def2", "a.b.c.data_c", "a.b.foo.data_c")
+
+        chkComplexNameMount("@mount('foo.') $def1 $def2", "a.data_a", "a.data_a")
+        chkComplexNameMount("@mount('foo.') $def1 $def2", "a.b.data_b", "a.b.data_b")
+        chkComplexNameMount("@mount('foo.') $def1 $def2", "a.b.c.data_c", "foo.c.data_c")
+
+        chkComplexNameMount("@mount('.foo.') $def1 $def2", "a.data_a", "a.data_a")
+        chkComplexNameMount("@mount('.foo.') $def1 $def2", "a.b.data_b", "a.b.data_b")
+        chkComplexNameMount("@mount('.foo.') $def1 $def2", "a.b.c.data_c", "a.b.foo.c.data_c")
+    }
+
+    private fun chkComplexNameMount(defs: String, name: String, expected: String) {
+        chkFull("$defs query q() = _test.mount_name($name);", "text[$expected]")
+    }
+
+    @Test fun testDuplicateNamespaceMount() {
+        val defs = "@mount('foo') namespace ns { entity data1 {} } @mount('bar') namespace ns { entity data2 {} }"
+        chkFull("$defs query q() = _test.mount_name(ns.data1);", "text[foo.data1]")
+        chkFull("$defs query q() = _test.mount_name(ns.data2);", "text[bar.data2]")
+    }
+
+    @Test fun testNestedNamespaceExternal() {
+        val def = "@mount('data') @log entity data {}"
+        ExternalTest.initExternalChain(tst, "foo", def = def)
+        chkNestedNsExternal("@external('foo') namespace a { $def }", "a.data")
+        chkNestedNsExternal("@external('foo') namespace a { namespace { $def } }", "a.data")
+        chkNestedNsExternal("@external('foo') namespace a { namespace b { $def } }", "a.b.data")
+        chkNestedNsExternal("@external('foo') namespace { namespace a { $def } }", "a.data")
+    }
+
+    private fun chkNestedNsExternal(def: String, name: String) {
+        chkFull("$def query q() = _test.external_chain($name);", "text[foo]")
+    }
 }

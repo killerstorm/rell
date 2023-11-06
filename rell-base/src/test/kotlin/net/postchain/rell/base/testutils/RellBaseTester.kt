@@ -10,14 +10,12 @@ import net.postchain.rell.base.compiler.base.lib.C_LibModule
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Message
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
-import net.postchain.rell.base.compiler.base.utils.C_SourcePath
 import net.postchain.rell.base.model.R_App
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.base.runtime.Rt_Printer
 import net.postchain.rell.base.sql.SqlExecutor
 import net.postchain.rell.base.utils.immMapOf
-import net.postchain.rell.base.lmodel.L_Module
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
 import kotlin.test.assertEquals
@@ -131,7 +129,7 @@ abstract class RellBaseTester(
             testLib = testLib,
             hiddenLib = hiddenLib,
             allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
-            symbolInfoFile = C_SourcePath.parse(RellTestUtils.MAIN_FILE),
+            symbolInfoFile = RellTestUtils.MAIN_FILE_PATH,
             complexWhatEnabled = complexWhatEnabled,
             ideDefIdConflictError = ideDefIdConflictError,
             mountConflictError = true,

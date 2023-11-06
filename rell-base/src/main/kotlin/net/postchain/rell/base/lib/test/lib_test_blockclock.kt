@@ -7,9 +7,11 @@ package net.postchain.rell.base.lib.test
 import com.google.common.math.LongMath
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
-import net.postchain.rell.base.runtime.*
+import net.postchain.rell.base.runtime.Rt_Exception
+import net.postchain.rell.base.runtime.Rt_IntValue
+import net.postchain.rell.base.runtime.Rt_NullValue
+import net.postchain.rell.base.runtime.Rt_UnitValue
 import net.postchain.rell.base.runtime.utils.Rt_Utils
-import java.lang.ArithmeticException
 
 object Lib_Test_BlockClock {
     const val DEFAULT_FIRST_BLOCK_TIME = 1577836800_000L // 2020-01-01 00:00:00 UTC

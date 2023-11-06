@@ -6,16 +6,20 @@ package net.postchain.rell.base.compiler.base.expr
 
 import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_Pos
-import net.postchain.rell.base.compiler.base.core.C_Name
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfoHandle
+import net.postchain.rell.base.compiler.base.core.C_NameHandle
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceMemberTag
 import net.postchain.rell.base.compiler.base.utils.C_Error
+import net.postchain.rell.base.compiler.base.utils.C_PosCodeMsg
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.compiler.vexpr.V_TypeValueMember
 import net.postchain.rell.base.compiler.vexpr.V_ValueMemberExpr
 import net.postchain.rell.base.model.R_FunctionType
+import net.postchain.rell.base.model.R_MountName
 import net.postchain.rell.base.model.R_Type
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
+import net.postchain.rell.base.utils.Nullable
 
 class C_ExprHint(val typeHint: C_TypeHint, val callable: Boolean = false) {
     fun memberTags(): List<C_NamespaceMemberTag>  {
@@ -30,17 +34,21 @@ class C_ExprHint(val typeHint: C_TypeHint, val callable: Boolean = false) {
     }
 }
 
-class C_ExprMember(val expr: C_Expr, val ideInfo: IdeSymbolInfo)
+class C_ExprDefMeta(
+    val mountName: R_MountName? = null,
+    val externalChain: Nullable<String>? = null,
+)
 
 abstract class C_Expr {
     abstract fun startPos(): S_Pos
 
     abstract fun value(): V_Expr
     open fun isCallable() = false
+    open fun getDefMeta(): C_ExprDefMeta? = null
 
-    open fun member(ctx: C_ExprContext, memberName: C_Name, exprHint: C_ExprHint): C_ExprMember {
+    open fun member(ctx: C_ExprContext, memberNameHand: C_NameHandle, exprHint: C_ExprHint): C_Expr {
         val vExpr = value()
-        return vExpr.member(ctx, memberName, false, exprHint)
+        return vExpr.member(ctx, memberNameHand, false, exprHint)
     }
 
     open fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
@@ -54,29 +62,31 @@ class C_ValueExpr(private val vExpr: V_Expr): C_Expr() {
     override fun startPos() = vExpr.pos
     override fun value() = vExpr
     override fun isCallable() = vExpr.type is R_FunctionType
+    override fun getDefMeta(): C_ExprDefMeta? = vExpr.getDefMeta()
 }
 
 abstract class C_NoValueExpr: C_Expr() {
     protected abstract fun errKindName(): Pair<String, String>
 
-    final override fun value(): V_Expr {
-        throw errNoValue()
+    override fun value(): V_Expr {
+        throw C_Error.stop(errNoValue())
     }
 
-    override fun member(ctx: C_ExprContext, memberName: C_Name, exprHint: C_ExprHint): C_ExprMember {
+    override fun member(ctx: C_ExprContext, memberNameHand: C_NameHandle, exprHint: C_ExprHint): C_Expr {
         ctx.msgCtx.error(errNoValue())
-        return C_ExprUtils.errorMember(ctx, memberName.pos)
+        memberNameHand.setIdeInfo(C_IdeSymbolInfo.UNKNOWN)
+        return C_ExprUtils.errorExpr(ctx, memberNameHand.pos)
     }
 
-    private fun errNoValue(): C_Error {
+    private fun errNoValue(): C_PosCodeMsg {
         val pos = startPos()
         val (kind, name) = errKindName()
         return errNoValue(pos, kind, name)
     }
 
     companion object {
-        fun errNoValue(pos: S_Pos, kind: String, name: String): C_Error {
-            return C_Error.stop(pos, "expr_novalue:$kind:[$name]", "Expression cannot be used as a value: $kind '$name'")
+        fun errNoValue(pos: S_Pos, kind: String, name: String): C_PosCodeMsg {
+            return C_PosCodeMsg(pos, "expr_novalue:$kind:[$name]", "Expression cannot be used as a value: $kind '$name'")
         }
     }
 }
@@ -85,6 +95,7 @@ class C_ValueMemberExpr(
     private val exprCtx: C_ExprContext,
     memberLink: C_MemberLink,
     private val member: C_TypeValueMember,
+    private val ideInfoHand: C_IdeSymbolInfoHandle,
 ): C_Expr() {
     private val vBase = memberLink.base
     private val selfType = memberLink.selfType
@@ -97,12 +108,14 @@ class C_ValueMemberExpr(
 
     override fun value(): V_Expr {
         val vMember = member.value(exprCtx, memberPos, memberName)
+        ideInfoHand.setIdeInfo(vMember.ideInfo)
         return makeMemberExpr(vMember)
     }
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
         val vMember = member.call(exprCtx, selfType, memberPos, args, resTypeHint)
         vMember ?: return super.call(ctx, pos, args, resTypeHint)
+        ideInfoHand.setIdeInfo(vMember.ideInfo)
         val vExpr = makeMemberExpr(vMember)
         return C_ValueExpr(vExpr)
     }

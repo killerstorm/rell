@@ -4,16 +4,18 @@
 
 package net.postchain.rell.base.compiler.ast
 
-import net.postchain.rell.base.compiler.base.core.C_CompilerPass
-import net.postchain.rell.base.compiler.base.core.C_DefinitionContext
-import net.postchain.rell.base.compiler.base.core.C_IdeSymbolDef
-import net.postchain.rell.base.compiler.base.core.C_Types
+import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceMemberTag
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.model.*
+import net.postchain.rell.base.utils.doc.DocDeclaration_TupleAttribute
+import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.doc.DocSymbolKind
+import net.postchain.rell.base.utils.doc.DocSymbolName
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
+import net.postchain.rell.base.utils.ide.IdeSymbolId
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.mapNotNullAllOrNull
@@ -90,19 +92,28 @@ class S_NameType(private val name: S_QualifiedName): S_Type(name.pos) {
 
 class S_GenericType(private val name: S_QualifiedName, private val args: List<S_Type>): S_Type(name.pos) {
     override fun compile0(ctx: C_DefinitionContext): R_Type {
+        val ref = compileGenericType(ctx)
+        ref ?: return R_CtErrorType
+        ref.ideInfoPtr.setDefault()
+        return ref.def
+    }
+
+    fun compileGenericType(ctx: C_DefinitionContext): C_GlobalNameResDef<R_Type>? {
         val rPosArgs = args.mapNotNullAllOrNull {
             val rType = it.compileOpt(ctx)
             if (rType == null) null else S_PosValue(it.pos, rType)
         }
 
         val nameHand = name.compile(ctx)
+        val typeDefEx = ctx.nsCtx.getTypeEx(nameHand)
 
-        val typeDef = ctx.nsCtx.getType(nameHand)
-        if (typeDef == null || rPosArgs == null) {
-            return R_CtErrorType
+        if (typeDefEx == null || rPosArgs == null) {
+            typeDefEx?.ideInfoPtr?.setDefault()
+            return null
         }
 
-        return typeDef.compileType(ctx.appCtx, name.pos, rPosArgs)
+        val rResType = typeDefEx.def.compileType(ctx.appCtx, name.pos, rPosArgs)
+        return C_GlobalNameResDef(rResType, typeDefEx.ideInfoPtr)
     }
 }
 
@@ -123,26 +134,47 @@ class S_TupleType(pos: S_Pos, private val fields: List<S_NameOptValue<S_Type>>):
         val rFields = fields.map { (name, type) ->
             val nameHand = name?.compile(ctx)
 
+            val rType = C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.compile(ctx), nameHand?.str) {
+                "tuple_field" toCodeMsg "tuple field"
+            }
+
             val fieldName = if (nameHand == null) null else {
                 val cName = nameHand.name
                 if (!names.add(cName.str)) {
                     throw C_Error.stop(cName.pos, "type_tuple_dupname:$cName", "Duplicate field: '$cName'")
                 }
 
-                val attrIdeId = typeIdeId.appendMember(IdeSymbolCategory.ATTRIBUTE, nameHand.rName)
-                val ideDef = C_IdeSymbolDef.make(IdeSymbolKind.MEM_TUPLE_ATTR, nameHand.pos.idePath(), attrIdeId)
+                val ideDef = makeFieldIdeDef(typeIdeId, nameHand.name, rType)
                 nameHand.setIdeInfo(ideDef.defInfo)
-                R_IdeName(nameHand.rName, ideDef.refInfo)
-            }
 
-            val rType = C_Types.checkNotUnit(ctx.msgCtx, type.pos, type.compile(ctx), nameHand?.str) {
-                "tuple_field" toCodeMsg "tuple field"
+                R_IdeName(nameHand.rName, ideDef.refInfo)
             }
 
             R_TupleField(fieldName, rType)
         }
 
         return R_TupleType(rFields)
+    }
+
+    companion object {
+        fun makeFieldIdeDef(tupleIdeId: IdeSymbolId, cName: C_Name, rType: R_Type): C_IdeSymbolDef {
+            val attrIdeId = tupleIdeId.appendMember(IdeSymbolCategory.ATTRIBUTE, cName.rName)
+
+            val docSymbol = DocSymbol(
+                DocSymbolKind.TUPLE_ATTR,
+                DocSymbolName.local(cName.str),
+                null,
+                DocDeclaration_TupleAttribute(cName.rName, rType.mType),
+                null,
+            )
+
+            return C_IdeSymbolDef.make(
+                IdeSymbolKind.MEM_TUPLE_ATTR,
+                cName.pos.idePath(),
+                attrIdeId,
+                docSymbol,
+            )
+        }
     }
 }
 

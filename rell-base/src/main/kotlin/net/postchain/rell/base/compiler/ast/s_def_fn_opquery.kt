@@ -20,6 +20,9 @@ import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.MutableTypedKeyMap
 import net.postchain.rell.base.utils.TypedKeyMap
+import net.postchain.rell.base.utils.doc.DocDeclaration_Operation
+import net.postchain.rell.base.utils.doc.DocDeclaration_Query
+import net.postchain.rell.base.utils.doc.DocModifiers
 import net.postchain.rell.base.utils.ide.IdeOutlineNodeType
 import net.postchain.rell.base.utils.ide.IdeOutlineTreeBuilder
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
@@ -43,19 +46,16 @@ class S_OperationDefinition(
         val mods = C_ModifierValues(C_ModifierTargetType.OPERATION, cName)
         val modMount = mods.field(C_ModifierFields.MOUNT)
         val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
-        modifiers.compile(ctx, mods)
-
-        val cDefBase = ctx.defBaseEx(cName, C_DefinitionType.OPERATION, IdeSymbolKind.DEF_OPERATION)
-        nameHand.setIdeInfo(cDefBase.ideDefInfo)
+        val docModifiers = modifiers.compile(ctx, mods)
 
         val mountName = ctx.mountName(modMount, cName)
         checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.OPERATION, mountName, C_ReservedMountNames.OPERATIONS)
 
+        val cDefBase = ctx.defBase(nameHand, C_DefinitionType.OPERATION, IdeSymbolKind.DEF_OPERATION, mountName)
         val defCtx = cDefBase.defCtx(ctx)
         val defBase = cDefBase.rBase(defCtx.initFrameGetter)
 
-
-        val rOperation = R_OperationDefinition(defBase, defCtx.definitionType, mountName)
+        val rOperation = R_OperationDefinition(defBase, mountName)
         ctx.appCtx.defsAdder.addStruct(rOperation.mirrorStructs.immutable)
         ctx.appCtx.defsAdder.addStruct(rOperation.mirrorStructs.mutable)
 
@@ -70,13 +70,17 @@ class S_OperationDefinition(
             ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
                 compileBody(defCtx, rOperation, header)
             }
+            ctx.executor.onPass(C_CompilerPass.DOCS) {
+                val doc = DocDeclaration_Operation(docModifiers, cName.rName, header.params.docParams)
+                cDefBase.setDocDeclaration(doc)
+            }
         }
     }
 
     private fun compileHeader(
-            defCtx: C_DefinitionContext,
-            cOperation: C_OperationGlobalFunction,
-            mirrorStructs: R_MirrorStructs
+        defCtx: C_DefinitionContext,
+        cOperation: C_OperationGlobalFunction,
+        mirrorStructs: R_MirrorStructs,
     ): C_OperationFunctionHeader {
         val forParams = C_FormalParameters.compile(defCtx, params, true)
         val header = C_OperationFunctionHeader(forParams)
@@ -125,7 +129,7 @@ class S_OperationDefinition(
         val rBody = cBody.rStmt
         val callFrame = frameCtx.makeCallFrame(cBody.guardBlock)
 
-        rOperation.setInternals(actParams.rParams, rBody, callFrame.rFrame)
+        rOperation.setInternals(actParams.rParams, actParams.rParamVars, rBody, callFrame.rFrame)
     }
 
     private fun processStatementVars(): TypedKeyMap {
@@ -157,18 +161,16 @@ class S_QueryDefinition(
         val mods = C_ModifierValues(C_ModifierTargetType.QUERY, cName)
         val modMount = mods.field(C_ModifierFields.MOUNT)
         val modDeprecated = mods.field(C_ModifierFields.DEPRECATED)
-        modifiers.compile(ctx, mods)
-
-        val cDefBase = ctx.defBaseEx(cName, C_DefinitionType.QUERY, IdeSymbolKind.DEF_QUERY)
-        nameHand.setIdeInfo(cDefBase.ideDefInfo)
+        val docModifiers = modifiers.compile(ctx, mods)
 
         val mountName = ctx.mountName(modMount, cName)
         checkSysMountNameConflict(ctx, name.pos, C_DeclarationType.QUERY, mountName, C_ReservedMountNames.QUERIES)
 
+        val cDefBase = ctx.defBase(nameHand, C_DefinitionType.QUERY, IdeSymbolKind.DEF_QUERY, mountName)
         val defCtx = cDefBase.defCtx(ctx)
-        val defBase = cDefBase.rBase(defCtx.initFrameGetter)
+        val rDefBase = cDefBase.rBase(defCtx.initFrameGetter)
 
-        val rQuery = R_QueryDefinition(defBase, mountName)
+        val rQuery = R_QueryDefinition(rDefBase, mountName)
         val cQuery = C_QueryGlobalFunction(rQuery)
 
         ctx.appCtx.defsAdder.addQuery(rQuery)
@@ -178,7 +180,7 @@ class S_QueryDefinition(
         ctx.executor.onPass(C_CompilerPass.MEMBERS) {
             val header = compileHeader(defCtx, cQuery)
             ctx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
-                compileBody(ctx, header, rQuery)
+                compileBody(ctx, cDefBase, cName, header, rQuery, docModifiers)
             }
         }
     }
@@ -189,7 +191,14 @@ class S_QueryDefinition(
         return header
     }
 
-    private fun compileBody(ctx: C_MountContext, header: C_QueryFunctionHeader, rQuery: R_QueryDefinition) {
+    private fun compileBody(
+        ctx: C_MountContext,
+        defBase: C_UserDefinitionBase,
+        cName: C_Name,
+        header: C_QueryFunctionHeader,
+        rQuery: R_QueryDefinition,
+        docModifiers: DocModifiers,
+    ) {
         if (header.queryBody == null) return
 
         val rBody = header.queryBody.compile()
@@ -199,6 +208,9 @@ class S_QueryDefinition(
                 checkGtvResult(ctx.msgCtx, rBody.retType)
             }
         }
+
+        val doc = DocDeclaration_Query(docModifiers, cName.rName, rBody.retType.mType, header.params.docParams)
+        defBase.setDocDeclaration(doc)
 
         rQuery.setBody(rBody)
     }

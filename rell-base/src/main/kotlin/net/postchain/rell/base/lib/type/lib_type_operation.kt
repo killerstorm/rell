@@ -12,6 +12,7 @@ import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.runtime.GtvRtConversion_None
 import net.postchain.rell.base.runtime.utils.toGtv
 import net.postchain.rell.base.utils.checkEquals
+import net.postchain.rell.base.utils.doc.DocCode
 
 object Lib_Type_Operation {
     val NAMESPACE = Ld_NamespaceDsl.make {
@@ -37,5 +38,5 @@ class R_OperationType(val rOperation: R_OperationDefinition): R_Type(rOperation.
     override fun createGtvConversion() = GtvRtConversion_None
     override fun strCode(): String = name
     override fun toMetaGtv() = rOperation.appLevelName.toGtv()
-    override fun getLibType0() = C_LibType.make(this)
+    override fun getLibType0() = C_LibType.make(this, DocCode.link(rOperation.moduleLevelName))
 }

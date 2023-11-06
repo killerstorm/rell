@@ -5,6 +5,7 @@
 package net.postchain.rell.base.compiler.vexpr
 
 import net.postchain.rell.base.compiler.ast.S_Pos
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
@@ -247,9 +248,11 @@ class V_SysFunctionTargetDescriptor(
     val rFn: R_SysFunction,
     val dbFn: Db_SysFunction?,
     val fullName: LazyString,
-    val pure: Boolean,
+    pure: Boolean,
     val synth: Boolean = false,
-)
+) {
+    val pure: Boolean = pure && resType.completeFlags().pure
+}
 
 abstract class V_FunctionCallTarget_SysFunction(
     protected val desc: V_SysFunctionTargetDescriptor,
@@ -280,13 +283,19 @@ class V_FunctionCallTarget_SysGlobalFunction(
     }
 }
 
-sealed class V_FunctionCall
+abstract class V_FunctionCall
 
-class V_GlobalFunctionCall(private val expr: V_Expr): V_FunctionCall() {
+class V_GlobalFunctionCall(
+    private val expr: V_Expr,
+    val ideInfo: C_IdeSymbolInfo? = null,
+): V_FunctionCall() {
     fun vExpr() = expr
 }
 
-abstract class V_MemberFunctionCall(protected val exprCtx: C_ExprContext): V_FunctionCall() {
+abstract class V_MemberFunctionCall(
+    protected val exprCtx: C_ExprContext,
+    val ideInfo: C_IdeSymbolInfo,
+): V_FunctionCall() {
     abstract fun vExprs(): List<V_Expr>
     open fun postVarFacts(): C_VarFacts = C_VarFacts.andPostFacts(vExprs())
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
@@ -301,9 +310,10 @@ abstract class V_MemberFunctionCall(protected val exprCtx: C_ExprContext): V_Fun
 
 class V_MemberFunctionCall_CommonCall(
     exprCtx: C_ExprContext,
+    ideInfo: C_IdeSymbolInfo,
     private val call: V_CommonFunctionCall,
     private val returnType: R_Type,
-): V_MemberFunctionCall(exprCtx) {
+): V_MemberFunctionCall(exprCtx, ideInfo) {
     override fun vExprs() = call.args
     override fun postVarFacts() = call.postVarFacts()
     override fun globalConstantRestriction() = call.globalConstantRestriction()
@@ -327,9 +337,10 @@ class V_MemberFunctionCall_CommonCall(
 
 class V_MemberFunctionCall_Error(
     exprCtx: C_ExprContext,
+    ideInfo: C_IdeSymbolInfo,
     private val returnType: R_Type = R_CtErrorType,
     private val msg: String = "Compilation error",
-): V_MemberFunctionCall(exprCtx) {
+): V_MemberFunctionCall(exprCtx, ideInfo) {
     override fun vExprs() = immListOf<V_Expr>()
     override fun returnType() = returnType
     override fun calculator(): R_MemberCalculator = R_MemberCalculator_Error(returnType, msg)

@@ -15,6 +15,11 @@ class L_FullName(val moduleName: R_ModuleName, val qName: R_QualifiedName) {
 
     fun str(): String = "${moduleName.str()}:${qName.str()}"
 
+    fun append(name: R_Name): L_FullName {
+        val qName2 = qName.append(name)
+        return L_FullName(moduleName, qName2)
+    }
+
     override fun equals(other: Any?) =
         this === other || (other is L_FullName && moduleName == other.moduleName && qName == other.qName)
 

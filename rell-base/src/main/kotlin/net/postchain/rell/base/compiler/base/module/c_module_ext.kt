@@ -10,23 +10,23 @@ import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.modifier.C_MountAnnotationValue
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceMemberBase
+import net.postchain.rell.base.compiler.base.namespace.C_UserNsProtoBuilder
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_LateInit
 import net.postchain.rell.base.compiler.base.utils.C_SourcePath
 import net.postchain.rell.base.model.R_EnumDefinition
 import net.postchain.rell.base.model.R_ModuleName
-import net.postchain.rell.base.model.R_MountName
+import net.postchain.rell.base.utils.doc.DocSymbol
 import net.postchain.rell.base.utils.toImmList
-import net.postchain.rell.base.utils.toImmMap
 
 data class C_ExtChainName(val name: String) {
     fun toExtChain(appCtx: C_AppContext): C_ExternalChain = appCtx.addExternalChain(name)
 }
 
 class C_ExtModule(
-        val midModule: C_MidModule,
-        val chain: C_ExtChainName?,
-        files: List<C_ExtModuleFile>
+    val midModule: C_MidModule,
+    val chain: C_ExtChainName?,
+    files: List<C_ExtModuleFile>,
 ) {
     private val files = files.toImmList()
 
@@ -136,24 +136,44 @@ class C_ExtModuleMember_Namespace(
     }
 
     private fun createSubMountContext(mntCtx: C_MountContext): C_MountContext {
-        val extChain = extChainName?.toExtChain(mntCtx.appCtx)
-        val subMountName = mntCtx.mountName(mount, qualifiedName?.toCQualifiedName())
+        val extChain = extChainName?.toExtChain(mntCtx.appCtx) ?: mntCtx.extChain
 
         if (qualifiedName == null) {
+            val subMountName = mntCtx.mountName(mount, null)
             return C_MountContext(mntCtx.fileCtx, mntCtx.nsCtx, extChain, mntCtx.nsBuilder, subMountName)
         }
 
-        var nsBuilder = mntCtx.nsBuilder
-        var nsCtx = mntCtx.nsCtx
+        var node = NsNode(mntCtx.fileCtx, mntCtx.nsBuilder, mntCtx)
 
-        for (ideName in qualifiedName.parts) {
-            nsBuilder = nsBuilder.addNamespace(ideName.name, true, ideName.ideInfo, deprecated = deprecated)
-            val nsPath = nsCtx.namespacePath.append(ideName.name.rName)
-            val subScopeBuilder = nsCtx.scopeBuilder.nested(nsBuilder.futureNs())
-            nsCtx = C_NamespaceContext(mntCtx.modCtx, mntCtx.symCtx, nsPath, subScopeBuilder)
+        for (ideName in qualifiedName.parts.dropLast(1)) {
+            node = node.subNode(ideName, null, null, mntCtx.extChain)
         }
 
-        return C_MountContext(mntCtx.fileCtx, nsCtx, extChain, nsBuilder, subMountName)
+        val lastName = qualifiedName.parts.last()
+        node = node.subNode(lastName, mount, deprecated, extChain)
+
+        return node.mntCtx
+    }
+
+    private class NsNode(
+        val fileCtx: C_FileContext,
+        val nsBuilder: C_UserNsProtoBuilder,
+        val mntCtx: C_MountContext,
+    ) {
+        fun subNode(
+            ideName: C_IdeName,
+            subMount: C_MountAnnotationValue?,
+            subDeprecated: C_Deprecated?,
+            subExtChain: C_ExternalChain?,
+        ): NsNode {
+            val resNsBuilder = nsBuilder.addNamespace(ideName.name, true, ideName.ideInfo, deprecated = subDeprecated)
+            val nsPath = mntCtx.nsCtx.namespacePath.append(ideName.name.rName)
+            val subScopeBuilder = mntCtx.nsCtx.scopeBuilder.nested(resNsBuilder.futureNs())
+            val resNsCtx = C_NamespaceContext(fileCtx.modCtx, fileCtx.symCtx, nsPath, subScopeBuilder)
+            val resMountName = mntCtx.mountName(subMount, C_QualifiedName(ideName.name))
+            val resMntCtx = C_MountContext(mntCtx.fileCtx, resNsCtx, subExtChain, resNsBuilder, resMountName)
+            return NsNode(fileCtx, resNsBuilder, resMntCtx)
+        }
     }
 }
 
@@ -162,10 +182,7 @@ class C_ExtModuleCompiler(
         extModules: List<C_ExtModule>,
         preModules: Map<C_ModuleKey, C_PrecompiledModule>
 ) {
-    private val extModules = extModules.toImmList()
-
-    private val headers = compileHeaders()
-    private val bases = extModules.map { compileModuleBasis(it, headers) }
+    private val bases = extModules.map { compileModuleBasis(it) }
 
     val modProvider = C_ModuleProvider(bases.associate { it.module.key to it.module }, preModules)
 
@@ -181,36 +198,18 @@ class C_ExtModuleCompiler(
         }
     }
 
-    private fun compileHeaders(): Map<R_ModuleName, C_ModuleHeader> {
-        val headers = mutableMapOf<R_ModuleName, C_ModuleHeader>()
-
-        val sortedMidModules = extModules.map { it.midModule }.sortedBy { it.moduleName.size() }.toImmList()
-
-        for (midModule in sortedMidModules) {
-            val parentHeader = if (midModule.parentName == null) null else headers[midModule.parentName]
-            headers[midModule.moduleName] = midModule.compileHeader(appCtx.msgCtx, parentHeader)
-        }
-
-        return headers.toImmMap()
-    }
-
-    private fun compileModuleBasis(extModule: C_ExtModule, headers: Map<R_ModuleName, C_ModuleHeader>): C_ModuleBasis {
+    private fun compileModuleBasis(extModule: C_ExtModule): C_ModuleBasis {
         val midModule = extModule.midModule
 
         val parentName = midModule.parentName
         val parentModuleKey = if (parentName == null) null else C_ModuleKey(parentName, null)
-
-        val parentHeader = headers[parentName]
-        val parentMountName = parentHeader?.mountName ?: R_MountName.EMPTY
-
-        val header = headers[midModule.moduleName] ?: C_ModuleHeader.empty(parentMountName)
 
         val extChain = extModule.chain?.toExtChain(appCtx)
         val moduleKey = C_ModuleKey(midModule.moduleName, extChain)
 
         val internalsLate = C_LateInit(C_CompilerPass.MODULES, C_ModuleInternals.empty(moduleKey))
         val importsGetter = internalsLate.getter.transform { it.importsDescriptor }
-        val descriptor = C_ModuleDescriptor(moduleKey, header, midModule.isDirectory, importsGetter)
+        val descriptor = C_ModuleDescriptor(moduleKey, midModule.compiledHeader, midModule.isDirectory, importsGetter)
 
         val module = C_Module(
                 appCtx.executor,
@@ -224,9 +223,9 @@ class C_ExtModuleCompiler(
 }
 
 private class C_ModuleBasis(
-        val extModule: C_ExtModule,
-        val module: C_Module,
-        private val internalsLate: C_LateInit<C_ModuleInternals>
+    val extModule: C_ExtModule,
+    val module: C_Module,
+    private val internalsLate: C_LateInit<C_ModuleInternals>,
 ) {
     fun compile(appCtx: C_AppContext, modProvider: C_ModuleProvider) {
         checkParentModule(appCtx.msgCtx, modProvider)
@@ -242,7 +241,8 @@ private class C_ModuleBasis(
         val compiledFiles = extModule.compileFiles(modCtx)
 
         appCtx.executor.onPass(C_CompilerPass.MODULES) {
-            val compiled = C_ModuleCompiler.compile(modCtx, compiledFiles)
+            val docSymbol = module.header.docSymbol ?: DocSymbol.NONE
+            val compiled = C_ModuleCompiler.compile(modCtx, compiledFiles, docSymbol, modCtx.nsGetter)
             internalsLate.set(C_ModuleInternals(compiled.contents, compiled.importsDescriptor))
             appCtx.addModule(module.descriptor, compiled)
         }

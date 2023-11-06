@@ -10,7 +10,6 @@ import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.base.compiler.base.core.C_DefinitionName
 import net.postchain.rell.base.compiler.base.lib.C_LibModule
-import net.postchain.rell.base.compiler.base.lib.C_LibType
 import net.postchain.rell.base.compiler.base.utils.C_StringQualifiedName
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.lib.Lib_Rell
@@ -78,27 +77,27 @@ object Lib_RellTest {
 
 private fun typeDefName(name: C_StringQualifiedName) = Lib_RellTest.typeDefName(name)
 
-private object R_TestBlockType: R_SimpleType(Lib_RellTest.BLOCK_TYPE_QNAME.str(), typeDefName(Lib_RellTest.BLOCK_TYPE_QNAME)) {
+private object R_TestBlockType: R_LibSimpleType(Lib_RellTest.BLOCK_TYPE_QNAME.str(), typeDefName(Lib_RellTest.BLOCK_TYPE_QNAME)) {
     override fun isReference() = true
     override fun isDirectMutable() = true
     override fun isDirectPure() = false
     override fun createGtvConversion() = GtvRtConversion_None
-    override fun getLibType0() = C_LibType.make(Lib_RellTest.BLOCK_TYPE)
+    override fun getLibTypeDef() = Lib_RellTest.BLOCK_TYPE
 }
 
-private object R_TestTxType: R_SimpleType(Lib_RellTest.TX_TYPE_QNAME.str(), typeDefName(Lib_RellTest.TX_TYPE_QNAME)) {
+private object R_TestTxType: R_LibSimpleType(Lib_RellTest.TX_TYPE_QNAME.str(), typeDefName(Lib_RellTest.TX_TYPE_QNAME)) {
     override fun isReference() = true
     override fun isDirectMutable() = true
     override fun isDirectPure() = false
     override fun createGtvConversion() = GtvRtConversion_None
-    override fun getLibType0() = C_LibType.make(Lib_RellTest.TX_TYPE)
+    override fun getLibTypeDef() = Lib_RellTest.TX_TYPE
 }
 
-object R_TestOpType: R_SimpleType(Lib_RellTest.OP_TYPE_QNAME.str(), typeDefName(Lib_RellTest.OP_TYPE_QNAME)) {
+object R_TestOpType: R_LibSimpleType(Lib_RellTest.OP_TYPE_QNAME.str(), typeDefName(Lib_RellTest.OP_TYPE_QNAME)) {
     override fun isReference() = true
     override fun isDirectPure() = false
     override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_None
-    override fun getLibType0() = C_LibType.make(Lib_RellTest.OP_TYPE)
+    override fun getLibTypeDef() = Lib_RellTest.OP_TYPE
 }
 
 private class BlockCommonFunctions(

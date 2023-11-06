@@ -20,6 +20,7 @@ import net.postchain.rell.base.model.expr.R_StructMemberExpr
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.utils.PostchainGtvUtils
+import net.postchain.rell.base.utils.doc.DocCode
 import net.postchain.rell.base.utils.toImmList
 
 object Lib_Type_Struct {
@@ -47,8 +48,10 @@ object Lib_Type_Struct {
                 ms?.mutable?.type
             }
 
-            strCode { t ->
-                "struct<mutable ${t.strCode()}>"
+            docCode { t ->
+                DocCode.builder()
+                    .keyword("struct").raw("<").keyword("mutable").raw(" ").append(t).raw(">")
+                    .build()
             }
 
             supertypeStrategySpecial { mType ->
@@ -58,7 +61,7 @@ object Lib_Type_Struct {
 
             function("to_immutable", result = "immutable_mirror_struct<T>", pure = true) {
                 body { a ->
-                    toMutableOrImmutable(a, false, "to_mutable")
+                    toMutableOrImmutable(a, false, "to_immutable")
                 }
             }
         }
@@ -76,8 +79,10 @@ object Lib_Type_Struct {
                 ms?.immutable?.type
             }
 
-            strCode { t ->
-                "struct<${t.strCode()}>"
+            docCode { t ->
+                DocCode.builder()
+                    .keyword("struct").raw("<").append(t).raw(">")
+                    .build()
             }
 
             supertypeStrategySpecial { mType ->
@@ -121,7 +126,7 @@ object Lib_Type_Struct {
                 Lib_Type_Gtv.makeToGtvBody(this, pretty = true)
             }
 
-            staticFunction("from_bytes", result = "T") {
+            staticFunction("from_bytes", result = "T", pure = true) {
                 alias("fromBytes", C_MessageType.ERROR)
                 param(type = "byte_array")
 
@@ -129,7 +134,6 @@ object Lib_Type_Struct {
                     val resType = fnBodyMeta.rResultType
                     Lib_Type_Gtv.validateFromGtvBody(this, resType)
 
-                    pure(resType.completeFlags().pure)
                     bodyContext { ctx, a ->
                         val bytes = a.asByteArray()
                         Rt_Utils.wrapErr("fn:struct:from_bytes") {
@@ -145,13 +149,13 @@ object Lib_Type_Struct {
 
             // Right from_gtv*() functions are added by default, and here we add deprecated functions for compatibility
             // (they used to exist only for structs, not for all types).
-            staticFunction("fromGTXValue", result = "T") {
+            staticFunction("fromGTXValue", result = "T", pure = true) {
                 deprecated(newName = "from_gtv")
                 param(type = "gtv")
                 Lib_Type_Gtv.makeFromGtvBody(this, pretty = false)
             }
 
-            staticFunction("fromPrettyGTXValue", result = "T") {
+            staticFunction("fromPrettyGTXValue", result = "T", pure = true) {
                 deprecated(newName = "from_gtv_pretty")
                 param(type = "gtv")
                 Lib_Type_Gtv.makeFromGtvBody(this, pretty = true)

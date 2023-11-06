@@ -7,13 +7,15 @@ package net.postchain.rell.base.lmodel
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.model.R_QualifiedName
 import net.postchain.rell.base.mtype.M_Type
-import net.postchain.rell.base.utils.immListOf
+import net.postchain.rell.base.utils.doc.DocDefinition
+import net.postchain.rell.base.utils.doc.DocSymbol
 
 class L_Module(
     val moduleName: R_ModuleName,
     val namespace: L_Namespace,
     val allImports: List<L_Module>,
-) {
+    override val docSymbol: DocSymbol,
+): DocDefinition {
     fun getTypeDef(qualifiedName: String): L_TypeDef {
         val qName = R_QualifiedName.of(qualifiedName)
         return getTypeDef(qName)
@@ -49,7 +51,7 @@ class L_Module(
         }
     }
 
-    companion object {
-        val EMPTY = L_Module(R_ModuleName.EMPTY, L_Namespace.EMPTY, immListOf())
+    override fun getDocMember(name: String): DocDefinition? {
+        return namespace.getDocMemberOrNull(name)
     }
 }

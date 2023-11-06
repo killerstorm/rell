@@ -20,6 +20,7 @@ import net.postchain.rell.base.runtime.Rt_CoreValueTypes
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.runtime.utils.toGtv
 import net.postchain.rell.base.utils.checkEquals
+import net.postchain.rell.base.utils.doc.DocCode
 import net.postchain.rell.base.utils.immListOf
 
 class V_LazyExpr(exprCtx: C_ExprContext, private val innerExpr: V_Expr): V_Expr(exprCtx, innerExpr.pos) {
@@ -64,7 +65,15 @@ private class R_LazyType(private val valueType: R_Type): R_Type("lazy<${valueTyp
             "value" to valueType.toMetaGtv()
     ).toGtv()
 
-    override fun getLibType0() = C_LibType.make(this)
+    override fun getLibType0(): C_LibType {
+        val b = DocCode.builder()
+        b.keyword("lazy")
+        b.raw("<")
+        L_TypeUtils.docCode(b, valueType.mType)
+        b.raw(">")
+        val doc = b.build()
+        return C_LibType.make(this, doc)
+    }
 }
 
 private sealed class Rt_LazyValue(

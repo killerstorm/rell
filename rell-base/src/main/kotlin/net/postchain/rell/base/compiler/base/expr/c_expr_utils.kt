@@ -6,6 +6,7 @@ package net.postchain.rell.base.compiler.base.expr
 
 import net.postchain.rell.base.compiler.ast.C_BinOp_EqNe
 import net.postchain.rell.base.compiler.ast.S_Pos
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.core.C_MessageContext
 import net.postchain.rell.base.compiler.base.core.C_QualifiedName
 import net.postchain.rell.base.compiler.base.utils.C_Error
@@ -22,7 +23,6 @@ import net.postchain.rell.base.runtime.Rt_Exception
 import net.postchain.rell.base.utils.CommonUtils
 import net.postchain.rell.base.utils.LazyPosString
 import net.postchain.rell.base.utils.LazyString
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 
 object C_ExprUtils {
     val ERROR_R_EXPR = errorRExpr()
@@ -117,21 +117,33 @@ object C_ExprUtils {
         return C_ValueExpr(value)
     }
 
-    fun errorVGlobalCall(ctx: C_ExprContext, pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): V_GlobalFunctionCall {
+    fun errorVGlobalCall(
+        ctx: C_ExprContext,
+        pos: S_Pos,
+        type: R_Type = R_CtErrorType,
+        msg: String = "Compilation error",
+        ideInfo: C_IdeSymbolInfo? = null,
+    ): V_GlobalFunctionCall {
         val vExpr = errorVExpr(ctx, pos, type, msg)
-        return V_GlobalFunctionCall(vExpr)
+        return V_GlobalFunctionCall(vExpr, ideInfo)
     }
 
-    fun errorVMemberCall(ctx: C_ExprContext, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): V_MemberFunctionCall {
-        return V_MemberFunctionCall_Error(ctx, type, msg)
+    fun errorVMemberCall(
+        ctx: C_ExprContext,
+        type: R_Type = R_CtErrorType,
+        msg: String = "Compilation error",
+        ideInfo: C_IdeSymbolInfo = C_IdeSymbolInfo.UNKNOWN,
+    ): V_MemberFunctionCall {
+        return V_MemberFunctionCall_Error(ctx, ideInfo, type, msg)
     }
 
-    fun errorVMember(pos: S_Pos, type: R_Type = R_CtErrorType, msg: String = "Compilation error"): V_TypeValueMember {
-        return V_TypeValueMember_Error(type, pos, msg)
-    }
-
-    fun errorMember(ctx: C_ExprContext, pos: S_Pos): C_ExprMember {
-        return C_ExprMember(errorExpr(ctx, pos), IdeSymbolInfo.UNKNOWN)
+    fun errorVMember(
+        pos: S_Pos,
+        type: R_Type = R_CtErrorType,
+        msg: String = "Compilation error",
+        ideInfo: C_IdeSymbolInfo = C_IdeSymbolInfo.UNKNOWN,
+    ): V_TypeValueMember {
+        return V_TypeValueMember_Error(type, ideInfo, pos, msg)
     }
 
     fun <T> evaluate(pos: S_Pos, code: () -> T): T {

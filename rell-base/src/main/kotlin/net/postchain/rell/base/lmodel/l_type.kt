@@ -29,7 +29,9 @@ sealed class L_Type(val typeDef: L_TypeDef) {
 
 class L_Type_Basic(typeDef: L_TypeDef): L_Type(typeDef) {
     init {
-        checkEquals(typeDef.mGenericType.params.size, 0)
+        checkEquals(typeDef.mGenericType.params.size, 0) {
+            "Wrong number of arguments for generic type '${typeDef.qualifiedName}'"
+        }
     }
 
     override val mType: M_Type by lazy {

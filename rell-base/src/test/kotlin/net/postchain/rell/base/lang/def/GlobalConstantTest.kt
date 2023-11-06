@@ -305,10 +305,10 @@ class GlobalConstantTest: BaseRellTest(false) {
         chkConst("struct<mutable user>('Bob').to_immutable()", "struct<user>[name=text[Bob]]")
 
         chkConstErr("struct<role>(user@{}).to_mutable()",
-                "ct_err:[def:const:bad_type:mutable:0::X:struct<mutable role>][def:const:bad_expr:0::X:at_expr]")
+                "ct_err:[def:const:bad_type:mutable:0::X:struct<mutable role>][def:const:bad_expr:0::X:fn:sys:struct<role>.to_mutable][def:const:bad_expr:0::X:at_expr]")
 
         chkConstErr("struct<mutable role>(user@{}).to_immutable()",
-                "ct_err:[def:const:bad_type:not_pure:0::X:struct<role>][def:const:bad_expr:0::X:at_expr]")
+                "ct_err:[def:const:bad_type:not_pure:0::X:struct<role>][def:const:bad_expr:0::X:fn:sys:struct<mutable role>.to_immutable][def:const:bad_expr:0::X:at_expr]")
 
         chkConstErr("f().name", "ct_err:[def:const:bad_expr:0::X:entity_attr][def:const:bad_expr:0::X:fn:f]")
         chkConstErr("f().to_struct()", "ct_err:[def:const:bad_expr:0::X:entity_to_struct][def:const:bad_expr:0::X:fn:f]")

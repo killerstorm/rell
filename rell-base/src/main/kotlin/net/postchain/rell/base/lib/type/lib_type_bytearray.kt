@@ -4,7 +4,7 @@
 
 package net.postchain.rell.base.lib.type
 
-import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.compiler.base.utils.C_MessageType
 import net.postchain.rell.base.lib.Lib_Crypto
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
@@ -21,7 +21,7 @@ import java.util.*
 object Lib_Type_ByteArray {
     val DB_SUBSCRIPT: Db_SysFunction = Db_SysFunction.template("byte_array.[]", 2, "GET_BYTE(#0, (#1)::INT)")
 
-    private val FromHex = C_SysFunction.simple(pure = true) { a ->
+    private val FromHex = C_SysFunctionBody.simple(pure = true) { a ->
         val s = a.asString()
         val bytes = Rt_Utils.wrapErr("fn:byte_array.from_hex") {
             CommonUtils.hexToBytes(s)
@@ -29,7 +29,7 @@ object Lib_Type_ByteArray {
         Rt_ByteArrayValue(bytes)
     }
 
-    private val FromList = C_SysFunction.simple(pure = true) { a ->
+    private val FromList = C_SysFunctionBody.simple(pure = true) { a ->
         val s = a.asList()
         val r = ByteArray(s.size)
         for (i in s.indices) {
@@ -50,23 +50,23 @@ object Lib_Type_ByteArray {
 
             constructor {
                 param(type = "text")
-                bodyFunction(FromHex)
+                bodyRaw(FromHex)
             }
 
             constructor {
                 deprecated(newName = "byte_array.from_list")
                 param(type = "list<integer>")
-                bodyFunction(FromList)
+                bodyRaw(FromList)
             }
 
             staticFunction("from_list", result = "byte_array") {
                 param(type = "list<integer>")
-                bodyFunction(FromList)
+                bodyRaw(FromList)
             }
 
             staticFunction("from_hex", result = "byte_array") {
                 param(type = "text")
-                bodyFunction(FromHex)
+                bodyRaw(FromHex)
             }
 
             staticFunction("from_base64", result = "byte_array") {
@@ -180,7 +180,7 @@ object Lib_Type_ByteArray {
             }
 
             function("sha256", "byte_array") {
-                bodyFunction(Lib_Crypto.Sha256)
+                bodyRaw(Lib_Crypto.Sha256)
             }
         }
     }

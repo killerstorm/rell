@@ -4,11 +4,10 @@
 
 package net.postchain.rell.base.lib.test
 
-import net.postchain.rell.base.compiler.base.lib.C_LibType
 import net.postchain.rell.base.lmodel.L_ParamImplication
 import net.postchain.rell.base.lmodel.dsl.Ld_FunctionMetaBodyDsl
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
-import net.postchain.rell.base.model.R_SimpleType
+import net.postchain.rell.base.model.R_LibSimpleType
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.runtime.*
@@ -259,11 +258,11 @@ class Rt_AssertError private constructor(val code: String, val msg: String): Rt_
     }
 }
 
-private object R_TestFailureType: R_SimpleType(FAILURE_QNAME.str(), Lib_RellTest.typeDefName(FAILURE_QNAME)) {
+private object R_TestFailureType: R_LibSimpleType(FAILURE_QNAME.str(), Lib_RellTest.typeDefName(FAILURE_QNAME)) {
     override fun isReference() = true
     override fun isDirectPure() = false
     override fun createGtvConversion(): GtvRtConversion = GtvRtConversion_None
-    override fun getLibType0() = C_LibType.make(Lib_RellTest.FAILURE_TYPE)
+    override fun getLibTypeDef() = Lib_RellTest.FAILURE_TYPE
 }
 
 private class Rt_TestFailureValue(val message: String): Rt_Value() {

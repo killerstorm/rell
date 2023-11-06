@@ -21,8 +21,6 @@ import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.R_Expr
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.utils.LazyString
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
-import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.toBytes
 
 object Lib_OpContext {
@@ -35,8 +33,6 @@ object Lib_OpContext {
     private val TRANSACTION_FN_LAZY = LazyString.of(TRANSACTION_FN)
 
     private val GET_SIGNERS_RETURN_TYPE: R_Type = R_ListType(R_ByteArrayType)
-
-    private val PROP_IDE_INFO = IdeSymbolInfo.get(IdeSymbolKind.MEM_SYS_PROPERTY)
 
     val NAMESPACE = Ld_NamespaceDsl.make {
         struct("gtx_operation") {
@@ -190,10 +186,10 @@ object Lib_OpContext {
     fun gtxTransactionStructValue(name: String, args: List<Gtv>): Rt_Value {
         val nameValue = Rt_TextValue(name)
         val argsValue = Rt_ListValue(LIST_OF_GTV_TYPE, args.map { Rt_GtvValue(it) }.toMutableList())
-        return Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, mutableListOf(nameValue, argsValue)) as Rt_Value
+        return Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, mutableListOf(nameValue, argsValue))
     }
 
-    private object PropTransaction: C_NamespaceProperty(PROP_IDE_INFO) {
+    private object PropTransaction: C_NamespaceProperty() {
         override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
             checkCtx(ctx.exprCtx, name.pos)
             return transactionExpr(ctx, name.pos)

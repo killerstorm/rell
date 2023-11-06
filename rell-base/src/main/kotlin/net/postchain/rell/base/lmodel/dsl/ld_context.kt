@@ -5,6 +5,7 @@
 package net.postchain.rell.base.lmodel.dsl
 
 import net.postchain.rell.base.compiler.base.utils.C_RNamePath
+import net.postchain.rell.base.lmodel.L_FullName
 import net.postchain.rell.base.lmodel.L_Module
 import net.postchain.rell.base.lmodel.L_TypeDef
 import net.postchain.rell.base.model.R_ModuleName
@@ -14,7 +15,7 @@ import net.postchain.rell.base.mtype.M_Type
 import net.postchain.rell.base.mtype.M_Types
 import net.postchain.rell.base.utils.*
 
-class Ld_DeclareTables(private val moduleName: R_ModuleName) {
+class Ld_DeclareTables(val moduleName: R_ModuleName) {
     private val typeDefs = mutableMapOf<R_QualifiedName, Ld_TypeDef.Declaration>()
     private val mTypes = mutableMapOf<R_QualifiedName, M_Type>()
     private var finished = false
@@ -60,8 +61,9 @@ class Ld_DeclareTables(private val moduleName: R_ModuleName) {
 }
 
 class Ld_DeclareContext(private val tables: Ld_DeclareTables, val namePath: C_RNamePath) {
-    fun getQualifiedName(simpleName: R_Name): R_QualifiedName {
-        return namePath.qualifiedName(simpleName)
+    fun getFullName(simpleName: R_Name): L_FullName {
+        val qName = namePath.qualifiedName(simpleName)
+        return L_FullName(tables.moduleName, qName)
     }
 
     fun nestedNamespaceContext(simpleName: R_Name): Ld_DeclareContext {
@@ -94,7 +96,7 @@ class Ld_NamespaceFinishTables(
 class Ld_NamespaceFinishContext(
     private val parent: Ld_NamespaceFinishContext?,
     private val tables: Ld_NamespaceFinishTables,
-    private val currentType: R_QualifiedName?,
+    private val currentType: L_FullName?,
 ) {
     val moduleName = tables.moduleName
     val typeCtx = Ld_TypeFinishContext(this, typeParams = immMapOf())
@@ -174,11 +176,11 @@ class Ld_NamespaceFinishContext(
         }
     }
 
-    fun pushType(typeDef: R_QualifiedName): Ld_NamespaceFinishContext {
-        return Ld_NamespaceFinishContext(parent = this, tables = tables, currentType = typeDef)
+    fun pushType(fullName: L_FullName): Ld_NamespaceFinishContext {
+        return Ld_NamespaceFinishContext(parent = this, tables = tables, currentType = fullName)
     }
 
-    fun getTypeStack(): List<R_QualifiedName> {
+    fun getTypeStack(): List<L_FullName> {
         return CommonUtils.chainToList(this) { it.parent }
             .mapNotNull { it.currentType }
             .reversed()

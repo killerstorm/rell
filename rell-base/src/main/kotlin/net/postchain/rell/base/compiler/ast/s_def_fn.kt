@@ -15,35 +15,81 @@ import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.stmt.R_ExprStatement
 import net.postchain.rell.base.model.stmt.R_ReturnStatement
+import net.postchain.rell.base.mtype.M_FunctionParam
+import net.postchain.rell.base.mtype.M_ParamArity
 import net.postchain.rell.base.utils.MutableTypedKeyMap
+import net.postchain.rell.base.utils.Nullable
 import net.postchain.rell.base.utils.TypedKeyMap
+import net.postchain.rell.base.utils.doc.*
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
 
 class S_FormalParameter(private val attr: S_AttrHeader, private val expr: S_Expr?) {
     fun compile(defCtx: C_DefinitionContext, index: Int): C_FormalParameter {
-        val ideData = C_GlobalAttrHeaderIdeData(IdeSymbolCategory.PARAMETER, IdeSymbolKind.LOC_PARAMETER, null)
-        val attrHeader = attr.compile(defCtx, false, ideData)
+        val docSymLate = C_LateInit(C_CompilerPass.EXPRESSIONS, Nullable.of<DocSymbol>())
 
+        val ideData = C_GlobalAttrHeaderIdeData(
+            IdeSymbolCategory.PARAMETER,
+            IdeSymbolKind.LOC_PARAMETER,
+            null,
+            docSymLate.getter,
+        )
+
+        val attrHeader = attr.compile(defCtx, false, ideData)
         val name = attrHeader.name
         val type = attrHeader.type ?: R_CtErrorType
 
-        val defaultValue = if (expr == null) null else {
+        val mParam = M_FunctionParam(name.str, type.mType, arity = M_ParamArity.ONE, exact = false, nullable = false)
+
+        val docDecGetter: C_LateGetter<DocDeclaration>
+        val defaultValue: C_ParameterDefaultValue?
+
+        if (expr == null) {
+            val docDec = makeDocDeclaration(mParam, null)
+            val docSym = makeDocSymbol(name, docDec)
+            docSymLate.set(Nullable.of(docSym), allowEarly = true)
+            docDecGetter = C_LateGetter.const(docDec)
+            defaultValue = null
+        } else {
             val rErrorExpr = C_ExprUtils.errorRExpr(type)
             val rExprLate = C_LateInit(C_CompilerPass.EXPRESSIONS, rErrorExpr)
             val rValueLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_DefaultValue(rErrorExpr, false))
 
+            //TODO don't create fallback doc every time
+            val fallbackDoc = makeDocDeclaration(mParam, C_ExprUtils.errorVExpr(defCtx.initExprCtx, expr.startPos))
+            val docDecLate = C_LateInit(C_CompilerPass.EXPRESSIONS, fallbackDoc)
+            docDecGetter = docDecLate.getter
+
             defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
                 val vExpr = compileExpr(defCtx, name.rName, type)
                 val rExpr = vExpr.toRExpr()
+                val docDec = makeDocDeclaration(mParam, vExpr)
+                val docSym = makeDocSymbol(name, docDec)
                 rExprLate.set(rExpr)
                 rValueLate.set(R_DefaultValue(rExpr, vExpr.info.hasDbModifications))
+                docDecLate.set(docDec)
+                docSymLate.set(Nullable.of(docSym))
             }
 
-            C_ParameterDefaultValue(expr.startPos, name.rName, rExprLate.getter, defCtx.initFrameGetter, rValueLate.getter)
+            defaultValue = C_ParameterDefaultValue(
+                expr.startPos,
+                name.rName,
+                rExprLate.getter,
+                defCtx.initFrameGetter,
+                rValueLate.getter,
+            )
         }
 
-        return C_FormalParameter(name, type, attrHeader.ideInfo, index, defaultValue)
+        return C_FormalParameter(
+            name,
+            type,
+            attrHeader.ideInfo,
+            mParam,
+            index,
+            defaultValue,
+            docSymLate.getter,
+            docDecGetter,
+        )
     }
 
     private fun compileExpr(defCtx: C_DefinitionContext, paramName: R_Name, paramType: R_Type): V_Expr {
@@ -64,6 +110,20 @@ class S_FormalParameter(private val attr: S_AttrHeader, private val expr: S_Expr
             }
         }
     }
+
+    private fun makeDocDeclaration(mParam: M_FunctionParam, expr: V_Expr?): DocDeclaration {
+        return DocDeclaration_Parameter(mParam, isLazy = false, implies = null, expr = expr)
+    }
+
+    private fun makeDocSymbol(name: C_Name, declaration: DocDeclaration): DocSymbol {
+        return DocSymbol(
+            kind = DocSymbolKind.PARAMETER,
+            symbolName = DocSymbolName.local(name.str),
+            mountName = null,
+            declaration = declaration,
+            comment = null,
+        )
+    }
 }
 
 abstract class S_FunctionBody {
@@ -82,7 +142,7 @@ abstract class S_FunctionBody {
         val cBody = compileQuery0(ctx, actParams.stmtCtx)
         val callFrame = frameCtx.makeCallFrame(cBody.guardBlock)
         val rRetType = fnCtx.actualReturnType()
-        return R_UserQueryBody(rRetType, actParams.rParams, cBody.rStmt, callFrame.rFrame)
+        return R_UserQueryBody(rRetType, actParams.rParams, actParams.rParamVars, cBody.rStmt, callFrame.rFrame)
     }
 
     fun compileFunction(ctx: C_FunctionBodyContext): R_FunctionBody {
@@ -94,7 +154,7 @@ abstract class S_FunctionBody {
         val cBody = compileFunction0(ctx, actParams.stmtCtx)
         val callFrame = frameCtx.makeCallFrame(cBody.guardBlock)
         val rRetType = fnCtx.actualReturnType()
-        return R_FunctionBody(rRetType, actParams.rParams, cBody.rStmt, callFrame.rFrame)
+        return R_FunctionBody(rRetType, actParams.rParams, actParams.rParamVars, cBody.rStmt, callFrame.rFrame)
     }
 }
 

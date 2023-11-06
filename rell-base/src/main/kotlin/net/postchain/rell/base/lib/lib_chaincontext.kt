@@ -16,19 +16,17 @@ import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.model.R_SysFunctionEx_N
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.utils.checkEquals
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
-import net.postchain.rell.base.utils.ide.IdeSymbolKind
 
 object Lib_ChainContext {
     val NAMESPACE = Ld_NamespaceDsl.make {
         namespace("chain_context") {
-            property("raw_config", type = "gtv", pure = false, ideKind = IdeSymbolKind.DEF_CONSTANT) {
+            property("raw_config", type = "gtv", pure = false) {
                 bodyContext { ctx ->
                     Rt_GtvValue(ctx.chainCtx.rawConfig)
                 }
             }
 
-            property("blockchain_rid", type = "byte_array", pure = false, ideKind = IdeSymbolKind.DEF_CONSTANT) {
+            property("blockchain_rid", type = "byte_array", pure = false) {
                 bodyContext { ctx ->
                     val bcRid = ctx.chainCtx.blockchainRid
                     Rt_ByteArrayValue(bcRid.toByteArray())
@@ -40,7 +38,7 @@ object Lib_ChainContext {
     }
 }
 
-private object C_NsProperty_ChainContext_Args: C_NamespaceProperty(IdeSymbolInfo.DEF_CONSTANT) {
+private object C_NsProperty_ChainContext_Args: C_NamespaceProperty() {
     override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
         val struct = ctx.modCtx.getModuleArgsStruct()
         if (struct == null) {
@@ -49,9 +47,9 @@ private object C_NsProperty_ChainContext_Args: C_NamespaceProperty(IdeSymbolInfo
                 "To use '$nameStr', define a struct '${C_Constants.MODULE_ARGS_STRUCT}'")
         }
 
-        val ideInfo = struct.ideInfo
-        if (ideInfo.link != null) {
-            ctx.exprCtx.symCtx.setLink(name.last.pos, ideInfo.link)
+        val ideLink = struct.ideInfo.link
+        if (ideLink != null) {
+            ctx.exprCtx.symCtx.setLink(name.last.pos, ideLink)
         }
 
         val moduleName = ctx.modCtx.moduleName

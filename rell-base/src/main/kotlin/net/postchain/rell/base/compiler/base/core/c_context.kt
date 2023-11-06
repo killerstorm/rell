@@ -24,6 +24,7 @@ import net.postchain.rell.base.compiler.base.namespace.C_UserNsProtoBuilder
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.*
+import net.postchain.rell.base.utils.doc.DocSymbolKind
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
 import net.postchain.rell.base.utils.ide.IdeSymbolId
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
@@ -169,10 +170,11 @@ class C_RegularModuleContext(
     private val nsAssembler = appCtx.createModuleNsAssembler(descriptor.key, sysDefsScope, external)
     private val defsGetter = nsAssembler.futureDefs()
 
+    val nsGetter: Getter<C_Namespace> = nsAssembler.futureNs()
+
     override val scopeBuilder: C_ScopeBuilder = let {
         val rootScopeBuilder = C_ScopeBuilder()
         val sysScopeBuilder = rootScopeBuilder.nested { sysDefsScope.ns }
-        val nsGetter = nsAssembler.futureNs()
         sysScopeBuilder.nested(nsGetter)
     }
 
@@ -265,11 +267,11 @@ class C_ExternalChain(
 )
 
 class C_MountContext(
-        val fileCtx: C_FileContext,
-        val nsCtx: C_NamespaceContext,
-        private val extChain: C_ExternalChain?,
-        val nsBuilder: C_UserNsProtoBuilder,
-        val mountName: R_MountName
+    val fileCtx: C_FileContext,
+    val nsCtx: C_NamespaceContext,
+    val extChain: C_ExternalChain?,
+    val nsBuilder: C_UserNsProtoBuilder,
+    val mountName: R_MountName,
 ) {
     val modCtx = nsCtx.modCtx
     val appCtx = modCtx.appCtx
@@ -337,45 +339,64 @@ class C_MountContext(
         return if (ann == null) extChain else appCtx.addExternalChain(ann.name)
     }
 
-    fun defBase(qualifiedName: C_StringQualifiedName, extChain: C_ExternalChain? = null): C_DefinitionBase {
+    fun defBaseCommon(
+        defType: C_DefinitionType,
+        ideKind: IdeSymbolKind,
+        qualifiedName: C_StringQualifiedName,
+        mountName: R_MountName?,
+        extChain: C_ExternalChain?,
+    ): C_CommonDefinitionBase {
         val moduleKey = modCtx.rModuleKey.copy(externalChain = extChain?.name)
         val fullName = C_StringQualifiedName.of(stringNamespacePath + qualifiedName.parts)
-        return C_Utils.createDefBase(moduleKey, fullName)
+        return C_Utils.createDefBase(defType, ideKind, moduleKey, fullName, mountName)
     }
 
-    fun defBaseEx(
+    fun defBase(
         simpleName: C_Name,
         defType: C_DefinitionType,
         ideKind: IdeSymbolKind,
+        mountName: R_MountName?,
         extChain: C_ExternalChain? = null,
-    ): C_DefinitionBaseEx {
+    ): C_UserDefinitionBase {
         val qualifiedName = C_StringQualifiedName.of(simpleName.str)
-        val base = defBase(qualifiedName, extChain)
-        val ideId = base.ideId(defType)
-        return base.baseEx(simpleName.pos, defType, ideKind, ideId)
+        val base = defBaseCommon(defType, ideKind, qualifiedName, mountName, extChain)
+        return base.userBase(simpleName.pos)
+    }
+
+    fun defBase(
+        nameHand: C_NameHandle,
+        defType: C_DefinitionType,
+        ideKind: IdeSymbolKind,
+        mountName: R_MountName?,
+        extChain: C_ExternalChain? = null,
+    ): C_UserDefinitionBase {
+        val defBase = defBase(nameHand.name, defType, ideKind, mountName, extChain)
+        nameHand.setIdeInfo(defBase.ideDefInfo)
+        return defBase
     }
 }
 
-enum class C_DefinitionType(val ideCategory: IdeSymbolCategory) {
-    REPL(IdeSymbolCategory.NONE),
-    CONSTANT(IdeSymbolCategory.CONSTANT),
-    ENTITY(IdeSymbolCategory.ENTITY),
-    ENUM(IdeSymbolCategory.ENUM),
-    FUNCTION(IdeSymbolCategory.FUNCTION),
-    IMPORT(IdeSymbolCategory.IMPORT),
-    OBJECT(IdeSymbolCategory.OBJECT),
-    OPERATION(IdeSymbolCategory.OPERATION),
-    QUERY(IdeSymbolCategory.QUERY),
-    STRUCT(IdeSymbolCategory.STRUCT),
+enum class C_DefinitionType(val ideCategory: IdeSymbolCategory, val docKind: DocSymbolKind) {
+    REPL(IdeSymbolCategory.NONE, DocSymbolKind.NONE),
+    CONSTANT(IdeSymbolCategory.CONSTANT, DocSymbolKind.CONSTANT),
+    ENTITY(IdeSymbolCategory.ENTITY, DocSymbolKind.ENTITY),
+    ENUM(IdeSymbolCategory.ENUM, DocSymbolKind.ENUM),
+    FUNCTION(IdeSymbolCategory.FUNCTION, DocSymbolKind.FUNCTION),
+    IMPORT(IdeSymbolCategory.IMPORT, DocSymbolKind.IMPORT),
+    OBJECT(IdeSymbolCategory.OBJECT, DocSymbolKind.OBJECT),
+    OPERATION(IdeSymbolCategory.OPERATION, DocSymbolKind.OPERATION),
+    QUERY(IdeSymbolCategory.QUERY, DocSymbolKind.QUERY),
+    STRUCT(IdeSymbolCategory.STRUCT, DocSymbolKind.STRUCT),
     ;
 
-    fun isEntityLike() = this == ENTITY || this == OBJECT
+    fun isEntityOrObject() = this == ENTITY || this == OBJECT
 }
 
 class C_DefinitionContext(
     val mntCtx: C_MountContext,
     val definitionType: C_DefinitionType,
     val defId: R_DefinitionId,
+    val cDefName: C_DefinitionName,
     val defName: R_DefinitionName,
     private val ideId: IdeSymbolId,
 ) {
@@ -391,7 +412,7 @@ class C_DefinitionContext(
     val initFrameGetter = initFrameLate.getter
 
     val initExprCtx: C_ExprContext = let {
-        val fnCtx = C_FunctionContext(this, "${mntCtx.mountName}.<init>", null, TypedKeyMap())
+        val fnCtx = C_FunctionContext(this, "${defName.appLevelName}.<init>", null, TypedKeyMap())
         val initFrameCtx = C_FrameContext.create(fnCtx)
 
         executor.onPass(C_CompilerPass.FRAMES) {
@@ -427,10 +448,10 @@ class C_DefinitionContext(
 }
 
 class C_FunctionContext(
-        val defCtx: C_DefinitionContext,
-        name: String,
-        val explicitReturnType: R_Type?,
-        val statementVars: TypedKeyMap
+    val defCtx: C_DefinitionContext,
+    name: String,
+    val explicitReturnType: R_Type?,
+    val statementVars: TypedKeyMap,
 ) {
     val nsCtx = defCtx.nsCtx
     val modCtx = nsCtx.modCtx
@@ -442,7 +463,7 @@ class C_FunctionContext(
     val fnUid = defCtx.modCtx.nextFnUid(name)
     private val blockUidGen = C_UidGen { id, name -> R_FrameBlockUid(id, name, fnUid) }
     private val varUidGen = C_UidGen { id, name -> C_VarUid(id, name, fnUid) }
-    private val loopUidGen = C_UidGen { id, name -> C_LoopUid(id, fnUid) }
+    private val loopUidGen = C_UidGen { id, _ -> C_LoopUid(id, fnUid) }
 
     private val retTypeTracker =
             if (explicitReturnType != null) RetTypeTracker.Explicit(explicitReturnType) else RetTypeTracker.Implicit()

@@ -6,6 +6,7 @@ package net.postchain.rell.base.compiler.base.expr
 
 import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_Pos
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.core.C_Name
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTargetInfo
@@ -13,7 +14,6 @@ import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.model.R_Attribute
 import net.postchain.rell.base.model.R_Name
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
 
@@ -98,19 +98,19 @@ class C_CallArgument(val index: Int, val name: C_Name?, val value: C_CallArgumen
 }
 
 sealed class C_CallArgumentIdeInfoProvider {
-    abstract fun getIdeInfo(name: R_Name): IdeSymbolInfo
+    abstract fun getIdeInfo(name: R_Name): C_IdeSymbolInfo
 }
 
 object C_CallArgumentIdeInfoProvider_Unknown: C_CallArgumentIdeInfoProvider() {
-    override fun getIdeInfo(name: R_Name) = IdeSymbolInfo.UNKNOWN
+    override fun getIdeInfo(name: R_Name) = C_IdeSymbolInfo.UNKNOWN
 }
 
 class C_CallArgumentIdeInfoProvider_Argument(
         private val targetInfo: C_FunctionCallTargetInfo
 ): C_CallArgumentIdeInfoProvider() {
-    override fun getIdeInfo(name: R_Name): IdeSymbolInfo {
+    override fun getIdeInfo(name: R_Name): C_IdeSymbolInfo {
         val param = targetInfo.getParameter(name)
-        return param ?: IdeSymbolInfo.UNKNOWN
+        return param ?: C_IdeSymbolInfo.UNKNOWN
     }
 }
 
@@ -119,8 +119,8 @@ class C_CallArgumentIdeInfoProvider_Attribute(
 ): C_CallArgumentIdeInfoProvider() {
     private val attributes = attributes.toImmMap()
 
-    override fun getIdeInfo(name: R_Name): IdeSymbolInfo {
+    override fun getIdeInfo(name: R_Name): C_IdeSymbolInfo {
         val attr = attributes[name]
-        return attr?.ideInfo ?: IdeSymbolInfo.UNKNOWN
+        return attr?.ideInfo ?: C_IdeSymbolInfo.UNKNOWN
     }
 }

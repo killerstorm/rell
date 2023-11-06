@@ -13,6 +13,7 @@ import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.compiler.vexpr.V_TypeAdapterExpr
 import net.postchain.rell.base.lib.type.Lib_Type_BigInteger
 import net.postchain.rell.base.lib.type.Lib_Type_Decimal
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.mtype.M_Type
@@ -21,7 +22,6 @@ import net.postchain.rell.base.mtype.M_Type_Tuple
 import net.postchain.rell.base.mtype.M_Types
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.immSetOf
-import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.utils.toImmSet
 
 class C_TypeHint private constructor(val mTypes: Set<M_Type>) {

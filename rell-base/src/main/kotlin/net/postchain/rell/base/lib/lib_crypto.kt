@@ -6,7 +6,7 @@ package net.postchain.rell.base.lib
 
 import net.postchain.crypto.CURVE_PARAMS
 import net.postchain.crypto.Signature
-import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.lmodel.L_ParamArity
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
@@ -25,7 +25,7 @@ import java.math.BigInteger
 import java.security.MessageDigest
 
 object Lib_Crypto {
-    val Sha256 = C_SysFunction.simple(pure = true) { a ->
+    val Sha256 = C_SysFunctionBody.simple(pure = true) { a ->
         val ba = a.asByteArray()
         val md = MessageDigest.getInstance("SHA-256")
         Rt_ByteArrayValue(md.digest(ba))
@@ -40,7 +40,7 @@ object Lib_Crypto {
         namespace("crypto") {
             function("sha256", "byte_array") {
                 param("byte_array")
-                bodyFunction(Sha256)
+                bodyRaw(Sha256)
             }
 
             function("keccak256", "byte_array", pure = true) {

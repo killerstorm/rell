@@ -26,7 +26,11 @@ import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.R_Expr
 import net.postchain.rell.base.runtime.utils.toGtv
 import net.postchain.rell.base.utils.*
+import net.postchain.rell.base.utils.doc.DocDeclaration
+import net.postchain.rell.base.utils.doc.DocDeclaration_Entity
+import net.postchain.rell.base.utils.doc.DocModifiers
 import net.postchain.rell.base.utils.ide.IdeFilePath
+import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import java.util.*
 
 typealias C_CodeMsgSupplier = () -> C_CodeMsg
@@ -157,63 +161,66 @@ object C_Utils {
     }
 
     fun createBlockEntity(appCtx: C_AppContext, chain: R_ExternalChainRef?): R_EntityDefinition {
-        val attrs = listOf(
-                C_SysAttribute("block_height", R_IntegerType, isKey = true),
-                C_SysAttribute("block_rid", R_ByteArrayType, isKey = true),
-                C_SysAttribute("timestamp", R_IntegerType)
-        )
         val sqlMapping = R_EntitySqlMapping_Block(chain)
-        return createSysEntity(appCtx, C_Constants.BLOCK_ENTITY_RNAME, chain, sqlMapping, attrs)
+        val header = C_SysEntityHeader(C_Constants.BLOCK_ENTITY_RNAME, chain, sqlMapping)
+        val attrs = listOf(
+            header.attrMaker.make("block_height", R_IntegerType, isKey = true),
+            header.attrMaker.make("block_rid", R_ByteArrayType, isKey = true),
+            header.attrMaker.make("timestamp", R_IntegerType),
+        )
+        return createSysEntity(appCtx, header, attrs)
     }
 
-    fun createTransactionEntity(appCtx: C_AppContext, chain: R_ExternalChainRef?, blockEntity: R_EntityDefinition): R_EntityDefinition {
-        val attrs = listOf(
-                C_SysAttribute("tx_rid", R_ByteArrayType, isKey = true),
-                C_SysAttribute("tx_hash", R_ByteArrayType),
-                C_SysAttribute("tx_data", R_ByteArrayType),
-                C_SysAttribute("block", blockEntity.type, sqlMapping = "block_iid")
-        )
+    fun createTransactionEntity(
+        appCtx: C_AppContext,
+        chain: R_ExternalChainRef?,
+        blockEntity: R_EntityDefinition,
+    ): R_EntityDefinition {
         val sqlMapping = R_EntitySqlMapping_Transaction(chain)
-        return createSysEntity(appCtx, C_Constants.TRANSACTION_ENTITY_RNAME, chain, sqlMapping, attrs)
+        val header = C_SysEntityHeader(C_Constants.TRANSACTION_ENTITY_RNAME, chain, sqlMapping)
+        val attrs = listOf(
+            header.attrMaker.make("tx_rid", R_ByteArrayType, isKey = true),
+            header.attrMaker.make("tx_hash", R_ByteArrayType),
+            header.attrMaker.make("tx_data", R_ByteArrayType),
+            header.attrMaker.make("block", blockEntity.type, sqlMapping = "block_iid"),
+        )
+        return createSysEntity(appCtx, header, attrs)
     }
 
     private fun createSysEntity(
-            appCtx: C_AppContext,
-            simpleName: R_Name,
-            chain: R_ExternalChainRef?,
-            sqlMapping: R_EntitySqlMapping,
-            attrs: List<C_SysAttribute>
+        appCtx: C_AppContext,
+        header: C_SysEntityHeader,
+        attrs: List<C_SysAttribute>,
     ): R_EntityDefinition {
-        val moduleKey = R_ModuleKey(C_LibUtils.DEFAULT_MODULE, chain?.name)
-        val cDefBase = createDefBase(moduleKey, C_StringQualifiedName.of(simpleName.str))
-        val defBase = cDefBase.rBase(R_CallFrame.NONE_INIT_FRAME_GETTER)
-
-        val mountName = R_MountName.of(simpleName.str)
+        val simpleName = header.simpleName
 
         val flags = R_EntityFlags(
-                isObject = false,
-                canCreate = false,
-                canUpdate = false,
-                canDelete = false,
-                gtv = true,
-                log = false
+            isObject = false,
+            canCreate = false,
+            canUpdate = false,
+            canDelete = false,
+            gtv = true,
+            log = false,
         )
 
-        val externalEntity = if (chain == null) null else R_ExternalEntity(chain, false)
+        val externalEntity = if (header.chain == null) null else R_ExternalEntity(header.chain, false)
 
         val entity = createEntity(
-                appCtx,
-                C_DefinitionType.ENTITY,
-                defBase,
-                simpleName,
-                mountName,
-                flags,
-                sqlMapping,
-                externalEntity
+            appCtx,
+            C_DefinitionType.ENTITY,
+            header.rDefBase,
+            simpleName,
+            flags,
+            header.sqlMapping,
+            externalEntity,
         )
 
-        val rAttrs = attrs.mapIndexed { i, attr -> attr.compile(i, true) }
-        val rAttrMap = rAttrs.map { it.rName to it }.toMap()
+        val rAttrMap = attrs
+            .mapIndexed { i, attr ->
+                val rAttr = attr.compile(i, true)
+                rAttr.rName to rAttr
+            }
+            .toImmMap()
 
         appCtx.executor.onPass(C_CompilerPass.MEMBERS) {
             setEntityBody(entity, R_EntityBody(listOf(), listOf(), rAttrMap))
@@ -222,17 +229,34 @@ object C_Utils {
         return entity
     }
 
+    private class C_SysEntityHeader(
+        val simpleName: R_Name,
+        val chain: R_ExternalChainRef?,
+        val sqlMapping: R_EntitySqlMapping,
+    ) {
+        val moduleKey = R_ModuleKey(C_LibUtils.DEFAULT_MODULE, chain?.name)
+
+        val rDefBase: R_DefinitionBase = let {
+            val mountName = sqlMapping.mountName
+            val qualifiedName = C_StringQualifiedName.of(simpleName.str)
+            val cDefBase = createDefBase(C_DefinitionType.ENTITY, IdeSymbolKind.DEF_ENTITY, moduleKey, qualifiedName, mountName)
+            val docGetter = cDefBase.docGetter(C_LateGetter.const(DocDeclaration_Entity(DocModifiers.NONE, simpleName)))
+            cDefBase.rBase(R_CallFrame.NONE_INIT_FRAME_GETTER, docGetter)
+        }
+
+        val attrMaker = C_SysAttribute.Maker(rDefBase.defName)
+    }
+
     fun createEntity(
         appCtx: C_AppContext,
         defType: C_DefinitionType,
         defBase: R_DefinitionBase,
         name: R_Name,
-        mountName: R_MountName,
         flags: R_EntityFlags,
         sqlMapping: R_EntitySqlMapping,
         externalEntity: R_ExternalEntity?,
     ): R_EntityDefinition {
-        val rEntity = R_EntityDefinition(defBase, defType, name, mountName, flags, sqlMapping, externalEntity)
+        val rEntity = R_EntityDefinition(defBase, defType, name, flags, sqlMapping, externalEntity)
         appCtx.defsAdder.addStruct(rEntity.mirrorStructs.immutable)
         appCtx.defsAdder.addStruct(rEntity.mirrorStructs.mutable)
         return rEntity
@@ -270,11 +294,13 @@ object C_Utils {
     fun createSysQuery(executor: C_CompilerExecutor, simpleName: String, type: R_Type, fn: R_SysFunction): R_QueryDefinition {
         val moduleName = RELL_MODULE_NAME
         val moduleKey = R_ModuleKey(moduleName, null)
-        val cDefBase = createDefBase(moduleKey, C_StringQualifiedName.of(simpleName))
-
+        val qName = C_StringQualifiedName.of(simpleName)
         val mountName = R_MountName(moduleName.parts + R_Name.of(simpleName))
 
-        val defBase = cDefBase.rBase(R_CallFrame.NONE_INIT_FRAME_GETTER)
+        val cDefBase = createDefBase(C_DefinitionType.QUERY, IdeSymbolKind.DEF_QUERY, moduleKey, qName, mountName)
+        val docGetter = cDefBase.docGetter(C_LateGetter.const(DocDeclaration.NONE))
+        val defBase = cDefBase.rBase(R_CallFrame.NONE_INIT_FRAME_GETTER, docGetter)
+
         val query = R_QueryDefinition(defBase, mountName)
 
         executor.onPass(C_CompilerPass.EXPRESSIONS) {
@@ -285,15 +311,22 @@ object C_Utils {
         return query
     }
 
-    fun createDefBase(module: R_ModuleKey, qualifiedName: C_StringQualifiedName): C_DefinitionBase {
-        val cDefName = createDefName(module, qualifiedName)
+    fun createDefBase(
+        defType: C_DefinitionType,
+        ideKind: IdeSymbolKind,
+        moduleKey: R_ModuleKey,
+        qualifiedName: C_StringQualifiedName,
+        mountName: R_MountName?,
+    ): C_CommonDefinitionBase {
+        val cDefName = createDefName(moduleKey, qualifiedName)
         val defName = cDefName.toRDefName()
         val defId = R_DefinitionId(defName.module, defName.qualifiedName)
-        return C_DefinitionBase(defId, cDefName, defName)
+        return C_CommonDefinitionBase(defType, ideKind, defId, cDefName, defName, mountName)
     }
 
     private fun createDefName(module: R_ModuleKey, qualifiedName: C_StringQualifiedName): C_DefinitionName {
-        return C_DefinitionName(module.str(), qualifiedName)
+        val defModule = C_DefinitionModuleName(module.name.str(), module.externalChain)
+        return C_DefinitionName(defModule, qualifiedName)
     }
 
     fun fullName(namespacePath: String?, name: String): String {
@@ -620,13 +653,15 @@ private class C_DirectLateGetter<T: Any>(private val init: C_LateInit<T>): C_Lat
 }
 
 private class C_TransformingLateGetter<T: Any, R: Any>(
-        private val getter: C_LateGetter<T>,
-        private val transformer: (T) -> R
+    private val getter: C_LateGetter<T>,
+    private val transformer: (T) -> R,
 ): C_LateGetter<R>() {
-    override fun get(): R {
+    private val lazyValue: R by lazy {
         val value = getter.get()
-        return transformer(value)
+        transformer(value)
     }
+
+    override fun get(): R = lazyValue
 }
 
 class C_LateInit<T: Any>(val pass: C_CompilerPass, fallback: T) {

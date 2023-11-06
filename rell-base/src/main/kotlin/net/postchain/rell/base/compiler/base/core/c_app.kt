@@ -6,16 +6,12 @@ package net.postchain.rell.base.compiler.base.core
 
 import net.postchain.rell.base.compiler.base.def.*
 import net.postchain.rell.base.compiler.base.lib.C_LibModule
-import net.postchain.rell.base.compiler.base.module.C_CompiledModule
-import net.postchain.rell.base.compiler.base.module.C_ModuleDescriptor
-import net.postchain.rell.base.compiler.base.module.C_ModuleKey
-import net.postchain.rell.base.compiler.base.module.C_PrecompiledModule
+import net.postchain.rell.base.compiler.base.module.*
 import net.postchain.rell.base.compiler.base.namespace.C_NsAsm_App
 import net.postchain.rell.base.compiler.base.namespace.C_NsAsm_AppAssembler
 import net.postchain.rell.base.compiler.base.namespace.C_NsAsm_ModuleAssembler
 import net.postchain.rell.base.compiler.base.namespace.C_NsAsm_ReplAssembler
 import net.postchain.rell.base.compiler.base.utils.*
-import net.postchain.rell.base.lmodel.L_Module
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.putAllAbsent
 import net.postchain.rell.base.utils.toImmList
@@ -45,6 +41,7 @@ class C_AppContext(
     val executor: C_CompilerExecutor,
     val repl: Boolean,
     private val oldReplState: C_ReplAppState,
+    private val newModuleHeaders: Map<R_ModuleName, C_ModuleHeader>,
     private val extraLibMod: C_LibModule?,
 ) {
     val globalCtx = msgCtx.globalCtx
@@ -161,7 +158,8 @@ class C_AppContext(
 
     fun addModule(module: C_ModuleDescriptor, compiled: C_CompiledModule) {
         executor.checkPass(C_CompilerPass.MODULES)
-        modulesBuilder.add(C_AppModule(module, compiled.rModule, compiled.contents.mntTables))
+        val appModule = C_AppModule(module, compiled.rModule, compiled.contents.mntTables)
+        modulesBuilder.add(appModule)
     }
 
     fun addExtraMountTables(mntTables: C_MountTables) {
@@ -216,6 +214,9 @@ class C_AppContext(
 
         val asmApp = nsAsmAppLate.get()
 
+        val resModuleHeaders = oldReplState.moduleHeaders.toMutableMap()
+        resModuleHeaders.putAllAbsent(newModuleHeaders)
+
         val modules = modulesBuilder.commit()
 
         val newPrecompiledModules = modules
@@ -229,12 +230,13 @@ class C_AppContext(
                 .toMap()
                 .toImmMap()
 
-        val stateModules = oldReplState.modules.toMutableMap()
-        stateModules.putAllAbsent(newPrecompiledModules)
+        val resModules = oldReplState.modules.toMutableMap()
+        resModules.putAllAbsent(newPrecompiledModules)
 
         val newReplState = C_ReplAppState(
                 asmApp.newReplState,
-                stateModules,
+                resModuleHeaders,
+                resModules,
                 sysDefs,
                 app.sqlDefs,
                 mntTables,
@@ -305,7 +307,11 @@ class C_AppContext(
         return res.toImmMap()
     }
 
-    private class C_AppModule(val module: C_ModuleDescriptor, val rModule: R_Module, val mntTables: C_MountTables)
+    private class C_AppModule(
+        val module: C_ModuleDescriptor,
+        val rModule: R_Module,
+        val mntTables: C_MountTables,
+    )
 }
 
 class C_AppDefs(

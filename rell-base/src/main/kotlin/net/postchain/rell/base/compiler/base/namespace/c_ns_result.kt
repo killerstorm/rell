@@ -80,7 +80,7 @@ private class C_NsRes_InternalMaker {
                 val impNs = def.ns()
                 val ns = makeNamespace(impNs)
                 val base = C_NamespaceMemberBase(def.defName, def.ideInfo, def.deprecated)
-                C_NamespaceItem(C_NamespaceMember_UserNamespace(base, ns), def.ideInfo)
+                C_NamespaceItem(C_NamespaceMember_UserNamespace(base, ns))
             }
         }
     }

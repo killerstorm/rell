@@ -4,8 +4,9 @@
 
 package net.postchain.rell.base.lmodel.dsl
 
-import net.postchain.rell.base.compiler.base.lib.C_LibMemberFunction
-import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunctionBody
+import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
+import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.compiler.base.utils.C_MessageType
 import net.postchain.rell.base.lmodel.*
 import net.postchain.rell.base.model.R_Name
@@ -14,6 +15,7 @@ import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.mtype.*
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.*
+import net.postchain.rell.base.utils.doc.*
 import java.util.function.Supplier
 import kotlin.math.max
 
@@ -29,27 +31,45 @@ class Ld_TypeDefParent(private val typeName: Ld_FullName, private val args: List
 }
 
 sealed class Ld_TypeDefMember {
-    abstract fun finish(ctx: Ld_TypeFinishContext, typeName: R_QualifiedName): List<L_TypeDefMember>
+    abstract fun finish(ctx: Ld_TypeFinishContext, typeName: L_FullName): List<L_TypeDefMember>
 }
 
 private class Ld_TypeDefMember_Constructor(private val constructor: Ld_Constructor): Ld_TypeDefMember() {
-    override fun finish(ctx: Ld_TypeFinishContext, typeName: R_QualifiedName): List<L_TypeDefMember> {
+    override fun finish(ctx: Ld_TypeFinishContext, typeName: L_FullName): List<L_TypeDefMember> {
         val lConstructor = constructor.finish(ctx, typeName)
-        return immListOf(L_TypeDefMember_Constructor(lConstructor))
+        val doc = makeDoc(typeName, lConstructor)
+        return immListOf(L_TypeDefMember_Constructor(lConstructor, doc))
+    }
+
+    private fun makeDoc(typeName: L_FullName, lConstructor: L_Constructor): DocSymbol {
+        return DocSymbol(
+            kind = DocSymbolKind.CONSTRUCTOR,
+            symbolName = DocSymbolName.global(typeName.moduleName.str(), typeName.qName.str()), //TODO proper name
+            mountName = null,
+            declaration = DocDeclaration_TypeConstructor(lConstructor),
+            comment = null,
+        )
     }
 }
 
-private class Ld_TypeDefMember_Constant(private val constant: Ld_Constant): Ld_TypeDefMember() {
-    override fun finish(ctx: Ld_TypeFinishContext, typeName: R_QualifiedName): List<L_TypeDefMember> {
-        val lConstant = constant.finish(ctx)
-        return immListOf(L_TypeDefMember_Constant(lConstant))
+private class Ld_TypeDefMember_Constant(
+    private val simpleName: R_Name,
+    private val constant: Ld_Constant,
+): Ld_TypeDefMember() {
+    override fun finish(ctx: Ld_TypeFinishContext, typeName: L_FullName): List<L_TypeDefMember> {
+        val fullName = typeName.append(simpleName)
+        val lConstant = constant.finish(ctx, simpleName)
+        val doc = Ld_DocSymbols.constant(fullName, lConstant.type, lConstant.value)
+        return immListOf(L_TypeDefMember_Constant(lConstant, doc))
     }
 }
 
 private class Ld_TypeDefMember_Property(private val property: Ld_TypeProperty): Ld_TypeDefMember() {
-    override fun finish(ctx: Ld_TypeFinishContext, typeName: R_QualifiedName): List<L_TypeDefMember> {
+    override fun finish(ctx: Ld_TypeFinishContext, typeName: L_FullName): List<L_TypeDefMember> {
+        val fullName = typeName.append(property.simpleName)
         val lProperty = property.finish(ctx)
-        return immListOf(L_TypeDefMember_Property(property.simpleName, lProperty))
+        val doc = Ld_DocSymbols.property(fullName, lProperty.type, lProperty.body.pure)
+        return immListOf(L_TypeDefMember_Property(property.simpleName, doc, lProperty))
     }
 }
 
@@ -58,27 +78,40 @@ private class Ld_TypeDefMember_Function(
     private val function: Ld_Function,
     private val isStatic: Boolean,
 ): Ld_TypeDefMember() {
-    override fun finish(ctx: Ld_TypeFinishContext, typeName: R_QualifiedName): List<L_TypeDefMember> {
-        val qualifiedName = typeName.append(simpleName)
-        val lFunction = function.finish(ctx, qualifiedName)
+    override fun finish(ctx: Ld_TypeFinishContext, typeName: L_FullName): List<L_TypeDefMember> {
+        val fullName = typeName.append(simpleName)
+        val lFunction = function.finish(ctx, fullName)
 
         val res = mutableListOf<L_TypeDefMember>()
-        res.add(L_TypeDefMember_Function(simpleName, lFunction, isStatic = isStatic, deprecated = function.deprecated))
+        res.add(makeMember(typeName, simpleName, lFunction, function.deprecated))
 
         for (alias in function.aliases) {
-            res.add(L_TypeDefMember_Function(alias.simpleName, lFunction, isStatic = isStatic, deprecated = alias.deprecated))
+            res.add(makeMember(typeName, alias.simpleName, lFunction, alias.deprecated))
         }
 
         return res.toImmList()
+    }
+
+    private fun makeMember(
+        typeName: L_FullName,
+        name: R_Name,
+        lFunction: L_Function,
+        deprecated: C_Deprecated?,
+    ): L_TypeDefMember {
+        val qName = typeName.qName.append(name)
+        val doc = Ld_DocSymbols.function(typeName.moduleName, qName, lFunction, isStatic, deprecated)
+        return L_TypeDefMember_Function(name, doc, lFunction, isStatic = isStatic, deprecated = deprecated)
     }
 }
 
 private class Ld_TypeDefMember_SpecialFunction(
     private val simpleName: R_Name,
-    private val fn: C_LibMemberFunction,
+    private val fn: C_SpecialLibMemberFunctionBody,
 ): Ld_TypeDefMember() {
-    override fun finish(ctx: Ld_TypeFinishContext, typeName: R_QualifiedName): List<L_TypeDefMember> {
-        return immListOf(L_TypeDefMember_SpecialFunction(simpleName, fn))
+    override fun finish(ctx: Ld_TypeFinishContext, typeName: L_FullName): List<L_TypeDefMember> {
+        val fullName = typeName.append(simpleName)
+        val doc = Ld_DocSymbols.specialFunction(fullName)
+        return immListOf(L_TypeDefMember_SpecialFunction(simpleName, doc, fn))
     }
 }
 
@@ -89,18 +122,18 @@ class Ld_TypeDef(
     private val typeParams: List<Ld_TypeParam>,
     private val parent: Ld_TypeDefParent?,
     private val rTypeFactory: L_TypeDefRTypeFactory?,
-    private val strCodeStrategy: L_TypeDefStrCodeStrategy?,
+    private val docCodeStrategy: L_TypeDefDocCodeStrategy?,
     private val supertypeStrategy: L_TypeDefSupertypeStrategy,
     private val members: List<Ld_TypeDefMember>,
 ) {
-    fun declare(ctx: Ld_DeclareContext, qualifiedName: R_QualifiedName): Declaration {
-        val dec = Declaration(qualifiedName, aliases)
-        ctx.declareType(qualifiedName, dec)
+    fun declare(ctx: Ld_DeclareContext, fullName: L_FullName): Declaration {
+        val dec = Declaration(fullName, aliases)
+        ctx.declareType(fullName.qName, dec)
         return dec
     }
 
     inner class Declaration(
-        private val qualifiedName: R_QualifiedName,
+        private val fullName: L_FullName,
         val aliases: List<Ld_Alias>,
     ) {
         private var typeDefMaking = false
@@ -120,8 +153,8 @@ class Ld_TypeDef(
 
             Ld_Exception.check(!typeDefMaking) {
                 val stack = ctx.getTypeStack()
-                val i = stack.indexOf(qualifiedName)
-                val cycle = (stack.drop(max(i, 0)) + listOf(qualifiedName)).map { it.str() }
+                val i = stack.indexOf(fullName)
+                val cycle = (stack.drop(max(i, 0)) + listOf(fullName)).map { it.str() }
                 val cycleCode = cycle.joinToString(",")
                 val cycleMsg = cycle.joinToString(", ")
                 "type_cycle:$cycleCode" to "Type recursion: $cycleMsg"
@@ -129,7 +162,7 @@ class Ld_TypeDef(
 
             typeDefMaking = true
 
-            val subCtx = ctx.pushType(qualifiedName)
+            val subCtx = ctx.pushType(fullName)
             val typeCtx = subCtx.typeCtx
             val (mTypeParams, mTypeParamMap) = Ld_TypeParam.finishList(typeCtx, typeParams)
 
@@ -138,10 +171,11 @@ class Ld_TypeDef(
             val lParent = parent?.finish(subTypeCtx)
 
             val mParent = if (lParent == null) null else M_GenericTypeParent(lParent.typeDef.mGenericType, lParent.args)
-            val mGenericType = makeGenericType(qualifiedName, mTypeParams, mParent)
+            val mGenericType = makeGenericType(fullName.qName, mTypeParams, mParent)
 
-            val fullName = L_FullName(ctx.moduleName, qualifiedName)
             val bodyRef = Ld_TypeDefMembersRef()
+
+            val docSym = makeDocSymbol(fullName, mTypeParams, lParent)
 
             val typeDef = L_TypeDef(
                 fullName,
@@ -150,6 +184,7 @@ class Ld_TypeDef(
                 parent = lParent,
                 rTypeFactory = rTypeFactory,
                 membersSupplier = bodyRef,
+                docSymbol = docSym,
             )
 
             val res = Ld_TypeDefRec(typeDef, bodyRef, mTypeParamMap)
@@ -165,7 +200,7 @@ class Ld_TypeDef(
             if (mTypeParams.isEmpty() && rTypeFactory != null) {
                 val rType = rTypeFactory.getRType(immListOf())
                 if (rType != null) {
-                    return L_TypeUtils.makeMGenericType(rType, mParent)
+                    return L_TypeUtils.makeMGenericType(rType, mParent, docCodeStrategy)
                 }
             }
 
@@ -174,8 +209,22 @@ class Ld_TypeDef(
                 mTypeParams,
                 mParent,
                 rTypeFactory = rTypeFactory,
-                strCodeStrategy = strCodeStrategy,
+                docCodeStrategy = docCodeStrategy,
                 supertypeStrategy = supertypeStrategy,
+            )
+        }
+
+        private fun makeDocSymbol(
+            fullName: L_FullName,
+            mTypeParams: List<M_TypeParam>,
+            lParent: L_TypeDefParent?,
+        ): DocSymbol {
+            return DocSymbol(
+                kind = DocSymbolKind.TYPE,
+                symbolName = DocSymbolName.global(fullName.moduleName.str(), fullName.qName.str()),
+                mountName = null,
+                declaration = DocDeclaration_Type(fullName.last, mTypeParams, lParent, flags),
+                comment = null,
             )
         }
 
@@ -186,7 +235,7 @@ class Ld_TypeDef(
             val typeDefRec = getTypeDef0(ctx)
 
             val typeCtx = ctx.typeCtx.subCtx(typeParams = typeDefRec.typeParams)
-            val lMembers = members.flatMap { it.finish(typeCtx, qualifiedName) }.toImmList()
+            val lMembers = members.flatMap { it.finish(typeCtx, fullName) }.toImmList()
 
             val body = L_TypeDefMembers(lMembers)
             typeDefRec.membersRef.set(body)
@@ -223,7 +272,7 @@ class Ld_TypeDef(
         ): Ld_TypeDef {
             val builder = Ld_TypeDefBuilder(simpleName, flags = flags)
 
-            val dsl = Ld_TypeDefDsl(builder)
+            val dsl = Ld_TypeDefDsl(simpleName.str, builder)
             if (rType != null) {
                 dsl.rType(rType)
             }
@@ -241,15 +290,15 @@ class Ld_NamespaceMember_Type(
     override fun getAliases(): List<Ld_Alias> = typeDef.aliases
 
     override fun declare(ctx: Ld_DeclareContext): Declaration {
-        val qualifiedName = ctx.getQualifiedName(simpleName)
-        val typeDeclaration = typeDef.declare(ctx, qualifiedName)
-        return MemDeclaration(qualifiedName, typeDeclaration)
+        val fullName = ctx.getFullName(simpleName)
+        val typeDeclaration = typeDef.declare(ctx, fullName)
+        return MemDeclaration(fullName, typeDeclaration)
     }
 
     private class MemDeclaration(
-        qualifiedName: R_QualifiedName,
+        fullName: L_FullName,
         private val typeDeclaration: Ld_TypeDef.Declaration,
-    ): Declaration(qualifiedName) {
+    ): Declaration(fullName) {
         override fun finish(ctx: Ld_NamespaceFinishContext): List<L_NamespaceMember> {
             val lTypeDef = typeDeclaration.finish(ctx)
 
@@ -274,10 +323,10 @@ interface Ld_TypeDefMaker: Ld_CommonNamespaceMaker {
     fun parent(type: String)
 
     fun rTypeFactory(factory: L_TypeDefRTypeFactory)
-    fun strCodeStrategy(strategy: L_TypeDefStrCodeStrategy)
+    fun docCodeStrategy(strategy: L_TypeDefDocCodeStrategy)
     fun supertypeStrategy(strategy: L_TypeDefSupertypeStrategy)
 
-    fun property(name: String, type: String, fn: C_SysFunction)
+    fun property(name: String, type: String, body: C_SysFunctionBody)
 
     fun constructor(params: List<String>?, pure: Boolean?, block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef)
 
@@ -290,11 +339,12 @@ interface Ld_TypeDefMaker: Ld_CommonNamespaceMaker {
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     )
 
-    fun function(name: String, fn: C_LibMemberFunction)
+    fun function(name: String, fn: C_SpecialLibMemberFunctionBody)
 }
 
 @RellLibDsl
 class Ld_TypeDefDsl(
+    val typeSimpleName: String,
     private val maker: Ld_TypeDefMaker,
 ): Ld_CommonNamespaceDsl by Ld_CommonNamespaceDslBuilder(maker) {
     fun alias(name: String, deprecated: C_MessageType? = null) {
@@ -334,28 +384,26 @@ class Ld_TypeDefDsl(
         }
     }
 
-    fun strCode(str: String) {
-        maker.strCodeStrategy { _, _ ->
-            str
-        }
+    fun rTypeFactory(factory: L_TypeDefRTypeFactory) {
+        maker.rTypeFactory(factory)
     }
 
-    fun strCode(calculator: (M_TypeSet) -> String) {
-        maker.strCodeStrategy { _, args ->
+    fun docCode(calculator: (DocCode) -> DocCode) {
+        maker.docCodeStrategy { args ->
             checkEquals(args.size, 1)
             calculator(args[0])
         }
     }
 
-    fun strCode(calculator: (M_TypeSet, M_TypeSet) -> String) {
-        maker.strCodeStrategy { _, args ->
+    fun docCode(calculator: (DocCode, DocCode) -> DocCode) {
+        maker.docCodeStrategy { args ->
             checkEquals(args.size, 2)
             calculator(args[0], args[1])
         }
     }
 
-    fun strCode(calculator: (M_TypeSet, M_TypeSet, M_TypeSet) -> String) {
-        maker.strCodeStrategy { _, args ->
+    fun docCode(calculator: (DocCode, DocCode, DocCode) -> DocCode) {
+        maker.docCodeStrategy { args ->
             checkEquals(args.size, 3)
             calculator(args[0], args[1], args[2])
         }
@@ -380,12 +428,12 @@ class Ld_TypeDefDsl(
     }
 
     fun property(name: String, type: String, pure: Boolean = false, getter: (Rt_Value) -> Rt_Value) {
-        val fn = C_SysFunction.simple(pure = pure, rCode = getter)
-        maker.property(name, type, fn)
+        val body = C_SysFunctionBody.simple(pure = pure, rCode = getter)
+        maker.property(name, type, body)
     }
 
-    fun property(name: String, type: String, fn: C_SysFunction) {
-        maker.property(name, type, fn)
+    fun property(name: String, type: String, body: C_SysFunctionBody) {
+        maker.property(name, type, body)
     }
 
     fun constructor(
@@ -406,7 +454,7 @@ class Ld_TypeDefDsl(
         maker.function(isStatic = false, name = name, result = result, params = params, pure = pure, block = block)
     }
 
-    fun function(name: String, fn: C_LibMemberFunction) {
+    fun function(name: String, fn: C_SpecialLibMemberFunctionBody) {
         maker.function(name, fn)
     }
 
@@ -437,7 +485,7 @@ private class Ld_TypeDefBuilder(
     private var selfType: String? = null
     private var parentType: Ld_TypeDefParent? = null
     private var rTypeFactory: L_TypeDefRTypeFactory? = null
-    private var strCodeStrategy: L_TypeDefStrCodeStrategy? = null
+    private var docCodeStrategy: L_TypeDefDocCodeStrategy? = null
     private var supertypeStrategy: L_TypeDefSupertypeStrategy? = null
 
     private val staticConflictChecker = Ld_MemberConflictChecker(immMapOf())
@@ -489,10 +537,10 @@ private class Ld_TypeDefBuilder(
         rTypeFactory = factory
     }
 
-    override fun strCodeStrategy(strategy: L_TypeDefStrCodeStrategy) {
-        check(strCodeStrategy == null) { "strCode strategy already set" }
+    override fun docCodeStrategy(strategy: L_TypeDefDocCodeStrategy) {
+        check(docCodeStrategy == null) { "strCode strategy already set" }
         check(members.isEmpty()) { "Trying to set strCode strategy after a member" }
-        strCodeStrategy = strategy
+        docCodeStrategy = strategy
     }
 
     override fun supertypeStrategy(strategy: L_TypeDefSupertypeStrategy) {
@@ -512,21 +560,21 @@ private class Ld_TypeDefBuilder(
         }
     }
 
-    override fun constant(name: String, type: String, value: L_ConstantValue) {
+    override fun constant(name: String, type: String, value: Ld_ConstantValue) {
         val rName = R_Name.of(name)
         staticConflictChecker.addMember(rName, Ld_ConflictMemberKind.OTHER)
 
         val ldType = Ld_Type.parse(type)
-        val constant = Ld_Constant(rName, ldType, value)
-        members.add(Ld_TypeDefMember_Constant(constant))
+        val constant = Ld_Constant(ldType, value)
+        members.add(Ld_TypeDefMember_Constant(rName, constant))
     }
 
-    override fun property(name: String, type: String, fn: C_SysFunction) {
+    override fun property(name: String, type: String, body: C_SysFunctionBody) {
         val rName = R_Name.of(name)
         valueConflictChecker.addMember(rName, Ld_ConflictMemberKind.OTHER)
 
         val ldType = Ld_Type.parse(type)
-        val property = Ld_TypeProperty(rName, ldType, fn)
+        val property = Ld_TypeProperty(rName, ldType, body)
         members.add(Ld_TypeDefMember_Property(property))
     }
 
@@ -582,7 +630,7 @@ private class Ld_TypeDefBuilder(
         members.add(Ld_TypeDefMember_Function(rName, fn, isStatic = isStatic))
     }
 
-    override fun function(name: String, fn: C_LibMemberFunction) {
+    override fun function(name: String, fn: C_SpecialLibMemberFunctionBody) {
         val rName = R_Name.of(name)
         valueConflictChecker.addMember(rName, Ld_ConflictMemberKind.OTHER)
         members.add(Ld_TypeDefMember_SpecialFunction(rName, fn))
@@ -602,7 +650,7 @@ private class Ld_TypeDefBuilder(
             typeParams = typeParamsCopy,
             parent = parentType,
             rTypeFactory = rTypeFactory,
-            strCodeStrategy = strCodeStrategy,
+            docCodeStrategy = docCodeStrategy,
             supertypeStrategy = supertypeStrategy ?: L_TypeDefSupertypeStrategy_None,
             members = members.toImmList(),
         )

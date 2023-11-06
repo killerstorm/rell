@@ -20,7 +20,7 @@ import net.postchain.rell.base.model.R_Type
 class C_DeprecatedLibFuncCase<CallT: V_FunctionCall>(
     private val case: C_LibFuncCase<CallT>,
     private val deprecated: C_Deprecated,
-): C_LibFuncCase<CallT>() {
+): C_LibFuncCase<CallT>(case.ideInfo) {
     override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibFuncCase<CallT> {
         val case2 = case.replaceTypeParams(rep)
         return if (case2 === case) this else C_DeprecatedLibFuncCase(case2, deprecated)

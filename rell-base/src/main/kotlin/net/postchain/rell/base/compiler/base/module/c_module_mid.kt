@@ -9,20 +9,24 @@ import net.postchain.rell.base.compiler.ast.S_BasicDefinition
 import net.postchain.rell.base.compiler.ast.S_Modifiers
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.*
-import net.postchain.rell.base.compiler.base.modifier.*
+import net.postchain.rell.base.compiler.base.modifier.C_ModifierContext
+import net.postchain.rell.base.compiler.base.modifier.C_ModifierFields
+import net.postchain.rell.base.compiler.base.modifier.C_ModifierTargetType
+import net.postchain.rell.base.compiler.base.modifier.C_ModifierValues
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceMemberBase
+import net.postchain.rell.base.compiler.base.utils.C_LateInit
 import net.postchain.rell.base.compiler.base.utils.C_SourcePath
 import net.postchain.rell.base.model.R_EnumDefinition
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.model.R_MountName
-import net.postchain.rell.base.utils.CommonUtils
-import net.postchain.rell.base.utils.queueOf
-import net.postchain.rell.base.utils.toImmList
-import net.postchain.rell.base.utils.toImmMap
+import net.postchain.rell.base.model.R_QualifiedName
+import net.postchain.rell.base.utils.*
+import net.postchain.rell.base.utils.doc.*
 
 class C_MidModuleContext(
         val msgCtx: C_MessageContext,
         val modImporter: C_MidModuleImporter,
+        val moduleName: R_ModuleName,
         val extChain: C_ExtChainName?
 )
 
@@ -31,34 +35,28 @@ class C_MidMemberContext(
         val modifierCtx: C_ModifierContext,
         val extChain: C_ExtChainName?
 ) {
-    fun externalChain(modExternal: C_ModifierValue<C_ExtChainName>): C_ExtChainName? {
-        val v = modExternal.value()
-        return v ?: extChain
+    fun externalChain(modExtChain: C_ExtChainName?): C_ExtChainName? {
+        return modExtChain ?: extChain
     }
 }
 
 class C_MidModuleHeader(
-        val pos: S_Pos,
-        private val rawMount: C_RawMountAnnotationValue?,
-        val abstract: S_Pos?,
-        val external: Boolean,
-        val test: Boolean
-) {
-    fun compile(msgCtx: C_MessageContext, parentMountName: R_MountName): C_ModuleHeader {
-        val mount = rawMount?.process(true)
-        val mountName = mount?.calculateMountName(msgCtx, parentMountName) ?: parentMountName
-        return C_ModuleHeader(mountName, abstract = abstract != null, external = external, test = test)
-    }
-}
+    val pos: S_Pos,
+    val abstract: S_Pos?,
+    val external: Boolean,
+    val test: Boolean,
+)
 
 class C_MidModule(
-        val moduleName: R_ModuleName,
-        val parentName: R_ModuleName?,
-        val header: C_MidModuleHeader?,
-        files: List<C_MidModuleFile>,
-        val isDirectory: Boolean,
-        val isTestDependency: Boolean,
-        val isSelected: Boolean,
+    val moduleName: R_ModuleName,
+    val parentName: R_ModuleName?,
+    val mountName: R_MountName,
+    val header: C_MidModuleHeader?,
+    val compiledHeader: C_ModuleHeader,
+    files: List<C_MidModuleFile>,
+    val isDirectory: Boolean,
+    val isTestDependency: Boolean,
+    val isSelected: Boolean,
 ) {
     private val files = files.toImmList()
 
@@ -66,11 +64,6 @@ class C_MidModule(
     val isTest = header?.test ?: false
 
     fun filePaths() = files.map { it.path }.toImmList()
-
-    fun compileHeader(msgCtx: C_MessageContext, parentHeader: C_ModuleHeader?): C_ModuleHeader {
-        val parentMountName = parentHeader?.mountName ?: R_MountName.EMPTY
-        return header?.compile(msgCtx, parentMountName) ?: C_ModuleHeader.empty(parentMountName)
-    }
 
     fun compile(ctx: C_MidModuleContext): C_ExtModule {
         val extFiles = files.map { it.compile(ctx) }
@@ -131,41 +124,65 @@ class C_MidModuleMember_Import(
     private val importDef: C_ImportDefinition,
     private val target: C_ImportTarget,
     private val moduleName: R_ModuleName,
+    private val modExtChain: C_ExtChainName?,
 ): C_MidModuleMember() {
     override fun compile(ctx: C_MidMemberContext): C_ExtModuleMember {
-        val mods = C_ModifierValues(C_ModifierTargetType.IMPORT, null)
-        val modExternal = mods.field(C_ModifierFields.EXTERNAL_CHAIN)
-        modifiers.compile(ctx.modifierCtx, mods)
-
-        val extChainName = ctx.externalChain(modExternal)
+        val extChainName = ctx.externalChain(modExtChain)
         ctx.modCtx.modImporter.importModule(moduleName, extChainName)
-
         return C_ExtModuleMember_Import(importDef, target, moduleName, extChainName)
     }
 }
 
 class C_MidModuleMember_Namespace(
     private val modifiers: S_Modifiers,
-    private val qualifiedName: C_IdeQualifiedName?,
+    private val qualifiedName: List<NamePart>,
     members: List<C_MidModuleMember>,
 ): C_MidModuleMember() {
     private val members = members.toImmList()
 
     override fun compile(ctx: C_MidMemberContext): C_ExtModuleMember {
-        val mods = C_ModifierValues(C_ModifierTargetType.NAMESPACE, name = qualifiedName?.last?.name)
+        val lastName = qualifiedName.lastOrNull()?.ideName?.name
+        val mods = C_ModifierValues(C_ModifierTargetType.NAMESPACE, name = lastName)
         val modExternal = mods.field(C_ModifierFields.EXTERNAL_CHAIN)
         val modMount = mods.field(C_ModifierFields.MOUNT)
-        val modDeprecated = if (qualifiedName == null) null else mods.field(C_ModifierFields.DEPRECATED)
-        modifiers.compile(ctx.modifierCtx, mods)
+        val modDeprecated = if (qualifiedName.isEmpty()) null else mods.field(C_ModifierFields.DEPRECATED)
+        val docModifiers = modifiers.compile(ctx.modifierCtx, mods)
+
+        for ((i, namePart) in qualifiedName.withIndex()) {
+            val actualDocModifiers = if (i < qualifiedName.size - 1) DocModifiers.NONE else docModifiers
+            val docSymbol = makeDocSymbol(ctx, namePart.qualifiedName, actualDocModifiers)
+            namePart.docSymbolLate.set(Nullable.of(docSymbol), allowEarly = true)
+        }
 
         val mount = modMount.value()?.process(true)
-        val extChainName = ctx.externalChain(modExternal)
+        val extChainName = ctx.externalChain(modExternal.value())
 
         val subCtx = C_MidMemberContext(ctx.modCtx, ctx.modifierCtx, extChainName)
         val subMembers = members.map { it.compile(subCtx) }
 
-        return C_ExtModuleMember_Namespace(qualifiedName, subMembers, mount, extChainName, modDeprecated?.value())
+        val ideQualifiedName = if (qualifiedName.isEmpty()) null else C_IdeQualifiedName(qualifiedName.map { it.ideName })
+        return C_ExtModuleMember_Namespace(ideQualifiedName, subMembers, mount, extChainName, modDeprecated?.value())
     }
+
+    private fun makeDocSymbol(
+        ctx: C_MidMemberContext,
+        qName: R_QualifiedName,
+        docModifiers: DocModifiers,
+    ): DocSymbol {
+        return DocSymbol(
+            kind = DocSymbolKind.NAMESPACE,
+            symbolName = DocSymbolName.global(ctx.modCtx.moduleName.str(), qName.str()),
+            mountName = null,
+            declaration = DocDeclaration_Namespace(docModifiers, qName.last),
+            comment = null,
+        )
+    }
+
+    class NamePart(
+        val ideName: C_IdeName,
+        val qualifiedName: R_QualifiedName,
+        val docSymbolLate: C_LateInit<Nullable<DocSymbol>>,
+    )
 }
 
 class C_MidModuleCompiler(
@@ -181,16 +198,16 @@ class C_MidModuleCompiler(
     private val moduleQueue = queueOf<Pair<C_MidModule, C_ExtChainName?>>()
     private val extModules = mutableListOf<C_ExtModule>()
 
-    fun compileModule(name: R_ModuleName, extChain: C_ExtChainName?) {
+    fun compileModule(moduleName: R_ModuleName, extChain: C_ExtChainName?) {
         check(!done)
-        importModule(name, extChain)
+        importModule(moduleName, extChain)
         processQueue()
     }
 
-    fun compileReplMembers(members: List<C_MidModuleMember>): List<C_ExtModuleMember> {
+    fun compileReplMembers(moduleName: R_ModuleName, members: List<C_MidModuleMember>): List<C_ExtModuleMember> {
         check(!done)
 
-        val moduleCtx = C_MidModuleContext(msgCtx, modImporter, null)
+        val moduleCtx = C_MidModuleContext(msgCtx, modImporter, moduleName, null)
         val modifierCtx = C_ModifierContext(msgCtx, C_NopSymbolContext)
         val memberCtx = C_MidMemberContext(moduleCtx, modifierCtx, null)
         val res = members.map { it.compile(memberCtx) }.toImmList()
@@ -234,7 +251,7 @@ class C_MidModuleCompiler(
     }
 
     private fun processModule(midModule: C_MidModule, extChain: C_ExtChainName?) {
-        val midCtx = C_MidModuleContext(msgCtx, modImporter, extChain)
+        val midCtx = C_MidModuleContext(msgCtx, modImporter, midModule.moduleName, extChain)
         val extModule = midModule.compile(midCtx)
         extModules.add(extModule)
     }

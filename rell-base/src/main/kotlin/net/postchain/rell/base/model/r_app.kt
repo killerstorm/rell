@@ -6,20 +6,20 @@ package net.postchain.rell.base.model
 
 import net.postchain.gtv.Gtv
 import net.postchain.rell.base.compiler.base.core.C_DefinitionName
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
+import net.postchain.rell.base.compiler.base.namespace.C_Namespace
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
 import net.postchain.rell.base.model.expr.R_Expr
 import net.postchain.rell.base.model.expr.R_FunctionExtensionsTable
 import net.postchain.rell.base.runtime.utils.toGtv
-import net.postchain.rell.base.utils.MsgString
-import net.postchain.rell.base.utils.checkEquals
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
-import net.postchain.rell.base.utils.toImmList
-import net.postchain.rell.base.utils.toImmMap
+import net.postchain.rell.base.utils.*
+import net.postchain.rell.base.utils.doc.DocDefinition
+import net.postchain.rell.base.utils.doc.DocSymbol
 
 class R_DefinitionName(
-        val module: String,
-        val qualifiedName: String,
-        val simpleName: String,
+    val module: String,
+    val qualifiedName: String,
+    val simpleName: String,
 ) {
     val appLevelName = appLevelName(module, qualifiedName)
 
@@ -37,17 +37,21 @@ class R_DefinitionBase(
     val defName: R_DefinitionName,
     val cDefName: C_DefinitionName,
     val initFrameGetter: C_LateGetter<R_CallFrame>,
+    val docGetter: C_LateGetter<DocSymbol>,
 )
 
-abstract class R_Definition(base: R_DefinitionBase) {
+abstract class R_Definition(base: R_DefinitionBase): DocDefinition {
     val defId = base.defId
     val defName = base.defName
     val cDefName = base.cDefName
     val initFrameGetter = base.initFrameGetter
+    private val docGetter = base.docGetter
 
     val simpleName = defName.simpleName
     val moduleLevelName = defName.qualifiedName
     val appLevelName = defName.appLevelName
+
+    final override val docSymbol: DocSymbol get() = docGetter.get()
 
     abstract fun toMetaGtv(): Gtv
 
@@ -87,25 +91,25 @@ data class R_AtEntityId(val exprId: R_AtExprId, val id: Long) {
 
 class R_DefaultValue(val rExpr: R_Expr, val isDbModification: Boolean)
 
-enum class R_KeyIndexKind(nameMsg: String) {
+enum class R_KeyIndexKind(val code: String) {
     KEY("key"),
     INDEX("index"),
     ;
 
-    val nameMsg = MsgString(nameMsg)
+    val nameMsg = MsgString(code)
 }
 
 class R_Attribute(
-        val index: Int,
-        val rName: R_Name,
-        val type: R_Type,
-        val mutable: Boolean,
-        val keyIndexKind: R_KeyIndexKind?,
-        val ideInfo: IdeSymbolInfo,
-        val canSetInCreate: Boolean = true,
-        val sqlMapping: String = rName.str,
-        private val exprGetter: C_LateGetter<R_DefaultValue>?
-) {
+    val index: Int,
+    val rName: R_Name,
+    val type: R_Type,
+    val mutable: Boolean,
+    val keyIndexKind: R_KeyIndexKind?,
+    val ideInfo: C_IdeSymbolInfo,
+    val canSetInCreate: Boolean = true,
+    val sqlMapping: String = rName.str,
+    private val exprGetter: C_LateGetter<R_DefaultValue>?,
+): DocDefinition {
     val ideName = R_IdeName(rName, ideInfo)
     val name = rName.str
 
@@ -113,6 +117,8 @@ class R_Attribute(
     val isExprDbModification: Boolean get() = exprGetter?.get()?.isDbModification ?: false
 
     val hasExpr: Boolean get() = exprGetter != null
+
+    override val docSymbol: DocSymbol get() = ideInfo.getIdeInfo().doc ?: DocSymbol.NONE
 
     fun toMetaGtv(): Gtv {
         return mapOf(
@@ -122,7 +128,7 @@ class R_Attribute(
         ).toGtv()
     }
 
-    fun copy(mutable: Boolean, ideInfo: IdeSymbolInfo): R_Attribute {
+    fun copy(mutable: Boolean, ideInfo: C_IdeSymbolInfo): R_Attribute {
         return R_Attribute(
                 index = index,
                 rName = rName,
@@ -153,25 +159,29 @@ data class R_ModuleKey(val name: R_ModuleName, val externalChain: String?) {
 }
 
 class R_Module(
-        val name: R_ModuleName,
-        val directory: Boolean,
-        val abstract: Boolean,
-        val external: Boolean,
-        val externalChain: String?,
-        val test: Boolean,
-        val selected: Boolean,
-        val entities: Map<String, R_EntityDefinition>,
-        val objects: Map<String, R_ObjectDefinition>,
-        val structs: Map<String, R_StructDefinition>,
-        val enums: Map<String, R_EnumDefinition>,
-        val operations: Map<String, R_OperationDefinition>,
-        val queries: Map<String, R_QueryDefinition>,
-        val functions: Map<String, R_FunctionDefinition>,
-        val constants: Map<String, R_GlobalConstantDefinition>,
-        val imports: Set<R_ModuleName>,
-        val moduleArgs: R_StructDefinition?
-) {
+    val name: R_ModuleName,
+    val directory: Boolean,
+    val abstract: Boolean,
+    val external: Boolean,
+    val externalChain: String?,
+    val test: Boolean,
+    val selected: Boolean,
+    val entities: Map<String, R_EntityDefinition>,
+    val objects: Map<String, R_ObjectDefinition>,
+    val structs: Map<String, R_StructDefinition>,
+    val enums: Map<String, R_EnumDefinition>,
+    val operations: Map<String, R_OperationDefinition>,
+    val queries: Map<String, R_QueryDefinition>,
+    val functions: Map<String, R_FunctionDefinition>,
+    val constants: Map<String, R_GlobalConstantDefinition>,
+    val imports: Set<R_ModuleName>,
+    val moduleArgs: R_StructDefinition?,
+    override val docSymbol: DocSymbol,
+    private val nsGetter: Getter<C_Namespace>,
+): DocDefinition {
     val key = R_ModuleKey(name, externalChain)
+
+    private val nsLazy: C_Namespace by lazy { nsGetter() }
 
     override fun toString() = name.toString()
 
@@ -200,6 +210,11 @@ class R_Module(
         if (defs.isNotEmpty()) {
             map[key] = defs.keys.sorted().map { it to defs.getValue(it).toMetaGtv() }.toMap().toGtv()
         }
+    }
+
+    override fun getDocMember(name: String): DocDefinition? {
+        val elem = nsLazy.getElement(R_Name.of(name))
+        return elem?.item
     }
 }
 

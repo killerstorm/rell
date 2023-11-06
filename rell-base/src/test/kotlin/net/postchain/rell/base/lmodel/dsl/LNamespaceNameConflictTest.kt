@@ -4,17 +4,11 @@
 
 package net.postchain.rell.base.lmodel.dsl
 
-import net.postchain.rell.base.compiler.ast.S_CallArgument
-import net.postchain.rell.base.compiler.base.core.C_TypeHint
-import net.postchain.rell.base.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty_RtValue
-import net.postchain.rell.base.compiler.vexpr.V_GlobalFunctionCall
+import net.postchain.rell.base.lib.Lib_Rell
 import net.postchain.rell.base.runtime.Rt_IntValue
 import net.postchain.rell.base.runtime.Rt_UnitValue
-import net.postchain.rell.base.utils.LazyPosString
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import org.junit.Test
 
 class LNamespaceNameConflictTest: BaseLTest() {
@@ -32,7 +26,7 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkNameConflictErr(defs, block, "ns") { property("ns", "anything") { bodyContext { Rt_UnitValue } } }
         chkNameConflictErr(defs, block, "ns") { property("ns", makeSpecProp()) }
         chkNameConflictErr(defs, block, "ns") { function("ns", "anything") { body { -> Rt_UnitValue } } }
-        chkNameConflictErr(defs, block, "ns") { function("ns", makeSpecFun()) }
+        chkNameConflictErr(defs, block, "ns") { function("ns", makeGlobalFun()) }
     }
 
     @Test fun testFunction() {
@@ -48,7 +42,7 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkNameConflictOK(defs, block, "function f(anything): anything") {
             function("f", "anything") { param("anything"); body { -> Rt_UnitValue } }
         }
-        chkNameConflictErr(defs, block, "f") { function("f", makeSpecFun()) }
+        chkNameConflictErr(defs, block, "f") { function("f", makeGlobalFun()) }
     }
 
     @Test fun testOther() {
@@ -57,7 +51,7 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkNameConflictCommon("c", "constant c: anything = unit") { constant("c", "anything", Rt_UnitValue) }
         chkNameConflictCommon("p", "property p: anything") { property("p", "anything") { bodyContext { Rt_UnitValue } } }
         chkNameConflictCommon("p", "property p") { property("p", makeSpecProp()) }
-        chkNameConflictCommon("f", "special function f()") { function("f", makeSpecFun()) }
+        chkNameConflictCommon("f", "special function f()") { function("f", makeGlobalFun()) }
     }
 
     private fun chkNameConflictCommon(name: String, def: String, block: Ld_NamespaceDsl.() -> Unit) {
@@ -69,7 +63,7 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkNameConflictErr(defs, block, name) { property(name, "anything") { bodyContext { Rt_UnitValue } } }
         chkNameConflictErr(defs, block, name) { property(name, makeSpecProp()) }
         chkNameConflictErr(defs, block, name) { function(name, "anything") { body { -> Rt_UnitValue } } }
-        chkNameConflictErr(defs, block, name) { function(name, makeSpecFun()) }
+        chkNameConflictErr(defs, block, name) { function(name, makeGlobalFun()) }
     }
 
     @Test fun testLink() {
@@ -85,7 +79,7 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkNameConflictErr(defs, block, "l") { constant("l", "anything", Rt_UnitValue) }
         chkNameConflictErr(defs, block, "l") { property("l", "anything") { bodyContext { Rt_UnitValue } } }
         chkNameConflictErr(defs, block, "l") { property("l", makeSpecProp()) }
-        chkNameConflictErr(defs, block, "l") { function("l", makeSpecFun()) }
+        chkNameConflictErr(defs, block, "l") { function("l", makeGlobalFun()) }
 
         chkNameConflictOK(defs0, block, "function l(anything): anything", "function l(): anything") {
             function("l", "anything") { param("anything"); body { -> Rt_UnitValue } }
@@ -137,18 +131,18 @@ class LNamespaceNameConflictTest: BaseLTest() {
             namespace("ns") {}
             type("t")
             struct("s") {}
-            constant("c", "anything", Rt_UnitValue)
+            constant("c", "integer", Rt_IntValue(0))
             property("p1", "anything") { bodyContext { Rt_UnitValue } }
             property("p2", makeSpecProp())
             function("f1", "anything") { body { -> Rt_UnitValue } }
-            function("f2", makeSpecFun())
+            function("f2", makeGlobalFun())
         }
 
         val defs = arrayOf(
             "namespace ns",
             "type t",
             "struct s",
-            "constant c: anything = unit",
+            "constant c: integer = int[0]",
             "property p1: anything",
             "property p2",
             "function f1(): anything",
@@ -165,6 +159,7 @@ class LNamespaceNameConflictTest: BaseLTest() {
         block2: Ld_NamespaceDsl.() -> Unit,
     ) {
         val mod = makeModule("test") {
+            imports(Lib_Rell.MODULE.lModule)
             block1(this)
             block2(this)
         }
@@ -178,6 +173,7 @@ class LNamespaceNameConflictTest: BaseLTest() {
         block2: Ld_NamespaceDsl.() -> Unit,
     ) {
         val mod = makeModule("test") {
+            imports(Lib_Rell.MODULE.lModule)
             block1(this)
             chkErr("LDE:name_conflict:$name") { block2(this) }
         }
@@ -187,19 +183,6 @@ class LNamespaceNameConflictTest: BaseLTest() {
     private fun makeBlock(block: Ld_NamespaceDsl.() -> Unit): Ld_NamespaceDsl.() -> Unit = block
 
     private fun makeSpecProp(): C_NamespaceProperty {
-        return C_NamespaceProperty_RtValue(IdeSymbolInfo.DEF_CONSTANT, Rt_IntValue(123))
-    }
-
-    private fun makeSpecFun(): C_GlobalFunction {
-        return object: C_GlobalFunction() {
-            override fun compileCall(
-                ctx: C_ExprContext,
-                name: LazyPosString,
-                args: List<S_CallArgument>,
-                resTypeHint: C_TypeHint
-            ): V_GlobalFunctionCall {
-                throw UnsupportedOperationException()
-            }
-        }
+        return C_NamespaceProperty_RtValue(Rt_IntValue(123))
     }
 }

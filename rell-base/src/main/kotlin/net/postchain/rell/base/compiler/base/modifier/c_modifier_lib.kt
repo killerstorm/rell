@@ -5,7 +5,7 @@
 package net.postchain.rell.base.compiler.base.modifier
 
 import net.postchain.rell.base.compiler.ast.S_KeywordModifierKind
-import net.postchain.rell.base.compiler.ast.S_QualifiedName
+import net.postchain.rell.base.compiler.base.core.C_QualifiedNameHandle
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.model.expr.R_AtWhatSort
 
@@ -56,8 +56,12 @@ private object C_Annotation_Deprecated {
 private object C_Annotation_Extend {
     val FIELD = C_ModifierField.valueAnnotation("extend", Evaluator)
 
-    private object Evaluator: C_ModifierEvaluator<S_QualifiedName>() {
-        override fun evaluate(ctx: C_ModifierContext, modLink: C_ModifierLink, args: List<C_AnnotationArg>): S_QualifiedName? {
+    private object Evaluator: C_ModifierEvaluator<C_QualifiedNameHandle>() {
+        override fun evaluate(
+            ctx: C_ModifierContext,
+            modLink: C_ModifierLink,
+            args: List<C_AnnotationArg>,
+        ): C_QualifiedNameHandle? {
             val arg = C_AnnUtils.checkArgsOne(ctx, modLink.name, args)
             return arg?.name(ctx)
         }

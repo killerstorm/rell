@@ -4,7 +4,7 @@
 
 package net.postchain.rell.base.lib
 
-import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.model.expr.Db_SysFunction
 import net.postchain.rell.base.runtime.Rt_BigIntegerValue
@@ -13,7 +13,7 @@ import net.postchain.rell.base.runtime.Rt_Exception
 import net.postchain.rell.base.runtime.Rt_IntValue
 
 object Lib_Math {
-    val Abs_Integer = C_SysFunction.simple(Db_SysFunction.simple("abs", "ABS"), pure = true) { a ->
+    val Abs_Integer = C_SysFunctionBody.simple(Db_SysFunction.simple("abs", "ABS"), pure = true) { a ->
         val v = a.asInteger()
         if (v == Long.MIN_VALUE) {
             throw Rt_Exception.common("abs:integer:overflow:$v", "Integer overflow: $v")
@@ -22,54 +22,54 @@ object Lib_Math {
         Rt_IntValue(r)
     }
 
-    val Abs_BigInteger = C_SysFunction.simple(Db_SysFunction.simple("abs", "ABS"), pure = true) { a ->
+    val Abs_BigInteger = C_SysFunctionBody.simple(Db_SysFunction.simple("abs", "ABS"), pure = true) { a ->
         val v = a.asBigInteger()
         val r = v.abs()
         Rt_BigIntegerValue.of(r)
     }
 
-    val Abs_Decimal = C_SysFunction.simple(Db_SysFunction.simple("abs", "ABS"), pure = true) { a ->
+    val Abs_Decimal = C_SysFunctionBody.simple(Db_SysFunction.simple("abs", "ABS"), pure = true) { a ->
         val v = a.asDecimal()
         val r = v.abs()
         Rt_DecimalValue.of(r)
     }
 
-    val Min_Integer = C_SysFunction.simple(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
+    val Min_Integer = C_SysFunctionBody.simple(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
         val v1 = a.asInteger()
         val v2 = b.asInteger()
         val r = Math.min(v1, v2)
         Rt_IntValue(r)
     }
 
-    val Min_BigInteger = C_SysFunction.simple(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
+    val Min_BigInteger = C_SysFunctionBody.simple(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
         val v1 = a.asBigInteger()
         val v2 = b.asBigInteger()
         val r = v1.min(v2)
         Rt_BigIntegerValue.of(r)
     }
 
-    val Min_Decimal = C_SysFunction.simple(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
+    val Min_Decimal = C_SysFunctionBody.simple(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
         val v1 = a.asDecimal()
         val v2 = b.asDecimal()
         val r = v1.min(v2)
         Rt_DecimalValue.of(r)
     }
 
-    val Max_Integer = C_SysFunction.simple(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
+    val Max_Integer = C_SysFunctionBody.simple(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
         val v1 = a.asInteger()
         val v2 = b.asInteger()
         val r = Math.max(v1, v2)
         Rt_IntValue(r)
     }
 
-    val Max_BigInteger = C_SysFunction.simple(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
+    val Max_BigInteger = C_SysFunctionBody.simple(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
         val v1 = a.asBigInteger()
         val v2 = b.asBigInteger()
         val r = v1.max(v2)
         Rt_BigIntegerValue.of(r)
     }
 
-    val Max_Decimal = C_SysFunction.simple(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
+    val Max_Decimal = C_SysFunctionBody.simple(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
         val v1 = a.asDecimal()
         val v2 = b.asDecimal()
         val r = v1.max(v2)
@@ -86,24 +86,24 @@ object Lib_Math {
         defFnMinMax(this, "decimal", Min_Decimal, Max_Decimal)
     }
 
-    private fun defFnAbs(d: Ld_NamespaceDsl, type: String, fn: C_SysFunction) {
+    private fun defFnAbs(d: Ld_NamespaceDsl, type: String, fn: C_SysFunctionBody) {
         d.function("abs", type) {
             param(type)
-            bodyFunction(fn)
+            bodyRaw(fn)
         }
     }
 
-    private fun defFnMinMax(d: Ld_NamespaceDsl, type: String, fnMin: C_SysFunction, fnMax: C_SysFunction) {
+    private fun defFnMinMax(d: Ld_NamespaceDsl, type: String, fnMin: C_SysFunctionBody, fnMax: C_SysFunctionBody) {
         d.function("min", type) {
             param(type)
             param(type)
-            bodyFunction(fnMin)
+            bodyRaw(fnMin)
         }
 
         d.function("max", type) {
             param(type)
             param(type)
-            bodyFunction(fnMax)
+            bodyRaw(fnMax)
         }
     }
 }
