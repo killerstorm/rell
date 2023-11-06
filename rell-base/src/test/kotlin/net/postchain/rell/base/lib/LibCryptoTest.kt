@@ -12,9 +12,7 @@ import net.postchain.crypto.Secp256K1CryptoSystem
 import net.postchain.crypto.secp256k1_derivePubKey
 import net.postchain.gtv.Gtv
 import net.postchain.rell.base.testutils.BaseRellTest
-import net.postchain.rell.base.utils.CommonUtils
-import net.postchain.rell.base.utils.PostchainGtvUtils
-import net.postchain.rell.base.utils.checkEquals
+import net.postchain.rell.base.utils.*
 import org.junit.Test
 import java.math.BigInteger
 import java.security.MessageDigest
@@ -73,22 +71,13 @@ class LibCryptoTest: BaseRellTest(false) {
     }
 
     @Test fun testEthEcrecoverWeb3Cases() {
-        val url = Resources.getResource(javaClass, "/eth_ecrecover_testcases.json")
-        val text = Resources.toString(url, Charsets.UTF_8)
-        val gtv = PostchainGtvUtils.jsonToGtv(text)
-
-        fun getBytes(v: Gtv, k: String): String {
-            val w = v.asDict().getValue(k)
-            val s = w.asString()
-            check(s.matches(Regex("0x[0-9A-Fa-f]+"))) { s }
-            return s.substring(2)
-        }
+        val gtv = loadJsonResource("/eth_ecrecover_testcases.json")
 
         for (obj in gtv.asArray()) {
-            val r = getBytes(obj, "r")
-            val s = getBytes(obj, "s")
-            val h = getBytes(obj, "h")
-            val v = getBytes(obj, "v")
+            val r = getBytes(obj, "r", "0x")
+            val s = getBytes(obj, "s", "0x")
+            val h = getBytes(obj, "h", "0x")
+            val v = getBytes(obj, "v", "0x")
             val res = obj.asDict().getValue("res").asString()
             val recId = Integer.parseInt(v, 16) - 27
 
@@ -131,7 +120,57 @@ class LibCryptoTest: BaseRellTest(false) {
         }
     }
 
-    @Test fun testPrivKeyToPubKey() {
+    @Test fun testEthPrivkeyToAddress() {
+        chk("crypto.eth_privkey_to_address(x'1111111111111111111111111111111111111111111111111111111111111111')",
+            "byte_array[19e7e376e7c213b7e7e7e46cc70a5dd086daff2a]")
+        chk("crypto.eth_privkey_to_address(x'2222222222222222222222222222222222222222222222222222222222222222')",
+            "byte_array[1563915e194d8cfba1943570603f7606a3115508]")
+        chk("crypto.eth_privkey_to_address(x'3333333333333333333333333333333333333333333333333333333333333333')",
+            "byte_array[5cbdd86a2fa8dc4bddd8a8f69dba48572eec07fb]")
+
+        chk("_type_of(crypto.eth_privkey_to_address(x''))", "text[byte_array]")
+        chk("crypto.eth_privkey_to_address(x'')", "rt_err:fn:privkey_to_pubkey:privkey_size:0")
+        chk("crypto.eth_privkey_to_address(x'00')", "rt_err:fn:privkey_to_pubkey:privkey_size:1")
+        chk("crypto.eth_privkey_to_address(x'33')", "rt_err:fn:privkey_to_pubkey:privkey_size:1")
+        chk("crypto.eth_privkey_to_address(x'11'.repeat(31))", "rt_err:fn:privkey_to_pubkey:privkey_size:31")
+        chk("crypto.eth_privkey_to_address(x'11'.repeat(33))", "rt_err:fn:privkey_to_pubkey:privkey_size:33")
+        chk("crypto.eth_privkey_to_address(x'00'.repeat(32))", "rt_err:point_to_bytes:bad_pubkey:1")
+    }
+
+    @Test fun testEthPrivkeyToAddressPyTcs() {
+        for (tc in loadPythonKeyTestCases()) {
+            chk("crypto.eth_privkey_to_address(x'${tc.sk}')", "byte_array[${tc.addr}]")
+        }
+    }
+
+    private fun chkEthPubkeyToAddress(privKey: String, address: String) {
+        chk("crypto.eth_pubkey_to_address(crypto.privkey_to_pubkey(x'$privKey'))", "byte_array[$address]")
+        chk("crypto.eth_pubkey_to_address(crypto.privkey_to_pubkey(x'$privKey', false))", "byte_array[$address]")
+        chk("crypto.eth_pubkey_to_address(crypto.privkey_to_pubkey(x'$privKey', true))", "byte_array[$address]")
+        chk("crypto.eth_pubkey_to_address(crypto.privkey_to_pubkey(x'$privKey').sub(1))", "byte_array[$address]")
+    }
+
+    @Test fun testEthPubkeyToAddress() {
+        chkEthPubkeyToAddress("1111111111111111111111111111111111111111111111111111111111111111",
+            "19e7e376e7c213b7e7e7e46cc70a5dd086daff2a")
+        chkEthPubkeyToAddress("2222222222222222222222222222222222222222222222222222222222222222",
+            "1563915e194d8cfba1943570603f7606a3115508")
+        chkEthPubkeyToAddress("3333333333333333333333333333333333333333333333333333333333333333",
+            "5cbdd86a2fa8dc4bddd8a8f69dba48572eec07fb")
+
+        chk("_type_of(crypto.eth_pubkey_to_address(x''))", "text[byte_array]")
+        chk("crypto.eth_pubkey_to_address(x'')", "rt_err:crypto:bad_pubkey:0")
+    }
+
+    @Test fun testEthPubkeyToAddressPyTcs() {
+        for (tc in loadPythonKeyTestCases()) {
+            chk("crypto.eth_pubkey_to_address(x'${tc.pk1}')", "byte_array[${tc.addr}]")
+            chk("crypto.eth_pubkey_to_address(x'04${tc.pk1}')", "byte_array[${tc.addr}]")
+            chk("crypto.eth_pubkey_to_address(x'${tc.pk2}')", "byte_array[${tc.addr}]")
+        }
+    }
+
+    @Test fun testPrivkeyToPubkey() {
         val privKey = ByteArray(32) { it.toByte() }.toHex()
 
         chk("crypto.privkey_to_pubkey(x'$privKey').size()", "int[65]")
@@ -144,6 +183,149 @@ class LibCryptoTest: BaseRellTest(false) {
 
         chk("crypto.privkey_to_pubkey(x'$privKey', true).size()", "int[33]")
         chk("crypto.privkey_to_pubkey(x'$privKey', true)", "byte_array[036d6caac248af96f6afa7f904f550253a0f3ef3f5aa2fe6838a95b216691468e2]")
+    }
+
+    @Test fun testPrivkeyToPubkeyPyTcs() {
+        for (tc in loadPythonKeyTestCases()) {
+            chk("crypto.privkey_to_pubkey(x'${tc.sk}')", "byte_array[04${tc.pk1}]")
+            chk("crypto.privkey_to_pubkey(x'${tc.sk}', false)", "byte_array[04${tc.pk1}]")
+            chk("crypto.privkey_to_pubkey(x'${tc.sk}', true)", "byte_array[${tc.pk2}]")
+        }
+    }
+
+    @Test fun testPubkeyEncode() {
+        chkPubkeyEncode(
+            "4f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1",
+            "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+        )
+        chkPubkeyEncode(
+            "466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f276728176c3c6431f8eeda4538dc37c865e2784f3a9e77d044f33e407797e1278a",
+            "02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27",
+        )
+    }
+
+    @Test fun testPubkeyEncodePyTcs() {
+        for (tc in loadPythonKeyTestCases()) {
+            chkPubkeyEncode(tc.pk1, tc.pk2)
+        }
+    }
+
+    private fun chkPubkeyEncode(pubKey: String, compPubKey: String) {
+        chk("crypto.pubkey_encode(x'$pubKey')", "byte_array[04$pubKey]")
+        chk("crypto.pubkey_encode(x'$pubKey', false)", "byte_array[04$pubKey]")
+        chk("crypto.pubkey_encode(x'$pubKey', true)", "byte_array[$compPubKey]")
+
+        chk("crypto.pubkey_encode(x'04$pubKey')", "byte_array[04$pubKey]")
+        chk("crypto.pubkey_encode(x'04$pubKey', false)", "byte_array[04$pubKey]")
+        chk("crypto.pubkey_encode(x'04$pubKey', true)", "byte_array[$compPubKey]")
+
+        chk("crypto.pubkey_encode(x'$compPubKey')", "byte_array[04$pubKey]")
+        chk("crypto.pubkey_encode(x'$compPubKey', false)", "byte_array[04$pubKey]")
+        chk("crypto.pubkey_encode(x'$compPubKey', true)", "byte_array[$compPubKey]")
+    }
+
+    @Test fun testPubkeyEncodeBadKey() {
+        chk("crypto.pubkey_encode(x'')", "rt_err:crypto:bad_pubkey:0")
+        chk("crypto.pubkey_encode(x'00')", "rt_err:point_to_bytes:bad_pubkey:1")
+        chk("crypto.pubkey_encode(x'33')", "rt_err:crypto:bad_pubkey:1")
+        chk("crypto.pubkey_encode(x'33'.repeat(32))", "rt_err:crypto:bad_pubkey:32")
+        chk("crypto.pubkey_encode(x'33'.repeat(34))", "rt_err:crypto:bad_pubkey:34")
+        chk("crypto.pubkey_encode(x'33'.repeat(63))", "rt_err:crypto:bad_pubkey:63")
+        chk("crypto.pubkey_encode(x'33'.repeat(66))", "rt_err:crypto:bad_pubkey:66")
+
+        chk("crypto.pubkey_encode(x'00'.repeat(33))", "rt_err:crypto:bad_pubkey:33")
+        chk("crypto.pubkey_encode(x'00'.repeat(64))", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.pubkey_encode(x'00'.repeat(65))", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.pubkey_encode(x'33'.repeat(33))", "rt_err:crypto:bad_pubkey:33")
+        chk("crypto.pubkey_encode(x'33'.repeat(64))", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.pubkey_encode(x'33'.repeat(65))", "rt_err:crypto:bad_pubkey:65")
+
+        chk("crypto.pubkey_encode(x'02' + x'00'.repeat(32))", "rt_err:crypto:bad_pubkey:33")
+        chk("crypto.pubkey_encode(x'02' + x'11'.repeat(32))", "rt_err:crypto:bad_pubkey:33")
+        chk("crypto.pubkey_encode(x'03' + x'00'.repeat(32))", "rt_err:crypto:bad_pubkey:33")
+        chk("crypto.pubkey_encode(x'03' + x'11'.repeat(32))", "rt_err:crypto:bad_pubkey:33")
+        chk("crypto.pubkey_encode(x'02' + x'11'.repeat(64))", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.pubkey_encode(x'03' + x'11'.repeat(64))", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.pubkey_encode(x'04' + x'00'.repeat(64))", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.pubkey_encode(x'04' + x'11'.repeat(64))", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.pubkey_encode(x'04' + x'11'.repeat(32))", "rt_err:crypto:bad_pubkey:33")
+        chk("crypto.pubkey_encode(x'00'.repeat(64))", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.pubkey_encode(x'11'.repeat(64))", "rt_err:crypto:bad_pubkey:65")
+    }
+
+    @Test fun testPubkeyToXy() {
+        chkPubkeyToXy(
+            "4f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1",
+            "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+            "35826991941973211494003564265461426073026284918572421206325859877044495085994",
+            "25491041833361137486709012056693088297620945779048998614056404517283089805761",
+        )
+        chkPubkeyToXy(
+            "466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f276728176c3c6431f8eeda4538dc37c865e2784f3a9e77d044f33e407797e1278a",
+            "02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27",
+            "31855367722742370537280679280108010854876607759940877706949385967087672770343",
+            "46659058944867745027460438812818578793297503278458148978085384795486842595210",
+        )
+        chkPubkeyToXy(
+            "3c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b13b306b0fe085665d8fc1b28ae1676cd3ad6e08eaeda225fe38d0da4de55703e0",
+            "023c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b1",
+            "27341391395138457474971175971081207666803680341783085051101294443585438462385",
+            "26772005640425216814694594224987412261034377630410179754457174380653265224672",
+        )
+
+        chk("_type_of(crypto.pubkey_to_xy(x''))", "text[(big_integer,big_integer)]")
+        chk("crypto.pubkey_to_xy(x'')", "rt_err:crypto:bad_pubkey:0")
+    }
+
+    @Test fun testPubkeyToXyPyTcs() {
+        for (tc in loadPythonKeyTestCases()) {
+            chkPubkeyToXy(tc.pk1, tc.pk2, tc.x, tc.y)
+        }
+    }
+
+    private fun chkPubkeyToXy(pubKey: String, compPubKey: String, x: String, y: String) {
+        chk("crypto.pubkey_to_xy(x'$pubKey')", "(bigint[$x],bigint[$y])")
+        chk("crypto.pubkey_to_xy(x'04$pubKey')", "(bigint[$x],bigint[$y])")
+        chk("crypto.pubkey_to_xy(x'$compPubKey')", "(bigint[$x],bigint[$y])")
+    }
+
+    @Test fun testXyToPubkey() {
+        chkXyToPubkey(
+            "4f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1",
+            "034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa",
+            "35826991941973211494003564265461426073026284918572421206325859877044495085994",
+            "25491041833361137486709012056693088297620945779048998614056404517283089805761",
+        )
+        chkXyToPubkey(
+            "466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f276728176c3c6431f8eeda4538dc37c865e2784f3a9e77d044f33e407797e1278a",
+            "02466d7fcae563e5cb09a0d1870bb580344804617879a14949cf22285f1bae3f27",
+            "31855367722742370537280679280108010854876607759940877706949385967087672770343",
+            "46659058944867745027460438812818578793297503278458148978085384795486842595210",
+        )
+        chkXyToPubkey(
+            "3c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b13b306b0fe085665d8fc1b28ae1676cd3ad6e08eaeda225fe38d0da4de55703e0",
+            "023c72addb4fdf09af94f0c94d7fe92a386a7e70cf8a1d85916386bb2535c7b1b1",
+            "27341391395138457474971175971081207666803680341783085051101294443585438462385",
+            "26772005640425216814694594224987412261034377630410179754457174380653265224672",
+        )
+
+        chk("_type_of(crypto.xy_to_pubkey(0, 0))", "text[byte_array]")
+        chk("crypto.xy_to_pubkey(0, 0)", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.xy_to_pubkey(1, 1)", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.xy_to_pubkey(123, 456)", "rt_err:crypto:bad_pubkey:65")
+        chk("crypto.xy_to_pubkey(-123, 456)", "rt_err:crypto:bad_point")
+    }
+
+    @Test fun testXyToPubkeyPyTcs() {
+        for (tc in loadPythonKeyTestCases()) {
+            chkXyToPubkey(tc.pk1, tc.pk2, tc.x, tc.y)
+        }
+    }
+
+    private fun chkXyToPubkey(pubKey: String, compPubKey: String, x: String, y: String) {
+        chk("crypto.xy_to_pubkey(${x}L, ${y}L)", "byte_array[04$pubKey]")
+        chk("crypto.xy_to_pubkey(${x}L, ${y}L, false)", "byte_array[04$pubKey]")
+        chk("crypto.xy_to_pubkey(${x}L, ${y}L, true)", "byte_array[$compPubKey]")
     }
 
     @Test fun testVerifySignatureErr() {
@@ -231,4 +413,48 @@ class LibCryptoTest: BaseRellTest(false) {
         chk("(cls@{456}).hash()", "0x4317338211726f61b281d62f0683fd55e355011b6e7495cf56f9e03059a3bc0a")
         chk("obj.hash()", "ct_err:fn:invalid:obj:hash")
     }
+
+    // Test cases generated by lib_crypto_key_testcases_python.py.
+    private fun loadPythonKeyTestCases(): List<PyKeyTestCase> {
+        val gtv = loadJsonResource("/lib_crypto_key_testcases_python.json")
+        checkEquals(gtv.asArray().size, 256)
+        return gtv.asArray()
+            .map { obj ->
+                val tc = PyKeyTestCase(
+                    sk = getBytes(obj, "sk"),
+                    pk1 = getBytes(obj, "pk1"),
+                    pk2 = getBytes(obj, "pk2"),
+                    addr = getBytes(obj, "addr"),
+                    x = getBytes(obj, "x"),
+                    y = getBytes(obj, "y"),
+                )
+                checkEquals(tc.sk.length, 32 * 2)
+                checkEquals(tc.pk1.length, 64 * 2)
+                checkEquals(tc.pk2.length, 33 * 2)
+                tc
+            }
+            .toImmList()
+    }
+
+    private fun loadJsonResource(path: String): Gtv {
+        val url = Resources.getResource(javaClass, path)
+        val text = Resources.toString(url, Charsets.UTF_8)
+        return PostchainGtvUtils.jsonToGtv(text)
+    }
+
+    private fun getBytes(v: Gtv, k: String, prefix: String = ""): String {
+        val w = v.asDict().getValue(k)
+        val s = w.asString()
+        check(s.matches(Regex("$prefix[0-9A-Fa-f]+"))) { s }
+        return s.substring(prefix.length)
+    }
+
+    private class PyKeyTestCase(
+        val sk: String,
+        val pk1: String,
+        val pk2: String,
+        val addr: String,
+        val x: String,
+        val y: String,
+    )
 }

@@ -10,6 +10,7 @@ import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.lmodel.L_ParamArity
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
+import net.postchain.rell.base.model.R_BigIntegerType
 import net.postchain.rell.base.model.R_ByteArrayType
 import net.postchain.rell.base.model.R_IntegerType
 import net.postchain.rell.base.model.R_TupleType
@@ -21,6 +22,8 @@ import net.postchain.rell.base.utils.etherjar.PrivateKey
 import net.postchain.rell.base.utils.etherjar.Signer
 import net.postchain.rell.base.utils.immListOf
 import org.bouncycastle.jcajce.provider.digest.Keccak
+import org.bouncycastle.math.ec.ECPoint
+import java.lang.RuntimeException
 import java.math.BigInteger
 import java.security.MessageDigest
 
@@ -30,6 +33,8 @@ object Lib_Crypto {
         val md = MessageDigest.getInstance("SHA-256")
         Rt_ByteArrayValue(md.digest(ba))
     }
+
+    private val POINT_TYPE = R_TupleType.create(R_BigIntegerType, R_BigIntegerType)
 
     val NAMESPACE = Ld_NamespaceDsl.make {
         link(target = "crypto.sha256")
@@ -47,8 +52,7 @@ object Lib_Crypto {
                 param("byte_array")
                 body { a ->
                     val data = a.asByteArray()
-                    val md: MessageDigest = Keccak.Digest256()
-                    val res = md.digest(data)
+                    val res = keccak256(data)
                     Rt_ByteArrayValue(res)
                 }
             }
@@ -121,22 +125,67 @@ object Lib_Crypto {
                 }
             }
 
+            function("eth_privkey_to_address", result = "byte_array", pure = true) {
+                param(name = "privkey", type = "byte_array")
+                body { arg ->
+                    val point = privkeyToPubkeyPoint(arg)
+                    pointToEthAddressValue(point)
+                }
+            }
+
+            function("eth_pubkey_to_address", result = "byte_array", pure = true) {
+                param(name = "pubkey", type = "byte_array")
+                body { arg ->
+                    val point = pubkeyToPoint(arg)
+                    pointToEthAddressValue(point)
+                }
+            }
+
             function("privkey_to_pubkey", "byte_array", pure = true) {
                 param("byte_array")
                 param("boolean", arity = L_ParamArity.ZERO_ONE)
 
                 bodyOpt1 { arg1, arg2 ->
-                    val privKey = arg1.asByteArray()
-                    checkPrivKeySize(privKey, "privkey_to_pubkey")
+                    val compressed = arg2?.asBoolean() ?: false
+                    val point = privkeyToPubkeyPoint(arg1)
+                    val bytes = pointToBytes(point, compressed)
+                    Rt_ByteArrayValue(bytes)
+                }
+            }
 
-                    val compress = arg2?.asBoolean() ?: false
+            function("pubkey_encode", "byte_array", pure = true) {
+                param(name = "pubkey", type = "byte_array")
+                param(name = "compressed", type = "boolean", arity = L_ParamArity.ZERO_ONE)
+                bodyOpt1 { arg1, arg2 ->
+                    val compressed = arg2?.asBoolean() ?: false
+                    val point = pubkeyToPoint(arg1)
+                    val bytes = pointToBytes(point, compressed)
+                    Rt_ByteArrayValue(bytes)
+                }
+            }
 
-                    val d = BigInteger(1, privKey)
-                    val q = CURVE_PARAMS.g.multiply(d)
-                    val pubKey = q.getEncoded(compress)
+            function("pubkey_to_xy", "(big_integer,big_integer)", pure = true) {
+                param(name = "pubkey", type = "byte_array")
+                body { arg ->
+                    val point = pubkeyToPoint(arg)
+                    val x = point.xCoord.toBigInteger()
+                    val y = point.yCoord.toBigInteger()
+                    val xValue = Rt_BigIntegerValue.of(x)
+                    val yValue = Rt_BigIntegerValue.of(y)
+                    Rt_TupleValue.make(POINT_TYPE, xValue, yValue)
+                }
+            }
 
-                    checkEquals(pubKey.size, if (compress) 33 else 65)
-                    Rt_ByteArrayValue(pubKey)
+            function("xy_to_pubkey", "byte_array", pure = true) {
+                param(name = "x", type = "big_integer")
+                param(name = "y", type = "big_integer")
+                param(name = "compressed", type = "boolean", arity = L_ParamArity.ZERO_ONE)
+                bodyOpt2 { arg1, arg2, arg3 ->
+                    val compressed = arg3?.asBoolean() ?: false
+                    val point = xyToPoint(arg1, arg2)
+                    val bytes = pointToBytes(point, compressed)
+                    bytesToPoint(bytes) // Check that it's a valid public key.
+                    Rt_ByteArrayValue(bytes)
                 }
             }
         }
@@ -156,10 +205,67 @@ object Lib_Crypto {
         }
     }
 
+    private fun privkeyToPubkeyPoint(privkeyValue: Rt_Value): ECPoint {
+        val privKey = privkeyValue.asByteArray()
+        checkPrivKeySize(privKey, "privkey_to_pubkey")
+        val d = BigInteger(1, privKey)
+        return CURVE_PARAMS.g.multiply(d)
+    }
+
     private fun checkPrivKeySize(privKey: ByteArray, fn: String) {
         val expPrivKeySize = 32
         Rt_Utils.check(privKey.size == expPrivKeySize) {
             "fn:$fn:privkey_size:${privKey.size}" toCodeMsg "Wrong size of private key: ${privKey.size} instead of $expPrivKeySize"
         }
+    }
+
+    private fun pubkeyToPoint(pubkeyValue: Rt_Value): ECPoint {
+        val bytes0 = pubkeyValue.asByteArray()
+        val bytes = if (bytes0.size == 64) (byteArrayOf(0x04) + bytes0) else bytes0
+        return bytesToPoint(bytes)
+    }
+
+    private fun bytesToPoint(bytes: ByteArray): ECPoint {
+        val point = try {
+            CURVE_PARAMS.curve.decodePoint(bytes)
+        } catch (e: RuntimeException) {
+            throw Rt_Exception.common("crypto:bad_pubkey:${bytes.size}", "Bad public key (size: ${bytes.size})")
+        }
+        return point
+    }
+
+    private fun xyToPoint(xValue: Rt_Value, yValue: Rt_Value): ECPoint {
+        val x = xValue.asBigInteger()
+        val y = yValue.asBigInteger()
+        val point = try {
+            CURVE_PARAMS.curve.createPoint(x, y)
+        } catch (e: RuntimeException) {
+            throw Rt_Exception.common("crypto:bad_point", "Bad EC point coordinates")
+        }
+        return point
+    }
+
+    private fun pointToEthAddressValue(point: ECPoint): Rt_Value {
+        val bytes = pointToBytes(point, false)
+
+        val payload = bytes.sliceArray(1 until bytes.size)
+        val hash = keccak256(payload)
+        checkEquals(hash.size, 32)
+
+        val res = hash.sliceArray(12 until 32)
+        return Rt_ByteArrayValue(res)
+    }
+
+    private fun pointToBytes(point: ECPoint, compressed: Boolean): ByteArray {
+        val bytes = point.getEncoded(compressed)
+        Rt_Utils.check(bytes.size == if (compressed) 33 else 65) {
+            "point_to_bytes:bad_pubkey:${bytes.size}" toCodeMsg "Bad public key (size: ${bytes.size})"
+        }
+        return bytes
+    }
+
+    private fun keccak256(data: ByteArray): ByteArray {
+        val md: MessageDigest = Keccak.Digest256()
+        return md.digest(data)
     }
 }
