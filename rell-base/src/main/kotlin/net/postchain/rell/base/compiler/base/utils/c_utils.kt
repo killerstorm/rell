@@ -71,6 +71,10 @@ class C_Error: RuntimeException {
     }
 }
 
+sealed class C_ValueOrError<T>
+class C_ValueOrError_Value<T>(val value: T): C_ValueOrError<T>()
+class C_ValueOrError_Error<T>(val error: C_PosCodeMsg): C_ValueOrError<T>()
+
 object C_Constants {
     const val LOG_ANNOTATION = "log"
     const val MODULE_ARGS_STRUCT = "module_args"

@@ -10,7 +10,6 @@ import net.postchain.rell.base.compiler.base.core.C_CompilerPass
 import net.postchain.rell.base.compiler.base.core.C_FunctionBodyContext
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
-import net.postchain.rell.base.compiler.base.expr.C_ExprDefMeta
 import net.postchain.rell.base.compiler.base.fn.*
 import net.postchain.rell.base.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.base.compiler.base.utils.C_LateInit
@@ -26,7 +25,7 @@ abstract class C_GlobalFunction {
     open fun getFunctionDefinition(): R_FunctionDefinition? = null
     open fun getAbstractDescriptor(): C_AbstractFunctionDescriptor? = null
     open fun getExtendableDescriptor(): C_ExtendableFunctionDescriptor? = null
-    open fun getDefMeta(): C_ExprDefMeta? = null
+    open fun getDefMeta(): R_DefinitionMeta? = null
 
     abstract fun compileCall(
         ctx: C_ExprContext,

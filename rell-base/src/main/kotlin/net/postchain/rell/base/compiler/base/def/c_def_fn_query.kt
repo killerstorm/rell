@@ -10,17 +10,13 @@ import net.postchain.rell.base.compiler.base.core.C_CompilerPass
 import net.postchain.rell.base.compiler.base.core.C_FunctionBodyContext
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
-import net.postchain.rell.base.compiler.base.expr.C_ExprDefMeta
 import net.postchain.rell.base.compiler.base.fn.C_FormalParameters
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallInfo
 import net.postchain.rell.base.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.base.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.base.compiler.base.utils.C_LateInit
 import net.postchain.rell.base.compiler.vexpr.V_GlobalFunctionCall
-import net.postchain.rell.base.model.R_QueryBody
-import net.postchain.rell.base.model.R_QueryDefinition
-import net.postchain.rell.base.model.R_Type
-import net.postchain.rell.base.model.R_UserQueryBody
+import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.LazyPosString
 
 class C_QueryFunctionHeader(
@@ -38,8 +34,8 @@ class C_QueryFunctionHeader(
 class C_QueryGlobalFunction(val rQuery: R_QueryDefinition): C_GlobalFunction() {
     private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_QueryFunctionHeader.ERROR)
 
-    override fun getDefMeta(): C_ExprDefMeta {
-        return C_ExprDefMeta(mountName = rQuery.mountName)
+    override fun getDefMeta(): R_DefinitionMeta {
+        return R_DefinitionMeta(rQuery.defName, mountName = rQuery.mountName)
     }
 
     fun setHeader(header: C_QueryFunctionHeader) {

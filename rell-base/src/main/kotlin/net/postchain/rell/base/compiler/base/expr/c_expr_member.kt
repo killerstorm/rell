@@ -126,7 +126,8 @@ class C_TypeValueMember_Function(
     }
 
     override fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember {
-        ctx.msgCtx.error(C_NoValueExpr.errNoValue(linkPos, kindMsg(), nameMsg().msg))
+        val codeMsg = C_NoValueExpr.errNoValue(kindMsg(), nameMsg().msg)
+        ctx.msgCtx.error(linkPos, codeMsg)
         return C_ExprUtils.errorVMember(linkPos, ideInfo = defaultIdeInfo)
     }
 

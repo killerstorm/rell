@@ -133,7 +133,7 @@ object Lib_Type_Text {
                 bodyN { args ->
                     Rt_Utils.check(args.isNotEmpty()) { "fn:text.format:no_args" toCodeMsg "No arguments" }
                     val s = args[0].asString()
-                    val anys = args.drop(1).map { it.asFormatArg() }.toTypedArray()
+                    val anys = args.drop(1).map { it.toFormatArg() }.toTypedArray()
                     val r = try {
                         s.format(Locale.US, *anys)
                     } catch (e: IllegalFormatException) {

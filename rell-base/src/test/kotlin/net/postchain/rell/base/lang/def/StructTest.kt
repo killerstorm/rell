@@ -25,7 +25,7 @@ class StructTest: BaseRellTest(false) {
         chkEx("{ return foo(i = 123, s = 'Hello', t = (456, 'Bye')); }",
                 "foo[i=int[123],s=text[Hello],q=text[Unknown],t=(int[456],text[Bye])]")
 
-        chkEx("{ return foo(i = 123, s = 'Hello'); }", "ct_err:attr_missing:t")
+        chkEx("{ return foo(i = 123, s = 'Hello'); }", "ct_err:attr_missing:[foo]:t")
 
         chkEx("{ return foo(i = 123, s = 'Hello', t = 'WrongType'); }",
                 "ct_err:attr_bad_type:2:t:(integer,text):text")
@@ -38,7 +38,7 @@ class StructTest: BaseRellTest(false) {
                 "foo[i=int[123],s=text[Hello],q=text[Bye]]")
 
         chkEx("{ val s = 'Hello'; return foo(i = 123, s); }", "foo[i=int[123],s=text[Hello],q=text[Unknown]]")
-        chkEx("{ val q = 'Bye'; return foo(i = 123, q); }", "ct_err:attr_missing:s")
+        chkEx("{ val q = 'Bye'; return foo(i = 123, q); }", "ct_err:attr_missing:[foo]:s")
 
         chkEx("{ val s = 123; return foo(i = 123, s); }", "ct_err:attr_bad_type:1:s:text:integer")
     }

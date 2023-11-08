@@ -8,34 +8,38 @@ import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.lib.C_TypeMember
+import net.postchain.rell.base.compiler.base.utils.C_ValueOrError
 import net.postchain.rell.base.compiler.vexpr.V_Expr
-import net.postchain.rell.base.model.R_EntityType
-import net.postchain.rell.base.model.R_EnumType
-import net.postchain.rell.base.model.R_StructType
-import net.postchain.rell.base.model.R_Type
+import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.LazyPosString
 import net.postchain.rell.base.utils.Nullable
 
 class C_SpecificTypeExpr(
     private val pos: S_Pos,
     private val type: R_Type,
-    private val ideInfoPtr: C_UniqueDefaultIdeInfoPtr = C_UniqueDefaultIdeInfoPtr(),
+    ideInfoPtr: C_UniqueDefaultIdeInfoPtr? = null,
 ) : C_NoValueExpr() {
+    private val ideInfoPtr = ideInfoPtr?.move() ?: C_UniqueDefaultIdeInfoPtr()
+
     override fun startPos() = pos
 
-    override fun getDefMeta(): C_ExprDefMeta? {
+    override fun getDefMeta(): R_DefinitionMeta? {
         return when (type) {
             is R_EntityType -> {
                 val entity = type.rEntity
-                C_ExprDefMeta(mountName = entity.mountName, externalChain = Nullable.of(entity.external?.chain?.name))
+                R_DefinitionMeta(
+                    entity.defName,
+                    mountName = entity.mountName,
+                    externalChain = Nullable.of(entity.external?.chain?.name),
+                )
             }
             else -> null
         }
     }
 
-    override fun value(): V_Expr {
+    override fun valueOrError(): C_ValueOrError<V_Expr> {
         ideInfoPtr.setDefault()
-        return super.value()
+        return super.valueOrError()
     }
 
     override fun member(ctx: C_ExprContext, memberNameHand: C_NameHandle, exprHint: C_ExprHint): C_Expr {
@@ -68,17 +72,25 @@ class C_SpecificTypeExpr(
         val fn = ctx.typeMgr.getConstructor(type)
         if (fn == null) {
             ideInfoPtr.setDefault()
-            // Handle no-constructor case: super throws error; TODO better handling
-            return super.call(ctx, pos, args, resTypeHint)
+            ctx.msgCtx.error(pos, "expr:type:no_constructor:${type.strCode()}",
+                "Type '${type.str()}' has no constructor")
+            return C_ExprUtils.errorExpr(ctx, pos, type)
         }
 
         val lazyName = LazyPosString.of(this.pos) { type.name }
 
-        val vCall = fn.compileCall(ctx, lazyName, args, resTypeHint)
-        ideInfoPtr.setIdeInfoOrDefault(vCall.ideInfo)
+        val vCall = ctx.msgCtx.consumeError {
+            fn.compileCall(ctx, lazyName, args, resTypeHint)
+        }
 
-        val vExpr = vCall.vExpr()
-        return C_ValueExpr(vExpr)
+        ideInfoPtr.setIdeInfoOrDefault(vCall?.ideInfo)
+
+        return if (vCall == null) {
+            C_ExprUtils.errorExpr(ctx, pos, type)
+        } else {
+            val vExpr = vCall.vExpr()
+            C_ValueExpr(vExpr)
+        }
     }
 
     override fun errKindName(): Pair<String, String> {

@@ -360,13 +360,13 @@ class NamespaceTest: BaseRellTest() {
     }
 
     private fun chkComplexNameMount(defs: String, name: String, expected: String) {
-        chkFull("$defs query q() = _test.mount_name($name);", "text[$expected]")
+        chkFull("$defs query q() = rell.meta($name).mount_name;", "text[$expected]")
     }
 
     @Test fun testDuplicateNamespaceMount() {
         val defs = "@mount('foo') namespace ns { entity data1 {} } @mount('bar') namespace ns { entity data2 {} }"
-        chkFull("$defs query q() = _test.mount_name(ns.data1);", "text[foo.data1]")
-        chkFull("$defs query q() = _test.mount_name(ns.data2);", "text[bar.data2]")
+        chkFull("$defs query q() = rell.meta(ns.data1).mount_name;", "text[foo.data1]")
+        chkFull("$defs query q() = rell.meta(ns.data2).mount_name;", "text[bar.data2]")
     }
 
     @Test fun testNestedNamespaceExternal() {

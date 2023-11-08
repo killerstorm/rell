@@ -8,7 +8,6 @@ import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.base.core.C_CompilerPass
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
-import net.postchain.rell.base.compiler.base.expr.C_ExprDefMeta
 import net.postchain.rell.base.compiler.base.fn.C_FormalParameters
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallInfo
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTarget_Regular
@@ -17,6 +16,7 @@ import net.postchain.rell.base.compiler.base.utils.C_LateInit
 import net.postchain.rell.base.compiler.vexpr.V_FunctionCallTarget_Operation
 import net.postchain.rell.base.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.base.lib.test.R_TestOpType
+import net.postchain.rell.base.model.R_DefinitionMeta
 import net.postchain.rell.base.model.R_OperationDefinition
 import net.postchain.rell.base.utils.LazyPosString
 
@@ -29,8 +29,8 @@ class C_OperationFunctionHeader(val params: C_FormalParameters) {
 class C_OperationGlobalFunction(val rOp: R_OperationDefinition): C_GlobalFunction() {
     private val headerLate = C_LateInit(C_CompilerPass.MEMBERS, C_OperationFunctionHeader.ERROR)
 
-    override fun getDefMeta(): C_ExprDefMeta {
-        return C_ExprDefMeta(mountName = rOp.mountName)
+    override fun getDefMeta(): R_DefinitionMeta {
+        return R_DefinitionMeta(rOp.defName, mountName = rOp.mountName)
     }
 
     fun setHeader(header: C_OperationFunctionHeader) {

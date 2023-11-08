@@ -138,32 +138,6 @@ class LibHiddenTest: BaseRellTest(false) {
         chk("_nullable_text(null)", "null")
     }
 
-    @Test fun testMountName() {
-        def("entity data {}")
-        def("object state {}")
-        def("operation op() {}")
-        def("query qq() = 0;")
-        def("@mount('my_data') entity data_2 {}")
-        def("@mount('my_state') object state_2 {}")
-        def("@mount('my_op') operation op_2() {}")
-        def("@mount('my_qq') query qq_2() = 0;")
-
-        chk("_test.mount_name(data)", "text[data]")
-        chk("_test.mount_name(state)", "text[state]")
-        chk("_test.mount_name(op)", "text[op]")
-        chk("_test.mount_name(qq)", "text[qq]")
-
-        chk("_test.mount_name(data_2)", "text[my_data]")
-        chk("_test.mount_name(state_2)", "text[my_state]")
-        chk("_test.mount_name(op_2)", "text[my_op]")
-        chk("_test.mount_name(qq_2)", "text[my_qq]")
-
-        chk("_test.mount_name(0)", "ct_err:expr_call:bad_arg:_test.mount_name")
-        chk("_test.mount_name(print)", "ct_err:expr_novalue:function:[print]")
-        chk("_test.mount_name(integer)", "ct_err:expr_novalue:type:[integer]")
-        chk("_test.mount_name(gtx_operation)", "ct_err:expr_novalue:struct:[gtx_operation]")
-    }
-
     @Test fun testExternalChain() {
         ExternalTest.initExternalChain(tst, "foo", def = "@log entity user { name; }")
         def("entity data {}")
@@ -173,7 +147,7 @@ class LibHiddenTest: BaseRellTest(false) {
         chk("_test.external_chain(user)", "text[foo]")
 
         chk("_test.external_chain(0)", "ct_err:expr_call:bad_arg:_test.external_chain")
-        chk("_test.external_chain(print)", "ct_err:expr_novalue:function:[print]")
-        chk("_test.external_chain(gtx_operation)", "ct_err:expr_novalue:struct:[gtx_operation]")
+        chk("_test.external_chain(print)", "ct_err:expr_call:bad_arg:_test.external_chain")
+        chk("_test.external_chain(gtx_operation)", "ct_err:expr_call:bad_arg:_test.external_chain")
     }
 }

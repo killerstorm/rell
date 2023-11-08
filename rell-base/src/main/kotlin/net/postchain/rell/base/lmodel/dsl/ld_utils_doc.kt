@@ -41,12 +41,12 @@ object Ld_DocSymbols {
         )
     }
 
-    fun specialFunction(fullName: L_FullName): DocSymbol {
+    fun specialFunction(fullName: L_FullName, isStatic: Boolean): DocSymbol {
         return DocSymbol(
             kind = DocSymbolKind.FUNCTION,
             symbolName = DocSymbolName.global(fullName.moduleName.str(), fullName.qName.str()),
             mountName = null,
-            declaration = DocDeclaration_SpecialFunction(fullName.last),
+            declaration = DocDeclaration_SpecialFunction(fullName.last, isStatic = isStatic),
             comment = null,
         )
     }

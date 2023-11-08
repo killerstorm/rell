@@ -125,6 +125,9 @@ class LTypeNameConflictTest: BaseLTest() {
         chkNameConflictOK(defs, block, "function x(): anything", "function h(): anything") {
             function("x", "anything") { alias("h"); body { -> Rt_UnitValue } }
         }
+        chkNameConflictOK(defs, block, "function x(): anything", "function i(): anything") {
+            function("x", "anything") { alias("i"); body { -> Rt_UnitValue } }
+        }
     }
 
     @Test fun testAliasStaticFunction() {
@@ -144,6 +147,9 @@ class LTypeNameConflictTest: BaseLTest() {
         chkNameConflictOK(defs, block, "static function x(anything): anything", "static function h(anything): anything") {
             staticFunction("x", "anything") { alias("h"); param("anything"); body { -> Rt_UnitValue } }
         }
+        chkNameConflictErr(defs, block, "i") {
+            staticFunction("x", "anything") { alias("i"); param("anything"); body { -> Rt_UnitValue } }
+        }
     }
 
     private fun initAlias(): Pair<Array<String>, Ld_TypeDefDsl.() -> Unit> {
@@ -153,6 +159,7 @@ class LTypeNameConflictTest: BaseLTest() {
             function("f", "anything") { body { -> Rt_UnitValue } }
             function("g", makeMemberFun())
             staticFunction("h", "anything") { param("anything"); body { -> Rt_UnitValue } }
+            staticFunction("i", makeGlobalFun())
         }
 
         val defs = arrayOf(
@@ -161,6 +168,7 @@ class LTypeNameConflictTest: BaseLTest() {
             "function f(): anything",
             "special function g(...)",
             "static function h(anything): anything",
+            "static special function i(...)",
         )
 
         return defs to block

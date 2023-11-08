@@ -23,6 +23,10 @@ class R_DefinitionName(
 ) {
     val appLevelName = appLevelName(module, qualifiedName)
 
+    val strictAppLevelName: String by lazy {
+        if (module.isEmpty()) ":$appLevelName" else appLevelName
+    }
+
     override fun toString() = appLevelName
 
     companion object {
@@ -56,6 +60,16 @@ abstract class R_Definition(base: R_DefinitionBase): DocDefinition {
     abstract fun toMetaGtv(): Gtv
 
     final override fun toString() = "${javaClass.simpleName}[$appLevelName]"
+}
+
+class R_DefinitionMeta(
+    defName: R_DefinitionName,
+    val mountName: R_MountName,
+    val externalChain: Nullable<String>? = null,
+) {
+    val fullName: String = defName.strictAppLevelName
+    val simpleName: String = defName.simpleName
+    val moduleName: String = defName.module
 }
 
 class R_ExternalChainsRoot

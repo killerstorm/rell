@@ -15,7 +15,7 @@ class LibRellTestOtherTest: BaseRellTest(false) {
     @Test fun testKeypairType() {
         chkEx("{ val x: rell.test.keypair; return _type_of(x); }", "text[rell.test.keypair]")
 
-        chk("rell.test.keypair()", "ct_err:attr_missing:pub,priv")
+        chk("rell.test.keypair()", "ct_err:attr_missing:[rell.test.keypair]:pub,priv")
         chk("rell.test.keypair(x'', x'')", "ct_err:attr_implic_multi:0:pub,priv")
         chk("rell.test.keypair(pub = x'11', priv = x'22')", "rell.test.keypair[pub=byte_array[11],priv=byte_array[22]]")
 

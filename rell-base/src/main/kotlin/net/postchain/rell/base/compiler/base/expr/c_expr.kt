@@ -11,15 +11,13 @@ import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfoHandle
 import net.postchain.rell.base.compiler.base.core.C_NameHandle
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceMemberTag
-import net.postchain.rell.base.compiler.base.utils.C_Error
-import net.postchain.rell.base.compiler.base.utils.C_PosCodeMsg
+import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.compiler.vexpr.V_TypeValueMember
 import net.postchain.rell.base.compiler.vexpr.V_ValueMemberExpr
+import net.postchain.rell.base.model.R_DefinitionMeta
 import net.postchain.rell.base.model.R_FunctionType
-import net.postchain.rell.base.model.R_MountName
 import net.postchain.rell.base.model.R_Type
-import net.postchain.rell.base.utils.Nullable
 
 class C_ExprHint(val typeHint: C_TypeHint, val callable: Boolean = false) {
     fun memberTags(): List<C_NamespaceMemberTag>  {
@@ -34,17 +32,21 @@ class C_ExprHint(val typeHint: C_TypeHint, val callable: Boolean = false) {
     }
 }
 
-class C_ExprDefMeta(
-    val mountName: R_MountName? = null,
-    val externalChain: Nullable<String>? = null,
-)
-
 abstract class C_Expr {
     abstract fun startPos(): S_Pos
 
-    abstract fun value(): V_Expr
+    abstract fun valueOrError(): C_ValueOrError<V_Expr>
+
+    fun value(): V_Expr {
+        val res = valueOrError()
+        return when (res) {
+            is C_ValueOrError_Value -> res.value
+            is C_ValueOrError_Error -> throw C_Error.stop(res.error)
+        }
+    }
+
     open fun isCallable() = false
-    open fun getDefMeta(): C_ExprDefMeta? = null
+    open fun getDefMeta(): R_DefinitionMeta? = null
 
     open fun member(ctx: C_ExprContext, memberNameHand: C_NameHandle, exprHint: C_ExprHint): C_Expr {
         val vExpr = value()
@@ -60,16 +62,16 @@ abstract class C_Expr {
 
 class C_ValueExpr(private val vExpr: V_Expr): C_Expr() {
     override fun startPos() = vExpr.pos
-    override fun value() = vExpr
+    override fun valueOrError() = C_ValueOrError_Value(vExpr)
     override fun isCallable() = vExpr.type is R_FunctionType
-    override fun getDefMeta(): C_ExprDefMeta? = vExpr.getDefMeta()
+    override fun getDefMeta(): R_DefinitionMeta? = vExpr.getDefMeta()
 }
 
 abstract class C_NoValueExpr: C_Expr() {
     protected abstract fun errKindName(): Pair<String, String>
 
-    override fun value(): V_Expr {
-        throw C_Error.stop(errNoValue())
+    override fun valueOrError(): C_ValueOrError<V_Expr> {
+        return C_ValueOrError_Error(errNoValue())
     }
 
     override fun member(ctx: C_ExprContext, memberNameHand: C_NameHandle, exprHint: C_ExprHint): C_Expr {
@@ -81,12 +83,13 @@ abstract class C_NoValueExpr: C_Expr() {
     private fun errNoValue(): C_PosCodeMsg {
         val pos = startPos()
         val (kind, name) = errKindName()
-        return errNoValue(pos, kind, name)
+        val codeMsg = errNoValue(kind, name)
+        return C_PosCodeMsg(pos, codeMsg)
     }
 
     companion object {
-        fun errNoValue(pos: S_Pos, kind: String, name: String): C_PosCodeMsg {
-            return C_PosCodeMsg(pos, "expr_novalue:$kind:[$name]", "Expression cannot be used as a value: $kind '$name'")
+        fun errNoValue(kind: String, name: String): C_CodeMsg {
+            return C_CodeMsg("expr_novalue:$kind:[$name]", "Expression cannot be used as a value: $kind '$name'")
         }
     }
 }
@@ -106,10 +109,10 @@ class C_ValueMemberExpr(
     override fun startPos() = vBase.pos
     override fun isCallable() = member.isCallable()
 
-    override fun value(): V_Expr {
+    override fun valueOrError(): C_ValueOrError<V_Expr> {
         val vMember = member.value(exprCtx, memberPos, memberName)
         ideInfoHand.setIdeInfo(vMember.ideInfo)
-        return makeMemberExpr(vMember)
+        return C_ValueOrError_Value(makeMemberExpr(vMember))
     }
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {

@@ -165,6 +165,15 @@ class LTypeTest: BaseLTest() {
         chkTypeMems(mod, "data", "pure constructor ()")
     }
 
+    @Test fun testConstructorSpecial() {
+        val mod = makeModule("test") {
+            type("data") {
+                constructor(makeGlobalFun())
+            }
+        }
+        chkTypeMems(mod, "data", "special constructor (...)")
+    }
+
     @Test fun testGenericTypeDef() {
         val mod = makeModule("test") {
             type("list") {
@@ -532,6 +541,15 @@ class LTypeTest: BaseLTest() {
             "type data2",
             "type data3",
         )
+    }
+
+    @Test fun testStaticFunctionSpecial() {
+        val mod = makeModule("test") {
+            type("data") {
+                staticFunction("f", makeGlobalFun())
+            }
+        }
+        chkTypeMems(mod, "data", "static special function f(...)")
     }
 
     private companion object {

@@ -190,13 +190,13 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
 
     @Test fun testStruct() {
         def("struct s { x: integer; }")
-        chk("s(*)", "ct_err:[attr_missing:x][expr:call:wildcard:struct]")
+        chk("s(*)", "ct_err:[attr_missing:[s]:x][expr:call:wildcard:struct]")
         chk("s(x = *)", "ct_err:expr:call:wildcard:struct")
     }
 
     @Test fun testCreateEntity() {
         def("entity data { x: integer; }")
-        chkOp("val f = create data(*);", "ct_err:[attr_missing:x][expr:call:wildcard:create_expr]")
+        chkOp("val f = create data(*);", "ct_err:[attr_missing:[data]:x][expr:call:wildcard:create_expr]")
         chkOp("val f = create data(x = *);", "ct_err:expr:call:wildcard:create_expr")
     }
 

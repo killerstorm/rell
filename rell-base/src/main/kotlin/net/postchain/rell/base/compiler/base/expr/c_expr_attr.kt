@@ -22,7 +22,11 @@ import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
 import net.postchain.rell.base.utils.toImmSet
 
-class C_CreateContext(val exprCtx: C_ExprContext, val initFrameGetter: C_LateGetter<R_CallFrame>, val filePos: R_FilePos) {
+class C_CreateContext(
+    val exprCtx: C_ExprContext,
+    val initFrameGetter: C_LateGetter<R_CallFrame>,
+    val filePos: R_FilePos,
+) {
     val msgCtx = exprCtx.msgCtx
 }
 
@@ -41,6 +45,7 @@ class C_AttrMatch(val attr: R_Attribute, val vExpr: V_Expr)
 object C_AttributeResolver {
     fun resolveCreate(
             ctx: C_CreateContext,
+            defName: String,
             attributes: Map<R_Name, R_Attribute>,
             args: List<C_AttrArgument>,
             pos: S_Pos
@@ -59,7 +64,7 @@ object C_AttributeResolver {
         }
 
         val implicitAttrs = matchDefaultExprs(ctx, pos, attributes, explicitAttrs)
-        checkMissingAttrs(attributes, explicitAttrs, implicitAttrs, pos)
+        checkMissingAttrs(defName, attributes, explicitAttrs, implicitAttrs, pos)
 
         for ((arg, attrMatch) in matchedAttrs) {
             val exprPos = arg.vExpr.pos
@@ -98,6 +103,7 @@ object C_AttributeResolver {
     }
 
     private fun checkMissingAttrs(
+            defName: String,
             attributes: Map<R_Name, R_Attribute>,
             explicitAttrs: List<V_CreateExprAttr>,
             implicitAttrs: List<V_CreateExprAttr>,
@@ -113,7 +119,8 @@ object C_AttributeResolver {
                 .toList()
 
         C_Errors.check(missing.isEmpty(), pos) {
-            "attr_missing:${missing.joinToString(",")}" toCodeMsg "Attributes not specified: ${missing.joinToString()}"
+            "attr_missing:[$defName]:${missing.joinToString(",")}" toCodeMsg
+                    "Attributes not specified: ${missing.joinToString()}"
         }
     }
 

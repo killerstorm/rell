@@ -30,7 +30,7 @@ class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
         val callArgs = C_CallArgument.compileAttributes(ctx, args, struct.attributes)
         val attrArgs = C_CallArgument.toAttrArguments(ctx, callArgs, C_CodeMsg("struct", "struct expression"))
 
-        val attrs = C_AttributeResolver.resolveCreate(createCtx, struct.attributes, attrArgs, fnPos)
+        val attrs = C_AttributeResolver.resolveCreate(createCtx, struct.name, struct.attributes, attrArgs, fnPos)
 
         val dbModRes = ctx.getDbModificationRestriction()
         if (dbModRes != null) {

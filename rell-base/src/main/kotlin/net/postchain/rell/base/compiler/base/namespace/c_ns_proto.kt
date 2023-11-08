@@ -16,6 +16,7 @@ import net.postchain.rell.base.compiler.base.module.C_ModuleKey
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_RNamePath
+import net.postchain.rell.base.compiler.base.utils.C_ValueOrError
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.lib.type.V_ObjectExpr
 import net.postchain.rell.base.model.*
@@ -325,13 +326,13 @@ class C_FunctionExpr(
     override fun startPos() = name.pos
     override fun isCallable() = true
 
-    override fun getDefMeta(): C_ExprDefMeta? {
+    override fun getDefMeta(): R_DefinitionMeta? {
         return fn.getDefMeta()
     }
 
-    override fun value(): V_Expr {
+    override fun valueOrError(): C_ValueOrError<V_Expr> {
         ideInfoPtr.setDefault()
-        return super.value()
+        return super.valueOrError()
     }
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {

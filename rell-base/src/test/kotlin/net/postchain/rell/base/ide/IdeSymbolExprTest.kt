@@ -339,9 +339,16 @@ class IdeSymbolExprTest: BaseIdeSymbolTest() {
             "p=MEM_STRUCT_ATTR;-;module.rell/struct[s].attr[p]", "?head=STRUCT_ATTR|:s.p",
             "y=MEM_STRUCT_ATTR;-;module.rell/struct[p].attr[y]", "?head=STRUCT_ATTR|:p.y",
         )
-        chkSymsExpr("s()", *s, err = "attr_missing:x")
-        chkSymsExpr("s().x", *s, "x=UNKNOWN;-;-", "?head=-", err = "attr_missing:x")
-        chkSymsExpr("s().p.x", *s, "p=UNKNOWN;-;-", "?head=-", "x=UNKNOWN;-;-", "?head=-", err = "attr_missing:x")
+        chkSymsExpr("s()", *s, err = "attr_missing:[s]:x")
+        chkSymsExpr("s().x", *s,
+            "x=MEM_STRUCT_ATTR;-;module.rell/struct[s].attr[x]", "?head=STRUCT_ATTR|:s.x",
+            err = "attr_missing:[s]:x",
+        )
+        chkSymsExpr("s().p.x", *s,
+            "p=MEM_STRUCT_ATTR;-;module.rell/struct[s].attr[p]", "?head=STRUCT_ATTR|:s.p",
+            "x=UNKNOWN;-;-", "?head=-",
+            err = "[attr_missing:[s]:x][unknown_member:[p]:x]",
+        )
 
         val abs = arrayOf("abs=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|rell:abs")
         val err = "expr_call_argtypes:[abs]:"

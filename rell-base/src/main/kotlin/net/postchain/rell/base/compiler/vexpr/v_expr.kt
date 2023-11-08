@@ -282,7 +282,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     open fun globalConstantId(): R_GlobalConstantId? = null
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
     open fun asNullable(): V_ExprWrapper = asWrapper()
-    open fun getDefMeta(): C_ExprDefMeta? = null
+    open fun getDefMeta(): R_DefinitionMeta? = null
 
     fun asWrapper(): V_ExprWrapper = V_ExprWrapper(msgCtx, this)
 }

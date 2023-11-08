@@ -15,11 +15,13 @@ class MirrorStructOperationTest: BaseRellTest(false) {
         chk("struct<new_user>('Bob', 123)", "struct<new_user>[name=text[Bob],rating=int[123]]")
         chk("struct<new_user>(123, 'Bob')", "struct<new_user>[name=text[Bob],rating=int[123]]")
 
-        chk("struct<new_user>()", "ct_err:attr_missing:name,rating")
-        chk("struct<new_user>('Bob')", "ct_err:attr_missing:rating")
-        chk("struct<new_user>(123)", "ct_err:attr_missing:name")
-        chk("struct<new_user>(rating = 'Bob')", "ct_err:[attr_missing:name][attr_bad_type:0:rating:integer:text]")
-        chk("struct<new_user>(name = 123)", "ct_err:[attr_missing:rating][attr_bad_type:0:name:text:integer]")
+        chk("struct<new_user>()", "ct_err:attr_missing:[struct<new_user>]:name,rating")
+        chk("struct<new_user>('Bob')", "ct_err:attr_missing:[struct<new_user>]:rating")
+        chk("struct<new_user>(123)", "ct_err:attr_missing:[struct<new_user>]:name")
+        chk("struct<new_user>(rating = 'Bob')",
+            "ct_err:[attr_missing:[struct<new_user>]:name][attr_bad_type:0:rating:integer:text]")
+        chk("struct<new_user>(name = 123)",
+            "ct_err:[attr_missing:[struct<new_user>]:rating][attr_bad_type:0:name:text:integer]")
     }
 
     @Test fun testConstructorDefaultValues() {
@@ -32,13 +34,13 @@ class MirrorStructOperationTest: BaseRellTest(false) {
         chk("struct<new_user_1>(456)", "struct<new_user_1>[name=text[Bob],rating=int[456]]")
         chk("struct<new_user_1>('Alice',456)", "struct<new_user_1>[name=text[Alice],rating=int[456]]")
 
-        chk("struct<new_user_2>()", "ct_err:attr_missing:rating")
-        chk("struct<new_user_2>('Alice')", "ct_err:attr_missing:rating")
+        chk("struct<new_user_2>()", "ct_err:attr_missing:[struct<new_user_2>]:rating")
+        chk("struct<new_user_2>('Alice')", "ct_err:attr_missing:[struct<new_user_2>]:rating")
         chk("struct<new_user_2>(123)", "struct<new_user_2>[name=text[Bob],rating=int[123]]")
         chk("struct<new_user_2>('Alice',123)", "struct<new_user_2>[name=text[Alice],rating=int[123]]")
 
-        chk("struct<new_user_3>()", "ct_err:attr_missing:name")
-        chk("struct<new_user_3>(456)", "ct_err:attr_missing:name")
+        chk("struct<new_user_3>()", "ct_err:attr_missing:[struct<new_user_3>]:name")
+        chk("struct<new_user_3>(456)", "ct_err:attr_missing:[struct<new_user_3>]:name")
         chk("struct<new_user_3>('Alice')", "struct<new_user_3>[name=text[Alice],rating=int[123]]")
         chk("struct<new_user_3>('Alice',456)", "struct<new_user_3>[name=text[Alice],rating=int[456]]")
     }
@@ -87,9 +89,10 @@ class MirrorStructOperationTest: BaseRellTest(false) {
     @Test fun testCycle() {
         def("operation op(a: integer, b: struct<op>?) {}")
 
-        chk("struct<op>()", "ct_err:attr_missing:a,b")
+        chk("struct<op>()", "ct_err:attr_missing:[struct<op>]:a,b")
         chk("struct<op>(a = 123, b = null)", "struct<op>[a=int[123],b=null]")
-        chk("struct<op>(a = 123, b = struct<op>(a = 456, b = null))", "struct<op>[a=int[123],b=struct<op>[a=int[456],b=null]]")
+        chk("struct<op>(a = 123, b = struct<op>(a = 456, b = null))",
+            "struct<op>[a=int[123],b=struct<op>[a=int[456],b=null]]")
 
         chkCompile("operation op2(a: integer, b: struct<op2>) {}", "OK")
     }

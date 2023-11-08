@@ -138,6 +138,11 @@ class IdeSymbolLibTest: BaseIdeSymbolTest() {
         chkSymsType(type, "$type=DEF_TYPE;-;-", "?doc=TYPE|rell:$actualType|$expected")
     }
 
+    @Test fun testTypeSpecialConstructor() {
+        file("module.rell", "entity data {}")
+        chkSymsExpr("rell.meta(data)", "meta=DEF_TYPE;-;-", "?doc=CONSTRUCTOR|rell:rell.meta|<constructor>(...)")
+    }
+
     @Test fun testTypeFunctions() {
         chkSymsExpr("unit()", "unit=DEF_TYPE;-;-", "?head=CONSTRUCTOR|rell:unit")
         chkSymsExpr("json('')", "json=DEF_TYPE;-;-", "?head=CONSTRUCTOR|rell:json")
@@ -190,7 +195,7 @@ class IdeSymbolLibTest: BaseIdeSymbolTest() {
         chkSymsExpr("rell.test", *rellTest, err = "expr_novalue:namespace:[rell.test]")
         chkSymsExpr("rell.test.keypair()", *rellTest,
             "keypair=DEF_STRUCT;-;-", "?head=STRUCT|rell.test:rell.test.keypair",
-            err = "attr_missing:pub,priv",
+            err = "attr_missing:[rell.test.keypair]:pub,priv",
         )
         chkSymsExpr("kp().pub", "pub=MEM_STRUCT_ATTR;-;-", "?head=STRUCT_ATTR|rell.test:rell.test.keypair.pub")
         chkSymsExpr("kp().priv", "priv=MEM_STRUCT_ATTR;-;-", "?head=STRUCT_ATTR|rell.test:rell.test.keypair.priv")

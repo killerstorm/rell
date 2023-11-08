@@ -47,9 +47,9 @@ class CreateTest: BaseRellTest() {
         def("entity person { name: text; year: integer; score: integer = 777; status: text = 'Unknown'; }")
         chkData()
 
-        chkOp("create person();", "ct_err:attr_missing:name,year")
-        chkOp("create person(name = 'Bob');", "ct_err:attr_missing:year")
-        chkOp("create person(year = 1980);", "ct_err:attr_missing:name")
+        chkOp("create person();", "ct_err:attr_missing:[person]:name,year")
+        chkOp("create person(name = 'Bob');", "ct_err:attr_missing:[person]:year")
+        chkOp("create person(year = 1980);", "ct_err:attr_missing:[person]:name")
         chkDataNew()
 
         chkOp("create person(name = 'Bob', year = 1980);")
@@ -116,9 +116,9 @@ class CreateTest: BaseRellTest() {
 
     @Test fun testWrongAttributes() {
         def("entity person { name; rating: integer; }")
-        chkOp("create person(true);", "ct_err:[attr_missing:name,rating][attr_implic_unknown:0:boolean]")
-        chkOp("create person('Bob', true);", "ct_err:[attr_missing:rating][attr_implic_unknown:1:boolean]")
-        chkOp("create person(true, 'Bob');", "ct_err:[attr_missing:rating][attr_implic_unknown:0:boolean]")
+        chkOp("create person(true);", "ct_err:[attr_missing:[person]:name,rating][attr_implic_unknown:0:boolean]")
+        chkOp("create person('Bob', true);", "ct_err:[attr_missing:[person]:rating][attr_implic_unknown:1:boolean]")
+        chkOp("create person(true, 'Bob');", "ct_err:[attr_missing:[person]:rating][attr_implic_unknown:0:boolean]")
         chkOp("create person('Bob', 123, true);", "ct_err:attr_implic_unknown:2:boolean")
     }
 

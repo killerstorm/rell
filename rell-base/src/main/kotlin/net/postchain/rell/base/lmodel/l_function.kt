@@ -299,10 +299,18 @@ class L_TypeDefMember_Function(
     }
 }
 
-class L_TypeDefMember_SpecialFunction(
+class L_TypeDefMember_ValueSpecialFunction(
     val simpleName: R_Name,
     doc: DocSymbol,
     val fn: C_SpecialLibMemberFunctionBody,
 ): L_TypeDefMember(simpleName.str, doc) {
     override fun strCode() = "special function $simpleName(...)"
+}
+
+class L_TypeDefMember_StaticSpecialFunction(
+    val simpleName: R_Name,
+    doc: DocSymbol,
+    val fn: C_SpecialLibGlobalFunctionBody,
+): L_TypeDefMember(simpleName.str, doc) {
+    override fun strCode() = "static special function $simpleName(...)"
 }

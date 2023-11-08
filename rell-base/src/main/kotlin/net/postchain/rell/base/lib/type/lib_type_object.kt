@@ -118,8 +118,8 @@ class V_ObjectExpr(
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("object", null)
     override fun toRExpr0(): R_Expr = R_ObjectExpr(rObject.type)
 
-    override fun getDefMeta(): C_ExprDefMeta {
-        return C_ExprDefMeta(mountName = rObject.rEntity.mountName)
+    override fun getDefMeta(): R_DefinitionMeta {
+        return R_DefinitionMeta(rObject.defName, mountName = rObject.rEntity.mountName)
     }
 }
 

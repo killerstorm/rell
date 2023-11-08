@@ -1,0 +1,47 @@
+/*
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ */
+
+package net.postchain.rell.base.compiler.lib
+
+import net.postchain.rell.base.compiler.ast.S_Expr
+import net.postchain.rell.base.compiler.base.expr.C_ExprContext
+import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunctionBody
+import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.testutils.LibModuleTester
+import net.postchain.rell.base.utils.LazyPosString
+import org.junit.Test
+
+class CLibTypeTest: BaseCLibTest() {
+    private val modTst = LibModuleTester(tst)
+
+    @Test fun testNoConstructor() {
+        modTst.extraModule {
+            type("data") {
+                modTst.setRTypeFactory(this)
+            }
+        }
+
+        chkCompile("function f(x: data) {}", "OK")
+        chk("data()", "ct_err:expr:type:no_constructor:data")
+    }
+
+    @Test fun testSpecialConstructor() {
+        modTst.extraModule {
+            type("data") {
+                modTst.setRTypeFactory(this)
+                constructor(object: C_SpecialLibGlobalFunctionBody() {
+                    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr {
+                        args.forEach { it.compile(ctx) }
+                        return C_ExprUtils.errorVExpr(ctx, name.pos)
+                    }
+                })
+            }
+        }
+
+        chkCompile("function f(x: data) {}", "OK")
+        chkCompile("function f() = data();", "OK")
+        chkCompile("function f() = data(foo);", "ct_err:unknown_name:foo")
+    }
+}

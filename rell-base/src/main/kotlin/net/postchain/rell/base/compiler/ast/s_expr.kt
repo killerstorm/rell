@@ -257,7 +257,14 @@ class S_CreateExpr(pos: S_Pos, val entityName: S_QualifiedName, val args: List<S
         val createCtx = C_CreateContext(ctx, entity.initFrameGetter, startPos.toFilePos())
 
         val attrArgs = C_CallArgument.toAttrArguments(ctx, callArgs, C_CodeMsg("create_expr", "create expression"))
-        val attrs = C_AttributeResolver.resolveCreate(createCtx, entity.attributes, attrArgs, startPos)
+
+        val attrs = C_AttributeResolver.resolveCreate(
+            createCtx,
+            entity.appLevelName,
+            entity.attributes,
+            attrArgs,
+            startPos,
+        )
 
         C_Errors.check(entity.flags.canCreate, startPos) {
             val entityNameStr = entityName.str()

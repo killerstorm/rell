@@ -397,9 +397,13 @@ class DocDeclaration_Function(
     }
 }
 
-class DocDeclaration_SpecialFunction(private val simpleName: R_Name): DocDeclaration() {
+class DocDeclaration_SpecialFunction(
+    private val simpleName: R_Name,
+    private val isStatic: Boolean,
+): DocDeclaration() {
     override fun genCode(): DocCode {
         val b = DocCode.builder()
+        if (isStatic) b.keyword("static").raw(" ")
         b.keyword("function")
         b.raw(" ")
         b.raw(simpleName.str)
@@ -493,6 +497,15 @@ class DocDeclaration_TypeConstructor(private val lConstructor: L_Constructor): D
         DocDecUtils.appendTypeParams(b, lConstructor.header.typeParams)
         Ld_DocSymbols.docCodeParams(b, lConstructor.header.params)
 
+        return b.build()
+    }
+}
+
+class DocDeclaration_TypeSpecialConstructor: DocDeclaration() {
+    override fun genCode(): DocCode {
+        val b = DocCode.builder()
+        b.keyword("constructor")
+        b.raw("(...)")
         return b.build()
     }
 }

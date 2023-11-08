@@ -44,8 +44,8 @@ class MirrorStructEntityTest: BaseRellTest(false) {
 
         chk("struct<user>('Bob', 123)", "struct<user>[name=text[Bob],rating=int[123]]")
         chk("struct<user>(rating = 123, name = 'Bob')", "struct<user>[name=text[Bob],rating=int[123]]")
-        chk("struct<user>()", "ct_err:attr_missing:name,rating")
-        chk("struct<user>(name = 'Bob')", "ct_err:attr_missing:rating")
+        chk("struct<user>()", "ct_err:attr_missing:[struct<user>]:name,rating")
+        chk("struct<user>(name = 'Bob')", "ct_err:attr_missing:[struct<user>]:rating")
         chk("struct<user>(name = 'Bob', rating = null)", "ct_err:attr_bad_type:1:rating:integer:null")
     }
 
@@ -54,8 +54,8 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         def("entity data2 { x: integer = 123; y: text; }")
 
         chk("struct<data1>()", "struct<data1>[x=int[123],y=text[abc]]")
-        chk("struct<data2>()", "ct_err:attr_missing:y")
-        chk("struct<data2>(x = 456)", "ct_err:attr_missing:y")
+        chk("struct<data2>()", "ct_err:attr_missing:[struct<data2>]:y")
+        chk("struct<data2>(x = 456)", "ct_err:attr_missing:[struct<data2>]:y")
         chk("struct<data2>(y = 'hello')", "struct<data2>[x=int[123],y=text[hello]]")
     }
 
@@ -126,11 +126,11 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         tstCtx.useSql = true
         tst.insert(LibBlockTransactionTest.BLOCK_INSERTS_0)
 
-        chk("struct<block>()", "ct_err:attr_missing:block_height,block_rid,timestamp")
+        chk("struct<block>()", "ct_err:attr_missing:[struct<block>]:block_height,block_rid,timestamp")
         chk("struct<block>(block_height = 123, block_rid = x'beef', timestamp = 456)",
                 "struct<block>[block_height=int[123],block_rid=byte_array[beef],timestamp=int[456]]")
 
-        chk("struct<transaction>()", "ct_err:attr_missing:tx_rid,tx_hash,tx_data,block")
+        chk("struct<transaction>()", "ct_err:attr_missing:[struct<transaction>]:tx_rid,tx_hash,tx_data,block")
         chk("struct<transaction>(block = block@{.block_height==10}, tx_data = x'dead', tx_hash = x'beef', tx_rid = x'cafe')",
                 "struct<transaction>[tx_rid=byte_array[cafe],tx_hash=byte_array[beef],tx_data=byte_array[dead],block=block[710]]")
     }
@@ -315,13 +315,18 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("user @* {} ( $, _=.name, _=.rating )", "[(user[1],Alice,456), (user[33],Bob,123)]")
 
         chkOp("val s: struct<user>? = _nullable($expr); create user(s);",
-                "ct_err:[attr_missing:name,rating][attr_implic_unknown:0:struct<user>?]")
-        chkOp("val s = $expr; create user(s, 'Alice');", "ct_err:[attr_missing:rating][attr_implic_unknown:0:struct<user>]")
-        chkOp("val s = $expr; create user('Alice', s);", "ct_err:[attr_missing:rating][attr_implic_unknown:1:struct<user>]")
-        chkOp("val s = $expr; create user(s, name = 'Alice');", "ct_err:[attr_missing:rating][attr_implic_unknown:0:struct<user>]")
-        chkOp("val s = $expr; create user(name = 'Alice', s);", "ct_err:[attr_missing:rating][attr_implic_unknown:1:struct<user>]")
+            "ct_err:[attr_missing:[user]:name,rating][attr_implic_unknown:0:struct<user>?]")
+        chkOp("val s = $expr; create user(s, 'Alice');",
+            "ct_err:[attr_missing:[user]:rating][attr_implic_unknown:0:struct<user>]")
+        chkOp("val s = $expr; create user('Alice', s);",
+            "ct_err:[attr_missing:[user]:rating][attr_implic_unknown:1:struct<user>]")
+        chkOp("val s = $expr; create user(s, name = 'Alice');",
+            "ct_err:[attr_missing:[user]:rating][attr_implic_unknown:0:struct<user>]")
+        chkOp("val s = $expr; create user(name = 'Alice', s);",
+            "ct_err:[attr_missing:[user]:rating][attr_implic_unknown:1:struct<user>]")
         chkOp("val s = $expr; create user(s = s);", "ct_err:attr_unknown_name:s")
-        chkOp("val s = $expr; create admin(s);", "ct_err:[attr_missing:name,root][attr_implic_unknown:0:struct<user>]")
+        chkOp("val s = $expr; create admin(s);",
+            "ct_err:[attr_missing:[admin]:name,root][attr_implic_unknown:0:struct<user>]")
     }
 
     @Test fun testMutableBasic() {
@@ -403,9 +408,9 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         tstCtx.useSql = true
         def("@log entity user { name; value: integer = 123; }")
 
-        chk("struct<user>('Bob')", "ct_err:attr_missing:transaction")
+        chk("struct<user>('Bob')", "ct_err:attr_missing:[struct<user>]:transaction")
         chk("struct<user>('Bob', transaction @ {})", "rt_err:at:wrong_count:0")
-        chk("struct<user>(transaction @ {})", "ct_err:attr_missing:name")
+        chk("struct<user>(transaction @ {})", "ct_err:attr_missing:[struct<user>]:name")
     }
 
     @Test fun testLogEntityGtvCompatibility() {

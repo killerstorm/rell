@@ -276,6 +276,16 @@ class LDocTest: BaseLTest() {
         chkDoc(mod, "data.!init#3", "CONSTRUCTOR|mod:data", "@deprecated\n<constructor>(\n\ta: [byte_array]\n)")
     }
 
+    @Test fun testTypeDefConstructorSpecial() {
+        val mod = makeDocModule {
+            type("data") {
+                constructor(makeGlobalFun())
+            }
+        }
+
+        chkDoc(mod, "data.!init", "CONSTRUCTOR|mod:data", "<constructor>(...)")
+    }
+
     @Test fun testTypeDefConstructorGeneric() {
         val mod = makeDocModule {
             type("data") {
@@ -301,6 +311,7 @@ class LDocTest: BaseLTest() {
                     param(type = "text", name = "x")
                     body { -> Rt_UnitValue }
                 }
+                staticFunction("stat_spec", makeGlobalFun())
 
                 function("pure_1", result = "text", pure = true) { body { -> Rt_UnitValue } }
                 function("pure_2", result = "text") {
@@ -316,6 +327,7 @@ class LDocTest: BaseLTest() {
         chkDoc(mod, "data.foo", "FUNCTION|mod:data.foo", "<function> foo(\n\tx: [text]\n): [integer]")
         chkDoc(mod, "data.spec", "FUNCTION|mod:data.spec", "<function> spec(...)")
         chkDoc(mod, "data.stat", "FUNCTION|mod:data.stat", "<static> <function> stat(\n\tx: [text]\n): [integer]")
+        chkDoc(mod, "data.stat_spec", "FUNCTION|mod:data.stat_spec", "<static> <function> stat_spec(...)")
         chkDoc(mod, "data.pure_1", "FUNCTION|mod:data.pure_1", "<pure> <function> pure_1(): [text]")
         chkDoc(mod, "data.pure_2", "FUNCTION|mod:data.pure_2", "<pure> <function> pure_2(): [text]")
         chkDoc(mod, "data.stat_pure_1", "FUNCTION|mod:data.stat_pure_1", "<pure> <static> <function> stat_pure_1(): [text]")

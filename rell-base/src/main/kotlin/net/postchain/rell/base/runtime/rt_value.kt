@@ -23,6 +23,8 @@ import java.math.BigDecimal
 import java.math.BigInteger
 import java.util.*
 import java.util.regex.Pattern
+import kotlin.reflect.KClass
+import kotlin.reflect.cast
 
 abstract class Rt_ValueRef {
     abstract fun get(): Rt_Value
@@ -119,7 +121,14 @@ abstract class Rt_Value {
     open fun asFunction(): Rt_FunctionValue = throw errType(Rt_CoreValueTypes.FUNCTION)
     open fun asLazyValue(): Rt_Value = throw errType(Rt_CoreValueTypes.LAZY)
 
-    open fun asFormatArg(): Any = toString()
+    fun <T: Rt_Value> asType(cls: KClass<T>, valueType: Rt_ValueType): T {
+        if (!cls.isInstance(this)) {
+            throw errType(valueType)
+        }
+        return cls.cast(this)
+    }
+
+    open fun toFormatArg(): Any = toString()
 
     abstract fun str(): String
     abstract fun strCode(showTupleFieldNames: Boolean = true): String
@@ -131,7 +140,8 @@ abstract class Rt_Value {
         return str()
     }
 
-    private fun errType(expected: Rt_CoreValueTypes) = Rt_ValueTypeError.exception(expected.type(), valueType)
+    private fun errType(expected: Rt_CoreValueTypes) = errType(expected.type())
+    private fun errType(expected: Rt_ValueType) = Rt_ValueTypeError.exception(expected, valueType)
 }
 
 sealed class Rt_VirtualValue(val gtv: Gtv): Rt_Value() {
@@ -168,7 +178,7 @@ class Rt_BooleanValue(val value: Boolean): Rt_Value() {
 
     override fun type() = R_BooleanType
     override fun asBoolean() = value
-    override fun asFormatArg() = value
+    override fun toFormatArg() = value
     override fun strCode(showTupleFieldNames: Boolean) = "boolean[$value]"
     override fun str() = "" + value
     override fun equals(other: Any?) = other is Rt_BooleanValue && value == other.value
@@ -185,7 +195,7 @@ class Rt_IntValue(val value: Long): Rt_Value() {
 
     override fun type() = R_IntegerType
     override fun asInteger() = value
-    override fun asFormatArg() = value
+    override fun toFormatArg() = value
     override fun strCode(showTupleFieldNames: Boolean) = "int[$value]"
     override fun str() = "" + value
     override fun equals(other: Any?) = other is Rt_IntValue && value == other.value
@@ -197,7 +207,7 @@ class Rt_BigIntegerValue private constructor(val value: BigInteger): Rt_Value() 
 
     override fun type() = R_BigIntegerType
     override fun asBigInteger() = value
-    override fun asFormatArg() = value
+    override fun toFormatArg() = value
     override fun strCode(showTupleFieldNames: Boolean) = "bigint[${str()}]"
     override fun str() = value.toString()
     override fun equals(other: Any?) = other === this || (other is Rt_BigIntegerValue && value == other.value)
@@ -254,7 +264,7 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
 
     override fun type() = R_DecimalType
     override fun asDecimal() = value
-    override fun asFormatArg() = value
+    override fun toFormatArg() = value
     override fun strCode(showTupleFieldNames: Boolean) = "dec[${str()}]"
     override fun str() = Lib_DecimalMath.toString(value)
     override fun equals(other: Any?) = other === this || (other is Rt_DecimalValue && value == other.value)
@@ -304,7 +314,7 @@ class Rt_TextValue(val value: String): Rt_Value() {
 
     override fun type() = R_TextType
     override fun asString() = value
-    override fun asFormatArg() = value
+    override fun toFormatArg() = value
 
     override fun strCode(showTupleFieldNames: Boolean): String {
         val esc = escape(value)
@@ -380,7 +390,7 @@ class Rt_ByteArrayValue(private val value: ByteArray): Rt_Value() {
 
     override fun type() = R_ByteArrayType
     override fun asByteArray() = value
-    override fun asFormatArg() = str()
+    override fun toFormatArg() = str()
     override fun strCode(showTupleFieldNames: Boolean) = "byte_array[${CommonUtils.bytesToHex(value)}]"
     override fun str() = "0x" + CommonUtils.bytesToHex(value)
     override fun equals(other: Any?) = other === this || (other is Rt_ByteArrayValue && value.contentEquals(other.value))
@@ -404,7 +414,7 @@ class Rt_RowidValue(val value: Long): Rt_Value() {
 
     override fun type() = R_RowidType
     override fun asRowid() = value
-    override fun asFormatArg() = value
+    override fun toFormatArg() = value
     override fun strCode(showTupleFieldNames: Boolean) = "rowid[$value]"
     override fun str() = "" + value
     override fun equals(other: Any?) = other is Rt_RowidValue && value == other.value
@@ -416,7 +426,7 @@ class Rt_EntityValue(val type: R_EntityType, val rowid: Long): Rt_Value() {
 
     override fun type() = type
     override fun asObjectId() = rowid
-    override fun asFormatArg() = str()
+    override fun toFormatArg() = str()
     override fun strCode(showTupleFieldNames: Boolean) = "${type.name}[$rowid]"
     override fun str() = strCode()
     override fun equals(other: Any?) = other === this || (other is Rt_EntityValue && type == other.type && rowid == other.rowid)
@@ -427,7 +437,7 @@ object Rt_NullValue: Rt_Value() {
     override val valueType = Rt_CoreValueTypes.NULL.type()
 
     override fun type() = R_NullType
-    override fun asFormatArg() = str()
+    override fun toFormatArg() = str()
     override fun strCode(showTupleFieldNames: Boolean) = "null"
     override fun str() = "null"
 }
@@ -443,7 +453,7 @@ class Rt_ListValue(private val type: R_Type, private val elements: MutableList<R
     override fun asIterable(): Iterable<Rt_Value> = elements
     override fun asCollection() = elements
     override fun asList() = elements
-    override fun asFormatArg() = elements
+    override fun toFormatArg() = elements
 
     override fun strCode(showTupleFieldNames: Boolean) = strCode(type, elements)
     override fun str() = elements.joinToString(", ", "[", "]") { it.str() }
@@ -480,7 +490,7 @@ class Rt_VirtualListValue(
     override fun type() = type
     override fun asVirtualCollection() = this
     override fun asVirtualList() = this
-    override fun asFormatArg() = elements
+    override fun toFormatArg() = elements
     override fun strCode(showTupleFieldNames: Boolean) = Rt_ListValue.strCode(type, elements)
     override fun str() = elements.joinToString(", ", "[", "]") { it?.str() ?: "null" }
     override fun equals(other: Any?) = other === this || (other is Rt_VirtualListValue && elements == other.elements)
@@ -517,7 +527,7 @@ class Rt_SetValue(private val type: R_Type, private val elements: MutableSet<Rt_
     override fun asIterable(): Iterable<Rt_Value> = elements
     override fun asCollection() = elements
     override fun asSet() = elements
-    override fun asFormatArg() = elements
+    override fun toFormatArg() = elements
     override fun strCode(showTupleFieldNames: Boolean) = strCode(type, elements, showTupleFieldNames)
     override fun str() = elements.joinToString(", ", "[", "]") { it.str() }
     override fun equals(other: Any?) = other === this || (other is Rt_SetValue && elements == other.elements)
@@ -539,7 +549,7 @@ class Rt_VirtualSetValue(
     override fun type() = type
     override fun asVirtualCollection() = this
     override fun asVirtualSet() = this
-    override fun asFormatArg() = elements
+    override fun toFormatArg() = elements
     override fun strCode(showTupleFieldNames: Boolean) = Rt_SetValue.strCode(type, elements, showTupleFieldNames)
     override fun str() = elements.joinToString(", ", "[", "]") { it.str() }
     override fun equals(other: Any?) = other === this || (other is Rt_VirtualSetValue && elements == other.elements)
@@ -567,7 +577,7 @@ class Rt_MapValue(val type: R_MapType, map: MutableMap<Rt_Value, Rt_Value>): Rt_
     override fun asMap() = map
     override fun asMutableMap() = mutableMap
     override fun asMapValue() = this
-    override fun asFormatArg() = map
+    override fun toFormatArg() = map
     override fun strCode(showTupleFieldNames: Boolean) = strCode(type, showTupleFieldNames, map)
     override fun str() = map.entries.joinToString(", ", "{", "}") { "${it.key.str()}=${it.value.str()}" }
     override fun equals(other: Any?) = other === this || (other is Rt_MapValue && map == other.map)
@@ -603,7 +613,7 @@ class Rt_VirtualMapValue(
 
     override fun type() = type
     override fun asMap() = map
-    override fun asFormatArg() = map
+    override fun toFormatArg() = map
     override fun strCode(showTupleFieldNames: Boolean) = Rt_MapValue.strCode(type, showTupleFieldNames, map)
     override fun str() = map.entries.joinToString(", ", "{", "}") { "${it.key.str()}=${it.value.str()}" }
     override fun equals(other: Any?) = other === this || (other is Rt_VirtualMapValue && map == other.map)
@@ -633,7 +643,7 @@ class Rt_TupleValue(val type: R_TupleType, val elements: List<Rt_Value>): Rt_Val
 
     override fun type() = type
     override fun asTuple() = elements
-    override fun asFormatArg() = str()
+    override fun toFormatArg() = str()
     override fun equals(other: Any?) = other === this || (other is Rt_TupleValue && elements == other.elements)
     override fun hashCode() = elements.hashCode()
 
@@ -687,7 +697,7 @@ class Rt_VirtualTupleValue(
 
     override fun type() = type
     override fun asVirtualTuple() = this
-    override fun asFormatArg() = str()
+    override fun toFormatArg() = str()
     override fun equals(other: Any?) = other === this || (other is Rt_VirtualTupleValue && elements == other.elements)
     override fun hashCode() = elements.hashCode()
 
@@ -715,7 +725,7 @@ class Rt_StructValue(private val type: R_StructType, private val attributes: Mut
 
     override fun type() = type
     override fun asStruct() = this
-    override fun asFormatArg() = str()
+    override fun toFormatArg() = str()
     override fun equals(other: Any?) = other === this || (other is Rt_StructValue && attributes == other.attributes)
     override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
@@ -792,7 +802,7 @@ class Rt_VirtualStructValue(
 
     override fun type() = type
     override fun asVirtualStruct() = this
-    override fun asFormatArg() = str()
+    override fun toFormatArg() = str()
     override fun equals(other: Any?) = other === this || (other is Rt_VirtualStructValue && attributes == other.attributes)
     override fun hashCode() = type.hashCode() * 31 + attributes.hashCode()
 
@@ -821,7 +831,7 @@ class Rt_EnumValue(private val type: R_EnumType, private val attr: R_EnumAttr): 
 
     override fun type() = type
     override fun asEnum() = attr
-    override fun asFormatArg() = attr.name
+    override fun toFormatArg() = attr.name
     override fun equals(other: Any?) = other is Rt_EnumValue && attr == other.attr
     override fun hashCode() = type.hashCode() * 31 + attr.value
 
@@ -842,7 +852,7 @@ class Rt_JsonValue private constructor(private val str: String): Rt_Value() {
 
     override fun type() = R_JsonType
     override fun asJsonString() = str
-    override fun asFormatArg() = str
+    override fun toFormatArg() = str
     override fun str() = str
     override fun strCode(showTupleFieldNames: Boolean) = "json[$str]"
     override fun equals(other: Any?) = other === this || (other is Rt_JsonValue && str == other.str)
@@ -877,7 +887,7 @@ class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(),
 
     override fun type() = R_RangeType
     override fun asRange() = this
-    override fun asFormatArg() = str()
+    override fun toFormatArg() = str()
     override fun str() = "range($start,$end,$step)"
     override fun strCode(showTupleFieldNames: Boolean) = "range[$start,$end,$step]"
 

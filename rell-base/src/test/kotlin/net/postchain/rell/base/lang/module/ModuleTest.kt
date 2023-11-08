@@ -625,18 +625,18 @@ class ModuleTest: BaseRellTest(false) {
         file("a/module.rell", "@mount('foo') module; entity data_a {}")
         file("a/b/module.rell", "module; entity data_b {}")
         repl.chk("import a;", "")
-        repl.chk("_test.mount_name(a.data_a)", "RES:text[foo.data_a]")
+        repl.chk("rell.meta(a.data_a).mount_name", "RES:text[foo.data_a]")
         repl.chk("import a.b;", "")
-        repl.chk("_test.mount_name(b.data_b)", "RES:text[foo.data_b]")
+        repl.chk("rell.meta(b.data_b).mount_name", "RES:text[foo.data_b]")
     }
 
     @Test fun testMountNameInReplImportChildFirst() {
         file("a/module.rell", "@mount('foo') module; entity data_a {}")
         file("a/b/module.rell", "module; entity data_b {}")
         repl.chk("import a.b;", "")
-        repl.chk("_test.mount_name(b.data_b)", "RES:text[foo.data_b]")
+        repl.chk("rell.meta(b.data_b).mount_name", "RES:text[foo.data_b]")
         repl.chk("import a;", "")
-        repl.chk("_test.mount_name(a.data_a)", "RES:text[foo.data_a]")
+        repl.chk("rell.meta(a.data_a).mount_name", "RES:text[foo.data_a]")
     }
 
     private fun chkAppFns(vararg expected: String) {

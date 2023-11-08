@@ -568,7 +568,7 @@ private class Ld_NamespaceMember_SpecialFunction(
         private val fn: C_SpecialLibGlobalFunctionBody,
     ): Declaration(fullName) {
         override fun finish(ctx: Ld_NamespaceFinishContext): List<L_NamespaceMember> {
-            val doc = Ld_DocSymbols.specialFunction(fullName)
+            val doc = Ld_DocSymbols.specialFunction(fullName, isStatic = false)
             return immListOf(L_NamespaceMember_SpecialFunction(qualifiedName, doc, fn))
         }
     }

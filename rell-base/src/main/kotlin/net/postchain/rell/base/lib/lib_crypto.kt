@@ -23,7 +23,6 @@ import net.postchain.rell.base.utils.etherjar.Signer
 import net.postchain.rell.base.utils.immListOf
 import org.bouncycastle.jcajce.provider.digest.Keccak
 import org.bouncycastle.math.ec.ECPoint
-import java.lang.RuntimeException
 import java.math.BigInteger
 import java.security.MessageDigest
 

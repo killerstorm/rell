@@ -29,7 +29,9 @@ class L_TypeDefMembers(members: List<L_TypeDefMember>) {
     val constants: List<L_TypeDefMember_Constant>
     val properties: List<L_TypeDefMember_Property>
     val constructors: List<L_TypeDefMember_Constructor>
-    val specialValueFunctions: List<L_TypeDefMember_SpecialFunction>
+    val specialConstructors: List<L_TypeDefMember_SpecialConstructor>
+    val specialValueFunctions: List<L_TypeDefMember_ValueSpecialFunction>
+    val specialStaticFunctions: List<L_TypeDefMember_StaticSpecialFunction>
     val valueFunctionsByName: Map<R_Name, List<L_TypeDefMember_Function>>
     val staticFunctionsByName: Map<R_Name, List<L_TypeDefMember_Function>>
 
@@ -44,16 +46,20 @@ class L_TypeDefMembers(members: List<L_TypeDefMember>) {
         val constants = mutableListOf<L_TypeDefMember_Constant>()
         val properties = mutableListOf<L_TypeDefMember_Property>()
         val constructors = mutableListOf<L_TypeDefMember_Constructor>()
+        val specialConstructors = mutableListOf<L_TypeDefMember_SpecialConstructor>()
         val staticFunctions = mutableListOf<L_TypeDefMember_Function>()
         val valueFunctions = mutableListOf<L_TypeDefMember_Function>()
-        val specialValueFunctions = mutableListOf<L_TypeDefMember_SpecialFunction>()
+        val specialValueFunctions = mutableListOf<L_TypeDefMember_ValueSpecialFunction>()
+        val specialStaticFunctions = mutableListOf<L_TypeDefMember_StaticSpecialFunction>()
 
         for (member in all) {
             when (member) {
                 is L_TypeDefMember_Constant -> constants.add(member)
                 is L_TypeDefMember_Property -> properties.add(member)
                 is L_TypeDefMember_Constructor -> constructors.add(member)
-                is L_TypeDefMember_SpecialFunction -> specialValueFunctions.add(member)
+                is L_TypeDefMember_SpecialConstructor -> specialConstructors.add(member)
+                is L_TypeDefMember_ValueSpecialFunction -> specialValueFunctions.add(member)
+                is L_TypeDefMember_StaticSpecialFunction -> specialStaticFunctions.add(member)
                 is L_TypeDefMember_Function -> {
                     val list = if (member.isStatic) staticFunctions else valueFunctions
                     list.add(member)
@@ -64,7 +70,9 @@ class L_TypeDefMembers(members: List<L_TypeDefMember>) {
         this.constants = constants.toImmList()
         this.properties = properties.toImmList()
         this.constructors = constructors.toImmList()
+        this.specialConstructors = specialConstructors.toImmList()
         this.specialValueFunctions = specialValueFunctions.toImmList()
+        this.specialStaticFunctions = specialStaticFunctions.toImmList()
 
         valueFunctionsByName = valueFunctions
             .groupBy { it.simpleName }
@@ -83,8 +91,10 @@ class L_TypeDefMembers(members: List<L_TypeDefMember>) {
                 is L_TypeDefMember_Constant -> member
                 is L_TypeDefMember_Property -> member.replaceTypeParams(map)
                 is L_TypeDefMember_Constructor -> null
+                is L_TypeDefMember_SpecialConstructor -> null
                 is L_TypeDefMember_Function -> member.replaceTypeParams(map)
-                is L_TypeDefMember_SpecialFunction -> member
+                is L_TypeDefMember_ValueSpecialFunction -> member
+                is L_TypeDefMember_StaticSpecialFunction -> member
             }
         }
         return L_TypeDefMembers(resAll)

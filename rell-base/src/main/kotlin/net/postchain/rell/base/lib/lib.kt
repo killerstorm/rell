@@ -20,6 +20,7 @@ object Lib_Rell {
 
         include(Lib_Exists.NAMESPACE)
         include(Lib_Math.NAMESPACE)
+        include(Lib_Meta.NAMESPACE)
         include(Lib_Print.NAMESPACE)
         include(Lib_Require.NAMESPACE)
         include(Lib_Crypto.NAMESPACE)
@@ -59,6 +60,8 @@ object Lib_Rell {
 
     val IMMUTABLE_MIRROR_STRUCT = MODULE.getTypeDef("immutable_mirror_struct")
     val MUTABLE_MIRROR_STRUCT = MODULE.getTypeDef("mutable_mirror_struct")
+
+    val RELL_META_TYPE = MODULE.getTypeDef("rell.meta")
 
     // Doesn't belong here logically, but shall be here for explicit initialization.
     private val GTX_OPERATION_STRUCT = MODULE.lModule.getStruct("gtx_operation").rStruct

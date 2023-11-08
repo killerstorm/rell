@@ -81,7 +81,13 @@ object C_LibAdapter {
             }
         }
 
-        return if (cases.isEmpty()) null else {
+        return if (cases.isEmpty()) {
+            val con = lTypeDef.members.specialConstructors.firstOrNull()
+            if (con == null) null else {
+                val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_TYPE, doc = con.docSymbol)
+                C_SpecialLibGlobalFunction(con.fn, ideInfo)
+            }
+        } else {
             C_LibFunctionUtils.makeGlobalFunction(naming, cases)
         }
     }
@@ -158,6 +164,14 @@ object C_LibAdapter {
             val cFn = C_LibFunctionUtils.makeGlobalFunction(naming, cases)
             val ideInfo = cases.first().ideInfo
             list.add(C_TypeStaticMember.makeFunction(defName, e.key, naming, cFn, ideInfo))
+        }
+
+        for (mem in lTypeDef.allMembers.specialStaticFunctions) {
+            val defName = defPath.subName(mem.simpleName)
+            val naming = C_GlobalFunctionNaming.makeTypeMember(lTypeDef.mGenericType.commonType, mem.simpleName)
+            val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_FUNCTION_SYSTEM, doc = mem.docSymbol)
+            val cFn = C_SpecialLibGlobalFunction(mem.fn, ideInfo)
+            list.add(C_TypeStaticMember.makeFunction(defName, mem.simpleName, naming, cFn, ideInfo))
         }
 
         return C_LibTypeMembers.simple(list.toImmList())

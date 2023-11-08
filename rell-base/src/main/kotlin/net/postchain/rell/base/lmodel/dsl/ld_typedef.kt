@@ -4,6 +4,7 @@
 
 package net.postchain.rell.base.lmodel.dsl
 
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunctionBody
 import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunctionBody
 import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
@@ -47,6 +48,23 @@ private class Ld_TypeDefMember_Constructor(private val constructor: Ld_Construct
             symbolName = DocSymbolName.global(typeName.moduleName.str(), typeName.qName.str()), //TODO proper name
             mountName = null,
             declaration = DocDeclaration_TypeConstructor(lConstructor),
+            comment = null,
+        )
+    }
+}
+
+private class Ld_TypeDefMember_SpecialConstructor(private val fn: C_SpecialLibGlobalFunctionBody): Ld_TypeDefMember() {
+    override fun finish(ctx: Ld_TypeFinishContext, typeName: L_FullName): List<L_TypeDefMember> {
+        val doc = makeDoc(typeName)
+        return immListOf(L_TypeDefMember_SpecialConstructor(fn, doc))
+    }
+
+    private fun makeDoc(typeName: L_FullName): DocSymbol {
+        return DocSymbol(
+            kind = DocSymbolKind.CONSTRUCTOR,
+            symbolName = DocSymbolName.global(typeName.moduleName.str(), typeName.qName.str()), //TODO proper name
+            mountName = null,
+            declaration = DocDeclaration_TypeSpecialConstructor(),
             comment = null,
         )
     }
@@ -104,14 +122,25 @@ private class Ld_TypeDefMember_Function(
     }
 }
 
-private class Ld_TypeDefMember_SpecialFunction(
+private class Ld_TypeDefMember_ValueSpecialFunction(
     private val simpleName: R_Name,
     private val fn: C_SpecialLibMemberFunctionBody,
 ): Ld_TypeDefMember() {
     override fun finish(ctx: Ld_TypeFinishContext, typeName: L_FullName): List<L_TypeDefMember> {
         val fullName = typeName.append(simpleName)
-        val doc = Ld_DocSymbols.specialFunction(fullName)
-        return immListOf(L_TypeDefMember_SpecialFunction(simpleName, doc, fn))
+        val doc = Ld_DocSymbols.specialFunction(fullName, isStatic = false)
+        return immListOf(L_TypeDefMember_ValueSpecialFunction(simpleName, doc, fn))
+    }
+}
+
+private class Ld_TypeDefMember_StaticSpecialFunction(
+    private val simpleName: R_Name,
+    private val fn: C_SpecialLibGlobalFunctionBody,
+): Ld_TypeDefMember() {
+    override fun finish(ctx: Ld_TypeFinishContext, typeName: L_FullName): List<L_TypeDefMember> {
+        val fullName = typeName.append(simpleName)
+        val doc = Ld_DocSymbols.specialFunction(fullName, isStatic = true)
+        return immListOf(L_TypeDefMember_StaticSpecialFunction(simpleName, doc, fn))
     }
 }
 
@@ -329,6 +358,7 @@ interface Ld_TypeDefMaker: Ld_CommonNamespaceMaker {
     fun property(name: String, type: String, body: C_SysFunctionBody)
 
     fun constructor(params: List<String>?, pure: Boolean?, block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef)
+    fun constructor(fn: C_SpecialLibGlobalFunctionBody)
 
     fun function(
         isStatic: Boolean,
@@ -339,6 +369,7 @@ interface Ld_TypeDefMaker: Ld_CommonNamespaceMaker {
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     )
 
+    fun function(name: String, fn: C_SpecialLibGlobalFunctionBody)
     fun function(name: String, fn: C_SpecialLibMemberFunctionBody)
 }
 
@@ -444,6 +475,10 @@ class Ld_TypeDefDsl(
         maker.constructor(params, pure = pure, block = block)
     }
 
+    fun constructor(fn: C_SpecialLibGlobalFunctionBody) {
+        maker.constructor(fn)
+    }
+
     fun function(
         name: String,
         result: String? = null,
@@ -466,6 +501,10 @@ class Ld_TypeDefDsl(
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     ) {
         maker.function(isStatic = true, name = name, result = result, params = params, pure = pure, block = block)
+    }
+
+    fun staticFunction(name: String, fn: C_SpecialLibGlobalFunctionBody) {
+        maker.function(name, fn)
     }
 }
 
@@ -579,9 +618,7 @@ private class Ld_TypeDefBuilder(
     }
 
     override fun constructor(params: List<String>?, pure: Boolean?, block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef) {
-        Ld_Exception.check(!flags.abstract) {
-            "type:abstract_constructor:$simpleName" to "Abstract type cannot have a constructor: $simpleName"
-        }
+        checkCanHaveConstructor()
 
         val bodyBuilder = Ld_FunctionBodyBuilder(simpleName, pure = pure)
         val conBuilder = Ld_ConstructorBuilder(outerTypeParams = typeParams.keys.toImmSet(), bodyBuilder)
@@ -599,6 +636,17 @@ private class Ld_TypeDefBuilder(
 
         val constructor = conBuilder.build(bodyRes)
         members.add(Ld_TypeDefMember_Constructor(constructor))
+    }
+
+    override fun constructor(fn: C_SpecialLibGlobalFunctionBody) {
+        checkCanHaveConstructor()
+        members.add(Ld_TypeDefMember_SpecialConstructor(fn))
+    }
+
+    private fun checkCanHaveConstructor() {
+        Ld_Exception.check(!flags.abstract) {
+            "type:abstract_constructor:$simpleName" to "Abstract type cannot have a constructor: $simpleName"
+        }
     }
 
     override fun function(
@@ -630,10 +678,16 @@ private class Ld_TypeDefBuilder(
         members.add(Ld_TypeDefMember_Function(rName, fn, isStatic = isStatic))
     }
 
+    override fun function(name: String, fn: C_SpecialLibGlobalFunctionBody) {
+        val rName = R_Name.of(name)
+        staticConflictChecker.addMember(rName, Ld_ConflictMemberKind.OTHER)
+        members.add(Ld_TypeDefMember_StaticSpecialFunction(rName, fn))
+    }
+
     override fun function(name: String, fn: C_SpecialLibMemberFunctionBody) {
         val rName = R_Name.of(name)
         valueConflictChecker.addMember(rName, Ld_ConflictMemberKind.OTHER)
-        members.add(Ld_TypeDefMember_SpecialFunction(rName, fn))
+        members.add(Ld_TypeDefMember_ValueSpecialFunction(rName, fn))
     }
 
     fun build(): Ld_TypeDef {

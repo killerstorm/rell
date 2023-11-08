@@ -144,3 +144,36 @@ All added functions that take a public key, support three kinds of public keys:
 2. Uncompressed 65-byte public key.
 3. Uncompressed 64-byte public key - same as the 65-byte key, but without the first byte; such key is returned by the
    crypto.eth_ecrecover() function and supported for convenience.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+7. Library: Type rell.meta to get definition meta-information (like a mount name of an operation)
+
+New type "rell.meta" has the following members:
+
+constructor(definition);
+
+    Constructor. Returns a value of type "rell.meta" describing the given definition (specified by name).
+    The definition can be: entity, object, operation, query.
+
+simple_name: text;
+
+    Simple name (e.g. "bar" if the full name is "lib:foo.bar").
+
+full_name: text;
+
+    Full name, including the module name, in the form: <module_name>:[<namespace_path>.]<simple_name>.
+    For example: ":foo" (root module), "my_module:bar", "my_module:my_namespace.bar".
+
+module_name: text;
+
+    Module name. Can be an empty string (for the root module).
+
+mount_name: text;
+
+    Mount name. Throws an error (at runtime) if the kind of the definition doesn't have a mount name.
+    (All definitions supported so far have mount names.)
+
+Example. Getting a mount name of an operation:
+
+    operation my_op() {}
+    query get_op_name() = rell.meta(my_op).mount_name;

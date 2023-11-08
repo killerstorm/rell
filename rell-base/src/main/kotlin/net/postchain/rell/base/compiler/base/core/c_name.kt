@@ -355,9 +355,7 @@ private class C_DefaultSymbolContext(private val checkDefIdConflicts: Boolean): 
 
     override fun addName(sName: S_Name, rName: R_Name): C_NameHandle {
         val pos = sName.pos
-        if (CommonUtils.IS_UNIT_TEST) {
-            check(pos !in symbolMap)
-        }
+        checkTest(pos !in symbolMap)
 
         val oldHand = nameMap[pos]
         if (oldHand != null) {
@@ -371,22 +369,20 @@ private class C_DefaultSymbolContext(private val checkDefIdConflicts: Boolean): 
     }
 
     override fun addSymbol(pos: S_Pos, ideInfo: C_IdeSymbolInfo) {
-        if (CommonUtils.IS_UNIT_TEST) {
-            check(pos !in symbolMap)
-            check(pos !in nameMap)
-        }
+        checkTest(pos !in symbolMap)
+        checkTest(pos !in nameMap)
         symbolMap[pos] = ideInfo
     }
 
     override fun setDefId(pos: S_Pos, defId: IdeSymbolId) {
         val extra = extraMap.computeIfAbsent(pos) { ExtraInfo() }
-        check(extra.defId == null || !CommonUtils.IS_UNIT_TEST) { "name not found: $pos" }
+        checkTest(extra.defId == null) { "name not found: $pos" }
         extra.defId = defId
     }
 
     override fun setLink(pos: S_Pos, link: IdeSymbolLink) {
         val extra = extraMap.computeIfAbsent(pos) { ExtraInfo() }
-        check(extra.link == null || !CommonUtils.IS_UNIT_TEST) { "name not found: $pos" }
+        checkTest(extra.link == null) { "name not found: $pos" }
         extra.link = link
     }
 
@@ -402,9 +398,7 @@ private class C_DefaultSymbolContext(private val checkDefIdConflicts: Boolean): 
         for (hand in nameMap.values) {
             val ideInfo = hand.ideInfo()
             if (ideInfo != null) {
-                if (CommonUtils.IS_UNIT_TEST) {
-                    check(hand.pos !in res)
-                }
+                checkTest(hand.pos !in res)
                 res[hand.pos] = ideInfo
             }
         }
@@ -421,7 +415,7 @@ private class C_DefaultSymbolContext(private val checkDefIdConflicts: Boolean): 
     private fun finishExtra() {
         for ((pos, extra) in extraMap) {
             val nameHand = nameMap[pos]
-            check(nameHand != null || !CommonUtils.IS_UNIT_TEST) { "name not found: $pos" }
+            checkTest(nameHand != null) { "name not found: $pos" }
             val defId = extra.defId
             val link = extra.link
             if (defId != null) {
@@ -493,8 +487,8 @@ private class C_DefaultSymbolContext(private val checkDefIdConflicts: Boolean): 
         fun setDefId(defId: IdeSymbolId) {
             val ideInfo = mIdeInfo
             when {
-                ideInfo == null -> check(!CommonUtils.IS_UNIT_TEST)
-                ideInfo.defId != null -> check(!CommonUtils.IS_UNIT_TEST)
+                ideInfo == null -> failTest()
+                ideInfo.defId != null -> failTest()
                 else -> mIdeInfo = ideInfo.update(defId = defId)
             }
         }
@@ -502,8 +496,8 @@ private class C_DefaultSymbolContext(private val checkDefIdConflicts: Boolean): 
         fun setLink(link: IdeSymbolLink) {
             val ideInfo = mIdeInfo
             when {
-                ideInfo == null -> check(!CommonUtils.IS_UNIT_TEST)
-                ideInfo.link != null -> check(!CommonUtils.IS_UNIT_TEST)
+                ideInfo == null -> failTest()
+                ideInfo.link != null -> failTest()
                 else -> mIdeInfo = ideInfo.update(link = link)
             }
         }
@@ -535,4 +529,20 @@ class C_SymbolContextManager(private val opts: C_CompilerOptions) {
             return if (path == mainFile) mainSymCtx else C_NopSymbolContext
         }
     }
+}
+
+private fun checkTest(b: Boolean) {
+    if (CommonUtils.IS_UNIT_TEST) {
+        check(b)
+    }
+}
+
+private fun checkTest(b: Boolean, msg: () -> String) {
+    if (CommonUtils.IS_UNIT_TEST) {
+        check(b, msg)
+    }
+}
+
+private fun failTest() {
+    check(!CommonUtils.IS_UNIT_TEST)
 }
