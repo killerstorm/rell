@@ -14,16 +14,16 @@ import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.PostchainGtvUtils
 import java.io.File
 
-abstract class ReplInputChannelFactory {
-    abstract fun createInputChannel(historyFile: File?): ReplInputChannel
+fun interface ReplInputChannelFactory {
+    fun createInputChannel(historyFile: File?): ReplInputChannel
 }
 
 interface ReplInputChannel {
     fun readLine(prompt: String): String?
 }
 
-abstract class ReplOutputChannelFactory {
-    abstract fun createOutputChannel(): ReplOutputChannel
+fun interface ReplOutputChannelFactory {
+    fun createOutputChannel(): ReplOutputChannel
 }
 
 interface ReplOutputChannel {

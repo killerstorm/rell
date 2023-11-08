@@ -65,7 +65,7 @@ class RellReplTester(
         outChannelFactory.chk(*expected)
     }
 
-    class TestReplInputChannelFactory(input: List<String>): ReplInputChannelFactory() {
+    class TestReplInputChannelFactory(input: List<String>): ReplInputChannelFactory {
         private val queue: Queue<String> = LinkedList(input)
         private var end = false
 
@@ -89,7 +89,7 @@ class RellReplTester(
 
     class TestReplOutputChannelFactory(
         private val outPlainValues: Boolean = false,
-    ): ReplOutputChannelFactory() {
+    ): ReplOutputChannelFactory {
         private val output: Queue<String> = ArrayDeque()
 
         val outPrinter: Rt_Printer = Rt_ReplTestPrinter("OUT")
