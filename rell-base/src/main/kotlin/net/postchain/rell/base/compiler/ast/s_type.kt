@@ -120,8 +120,25 @@ class S_GenericType(private val name: S_QualifiedName, private val args: List<S_
 class S_NullableType(pos: S_Pos, val valueType: S_Type): S_Type(pos) {
     override fun compile0(ctx: C_DefinitionContext): R_Type {
         val rValueType = valueType.compile(ctx)
-        if (rValueType is R_NullableType) throw C_Error.stop(pos, "type_nullable_nullable", "Nullable nullable (T??) is not allowed")
-        return R_NullableType(rValueType)
+        return when (rValueType) {
+            is R_NullableType -> {
+                errBadType(ctx, "nullable", "T?")
+                rValueType
+            }
+            R_NullType -> {
+                errBadType(ctx, "null", "null")
+                rValueType
+            }
+            R_UnitType -> {
+                errBadType(ctx, "unit", "unit")
+                R_CtErrorType
+            }
+            else -> R_NullableType(rValueType)
+        }
+    }
+
+    private fun errBadType(ctx: C_DefinitionContext, valueTypeName: String, valueTypeCode: String) {
+        ctx.msgCtx.error(pos, "type_nullable:$valueTypeName", "Nullable $valueTypeName ($valueTypeCode?) is not allowed")
     }
 }
 

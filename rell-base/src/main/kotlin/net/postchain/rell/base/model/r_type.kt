@@ -691,7 +691,6 @@ class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName, enum.cDe
 class R_NullableType(val valueType: R_Type): R_Type(calcName(valueType)) {
     init {
         check(valueType != R_NullType)
-        check(valueType != R_UnitType)
         check(valueType !is R_NullableType)
     }
 

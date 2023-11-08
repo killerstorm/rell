@@ -49,9 +49,13 @@ class NullableTest: BaseRellTest(false) {
         chkFn(": range? = 123;", "ct_err:fn_rettype:[range?]:[integer]")
     }
 
-    @Test fun testNullableNullable() {
-        chkFn(": integer? ? = 123;", "ct_err:type_nullable_nullable")
-        chkFn("{ val x: integer? ? = 123; }", "ct_err:type_nullable_nullable")
+    @Test fun testBadNullable() {
+        chkCompile("function f(): (text?)? = null;", "ct_err:type_nullable:nullable")
+        chkCompile("struct data { x: (text?)?; }", "ct_err:type_nullable:nullable")
+
+        chkCompile("function f(): unit? = null;", "ct_err:type_nullable:unit")
+        chkCompile("function f(x: unit?) {}", "ct_err:type_nullable:unit")
+        chkCompile("struct data { x: unit?; }", "ct_err:type_nullable:unit")
     }
 
     @Test fun testAssignment() {
