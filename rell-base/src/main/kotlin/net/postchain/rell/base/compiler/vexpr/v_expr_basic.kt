@@ -20,6 +20,7 @@ import net.postchain.rell.base.runtime.Rt_StructValue
 import net.postchain.rell.base.runtime.Rt_TupleValue
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.checkEquals
+import net.postchain.rell.base.utils.immSetOf
 import net.postchain.rell.base.utils.toImmList
 
 class V_ErrorExpr(
@@ -37,10 +38,11 @@ class V_ConstantValueExpr(
     exprCtx: C_ExprContext,
     pos: S_Pos,
     private val value: Rt_Value,
-    private val exprInfo: V_ExprInfo = V_ExprInfo.simple(value.type()),
+    private val valueType: R_Type = value.type(),
+    private val dependsOnAtExprs: Set<R_AtExprId> = immSetOf(),
 ): V_Expr(exprCtx, pos) {
-    override fun exprInfo0() = exprInfo
-    override fun toRExpr0() = R_ConstantValueExpr(value)
+    override fun exprInfo0() = V_ExprInfo.simple(valueType, dependsOnAtExprs = dependsOnAtExprs)
+    override fun toRExpr0() = R_ConstantValueExpr(type, value)
     override fun constantValue(ctx: V_ConstantValueEvalContext) = value
 }
 

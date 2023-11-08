@@ -46,10 +46,6 @@ class Rt_LogPrinter(name: String = "net.postchain.Rell"): Rt_Printer {
     }
 }
 
-interface Rt_PrinterFactory {
-    fun newPrinter(): Rt_Printer
-}
-
 class Rt_ChainSqlMapping(val chainId: Long) {
     private val prefix = "c$chainId."
     private val systemPrefix = "${prefix}sys."

@@ -65,7 +65,7 @@ sealed class GtvToRtSymbol {
     abstract fun codeMsg(): C_CodeMsg
 }
 
-class GtvToRtSymbol_Param(private val param: R_Param): GtvToRtSymbol() {
+class GtvToRtSymbol_Param(private val param: R_FunctionParam): GtvToRtSymbol() {
     override fun codeMsg() = "param:${param.name}" toCodeMsg "parameter: ${param.name}"
 }
 
@@ -297,7 +297,6 @@ class GtvRtConversion_Enum(private val enum: R_EnumDefinition): GtvRtConversion(
     }
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
-        val enumName = enum.appLevelName
         val attr = if (ctx.pretty && gtv.type == GtvType.STRING) {
             val name = GtvRtUtils.gtvToString(ctx, gtv, enum.type)
             val attr = enum.attr(name)

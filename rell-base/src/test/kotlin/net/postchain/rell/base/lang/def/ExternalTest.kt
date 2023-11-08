@@ -12,21 +12,6 @@ import net.postchain.rell.base.testutils.RellTestUtils
 import org.junit.Test
 
 class ExternalTest: BaseRellTest() {
-    companion object {
-        val BLOCK_INSERTS_123 = RellTestContext.BlockBuilder(123)
-            .block(1001, 1, "DEAD01", 1510000000000)
-            .block(1002, 2, "DEAD02", 1520000000000)
-            .block(1003, 3, "DEAD03", 1530000000000)
-            .block(1004, 4, "DEAD04", 1540000000000)
-            .block(1005, 5, "DEAD05", 1550000000000)
-            .tx(2001, 1001, "BEEF01", "2001", "1234")
-            .tx(2002, 1002, "BEEF02", "2002", "1234")
-            .tx(2003, 1003, "BEEF03", "2003", "1234")
-            .tx(2004, 1004, "BEEF04", "2004", "1234")
-            .tx(2005, 1005, "BEEF05", "2005", "1234")
-            .list()
-    }
-
     @Test fun testSimple() {
         tstCtx.blockchain(333, "deadbeef")
 
@@ -264,7 +249,7 @@ class ExternalTest: BaseRellTest() {
         tstCtx.blockchain(555, "beefdead")
 
         initExternalChain(chainId = 333, inserts = LibBlockTransactionTest.BLOCK_INSERTS_333)
-        initExternalChain(chainId = 555, inserts = LibBlockTransactionTest.BLOCK_INSERTS_555, resetDatabase = false, txId = 2)
+        initExternalChain(chainId = 555, inserts = LibBlockTransactionTest.BLOCK_INSERTS_555, dropTables = false, txId = 2)
         def("@mount('') namespace foo { @external('foo') @log entity user { name; } }")
         def("@mount('') namespace bar { @external('bar') @log entity user { name; } }")
         def("@log entity local_user { name; }")
@@ -393,15 +378,21 @@ class ExternalTest: BaseRellTest() {
         tst.chainDependency("foo", "deadbeef", 1000)
         tst.chainDependency("bar", "beefdead", 1000)
 
-        chkCompile("function f(u: foo.user): transaction = u.transaction;", "ct_err:fn_rettype:[transaction]:[[foo]:transaction]")
-        chkCompile("function f(u: user): foo.transaction = u.transaction;", "ct_err:fn_rettype:[[foo]:transaction]:[transaction]")
+        chkCompile("function f(u: foo.user): transaction = u.transaction;",
+            "ct_err:fn_rettype:[transaction]:[[foo]:transaction]")
+        chkCompile("function f(u: user): foo.transaction = u.transaction;",
+            "ct_err:fn_rettype:[[foo]:transaction]:[transaction]")
         chkCompile("function f(u: foo.user): block = u.transaction.block;", "ct_err:fn_rettype:[block]:[[foo]:block]")
         chkCompile("function f(u: user): foo.block = u.transaction.block;", "ct_err:fn_rettype:[[foo]:block]:[block]")
 
-        chkCompile("function f(u: bar.user): foo.transaction = u.transaction;", "ct_err:fn_rettype:[[foo]:transaction]:[[bar]:transaction]")
-        chkCompile("function f(u: foo.user): bar.transaction = u.transaction;", "ct_err:fn_rettype:[[bar]:transaction]:[[foo]:transaction]")
-        chkCompile("function f(u: bar.user): foo.block = u.transaction.block;", "ct_err:fn_rettype:[[foo]:block]:[[bar]:block]")
-        chkCompile("function f(u: foo.user): bar.block = u.transaction.block;", "ct_err:fn_rettype:[[bar]:block]:[[foo]:block]")
+        chkCompile("function f(u: bar.user): foo.transaction = u.transaction;",
+            "ct_err:fn_rettype:[[foo]:transaction]:[[bar]:transaction]")
+        chkCompile("function f(u: foo.user): bar.transaction = u.transaction;",
+            "ct_err:fn_rettype:[[bar]:transaction]:[[foo]:transaction]")
+        chkCompile("function f(u: bar.user): foo.block = u.transaction.block;",
+            "ct_err:fn_rettype:[[foo]:block]:[[bar]:block]")
+        chkCompile("function f(u: foo.user): bar.block = u.transaction.block;",
+            "ct_err:fn_rettype:[[bar]:block]:[[foo]:block]")
     }
 
     @Test fun testTxExplicitTypeCompatibility2() {
@@ -881,22 +872,58 @@ class ExternalTest: BaseRellTest() {
     }
 
     private fun initExternalChain(
-            chainId: Long = 333,
-            entityName: String = "user",
-            def: String = "@log entity user { name; }",
-            resetDatabase: Boolean = true,
-            inserts: List<String> = listOf(),
-            txId: Int = 444
+        chainId: Long = 333,
+        entityName: String = "user",
+        def: String = "@log entity user { name; }",
+        dropTables: Boolean = true,
+        inserts: List<String> = listOf(),
+        txId: Int = 444
     ) {
         run {
             val t = RellCodeTester(tst.tstCtx)
             t.def(def)
             t.chainId = chainId
-            t.dropTables = resetDatabase
+            t.dropTables = dropTables
             t.insert(inserts)
             t.insert("c$chainId.$entityName", "name,transaction", "1,'Bob',$txId")
             t.chk("$entityName @ {} ( _=user, _=.name )", "($entityName[1],text[Bob])")
         }
         tst.dropTables = false
+    }
+
+    companion object {
+        val BLOCK_INSERTS_123 = RellTestContext.BlockBuilder(123)
+            .block(1001, 1, "DEAD01", 1510000000000)
+            .block(1002, 2, "DEAD02", 1520000000000)
+            .block(1003, 3, "DEAD03", 1530000000000)
+            .block(1004, 4, "DEAD04", 1540000000000)
+            .block(1005, 5, "DEAD05", 1550000000000)
+            .tx(2001, 1001, "BEEF01", "2001", "1234")
+            .tx(2002, 1002, "BEEF02", "2002", "1234")
+            .tx(2003, 1003, "BEEF03", "2003", "1234")
+            .tx(2004, 1004, "BEEF04", "2004", "1234")
+            .tx(2005, 1005, "BEEF05", "2005", "1234")
+            .list()
+
+        fun initExternalChain(
+            tst: RellCodeTester,
+            chainName: String,
+            def: String,
+            dropTables: Boolean = true,
+        ) {
+            tst.tstCtx.useSql = true
+            tst.tstCtx.blockchain(333, "deadbeef")
+
+            run {
+                val t = RellCodeTester(tst.tstCtx)
+                t.def(def)
+                t.chainId = 333
+                t.dropTables = dropTables
+                t.init()
+            }
+
+            tst.chainDependency(chainName, "deadbeef", 0)
+            tst.dropTables = false
+        }
     }
 }

@@ -4,20 +4,20 @@
 
 package net.postchain.rell.base.compiler.base.def
 
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.core.C_MessageContext
 import net.postchain.rell.base.compiler.base.core.C_Name
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.base.utils.C_GraphUtils
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
 import net.postchain.rell.base.model.*
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.toImmSet
 
 class C_Struct(
-        val name: C_Name,
-        val ideInfo: IdeSymbolInfo,
-        val structDef: R_StructDefinition,
-        val attrsGetter: C_LateGetter<List<C_CompiledAttribute>>
+    val name: C_Name,
+    val ideInfo: C_IdeSymbolInfo,
+    val structDef: R_StructDefinition,
+    val attrsGetter: C_LateGetter<List<C_CompiledAttribute>>,
 )
 
 object C_StructUtils {

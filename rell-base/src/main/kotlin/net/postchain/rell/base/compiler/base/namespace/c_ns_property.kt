@@ -13,7 +13,6 @@ import net.postchain.rell.base.compiler.vexpr.V_ConstantValueExpr
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.runtime.Rt_Value
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 
 class C_NamespacePropertyContext(val exprCtx: C_ExprContext) {
     val defCtx = exprCtx.defCtx
@@ -22,21 +21,22 @@ class C_NamespacePropertyContext(val exprCtx: C_ExprContext) {
     val modCtx = defCtx.modCtx
 }
 
-abstract class C_NamespaceProperty(val ideInfo: IdeSymbolInfo) {
+abstract class C_NamespaceProperty {
     abstract fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr
 }
 
-class C_NamespaceProperty_RtValue(ideInfo: IdeSymbolInfo, private val value: Rt_Value): C_NamespaceProperty(ideInfo) {
+class C_NamespaceProperty_RtValue(
+    private val value: Rt_Value,
+): C_NamespaceProperty() {
     override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
         return V_ConstantValueExpr(ctx.exprCtx, name.pos, value)
     }
 }
 
 class C_NamespaceProperty_SysFunction(
-    ideInfo: IdeSymbolInfo,
     private val resultType: R_Type,
     private val fn: C_SysFunction,
-): C_NamespaceProperty(ideInfo) {
+): C_NamespaceProperty() {
     override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
         val body = fn.compileCall(C_SysFunctionCtx(ctx.exprCtx, name.pos))
         return C_ExprUtils.createSysGlobalPropExpr(ctx.exprCtx, resultType, body.rFn, name, pure = body.pure)

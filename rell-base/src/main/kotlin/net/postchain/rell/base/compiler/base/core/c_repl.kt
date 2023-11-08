@@ -15,20 +15,24 @@ import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.repl.*
 import net.postchain.rell.base.utils.*
+import net.postchain.rell.base.utils.ide.IdeSymbolKind
 
 private const val REPL_NAME = "<REPL>"
 
 class C_ExtReplCommand(
-        extModules: List<C_ExtModule>,
-        extMembers: List<C_ExtModuleMember>,
-        private val currentModuleName: R_ModuleName?,
-        statements: List<S_Statement>,
-        preModules: Map<C_ModuleKey, C_PrecompiledModule>
+    extModules: List<C_ExtModule>,
+    extMembers: List<C_ExtModuleMember>,
+    private val currentModuleName: R_ModuleName?,
+    statements: List<S_Statement>,
+    preModules: Map<C_ModuleKey, C_PrecompiledModule>,
+    newModuleHeaders: Map<R_ModuleName, C_ModuleHeader>,
 ) {
     private val extModules = extModules.toImmList()
     private val extMembers = extMembers.toImmList()
     private val statements = statements.toImmList()
     private val preModules = preModules.toImmMap()
+
+    val newModuleHeaders = newModuleHeaders.toImmMap()
 
     fun compile(appCtx: C_AppContext, codeState: ReplCodeState): C_LateGetter<ReplCode> {
         val extCompiler = C_ExtModuleCompiler(appCtx, extModules, preModules)
@@ -73,9 +77,9 @@ class C_ExtReplCommand(
 
     private fun createReplContext(mntCtx: C_MountContext, codeState: ReplCodeState): C_ReplCommandContext {
         val stmtVars = discoverStatementVars()
-        val cDefBase = mntCtx.defBase(C_StringQualifiedName.of(REPL_NAME))
-        val ideId = cDefBase.ideId(C_DefinitionType.REPL)
-        val defCtx = C_DefinitionContext(mntCtx, C_DefinitionType.REPL, cDefBase.defId, cDefBase.defName, ideId)
+        val qName = C_StringQualifiedName.of(REPL_NAME)
+        val cDefBase = mntCtx.defBaseCommon(C_DefinitionType.REPL, IdeSymbolKind.UNKNOWN, qName, null, null)
+        val defCtx = cDefBase.defCtx(mntCtx)
         val fnCtx = C_FunctionContext(defCtx, REPL_NAME, null, stmtVars)
         val frameCtx = C_FrameContext.create(fnCtx, codeState.cState.frameProto)
         return C_ReplCommandContext(frameCtx, codeState)
@@ -124,16 +128,19 @@ object C_ReplCompiler {
             oldCodeState: ReplCodeState
     ): C_ReplResult {
         val msgCtx = C_MessageContext(globalCtx)
-
-        val extCommand = msgCtx.consumeError {
-            val ast = C_Parser.parseRepl(code)
-            ast.compile(msgCtx, sourceDir, currentModuleName, oldDefsState.appState.modules)
-        }
-        extCommand ?: return C_ReplResult(null, msgCtx.messages())
-
         val controller = C_CompilerController(msgCtx)
+
         val res = C_LateInit.context(controller.executor) {
-            compileExt(msgCtx, controller, extCommand, oldDefsState, oldCodeState)
+            val extCommand = msgCtx.consumeError {
+                val ast = C_Parser.parseRepl(code)
+                ast.compile(msgCtx, sourceDir, currentModuleName, oldDefsState.appState)
+            }
+
+            if (extCommand == null) {
+                C_ReplResult(null, msgCtx.messages())
+            } else {
+                compileExt(msgCtx, controller, extCommand, oldDefsState, oldCodeState)
+            }
         }
 
         return res
@@ -147,7 +154,15 @@ object C_ReplCompiler {
         oldCodeState: ReplCodeState,
     ): C_ReplResult {
         val executor = controller.executor
-        val appCtx = C_AppContext(msgCtx, executor, true, oldDefsState.appState, extraLibMod = null)
+
+        val appCtx = C_AppContext(
+            msgCtx,
+            executor,
+            true,
+            oldDefsState.appState,
+            extCommand.newModuleHeaders,
+            extraLibMod = null,
+        )
 
         val codeGetter = msgCtx.consumeError {
             extCommand.compile(appCtx, oldCodeState)
@@ -172,6 +187,7 @@ object C_ReplCompiler {
 
 class C_ReplAppState(
         val nsAsmState: C_NsAsm_ReplState,
+        moduleHeaders: Map<R_ModuleName, C_ModuleHeader>,
         modules: Map<C_ModuleKey, C_PrecompiledModule>,
         val sysDefs: C_SystemDefs?,
         val sqlDefs: R_AppSqlDefs,
@@ -179,13 +195,15 @@ class C_ReplAppState(
         constants: List<R_GlobalConstantDefinition>,
         val functionExtensions: C_FunctionExtensionsTable
 ) {
+    val moduleHeaders = moduleHeaders.toImmMap()
     val modules = modules.toImmMap()
     val constants = constants.toImmList()
 
     companion object {
         val EMPTY = C_ReplAppState(
                 C_NsAsm_ReplState.EMPTY,
-                mapOf(),
+                immMapOf(),
+                immMapOf(),
                 null,
                 R_AppSqlDefs.EMPTY,
                 C_MountTables.EMPTY,

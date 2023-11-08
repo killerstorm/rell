@@ -6,16 +6,16 @@ package net.postchain.rell.base.mtype
 
 sealed class M_Type_Param(val param: M_TypeParam): M_Type() {
     companion object {
-        fun make(param: M_TypeParam): M_Type = M_Type_InternalParam(param)
+        fun make(param: M_TypeParam): M_Type = M_Type_Param_Internal(param)
     }
 }
 
-private class M_Type_InternalParam(param: M_TypeParam): M_Type_Param(param) {
+private class M_Type_Param_Internal(param: M_TypeParam): M_Type_Param(param) {
     override fun strCode(): String = param.name
     override fun hashCode0() = param.hashCode()
 
     override fun matchTypeEqual0(type: M_Type, handler: M_TypeMatchEqualHandler): Boolean {
-        return type is M_Type_InternalParam && param == type.param
+        return type is M_Type_Param_Internal && param == type.param
     }
 
     override fun matchTypeSuper0(type: M_Type, handler: M_TypeMatchSuperHandler): Boolean {

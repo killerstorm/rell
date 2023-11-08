@@ -33,7 +33,7 @@
     </modules>
 
     <properties>
-        <postchain.version>3.13.2</postchain.version>
+        <postchain.version>3.13.15</postchain.version>
         <dist-classifier>dist</dist-classifier>
 
         <kotlin.version>1.8.21</kotlin.version>
@@ -69,6 +69,7 @@
                             <failBuildOnAnyVulnerability>true</failBuildOnAnyVulnerability>
                             <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
                             <suppressionFiles>
+                                <suppressionFile>https://gitlab.com/chromaway/chromia-parent/-/raw/dev/common-dependencies-suppression.xml?ref_type=heads</suppressionFile>
                                 <suppressionFile>dependencies-suppression.xml</suppressionFile>
                             </suppressionFiles>
                         </configuration>

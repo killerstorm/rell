@@ -5,11 +5,12 @@
 package net.postchain.rell.base.lib.type
 
 import net.postchain.rell.base.compiler.ast.S_VirtualType
-import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
+import net.postchain.rell.base.utils.doc.DocCode
 
 object Lib_Type_Virtual {
-    val ToFull = C_SysFunction.simple { a ->
+    val ToFull = C_SysFunctionBody.simple { a ->
         val virtual = a.asVirtual()
         val full = virtual.toFull()
         full
@@ -23,8 +24,14 @@ object Lib_Type_Virtual {
                 S_VirtualType.virtualType(t)
             }
 
+            docCode { t ->
+                DocCode.builder()
+                    .keyword("virtual").raw("<").append(t).raw(">")
+                    .build()
+            }
+
             function("to_full", result = "T") {
-                bodyFunction(ToFull)
+                bodyRaw(ToFull)
             }
         }
     }

@@ -11,7 +11,15 @@ import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.R_Expr
-import net.postchain.rell.base.utils.ide.*
+import net.postchain.rell.base.utils.Nullable
+import net.postchain.rell.base.utils.doc.DocDeclaration_EntityAttribute
+import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.doc.DocSymbolKind
+import net.postchain.rell.base.utils.doc.DocSymbolName
+import net.postchain.rell.base.utils.ide.IdeLocalSymbolLink
+import net.postchain.rell.base.utils.ide.IdeSymbolCategory
+import net.postchain.rell.base.utils.ide.IdeSymbolId
+import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.immListOf
 
 class C_AttrHeader(
@@ -19,7 +27,7 @@ class C_AttrHeader(
         val name: C_Name,
         val type: R_Type?,
         val isExplicitType: Boolean,
-        val ideInfo: IdeSymbolInfo,
+        val ideInfo: C_IdeSymbolInfo,
 ) {
     val rName = name.rName
 }
@@ -31,20 +39,23 @@ abstract class C_AttrHeaderIdeData {
 class C_GlobalAttrHeaderIdeData(
     private val ideCat: IdeSymbolCategory,
     private val ideKind: IdeSymbolKind,
-    private val defIdeInfo: IdeSymbolInfo?,
+    private val defIdeInfo: C_IdeSymbolInfo?,
+    private val docGetter: C_LateGetter<Nullable<DocSymbol>> = C_LateGetter.const(Nullable.of()),
 ): C_AttrHeaderIdeData() {
     override fun ideDef(ctx: C_DefinitionContext, pos: S_Pos, attrName: R_Name): C_IdeSymbolDef {
-        val ideDef = C_DefinitionBase.ideDef(pos, ctx.definitionType, ctx.defName, ideKind, ideCat to attrName)
+        val ideId = C_CommonDefinitionBase.ideId(ctx.definitionType, ctx.defName, ideCat to attrName)
+        val ideDef = C_CommonDefinitionBase.ideDef(pos, ideKind, ideId, docGetter)
         return if (defIdeInfo == null) ideDef else C_IdeSymbolDef(defIdeInfo, ideDef.refInfo)
     }
 }
 
-class C_LocalAttrHeaderIdeData(private val ideKind: IdeSymbolKind): C_AttrHeaderIdeData() {
+class C_LocalAttrHeaderIdeData(
+    private val ideKind: IdeSymbolKind,
+    private val docGetter: C_LateGetter<Nullable<DocSymbol>>,
+): C_AttrHeaderIdeData() {
     override fun ideDef(ctx: C_DefinitionContext, pos: S_Pos, attrName: R_Name): C_IdeSymbolDef {
-        val defInfo = IdeSymbolInfo(ideKind)
         val ideLink = IdeLocalSymbolLink(pos)
-        val refInfo = IdeSymbolInfo(ideKind, link = ideLink)
-        return C_IdeSymbolDef(defInfo, refInfo)
+        return C_IdeSymbolDef.makeLate(ideKind, link = ideLink, docGetter = docGetter)
     }
 }
 
@@ -55,8 +66,8 @@ sealed class C_AttrHeaderHandle(val pos: S_Pos, val name: C_Name) {
 }
 
 class C_NamedAttrHeaderHandle(
-        private val nameHand: C_NameHandle,
-        private val type: R_Type
+    private val nameHand: C_NameHandle,
+    private val type: R_Type,
 ): C_AttrHeaderHandle(nameHand.pos, nameHand.name) {
     override fun compile(ctx: C_DefinitionContext, canInferType: Boolean, ideData: C_AttrHeaderIdeData): C_AttrHeader {
         val ideDef = ideData.ideDef(ctx, pos, nameHand.rName)
@@ -66,12 +77,12 @@ class C_NamedAttrHeaderHandle(
 }
 
 class C_AnonAttrHeaderHandle(
-        private val ctx: C_NamespaceContext,
-        private val typeNameHand: C_QualifiedNameHandle,
-        private val nullable: Boolean
+    private val ctx: C_NamespaceContext,
+    private val typeNameHand: C_QualifiedNameHandle,
+    private val nullable: Boolean,
 ): C_AttrHeaderHandle(typeNameHand.pos, typeNameHand.last.name) {
     override fun compile(ctx: C_DefinitionContext, canInferType: Boolean, ideData: C_AttrHeaderIdeData): C_AttrHeader {
-        val typeName = typeNameHand.qName
+        val typeName = typeNameHand.cName
         val lastNameHand = typeNameHand.last
 
         val ideDef = ideData.ideDef(ctx, lastNameHand.pos, lastNameHand.rName)
@@ -126,30 +137,34 @@ class C_AnonAttrHeaderHandle(
 }
 
 class C_SysAttribute(
-        val name: R_Name,
-        val type: R_Type,
-        val mutable: Boolean,
-        val isKey: Boolean,
-        val expr: R_Expr?,
-        val sqlMapping: String,
-        val canSetInCreate: Boolean
+    val name: R_Name,
+    val type: R_Type,
+    val mutable: Boolean,
+    val isKey: Boolean,
+    val expr: R_Expr?,
+    val sqlMapping: String,
+    val canSetInCreate: Boolean,
+    val docSymbol: DocSymbol?,
 ) {
+    // Name as String, not R_Name.
     constructor(
-            name: String,
-            type: R_Type,
-            mutable: Boolean = false,
-            isKey: Boolean = false,
-            expr: R_Expr? = null,
-            sqlMapping: String = name,
-            canSetInCreate: Boolean = true
+        name: String,
+        type: R_Type,
+        mutable: Boolean = false,
+        isKey: Boolean = false,
+        expr: R_Expr? = null,
+        sqlMapping: String = name,
+        canSetInCreate: Boolean = true,
+        docSymbol: DocSymbol? = null,
     ): this(
-            name = R_Name.of(name),
-            type = type,
-            mutable = mutable,
-            isKey = isKey,
-            expr = expr,
-            sqlMapping = sqlMapping,
-            canSetInCreate = canSetInCreate
+        name = R_Name.of(name),
+        type = type,
+        mutable = mutable,
+        isKey = isKey,
+        expr = expr,
+        sqlMapping = sqlMapping,
+        canSetInCreate = canSetInCreate,
+        docSymbol = docSymbol,
     )
 
     fun compile(index: Int, persistent: Boolean): R_Attribute {
@@ -158,7 +173,7 @@ class C_SysAttribute(
 
         val keyIndexKind = if (isKey) R_KeyIndexKind.KEY else null
         val ideKind = C_AttrUtils.getIdeSymbolKind(persistent, mutable, keyIndexKind)
-        val ideInfo = IdeSymbolInfo(ideKind)
+        val ideInfo = C_IdeSymbolInfo.direct(ideKind, doc = docSymbol)
 
         return R_Attribute(
                 index,
@@ -171,6 +186,46 @@ class C_SysAttribute(
                 exprGetter = exprGetter,
                 sqlMapping = sqlMapping
         )
+    }
+
+    class Maker(private val rEntityDefName: R_DefinitionName) {
+        fun make(
+            name: String,
+            type: R_Type,
+            mutable: Boolean = false,
+            isKey: Boolean = false,
+            sqlMapping: String = name,
+            expr: R_Expr? = null,
+            canSetInCreate: Boolean = true,
+        ): C_SysAttribute {
+            val rName = R_Name.of(name)
+
+            val docDec = DocDeclaration_EntityAttribute(
+                rName,
+                mType = type.mType,
+                isMutable = mutable,
+                keyIndexKind = if (isKey) R_KeyIndexKind.KEY else null,
+            )
+
+            val doc = DocSymbol(
+                DocSymbolKind.ENTITY_ATTR,
+                DocSymbolName.global(rEntityDefName.module, "${rEntityDefName.qualifiedName}.$rName"),
+                null,
+                docDec,
+                null,
+            )
+
+            return C_SysAttribute(
+                name = name,
+                type = type,
+                mutable = mutable,
+                isKey = isKey,
+                sqlMapping = sqlMapping,
+                expr = expr,
+                canSetInCreate = canSetInCreate,
+                docSymbol = doc,
+            )
+        }
     }
 }
 

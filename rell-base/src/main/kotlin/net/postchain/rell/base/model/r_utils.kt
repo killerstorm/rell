@@ -4,9 +4,9 @@
 
 package net.postchain.rell.base.model
 
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.utils.CommonUtils
 import net.postchain.rell.base.utils.VersionNumber
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.toImmList
 import org.apache.commons.lang3.StringUtils
 import java.util.*
@@ -138,6 +138,14 @@ class R_MountName(parts: List<R_Name>): R_GenericQualifiedName<R_MountName>(part
     }
 }
 
+data class R_FullName(
+    val moduleName: R_ModuleName,
+    val qualifiedName: R_QualifiedName,
+) {
+    fun str(): String = "$moduleName:$qualifiedName"
+    override fun toString() = str()
+}
+
 class R_Name private constructor(val str: String): Comparable<R_Name> {
     override fun compareTo(other: R_Name) = str.compareTo(other.str)
     override fun toString() = str
@@ -179,7 +187,7 @@ class R_Name private constructor(val str: String): Comparable<R_Name> {
     }
 }
 
-class R_IdeName(val rName: R_Name, val ideInfo: IdeSymbolInfo) {
+class R_IdeName(val rName: R_Name, val ideInfo: C_IdeSymbolInfo) {
     val str = rName.str
 
     override fun equals(other: Any?) = other is R_IdeName && rName == other.rName
@@ -208,8 +216,8 @@ class R_LangVersion(private val ver: VersionNumber): Comparable<R_LangVersion> {
 }
 
 object R_Utils {
-    val ERROR_APP_UID = R_AppUid(-1)
-    val ERROR_CONTAINER_UID = R_ContainerUid(-1, "<error>", ERROR_APP_UID)
-    val ERROR_FN_UID = R_FnUid(-1, "<error>", ERROR_CONTAINER_UID)
+    private val ERROR_APP_UID = R_AppUid(-1)
+    private val ERROR_CONTAINER_UID = R_ContainerUid(-1, "<error>", ERROR_APP_UID)
+    private val ERROR_FN_UID = R_FnUid(-1, "<error>", ERROR_CONTAINER_UID)
     val ERROR_BLOCK_UID = R_FrameBlockUid(-1, "<error>", ERROR_FN_UID)
 }

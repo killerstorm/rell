@@ -54,9 +54,16 @@ class Rt_PostchainOpContext(
     override fun signers() = signers
 
     override fun allOperations(): List<Rt_Value> {
-        return allOperations.map { op ->
-            Lib_OpContext.gtxTransactionStructValue(op.opName, op.args.asList())
-        }
+        return allOperations.map { op -> opToRtValue(op) }
+    }
+
+    override fun currentOperation(): Rt_Value {
+        val op = allOperations[opIndex]
+        return opToRtValue(op)
+    }
+
+    private fun opToRtValue(op: OpData): Rt_Value {
+        return Lib_OpContext.gtxTransactionStructValue(op.opName, op.args.asList())
     }
 
     override fun emitEvent(type: String, data: Gtv) {

@@ -6,43 +6,78 @@ package net.postchain.rell.base.compiler.base.expr
 
 import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_Pos
-import net.postchain.rell.base.compiler.base.core.C_Name
-import net.postchain.rell.base.compiler.base.core.C_QualifiedName
-import net.postchain.rell.base.compiler.base.core.C_TypeHint
+import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.lib.C_TypeMember
+import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.model.R_EntityType
 import net.postchain.rell.base.model.R_EnumType
 import net.postchain.rell.base.model.R_StructType
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.utils.LazyPosString
+import net.postchain.rell.base.utils.Nullable
 
-class C_SpecificTypeExpr(private val pos: S_Pos, private val type: R_Type): C_NoValueExpr() {
+class C_SpecificTypeExpr(
+    private val pos: S_Pos,
+    private val type: R_Type,
+    private val ideInfoPtr: C_UniqueDefaultIdeInfoPtr = C_UniqueDefaultIdeInfoPtr(),
+) : C_NoValueExpr() {
     override fun startPos() = pos
 
-    override fun member(ctx: C_ExprContext, memberName: C_Name, exprHint: C_ExprHint): C_ExprMember {
+    override fun getDefMeta(): C_ExprDefMeta? {
+        return when (type) {
+            is R_EntityType -> {
+                val entity = type.rEntity
+                C_ExprDefMeta(mountName = entity.mountName, externalChain = Nullable.of(entity.external?.chain?.name))
+            }
+            else -> null
+        }
+    }
+
+    override fun value(): V_Expr {
+        ideInfoPtr.setDefault()
+        return super.value()
+    }
+
+    override fun member(ctx: C_ExprContext, memberNameHand: C_NameHandle, exprHint: C_ExprHint): C_Expr {
+        ideInfoPtr.setDefault()
+
+        val memberName = memberNameHand.name
         val members = ctx.typeMgr.getStaticMembers(type, memberName.rName)
+
         val member = C_TypeMember.getMember(ctx.msgCtx, members, exprHint, memberName, type, "type_static_member")
-        member ?: return C_ExprUtils.errorMember(ctx, memberName.pos)
+        if (member == null) {
+            memberNameHand.setIdeInfo(C_IdeSymbolInfo.UNKNOWN)
+            return C_ExprUtils.errorExpr(ctx, memberName.pos)
+        }
 
         val qName = C_QualifiedName(memberName)
-        return member.toExprMember(ctx, qName, type)
+        return member.toExprMember(ctx, qName, type, memberNameHand)
     }
 
     override fun isCallable(): Boolean {
-        return type.hasConstructor() || type.libType.hasConstructor()
+        return type.libType.hasConstructor()
     }
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
         if (type.isError()) {
+            ideInfoPtr.setDefault()
             // Do not report redundant errors on error types.
             return C_ExprUtils.errorExpr(ctx, pos)
         }
 
         val fn = ctx.typeMgr.getConstructor(type)
-        // Handle no-constructor case: super throws error; TODO better handling
-        fn ?: return super.call(ctx, pos, args, resTypeHint)
+        if (fn == null) {
+            ideInfoPtr.setDefault()
+            // Handle no-constructor case: super throws error; TODO better handling
+            return super.call(ctx, pos, args, resTypeHint)
+        }
 
         val lazyName = LazyPosString.of(this.pos) { type.name }
-        val vExpr = fn.compileCall(ctx, lazyName, args, resTypeHint).vExpr()
+
+        val vCall = fn.compileCall(ctx, lazyName, args, resTypeHint)
+        ideInfoPtr.setIdeInfoOrDefault(vCall.ideInfo)
+
+        val vExpr = vCall.vExpr()
         return C_ValueExpr(vExpr)
     }
 

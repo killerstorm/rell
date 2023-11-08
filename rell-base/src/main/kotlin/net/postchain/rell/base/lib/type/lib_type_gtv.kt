@@ -10,6 +10,7 @@ import net.postchain.rell.base.lmodel.dsl.Ld_FunctionDsl
 import net.postchain.rell.base.lmodel.dsl.Ld_FunctionMetaBodyDsl
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.model.R_GtvType
+import net.postchain.rell.base.model.R_ListType
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.model.R_VirtualType
 import net.postchain.rell.base.runtime.*
@@ -17,6 +18,8 @@ import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.utils.PostchainGtvUtils
 
 object Lib_Type_Gtv {
+    val LIST_OF_GTV_TYPE = R_ListType(R_GtvType)
+
     val NAMESPACE = Ld_NamespaceDsl.make {
         type("gtv", rType = R_GtvType) {
             alias("GTXValue", C_MessageType.ERROR)
@@ -94,12 +97,12 @@ object Lib_Type_Gtv {
         type("gtv_extension", abstract = true, extension = true, hidden = true) {
             generic("T", subOf = "any")
 
-            staticFunction("from_gtv", result = "T") {
+            staticFunction("from_gtv", result = "T", pure = true) {
                 param(type = "gtv")
                 makeFromGtvBody(this, pretty = false)
             }
 
-            staticFunction("from_gtv_pretty", result = "T") {
+            staticFunction("from_gtv_pretty", result = "T", pure = true) {
                 param(type = "gtv")
                 makeFromGtvBody(this, pretty = true, allowVirtual = false)
             }
@@ -167,8 +170,6 @@ object Lib_Type_Gtv {
         bodyMeta {
             val resType = fnBodyMeta.rResultType
             validateFromGtvBody(this, resType, allowVirtual = allowVirtual)
-
-            pure(resType.completeFlags().pure)
 
             bodyContext { ctx, a ->
                 val gtv = a.asGtv()

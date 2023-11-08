@@ -23,6 +23,10 @@ object CliReplOutputChannelFactory: ReplOutputChannelFactory() {
 private object CliReplOutputChannel: ReplOutputChannel {
     private var valueFormat = ReplValueFormat.ONE_ITEM_PER_LINE
 
+    override fun printInfo(msg: String) {
+        println(msg)
+    }
+
     override fun printCompilerError(code: String, msg: String) {
         println(msg)
     }

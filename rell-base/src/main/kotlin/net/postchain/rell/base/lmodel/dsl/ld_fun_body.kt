@@ -5,6 +5,7 @@
 package net.postchain.rell.base.lmodel.dsl
 
 import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.compiler.base.lib.C_SysFunctionCtx
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.lmodel.L_FunctionBody
@@ -48,7 +49,7 @@ interface Ld_CommonFunctionBodyDsl: Ld_FunctionContextDsl {
 @RellLibDsl
 interface Ld_FunctionBodyDsl: Ld_CommonFunctionBodyDsl {
     fun validate(validator: (C_SysFunctionCtx) -> Unit)
-    fun bodyFunction(fn: C_SysFunction): Ld_FunctionBodyRef
+    fun bodyRaw(body: C_SysFunctionBody): Ld_FunctionBodyRef
     fun bodyMeta(block: Ld_FunctionMetaBodyDsl.() -> Ld_FunctionBodyRef): Ld_FunctionBodyRef
 }
 
@@ -168,8 +169,8 @@ class Ld_FunctionBodyDslBuilder(
         return maker.validator(validator)
     }
 
-    override fun bodyFunction(fn: C_SysFunction): Ld_FunctionBodyRef {
-        return maker.bodyFunction(fn)
+    override fun bodyRaw(body: C_SysFunctionBody): Ld_FunctionBodyRef {
+        return maker.bodyRaw(body)
     }
 
     override fun bodyMeta(block: Ld_FunctionMetaBodyDsl.() -> Ld_FunctionBodyRef): Ld_FunctionBodyRef {
@@ -183,39 +184,45 @@ interface Ld_CommonFunctionBodyMaker {
     fun validator(validator: (C_SysFunctionCtx) -> Unit)
     fun dbFunction(dbFn: Db_SysFunction)
     fun bodyContextN(rCode: (Rt_CallContext, List<Rt_Value>) -> Rt_Value): Ld_FunctionBodyRef
-    fun bodyFunction(fn: C_SysFunction): Ld_FunctionBodyRef
+    fun bodyRaw(body: C_SysFunctionBody): Ld_FunctionBodyRef
 }
 
 interface Ld_FunctionBodyMaker: Ld_CommonFunctionBodyMaker {
     fun bodyMeta(block: Ld_FunctionMetaBodyDsl.() -> Ld_FunctionBodyRef): Ld_FunctionBodyRef
 }
 
-internal class Ld_InternalFunctionBody(
+internal class Ld_InternalFunctionBody(val fn: C_SysFunction, val pure: Boolean)
+
+internal class Ld_InternalFunctionBodyState(
     val pure: Boolean?,
     val validator: ((C_SysFunctionCtx) -> Unit)?,
     val dbFunction: Db_SysFunction?,
 ) {
-    fun bodyContextN(rCode: (Rt_CallContext, List<Rt_Value>) -> Rt_Value): C_SysFunction {
+    fun bodyContextN(rCode: (Rt_CallContext, List<Rt_Value>) -> Rt_Value): Ld_InternalFunctionBody {
         val rFn = R_SysFunction { ctx, args ->
             rCode(ctx, args)
         }
-        val cFn = C_SysFunction.direct(rFn, dbFunction, pure = pure ?: false)
-        return bodyFunction0(cFn)
+        val body = C_SysFunctionBody(pure = pure ?: false, rFn, dbFunction)
+        return body0(body)
     }
 
-    fun bodyFunction(fn: C_SysFunction): C_SysFunction {
-        require(pure == null) { "Pure already set" }
-        require(dbFunction == null) { "DB function already set" }
-        return bodyFunction0(fn)
+    fun bodyRaw(body: C_SysFunctionBody): Ld_InternalFunctionBody {
+        Ld_Exception.check(pure == null || pure == body.pure) {
+            "body:pure_diff:$pure:${body.pure}" to "Pure already set and differs"
+        }
+        Ld_Exception.check(dbFunction == null) { "body:db_fn_already_set" to "DB function already set" }
+        return body0(body)
     }
 
-    private fun bodyFunction0(fn: C_SysFunction): C_SysFunction {
-        return if (validator == null) fn else C_SysFunction.validating(fn, validator)
+    private fun body0(body: C_SysFunctionBody): Ld_InternalFunctionBody {
+        val fn = C_SysFunction.direct(body)
+        val fn2 = if (validator == null) fn else C_SysFunction.validating(fn, validator)
+        return Ld_InternalFunctionBody(fn2, body.pure)
     }
 }
 
 internal class Ld_InternalFunctionBodyBuilder(
-    state: Ld_InternalFunctionBody?,
+    state: Ld_InternalFunctionBodyState?,
 ) {
     private var pure: Boolean? = state?.pure
     private var validator: ((C_SysFunctionCtx) -> Unit)? = state?.validator
@@ -227,16 +234,10 @@ internal class Ld_InternalFunctionBodyBuilder(
         return validator == null && dbFunction == null && !built
     }
 
-    fun build(): Ld_InternalFunctionBody {
+    fun build(): Ld_InternalFunctionBodyState {
         check(!built)
         built = true
-        return Ld_InternalFunctionBody(pure, validator, dbFunction)
-    }
-
-    fun pure(pure: Boolean) {
-        require(this.pure == null) { "Pure already specified" }
-        require(!built) { "Body already created" }
-        this.pure = pure
+        return Ld_InternalFunctionBodyState(pure, validator, dbFunction)
     }
 
     fun validator(validator: (C_SysFunctionCtx) -> Unit) {
@@ -252,23 +253,24 @@ internal class Ld_InternalFunctionBodyBuilder(
     }
 }
 
-sealed class Ld_FunctionBody {
+sealed class Ld_FunctionBody(val pure: Boolean) {
     abstract fun finish(qualifiedName: R_QualifiedName): L_FunctionBody
 }
 
-private class Ld_FunctionBody_Direct(private val lBody: L_FunctionBody): Ld_FunctionBody() {
+private class Ld_FunctionBody_Direct(pure: Boolean, private val lBody: L_FunctionBody): Ld_FunctionBody(pure) {
     override fun finish(qualifiedName: R_QualifiedName) = lBody
 }
 
 private class Ld_FunctionBody_Meta(
+    pure: Boolean,
     private val fnSimpleName: R_Name,
-    private val internalBody: Ld_InternalFunctionBody,
+    private val internalState: Ld_InternalFunctionBodyState,
     private val block: Ld_FunctionMetaBodyDsl.() -> Ld_FunctionBodyRef,
-): Ld_FunctionBody() {
+): Ld_FunctionBody(pure) {
     override fun finish(qualifiedName: R_QualifiedName): L_FunctionBody {
         val fnQualifiedName = LazyString.of { qualifiedName.str() }
         return L_FunctionBody.delegating { meta ->
-            val metaBuilder = Ld_FunctionMetaBodyBuilder(fnSimpleName, fnQualifiedName, internalBody)
+            val metaBuilder = Ld_FunctionMetaBodyBuilder(fnSimpleName, fnQualifiedName, internalState)
             val metaDslBuilder = Ld_FunctionMetaBodyDslBuilder(meta, metaBuilder)
             val bodyRes = block(metaDslBuilder)
             metaBuilder.build(bodyRes)
@@ -280,7 +282,7 @@ class Ld_FunctionBodyBuilder(
     override val fnSimpleName: R_Name,
     pure: Boolean?,
 ): Ld_FunctionBodyMaker {
-    private val internalBuilder = Ld_InternalFunctionBodyBuilder(Ld_InternalFunctionBody(
+    private val internalBuilder = Ld_InternalFunctionBodyBuilder(Ld_InternalFunctionBodyState(
         pure = pure,
         validator = null,
         dbFunction = null,
@@ -306,20 +308,32 @@ class Ld_FunctionBodyBuilder(
     }
 
     override fun bodyContextN(rCode: (Rt_CallContext, List<Rt_Value>) -> Rt_Value): Ld_FunctionBodyRef {
-        val internalBody = internalBuilder.build()
-        val fn = internalBody.bodyContextN(rCode)
-        return bodyFunction(fn)
+        val internalState = internalBuilder.build()
+        val fn = internalState.bodyContextN(rCode)
+        return bodyInternal(fn)
     }
 
-    override fun bodyFunction(fn: C_SysFunction): Ld_FunctionBodyRef {
-        val body = L_FunctionBody.direct(fn)
-        return body0(Ld_FunctionBody_Direct(body))
+    override fun bodyRaw(body: C_SysFunctionBody): Ld_FunctionBodyRef {
+        val internalState = internalBuilder.build()
+        val fn = internalState.bodyRaw(body)
+        return bodyInternal(fn)
     }
 
     override fun bodyMeta(block: Ld_FunctionMetaBodyDsl.() -> Ld_FunctionBodyRef): Ld_FunctionBodyRef {
         require(bodyRes == null) { "Body already set" }
-        val internalBody = internalBuilder.build()
-        return body0(Ld_FunctionBody_Meta(fnSimpleName, internalBody, block))
+        var internalState = internalBuilder.build()
+        val pure = internalState.pure ?: false
+        internalState = Ld_InternalFunctionBodyState(
+            pure = pure,
+            validator = internalState.validator,
+            dbFunction = internalState.dbFunction
+        )
+        return body0(Ld_FunctionBody_Meta(pure, fnSimpleName, internalState, block))
+    }
+
+    private fun bodyInternal(internalBody: Ld_InternalFunctionBody): Ld_FunctionBodyRef {
+        val body = L_FunctionBody.direct(internalBody.fn)
+        return body0(Ld_FunctionBody_Direct(internalBody.pure, body))
     }
 
     private fun body0(body: Ld_FunctionBody): Ld_FunctionBodyRef {
@@ -338,22 +352,20 @@ interface Ld_FunctionMetaBodyDsl: Ld_CommonFunctionBodyDsl {
     val fnBodyMeta: L_FunctionBodyMeta
 
     fun validationError(code: String, msg: String)
-    fun pure(pure: Boolean)
 }
 
 interface Ld_FunctionMetaBodyMaker: Ld_CommonFunctionBodyMaker {
     val fnQualifiedName: LazyString
 
     fun validationError(code: String, msg: String)
-    fun pure(pure: Boolean)
 }
 
 private class Ld_FunctionMetaBodyBuilder(
     override val fnSimpleName: R_Name,
     override val fnQualifiedName: LazyString,
-    internalBody: Ld_InternalFunctionBody,
+    internalState: Ld_InternalFunctionBodyState,
 ): Ld_FunctionMetaBodyMaker {
-    private val internalBuilder = Ld_InternalFunctionBodyBuilder(internalBody)
+    private val internalBuilder = Ld_InternalFunctionBodyBuilder(internalState)
     private var validationError: C_CodeMsg? = null
     private var bodyRes: Ld_BodyResImpl? = null
 
@@ -368,10 +380,6 @@ private class Ld_FunctionMetaBodyBuilder(
         internalBuilder.validator(validator)
     }
 
-    override fun pure(pure: Boolean) {
-        internalBuilder.pure(pure)
-    }
-
     override fun dbFunction(dbFn: Db_SysFunction) {
         internalBuilder.dbFunction(dbFn)
     }
@@ -383,30 +391,30 @@ private class Ld_FunctionMetaBodyBuilder(
     }
 
     override fun bodyContextN(rCode: (Rt_CallContext, List<Rt_Value>) -> Rt_Value): Ld_FunctionBodyRef {
-        val internalBody = internalBuilder.build()
-        val fn = internalBody.bodyContextN(rCode)
-        return body0(fn)
+        val internalState = internalBuilder.build()
+        val internalBody = internalState.bodyContextN(rCode)
+        return body0(internalBody)
     }
 
-    override fun bodyFunction(fn: C_SysFunction): Ld_FunctionBodyRef {
-        val internalBody = internalBuilder.build()
-        val fn2 = internalBody.bodyFunction(fn)
-        return body0(fn2)
+    override fun bodyRaw(body: C_SysFunctionBody): Ld_FunctionBodyRef {
+        val internalState = internalBuilder.build()
+        val internalBody = internalState.bodyRaw(body)
+        return body0(internalBody)
     }
 
-    private fun body0(fn: C_SysFunction): Ld_FunctionBodyRef {
+    private fun body0(internalBody: Ld_InternalFunctionBody): Ld_FunctionBodyRef {
         require(this.bodyRes == null) { "Body already set" }
 
-        var fn2 = fn
+        var fn = internalBody.fn
 
         val err = validationError
         if (err != null) {
-            fn2 = C_SysFunction.validating(fn2) { ctx ->
+            fn = C_SysFunction.validating(fn) { ctx ->
                 ctx.exprCtx.msgCtx.error(ctx.callPos, err.code, err.msg)
             }
         }
 
-        val res = Ld_BodyResImpl(fn2)
+        val res = Ld_BodyResImpl(fn)
         bodyRes = res
         return res
     }
@@ -422,9 +430,5 @@ class Ld_FunctionMetaBodyDslBuilder(
 
     override fun validationError(code: String, msg: String) {
         maker.validationError(code, msg)
-    }
-
-    override fun pure(pure: Boolean) {
-        maker.pure(pure)
     }
 }

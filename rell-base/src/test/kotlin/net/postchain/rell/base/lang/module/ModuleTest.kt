@@ -529,7 +529,7 @@ class ModuleTest: BaseRellTest(false) {
         }
 
         if (res.errors.isNotEmpty()) {
-            val s = RellTestUtils.errsToString(res.errors, false)
+            val s = RellTestUtils.msgsToString(res.errors, false)
             return "ct_err:$s"
         }
 
@@ -619,6 +619,24 @@ class ModuleTest: BaseRellTest(false) {
         chkCompile("import r: rell;", "ct_err:import:not_found:rell")
         chkCompile("import rell.a;", "ct_err:[main.rell:import:not_found:rell.a][rell/a.rell:module:reserved_name:rell.a]")
         chkCompile("import r: a.rell; function f() = r.X;", "OK")
+    }
+
+    @Test fun testMountNameInReplImportParentFirst() {
+        file("a/module.rell", "@mount('foo') module; entity data_a {}")
+        file("a/b/module.rell", "module; entity data_b {}")
+        repl.chk("import a;", "")
+        repl.chk("_test.mount_name(a.data_a)", "RES:text[foo.data_a]")
+        repl.chk("import a.b;", "")
+        repl.chk("_test.mount_name(b.data_b)", "RES:text[foo.data_b]")
+    }
+
+    @Test fun testMountNameInReplImportChildFirst() {
+        file("a/module.rell", "@mount('foo') module; entity data_a {}")
+        file("a/b/module.rell", "module; entity data_b {}")
+        repl.chk("import a.b;", "")
+        repl.chk("_test.mount_name(b.data_b)", "RES:text[foo.data_b]")
+        repl.chk("import a;", "")
+        repl.chk("_test.mount_name(a.data_a)", "RES:text[foo.data_a]")
     }
 
     private fun chkAppFns(vararg expected: String) {

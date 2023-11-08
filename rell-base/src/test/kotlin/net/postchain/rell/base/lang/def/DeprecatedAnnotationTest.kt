@@ -98,7 +98,7 @@ class DeprecatedAnnotationTest: BaseRellTest(useSql = false) {
         def("@deprecated namespace c.d.e { val k = 333; }")
         chk("a.k", "int[111]")
         chk("b.k", "ct_err:deprecated:NAMESPACE:b")
-        chk("c.d.e.k", "ct_err:[deprecated:NAMESPACE:c][deprecated:NAMESPACE:c.d][deprecated:NAMESPACE:c.d.e]")
+        chk("c.d.e.k", "ct_err:deprecated:NAMESPACE:c.d.e")
         chkCompile("@deprecated namespace { val r = 123; }", "ct_err:modifier:invalid:ann:deprecated")
     }
 

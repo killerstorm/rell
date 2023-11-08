@@ -6,11 +6,11 @@ package net.postchain.rell.base.mtype
 
 sealed class M_Type_Capture(val set: M_TypeSet_Many): M_Type() {
     companion object {
-        fun make(set: M_TypeSet_Many): M_Type = M_Type_InternalCapture(set)
+        fun make(set: M_TypeSet_Many): M_Type = M_Type_Capture_Internal(set)
     }
 }
 
-private class M_Type_InternalCapture(set: M_TypeSet_Many): M_Type_Capture(set) {
+private class M_Type_Capture_Internal(set: M_TypeSet_Many): M_Type_Capture(set) {
     override fun strCode() = "CAP<${set.strCode()}>"
     override fun hashCode0() = System.identityHashCode(this)
 

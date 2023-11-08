@@ -6,10 +6,7 @@ package net.postchain.rell.base.compiler.base.expr
 
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.ast.S_PosValue
-import net.postchain.rell.base.compiler.base.core.C_AppContext
-import net.postchain.rell.base.compiler.base.core.C_MessageContext
-import net.postchain.rell.base.compiler.base.core.C_Name
-import net.postchain.rell.base.compiler.base.core.C_Types
+import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.modifier.C_AtSummarizationKind
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.base.utils.C_Utils
@@ -46,10 +43,10 @@ class C_AtFromMember(
     fun isValue() = member.isValue()
     fun isCallable() = member.isCallable()
 
-    fun compile(ctx: C_ExprContext, cName: C_Name): C_ExprMember {
-        val baseExpr = base.compile(cName.pos)
-        val link = C_MemberLink(baseExpr, selfType, cName.pos, cName, false)
-        return member.compile(ctx, link)
+    fun compile(ctx: C_ExprContext, cNameHand: C_NameHandle): C_Expr {
+        val baseExpr = base.compile(cNameHand.pos)
+        val link = C_MemberLink(baseExpr, selfType, cNameHand.pos, cNameHand.name, false)
+        return member.compile(ctx, link, cNameHand)
     }
 }
 
@@ -78,10 +75,11 @@ sealed class C_AtFromItem(val pos: S_Pos)
 class C_AtFromItem_Entity(pos: S_Pos, val alias: C_Name, val entity: R_EntityDefinition): C_AtFromItem(pos)
 
 class C_AtFromItem_Iterable(
-        pos: S_Pos,
-        val vExpr: V_Expr,
-        val elemType: R_Type,
-        val rIterableAdapter: R_IterableAdapter
+    pos: S_Pos,
+    val vExpr: V_Expr,
+    val elemType: R_Type,
+    val ideInfo: C_IdeSymbolInfo,
+    private val rIterableAdapter: R_IterableAdapter,
 ): C_AtFromItem(pos) {
     fun compile(): V_ColAtFrom {
         return V_ColAtFrom(rIterableAdapter, vExpr)
@@ -222,14 +220,14 @@ class C_AtContextMember(private val member: C_AtFromMember, private val outerAtE
         return "${owner.code}:$name" toCodeMsg "${owner.msg}.$name"
     }
 
-    fun compile(ctx: C_ExprContext, cName: C_Name): C_ExprMember {
+    fun compile(ctx: C_ExprContext, cNameHand: C_NameHandle): C_Expr {
         if (outerAtExpr) {
             val name = member.nameMsg()
             val owner = member.ownerMsg()
-            ctx.msgCtx.error(cName.pos, "at_expr:attr:belongs_to_outer:$name:${owner.code}",
+            ctx.msgCtx.error(cNameHand.pos, "at_expr:attr:belongs_to_outer:$name:${owner.code}",
                 "Name '$name' belongs to an outer at-expression, fully qualified name is required")
         }
-        return member.compile(ctx, cName)
+        return member.compile(ctx, cNameHand)
     }
 }
 
@@ -252,7 +250,7 @@ class C_AtFromImplicitAttr(
     fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr {
         val vBase = base.compile(pos)
         val link = C_MemberLink(vBase, selfType, pos, null, false)
-        val cExpr = attr.member.compile(ctx, link).expr
+        val cExpr = attr.member.compile(ctx, link, C_IdeSymbolInfoHandle.NOP_HANDLE)
         return cExpr.value()
     }
 }

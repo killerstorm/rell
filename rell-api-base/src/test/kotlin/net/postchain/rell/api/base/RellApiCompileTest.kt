@@ -127,8 +127,8 @@ class RellApiCompileTest: BaseRellApiTest() {
     @Test fun testCompileAppMountConflictSys() {
         val config1 = configBuilder().mountConflictError(true).build()
         val config2 = configBuilder().mountConflictError(false).build()
-        val sourceDir = C_SourceDir.mapDirOf("sys.rell" to "module; @mount('block') entity user {}")
-        val err = "sys.rell:mnt_conflict:sys:[sys:user]:block:ENTITY:[block]"
+        val sourceDir = C_SourceDir.mapDirOf("sys.rell" to "module; @mount('blocks') entity user {}")
+        val err = "sys.rell:mnt_conflict:sys:[sys:user]:blocks"
         chkCompileAppModules(config1, sourceDir, null, listOf(), "CTE:$err")
         chkCompileAppModules(config2, sourceDir, null, listOf(), "sys")
         chkCompileAppModules(config1, sourceDir, listOf("sys"), listOf(), "CTE:$err")

@@ -4,7 +4,22 @@
 
 package net.postchain.rell.base.lmodel.dsl
 
+import net.postchain.rell.base.compiler.ast.S_Expr
+import net.postchain.rell.base.compiler.base.expr.C_ExprContext
+import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.base.compiler.base.lib.C_LibFuncCaseCtx
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunctionBody
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunctionBody
+import net.postchain.rell.base.compiler.base.lib.V_SpecialMemberFunctionCall
+import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.lmodel.L_Module
+import net.postchain.rell.base.model.R_CtErrorType
+import net.postchain.rell.base.model.R_Type
+import net.postchain.rell.base.model.expr.R_MemberCalculator
+import net.postchain.rell.base.model.expr.R_MemberCalculator_Error
+import net.postchain.rell.base.utils.LazyPosString
+import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.doc.DocUtils
 import net.postchain.rell.base.utils.toImmList
 import kotlin.test.assertEquals
 
@@ -54,5 +69,53 @@ abstract class BaseLTest {
             "LDE:${e.code}"
         }
         assertEquals(expected, actual)
+    }
+
+    companion object {
+        fun chkDoc(mod: L_Module, name: String, expectedHeader: String, expectedCode: String) {
+            val path = if (name.isEmpty()) listOf() else name.split(".").toList()
+            val doc = DocUtils.getDocSymbolByPath(mod, path)
+            checkNotNull(doc) { "Symbol not found: $name" }
+            chkDoc(doc, expectedHeader, expectedCode)
+        }
+
+        fun chkDoc(actualDoc: DocSymbol, expectedHeader: String, expectedCode: String) {
+            val actualHeader = getDocHeaderStr(actualDoc)
+            val actualCode = actualDoc.declaration.code.strCode()
+            assertEquals(expectedHeader, actualHeader)
+            assertEquals(expectedCode, actualCode)
+        }
+
+        fun getDocHeaderStr(doc: DocSymbol): String {
+            val parts = listOfNotNull(doc.kind.name, doc.symbolName.strCode(), doc.mountName)
+            return parts.joinToString("|")
+        }
+
+        fun makeGlobalFun(): C_SpecialLibGlobalFunctionBody {
+            return object: C_SpecialLibGlobalFunctionBody() {
+                override fun compileCall(
+                    ctx: C_ExprContext,
+                    name: LazyPosString,
+                    args: List<S_Expr>
+                ): V_Expr {
+                    return C_ExprUtils.errorVExpr(ctx, name.pos)
+                }
+            }
+        }
+
+        fun makeMemberFun(): C_SpecialLibMemberFunctionBody {
+            return object: C_SpecialLibMemberFunctionBody() {
+                override fun compileCall(
+                    ctx: C_ExprContext,
+                    callCtx: C_LibFuncCaseCtx,
+                    selfType: R_Type,
+                    args: List<V_Expr>,
+                ): V_SpecialMemberFunctionCall {
+                    return object: V_SpecialMemberFunctionCall(ctx, R_CtErrorType) {
+                        override fun calculator(): R_MemberCalculator = R_MemberCalculator_Error(R_CtErrorType, "Error")
+                    }
+                }
+            }
+        }
     }
 }

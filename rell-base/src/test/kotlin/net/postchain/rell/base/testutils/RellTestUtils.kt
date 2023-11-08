@@ -14,15 +14,17 @@ import net.postchain.rell.base.compiler.base.lib.C_LibModule
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Message
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
+import net.postchain.rell.base.compiler.base.utils.C_SourcePath
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.sql.SqlManager
 import net.postchain.rell.base.utils.CommonUtils
 
 object RellTestUtils {
-    const val MAIN_FILE = "main.rell"
-
     const val RELL_VER = "0.14.0"
+
+    const val MAIN_FILE = "main.rell"
+    val MAIN_FILE_PATH = C_SourcePath.parse(MAIN_FILE)
 
     val DEFAULT_COMPILER_OPTIONS = C_CompilerOptions.builder().hiddenLib(true).build()
 
@@ -51,7 +53,7 @@ object RellTestUtils {
         outMessages?.addAll(cRes.messages)
 
         if (cRes.errors.isNotEmpty()) {
-            val s = errsToString(cRes.errors, errPos)
+            val s = msgsToString(cRes.errors, errPos)
             return "ct_err:$s"
         }
 
@@ -59,7 +61,7 @@ object RellTestUtils {
         return processor(tApp)
     }
 
-    fun errsToString(errs: List<C_Message>, errPos: Boolean): String {
+    fun msgsToString(errs: List<C_Message>, errPos: Boolean = false): String {
         val forceFile = errs.any { it.pos.path().str() != "main.rell" }
 
         val errMsgs = errs
@@ -142,7 +144,7 @@ object RellTestUtils {
     }
 
     fun callQuery(exeCtx: Rt_ExecutionContext, name: String, args: List<Rt_Value>, encoder: (R_Type, Rt_Value) -> String): String {
-        val decoder = { _: List<R_Param>, args2: List<Rt_Value> -> args2 }
+        val decoder = { _: List<R_FunctionParam>, args2: List<Rt_Value> -> args2 }
         val eval = RellTestEval()
         return eval.eval {
             callQueryGeneric(eval, exeCtx, name, args, decoder, encoder)
@@ -150,12 +152,12 @@ object RellTestUtils {
     }
 
     fun <T> callQueryGeneric(
-            eval: RellTestEval,
-            exeCtx: Rt_ExecutionContext,
-            name: String,
-            args: List<T>,
-            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>,
-            encoder: (R_Type, Rt_Value) -> String
+        eval: RellTestEval,
+        exeCtx: Rt_ExecutionContext,
+        name: String,
+        args: List<T>,
+        decoder: (List<R_FunctionParam>, List<T>) -> List<Rt_Value>,
+        encoder: (R_Type, Rt_Value) -> String
     ): String {
         val mName = R_MountName.of(name)
         val query = exeCtx.appCtx.app.queries[mName]
@@ -178,7 +180,7 @@ object RellTestUtils {
             sqlMgr: SqlManager,
             name: String,
             args: List<T>,
-            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>
+            decoder: (List<R_FunctionParam>, List<T>) -> List<Rt_Value>
     ): String {
         val mName = R_MountName.of(name)
         val op = appCtx.app.operations[mName]

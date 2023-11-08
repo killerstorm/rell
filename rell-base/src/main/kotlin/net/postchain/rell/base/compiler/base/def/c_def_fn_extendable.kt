@@ -21,8 +21,9 @@ import net.postchain.rell.base.utils.checkEquals
 import net.postchain.rell.base.utils.toImmList
 
 class C_ExtendableFunctionDescriptor(
-        val uid: R_ExtendableFunctionUid,
-        private val headerGetter: C_LateGetter<C_UserFunctionHeader>
+    val uid: R_ExtendableFunctionUid,
+    val fullName: R_FullName?,
+    private val headerGetter: C_LateGetter<C_UserFunctionHeader>,
 ) {
     fun header() = headerGetter.get()
 }
@@ -56,14 +57,15 @@ class C_FunctionExtensionsTable(list: List<C_FunctionExtensions>) {
 }
 
 class C_ExtendableUserGlobalFunction(
-        appCtx: C_AppContext,
-        rFunction: R_FunctionDefinition,
-        private val extFnUid: R_ExtendableFunctionUid,
-        private val typePos: S_Pos,
+    appCtx: C_AppContext,
+    rFunction: R_FunctionDefinition,
+    private val extFnUid: R_ExtendableFunctionUid,
+    fullName: R_FullName?,
+    private val typePos: S_Pos,
 ): C_UserGlobalFunction(rFunction) {
     private val msgCtx = appCtx.msgCtx
 
-    private val descriptor = C_ExtendableFunctionDescriptor(extFnUid, headerGetter)
+    private val descriptor = C_ExtendableFunctionDescriptor(extFnUid, fullName, headerGetter)
 
     private val rDescriptorLazy: R_ExtendableFunctionDescriptor by lazy {
         val combiner = compileCombiner()

@@ -71,7 +71,12 @@ class C_MntEntry(
         val stamp: R_AppUid
 ) {
     companion object {
-        private val SYSTEM_MOUNT_NAMES = SqlConstants.SYSTEM_OBJECTS.map { R_MountName.of(it) }
+        private val SYSTEM_MOUNT_NAMES = let {
+            // "block" and "transaction" are reserved mount names for backwards compatibility reasons
+            val all = SqlConstants.SYSTEM_OBJECTS + listOf("block", "transaction")
+            all.map { R_MountName.of(it) }.toImmList()
+        }
+
         private val SYSTEM_MOUNT_PREFIX = R_MountName.of("sys")
 
         fun processMountConflicts(msgCtx: C_MessageContext, stamp: R_AppUid, mntTables: C_MountTables): C_MountTables {

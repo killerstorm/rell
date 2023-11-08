@@ -16,7 +16,7 @@ object Lib_Type_VirtualCollection {
 
             function("to_text", "text") {
                 alias("str")
-                bodyFunction(Lib_Type_Any.ToText_NoDb)
+                bodyRaw(Lib_Type_Any.ToText_NoDb)
             }
 
             function("empty", "boolean", pure = true) {

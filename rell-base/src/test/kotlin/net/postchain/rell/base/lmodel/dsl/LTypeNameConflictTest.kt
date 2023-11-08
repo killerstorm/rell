@@ -4,14 +4,6 @@
 
 package net.postchain.rell.base.lmodel.dsl
 
-import net.postchain.rell.base.compiler.base.core.C_TypeHint
-import net.postchain.rell.base.compiler.base.expr.C_ExprContext
-import net.postchain.rell.base.compiler.base.lib.C_LibFuncCaseCtx
-import net.postchain.rell.base.compiler.base.lib.C_LibMemberFunction
-import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunction
-import net.postchain.rell.base.compiler.vexpr.V_Expr
-import net.postchain.rell.base.compiler.vexpr.V_MemberFunctionCall
-import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.runtime.Rt_UnitValue
 import org.junit.Test
 
@@ -23,7 +15,7 @@ class LTypeNameConflictTest: BaseLTest() {
             function("f", "anything") { param("anything"); body { -> Rt_UnitValue } }
         }
         chkNameConflictErr(defs, block, "f") {
-            function("f", makeSpecFun())
+            function("f", makeMemberFun())
         }
         chkNameConflictOK(defs, block, "static function f(): anything") {
             staticFunction("f", "anything") { body { -> Rt_UnitValue } }
@@ -46,7 +38,7 @@ class LTypeNameConflictTest: BaseLTest() {
             function("f", "anything") { body { -> Rt_UnitValue } }
         }
         chkNameConflictOK(defs, block, "special function f(...)") {
-            function("f", makeSpecFun())
+            function("f", makeMemberFun())
         }
         chkNameConflictErr(defs, block, "f") {
             constant("f", 123)
@@ -57,13 +49,13 @@ class LTypeNameConflictTest: BaseLTest() {
     }
 
     @Test fun testSpecialFunction() {
-        val block = makeBlock { function("f", makeSpecFun()) }
+        val block = makeBlock { function("f", makeMemberFun()) }
         val defs = arrayOf("special function f(...)")
         chkNameConflictErr(defs, block, "f") {
             function("f", "anything") { body { -> Rt_UnitValue } }
         }
         chkNameConflictErr(defs, block, "f") {
-            function("f", makeSpecFun())
+            function("f", makeMemberFun())
         }
         chkNameConflictOK(defs, block, "static function f(): anything") {
             staticFunction("f", "anything") { body { -> Rt_UnitValue } }
@@ -83,7 +75,7 @@ class LTypeNameConflictTest: BaseLTest() {
             function("c", "anything") { body { -> Rt_UnitValue } }
         }
         chkNameConflictOK(defs, block, "special function c(...)") {
-            function("c", makeSpecFun())
+            function("c", makeMemberFun())
         }
         chkNameConflictErr(defs, block, "c") {
             staticFunction("c", "anything") { body { -> Rt_UnitValue } }
@@ -103,7 +95,7 @@ class LTypeNameConflictTest: BaseLTest() {
             function("p", "anything") { body { -> Rt_UnitValue } }
         }
         chkNameConflictErr(defs, block, "p") {
-            function("p", makeSpecFun())
+            function("p", makeMemberFun())
         }
         chkNameConflictOK(defs, block, "static function p(): anything") {
             staticFunction("p", "anything") { body { -> Rt_UnitValue } }
@@ -159,7 +151,7 @@ class LTypeNameConflictTest: BaseLTest() {
             constant("c", 123)
             property("p", "anything") { Rt_UnitValue }
             function("f", "anything") { body { -> Rt_UnitValue } }
-            function("g", makeSpecFun())
+            function("g", makeMemberFun())
             staticFunction("h", "anything") { param("anything"); body { -> Rt_UnitValue } }
         }
 
@@ -207,18 +199,4 @@ class LTypeNameConflictTest: BaseLTest() {
     }
 
     private fun makeBlock(block: Ld_TypeDefDsl.() -> Unit): Ld_TypeDefDsl.() -> Unit = block
-
-    private fun makeSpecFun(): C_LibMemberFunction {
-        return object: C_SpecialLibMemberFunction() {
-            override fun compileCallFull(
-                ctx: C_ExprContext,
-                callCtx: C_LibFuncCaseCtx,
-                selfType: R_Type,
-                args: List<V_Expr>,
-                resTypeHint: C_TypeHint
-            ): V_MemberFunctionCall {
-                throw UnsupportedOperationException()
-            }
-        }
-    }
 }

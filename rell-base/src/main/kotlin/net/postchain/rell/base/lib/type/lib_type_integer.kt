@@ -32,7 +32,7 @@ object Lib_Type_Integer {
 
             constructor {
                 param("decimal")
-                bodyFunction(Lib_Type_Decimal.ToInteger)
+                bodyRaw(Lib_Type_Decimal.ToInteger)
             }
 
             staticFunction("from_text", "integer", pure = true) {
@@ -59,12 +59,12 @@ object Lib_Type_Integer {
             }
 
             function("abs", "integer") {
-                bodyFunction(Lib_Math.Abs_Integer)
+                bodyRaw(Lib_Math.Abs_Integer)
             }
 
             function("min", "integer") {
                 param("integer")
-                bodyFunction(Lib_Math.Min_Integer)
+                bodyRaw(Lib_Math.Min_Integer)
             }
 
             function("min", "big_integer", pure = true) {
@@ -91,7 +91,7 @@ object Lib_Type_Integer {
 
             function("max", "integer") {
                 param("integer")
-                bodyFunction(Lib_Math.Max_Integer)
+                bodyRaw(Lib_Math.Max_Integer)
             }
 
             function("max", "big_integer", pure = true) {
@@ -117,11 +117,11 @@ object Lib_Type_Integer {
             }
 
             function("to_big_integer", "big_integer") {
-                bodyFunction(Lib_Type_BigInteger.FromInteger)
+                bodyRaw(Lib_Type_BigInteger.FromInteger)
             }
 
             function("to_decimal", "decimal") {
-                bodyFunction(Lib_Type_Decimal.FromInteger)
+                bodyRaw(Lib_Type_Decimal.FromInteger)
             }
 
             function("to_text", "text", pure = true) {

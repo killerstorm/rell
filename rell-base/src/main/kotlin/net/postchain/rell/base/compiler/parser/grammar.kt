@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.parser
@@ -340,7 +340,14 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val nullLiteralExpr by NULL map { S_NullLiteralExpr(it.pos) }
 
-    private val literalExpr by intExpr or bigIntExpr or decimalExpr or stringExpr or bytesExpr or booleanLiteralExpr or nullLiteralExpr
+    private val literalExpr by
+        intExpr or
+        bigIntExpr or
+        decimalExpr or
+        stringExpr or
+        bytesExpr or
+        booleanLiteralExpr or
+        nullLiteralExpr
 
     private val tupleExprFieldNameEqExpr by ( name * ASSIGN * expressionRef ) map {
         ( name, pos, expr ) -> S_TupleExprField_NameEqExpr(name, pos.pos, expr)
@@ -451,7 +458,7 @@ object S_Grammar : Grammar<S_RellFile>() {
         S_CreateExpr(kw.pos, entityName, args)
     }
 
-    private val virtualTypeExpr by virtualType map { S_TypeExpr(it) }
+    private val virtualTypeExpr by virtualType map { S_SpecialTypeExpr(it) }
 
     private val callArg by ( optional(name * -ASSIGN) * callArgValue) map {
         (name, value) ->
@@ -488,7 +495,7 @@ object S_Grammar : Grammar<S_RellFile>() {
 
     private val genericTypeExpr by ( genericType * ( baseExprTailMember or baseExprTailCall ) ) map {
         (type, tail) ->
-        val baseExpr = S_TypeExpr(type)
+        val baseExpr = S_GenericTypeExpr(type)
         tail.toExpr(baseExpr)
     }
 

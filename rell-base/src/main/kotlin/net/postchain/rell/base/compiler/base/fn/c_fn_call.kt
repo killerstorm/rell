@@ -5,6 +5,7 @@
 package net.postchain.rell.base.compiler.base.fn
 
 import net.postchain.rell.base.compiler.ast.S_Pos
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.expr.C_CallTypeHints
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
@@ -18,7 +19,6 @@ import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.utils.LazyPosString
 import net.postchain.rell.base.utils.LazyString
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
@@ -26,7 +26,7 @@ import net.postchain.rell.base.utils.toImmMap
 abstract class C_FunctionCallTargetInfo {
     abstract fun retType(): R_Type?
     abstract fun typeHints(): C_CallTypeHints
-    abstract fun getParameter(name: R_Name): IdeSymbolInfo?
+    abstract fun getParameter(name: R_Name): C_IdeSymbolInfo?
 }
 
 abstract class C_FunctionCallTarget: C_FunctionCallTargetInfo() {
@@ -125,7 +125,9 @@ class C_FunctionCallParameters(list: List<C_FunctionCallParameter>) {
 
     companion object {
         fun fromTypes(types: List<R_Type>): C_FunctionCallParameters {
-            val params = types.mapIndexed { index, rType -> C_FunctionCallParameter(null, rType, index, IdeSymbolInfo.UNKNOWN, null) }
+            val params = types.mapIndexed { index, rType ->
+                C_FunctionCallParameter(null, rType, index, C_IdeSymbolInfo.UNKNOWN, null)
+            }
             return C_FunctionCallParameters(params)
         }
     }
@@ -135,7 +137,7 @@ class C_FunctionCallParameter(
         val name: R_Name?,
         val type: R_Type,
         val index: Int,
-        ideInfo: IdeSymbolInfo,
+        ideInfo: C_IdeSymbolInfo,
         private val defaultValue: C_ParameterDefaultValue?,
 ) {
     val namedArgIdeInfo = ideInfo.update(kind = IdeSymbolKind.EXPR_CALL_ARG)

@@ -10,6 +10,7 @@ import net.postchain.rell.base.model.R_MapType
 import net.postchain.rell.base.model.R_SetType
 import net.postchain.rell.base.runtime.Rt_ListValue
 import net.postchain.rell.base.runtime.Rt_SetValue
+import net.postchain.rell.base.utils.doc.DocCode
 
 object Lib_Type_VirtualMap {
     val NAMESPACE = Ld_NamespaceDsl.make {
@@ -23,8 +24,12 @@ object Lib_Type_VirtualMap {
                 R_MapType(k, v0).virtualType
             }
 
-            strCode { k, v, _ ->
-                "virtual<map<${k.strCode()},${v.strCode()}>>"
+            docCode { k, v, _ ->
+                DocCode.builder()
+                    .keyword("virtual").raw("<")
+                    .link("map").raw("<").append(k).sep(", ").append(v).raw(">")
+                    .raw(">")
+                    .build()
             }
 
             Lib_Type_Map.defCommonFunctions(this)
@@ -54,7 +59,7 @@ object Lib_Type_VirtualMap {
             }
 
             function("to_full", result = "map<K,V0>") {
-                bodyFunction(Lib_Type_Virtual.ToFull)
+                bodyRaw(Lib_Type_Virtual.ToFull)
             }
         }
     }

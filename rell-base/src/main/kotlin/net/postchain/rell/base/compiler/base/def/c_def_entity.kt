@@ -4,6 +4,7 @@
 
 package net.postchain.rell.base.compiler.base.def
 
+import com.google.common.collect.Multimap
 import net.postchain.rell.base.compiler.ast.S_AttributeDefinition
 import net.postchain.rell.base.compiler.ast.S_EntityDefinition
 import net.postchain.rell.base.compiler.ast.S_Expr
@@ -13,17 +14,19 @@ import net.postchain.rell.base.compiler.base.expr.C_EntityAttrRef
 import net.postchain.rell.base.compiler.base.expr.C_ExprHint
 import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.base.compiler.base.utils.*
+import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.model.*
+import net.postchain.rell.base.utils.Nullable
+import net.postchain.rell.base.utils.doc.*
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.toImmMap
-import net.postchain.rell.base.utils.toImmSet
+import net.postchain.rell.base.utils.toImmMultimap
 
 private class C_EntityAttributeClause(
-        private val defCtx: C_DefinitionContext,
-        private val sysAttr: C_SysAttribute?,
-        private val persistent: Boolean
+    private val defCtx: C_DefinitionContext,
+    private val sysAttr: C_SysAttribute?,
+    private val persistent: Boolean,
 ) {
     private val msgCtx = defCtx.msgCtx
 
@@ -34,7 +37,13 @@ private class C_EntityAttributeClause(
         defs.add(cDef)
     }
 
-    fun compile(index: Int, keyIndexKind: R_KeyIndexKind?): C_CompiledAttribute {
+    fun compile(index: Int, keys: Collection<R_Key>, indices: Collection<R_Index>): C_CompiledAttribute {
+        val keyIndexKind = when {
+            keys.isNotEmpty() -> R_KeyIndexKind.KEY
+            indices.isNotEmpty() -> R_KeyIndexKind.INDEX
+            else -> null
+        }
+
         val (primaryDefs, secondaryDefs) = defs.partition { it.primary }
 
         if (sysAttr != null) {
@@ -51,30 +60,83 @@ private class C_EntityAttributeClause(
         val mutable = mainDef.attrDef.mutablePos != null
         val ideKind = C_AttrUtils.getIdeSymbolKind(persistent, mutable, keyIndexKind)
 
-        val ideData = C_GlobalAttrHeaderIdeData(IdeSymbolCategory.ATTRIBUTE, ideKind, null)
+        val docSymLate = C_LateInit(C_CompilerPass.DOCS, Nullable.of<DocSymbol>())
+        val ideData = C_GlobalAttrHeaderIdeData(IdeSymbolCategory.ATTRIBUTE, ideKind, null, docSymLate.getter)
+
         val mainHeader = mainDef.attrHeader.compile(defCtx, false, ideData)
         val type = mainHeader.type ?: R_CtErrorType
 
         checkAttrType(mainDef, type)
         processOtherDefs(conflictDefs, otherDefs, type, ideKind, mainHeader.ideInfo)
 
-        if (defCtx.definitionType.isEntityLike()) {
+        if (defCtx.definitionType.isEntityOrObject()) {
             S_EntityDefinition.checkAttrNameLen(msgCtx, mainDef.name)
         }
 
         val exprGetter = processAttrExpr(mainDef.name, mainDef.attrDef.expr, type)
 
+        defCtx.executor.onPass(C_CompilerPass.DOCS) {
+            val docExpr = exprGetter?.get()?.vDocExpr
+            val docDec = makeDocDeclaration(mainDef.name, type, mutable, docExpr, keys, indices)
+            val docSym = makeDocSymbol(mainDef.name, docDec)
+            docSymLate.set(Nullable.of(docSym))
+        }
+
         val rAttr = R_Attribute(
-                index,
-                mainDef.name.rName,
-                type,
-                mutable = mutable,
-                keyIndexKind = keyIndexKind,
-                ideInfo = mainHeader.ideInfo,
-                exprGetter = exprGetter
+            index,
+            mainDef.name.rName,
+            type,
+            mutable = mutable,
+            keyIndexKind = keyIndexKind,
+            ideInfo = mainHeader.ideInfo,
+            exprGetter = exprGetter?.transform { it.rDefaultValue },
         )
 
         return C_CompiledAttribute(mainDef.attrHeader.pos, rAttr)
+    }
+
+    private fun makeDocDeclaration(
+        name: C_Name,
+        type: R_Type,
+        mutable: Boolean,
+        docExpr: V_Expr?,
+        keys: Collection<R_Key>,
+        indices: Collection<R_Index>,
+    ): DocDeclaration {
+        var keyIndexKind: R_KeyIndexKind? = null
+        var docKeys = keys
+        var docIndices = indices
+
+        when {
+            keys.any { it.attribs.size == 1 } -> {
+                keyIndexKind = R_KeyIndexKind.KEY
+                docKeys = keys.filter { it.attribs.size != 1 }
+            }
+            indices.any { it.attribs.size == 1 } -> {
+                keyIndexKind = R_KeyIndexKind.INDEX
+                docIndices = indices.filter { it.attribs.size != 1 }
+            }
+        }
+
+        return DocDeclaration_EntityAttribute(name.rName, type.mType, mutable, keyIndexKind, docExpr, docKeys, docIndices)
+    }
+
+    private fun makeDocSymbol(name: C_Name, docDec: DocDeclaration): DocSymbol {
+        val docKind = when (defCtx.definitionType) {
+            C_DefinitionType.STRUCT -> DocSymbolKind.STRUCT_ATTR
+            C_DefinitionType.OBJECT -> DocSymbolKind.OBJECT_ATTR
+            else -> DocSymbolKind.ENTITY_ATTR
+        }
+
+        val defName = defCtx.cDefName.toPath().subName(name.rName)
+
+        return DocSymbol(
+            kind = docKind,
+            symbolName = DocSymbolName.global(defName.module.module, defName.qualifiedName.str()),
+            mountName = null,
+            declaration = docDec,
+            comment = null,
+        )
     }
 
     private fun processOtherDefs(
@@ -82,7 +144,7 @@ private class C_EntityAttributeClause(
             secondaryDefs: List<C_AttributeDefinition>,
             type: R_Type,
             ideKind: IdeSymbolKind,
-            mainIdeInfo: IdeSymbolInfo,
+            mainIdeInfo: C_IdeSymbolInfo,
     ) {
         for (def in conflictDefs) {
             val ideData = C_GlobalAttrHeaderIdeData(IdeSymbolCategory.ATTRIBUTE, ideKind, null)
@@ -96,14 +158,15 @@ private class C_EntityAttributeClause(
         }
     }
 
-    private fun processAttrExpr(name: C_Name, expr: S_Expr?, type: R_Type?): C_LateGetter<R_DefaultValue>? {
+    private fun processAttrExpr(name: C_Name, expr: S_Expr?, type: R_Type?): C_LateGetter<C_DefaultValue>? {
         if (expr == null) {
             return null
         }
 
         val exprType = type ?: R_CtErrorType
         val errValue = R_DefaultValue(C_ExprUtils.errorRExpr(exprType), false)
-        val late = C_LateInit(C_CompilerPass.EXPRESSIONS, errValue)
+        val errDocExpr = C_ExprUtils.errorVExpr(defCtx.initExprCtx, expr.startPos, exprType)
+        val late = C_LateInit(C_CompilerPass.EXPRESSIONS, C_DefaultValue(errValue, errDocExpr))
 
         defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
             val exprCtx = defCtx.initExprCtx
@@ -113,13 +176,19 @@ private class C_EntityAttributeClause(
             }
             val vExpr = adapter.adaptExpr(exprCtx, vExpr0)
             val rExpr = vExpr.toRExpr()
-            late.set(R_DefaultValue(rExpr, vExpr0.info.hasDbModifications))
+            val rDefaultValue = R_DefaultValue(rExpr, vExpr0.info.hasDbModifications)
+            late.set(C_DefaultValue(rDefaultValue, vExpr0))
         }
 
         return late.getter
     }
 
-    private fun processSecondaryDef(def: C_AttributeDefinition, rPrimaryType: R_Type, ideKind: IdeSymbolKind, mainIdeInfo: IdeSymbolInfo) {
+    private fun processSecondaryDef(
+        def: C_AttributeDefinition,
+        rPrimaryType: R_Type,
+        ideKind: IdeSymbolKind,
+        mainIdeInfo: C_IdeSymbolInfo,
+    ) {
         val ideData = C_GlobalAttrHeaderIdeData(IdeSymbolCategory.ATTRIBUTE, ideKind, mainIdeInfo)
         val header = def.attrHeader.compile(defCtx, true, ideData)
 
@@ -145,7 +214,7 @@ private class C_EntityAttributeClause(
     }
 
     private fun checkAttrType(attr: C_AttributeDefinition, type: R_Type?) {
-        if (defCtx.definitionType.isEntityLike() && type != null && !type.sqlAdapter.isSqlCompatible()) {
+        if (defCtx.definitionType.isEntityOrObject() && type != null && !type.sqlAdapter.isSqlCompatible()) {
             val name = attr.name
             val typeStr = type.strCode()
             msgCtx.error(name.pos, "entity_attr_type:$name:$typeStr", "Attribute '$name' has unallowed type: $typeStr")
@@ -159,6 +228,11 @@ private class C_EntityAttributeClause(
     ) {
         val name = attrHeader.name
     }
+
+    private class C_DefaultValue(
+        val rDefaultValue: R_DefaultValue,
+        val vDocExpr: V_Expr,
+    )
 }
 
 class C_EntityContext(
@@ -194,7 +268,7 @@ class C_EntityContext(
         val nameStr = attrHeader.rName.str
 
         val defType = defCtx.definitionType
-        if (defType.isEntityLike() && !C_EntityAttrRef.isAllowedRegularAttrName(nameStr)) {
+        if (defType.isEntityOrObject() && !C_EntityAttrRef.isAllowedRegularAttrName(nameStr)) {
             msgCtx.error(attrHeader.pos, "unallowed_attr_name:$nameStr", "Unallowed attribute name: '$nameStr'")
         }
 
@@ -231,22 +305,23 @@ class C_EntityContext(
     }
 
     private fun compileAttributes(): Map<R_Name, C_CompiledAttribute> {
-        val keyAttrs = keys.flatMap { it.attribs }.toImmSet()
-        val indexAttrs = indices.flatMap { it.attribs }.toImmSet()
+        val keyMap = keyIndexMap(keys)
+        val indexMap = keyIndexMap(indices)
 
         val cAttrs = mutableListOf<C_CompiledAttribute>()
 
         for ((name, attr) in attrMap) {
-            val keyIndexKind = when {
-                name in keyAttrs -> R_KeyIndexKind.KEY
-                name in indexAttrs -> R_KeyIndexKind.INDEX
-                else -> null
-            }
-            val compiledAttr = attr.compile(cAttrs.size, keyIndexKind)
+            val attrKeys = keyMap.get(name)
+            val attrIndices = indexMap.get(name)
+            val compiledAttr = attr.compile(cAttrs.size, attrKeys, attrIndices)
             cAttrs.add(compiledAttr)
         }
 
         return cAttrs.map { it.rAttr.rName to it }.toMap().toImmMap()
+    }
+
+    private fun <T: R_KeyIndex> keyIndexMap(list: List<T>): Multimap<R_Name, T> {
+        return list.flatMap { r -> r.attribs.map { attr -> attr to r } }.toImmMultimap()
     }
 
     private fun addUniqueKeyIndex(pos: S_Pos, set: MutableSet<Set<R_Name>>, names: List<R_Name>, kind: R_KeyIndexKind) {

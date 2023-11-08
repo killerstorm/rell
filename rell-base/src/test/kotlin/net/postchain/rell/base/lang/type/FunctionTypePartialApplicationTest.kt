@@ -475,6 +475,9 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chkEx("{ val f: $type = $baseExpr.$fn(*); return _type_of(f); }", "text[$type]")
         chkEx("{ val f: $type = $baseExpr.$fn(*); return f; }", "fn[$baseType.$fn($wildArgs)]")
         chkEx("{ val f: $type = $baseExpr.$fn(*); return f($args); }", expRes)
+        chkFull("function f(): $type = $baseExpr.$fn(*); query q() = _type_of(f());", "text[$type]")
+        chkFull("function f(): $type = $baseExpr.$fn(*); query q() = f();", "fn[$baseType.$fn($wildArgs)]")
+        chkFull("function f(): $type = $baseExpr.$fn(*); query q() = f()($args);", expRes)
     }
 
     @Test fun testSysMemberFunctionPartial() {

@@ -4,7 +4,8 @@
 
 package net.postchain.rell.base.lmodel.dsl
 
-import net.postchain.rell.base.compiler.base.def.C_GlobalFunction
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunctionBody
+import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty
 import net.postchain.rell.base.compiler.base.utils.C_RNamePath
 import net.postchain.rell.base.lmodel.*
@@ -16,8 +17,7 @@ import net.postchain.rell.base.runtime.Rt_DecimalValue
 import net.postchain.rell.base.runtime.Rt_IntValue
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.*
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
-import net.postchain.rell.base.utils.ide.IdeSymbolKind
+import net.postchain.rell.base.utils.doc.*
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -28,7 +28,9 @@ abstract class Ld_NamespaceMember(val simpleName: R_Name) {
 
     abstract fun declare(ctx: Ld_DeclareContext): Declaration
 
-    abstract class Declaration(val qualifiedName: R_QualifiedName) {
+    abstract class Declaration(val fullName: L_FullName) {
+        val qualifiedName = fullName.qName
+
         abstract fun finish(ctx: Ld_NamespaceFinishContext): List<L_NamespaceMember>
     }
 }
@@ -64,7 +66,6 @@ interface Ld_NamespaceDsl: Ld_CommonNamespaceDsl {
         name: String,
         type: String,
         pure: Boolean = false,
-        ideKind: IdeSymbolKind = IdeSymbolKind.MEM_SYS_PROPERTY,
         block: Ld_NamespacePropertyDsl.() -> Ld_PropertyBody,
     )
 
@@ -78,7 +79,7 @@ interface Ld_NamespaceDsl: Ld_CommonNamespaceDsl {
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     )
 
-    fun function(name: String, fn: C_GlobalFunction)
+    fun function(name: String, fn: C_SpecialLibGlobalFunctionBody)
 
     companion object {
         fun make(block: Ld_NamespaceDsl.() -> Unit): Ld_Namespace {
@@ -91,7 +92,7 @@ interface Ld_NamespaceDsl: Ld_CommonNamespaceDsl {
 }
 
 interface Ld_CommonNamespaceMaker {
-    fun constant(name: String, type: String, value: L_ConstantValue)
+    fun constant(name: String, type: String, value: Ld_ConstantValue)
 }
 
 interface Ld_NamespaceMaker: Ld_CommonNamespaceMaker {
@@ -115,7 +116,6 @@ interface Ld_NamespaceMaker: Ld_CommonNamespaceMaker {
         name: String,
         type: String,
         pure: Boolean = false,
-        ideKind: IdeSymbolKind = IdeSymbolKind.MEM_SYS_PROPERTY,
         block: Ld_NamespacePropertyDsl.() -> Ld_PropertyBody,
     )
 
@@ -129,7 +129,7 @@ interface Ld_NamespaceMaker: Ld_CommonNamespaceMaker {
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     )
 
-    fun function(name: String, fn: C_GlobalFunction)
+    fun function(name: String, fn: C_SpecialLibGlobalFunctionBody)
 }
 
 class Ld_CommonNamespaceDslBuilder(
@@ -148,13 +148,13 @@ class Ld_CommonNamespaceDslBuilder(
     }
 
     override fun constant(name: String, type: String, value: Rt_Value) {
-        val lValue = L_ConstantValue.make(value)
-        maker.constant(name, type, lValue)
+        val ldValue = Ld_ConstantValue.make(value)
+        maker.constant(name, type, ldValue)
     }
 
     override fun constant(name: String, type: String, getter: (R_Type) -> Rt_Value) {
-        val lValue = L_ConstantValue.make(getter)
-        maker.constant(name, type, lValue)
+        val ldValue = Ld_ConstantValue.make(getter)
+        maker.constant(name, type, ldValue)
     }
 }
 
@@ -179,7 +179,7 @@ class Ld_NamespaceDslBuilder(
         extension: Boolean,
         hidden: Boolean,
         rType: R_Type?,
-        block: Ld_TypeDefDsl.() -> Unit
+        block: Ld_TypeDefDsl.() -> Unit,
     ) {
         maker.type(name, abstract, extension, hidden, rType, block)
     }
@@ -192,10 +192,9 @@ class Ld_NamespaceDslBuilder(
         name: String,
         type: String,
         pure: Boolean,
-        ideKind: IdeSymbolKind,
-        block: Ld_NamespacePropertyDsl.() -> Ld_PropertyBody
+        block: Ld_NamespacePropertyDsl.() -> Ld_PropertyBody,
     ) {
-        maker.property(name, type, pure, ideKind, block)
+        maker.property(name, type, pure, block)
     }
 
     override fun property(name: String, property: C_NamespaceProperty) {
@@ -207,12 +206,12 @@ class Ld_NamespaceDslBuilder(
         result: String?,
         params: List<String>?,
         pure: Boolean?,
-        block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef
+        block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     ) {
         maker.function(name, result, params, pure, block)
     }
 
-    override fun function(name: String, fn: C_GlobalFunction) {
+    override fun function(name: String, fn: C_SpecialLibGlobalFunctionBody) {
         maker.function(name, fn)
     }
 }
@@ -309,10 +308,10 @@ class Ld_NamespaceBuilder(
         addMember(member)
     }
 
-    override fun constant(name: String, type: String, value: L_ConstantValue) {
+    override fun constant(name: String, type: String, value: Ld_ConstantValue) {
         val simpleName = getSimpleName(name)
         val ldType = Ld_Type.parse(type)
-        val constant = Ld_Constant(simpleName, ldType, value)
+        val constant = Ld_Constant(ldType, value)
         val member = Ld_NamespaceMember_Constant(simpleName, constant)
         addMember(member)
     }
@@ -321,14 +320,12 @@ class Ld_NamespaceBuilder(
         name: String,
         type: String,
         pure: Boolean,
-        ideKind: IdeSymbolKind,
         block: Ld_NamespacePropertyDsl.() -> Ld_PropertyBody,
     ) {
         val simpleName = getSimpleName(name)
         val ldType = Ld_Type.parse(type)
-        val ideInfo = IdeSymbolInfo.get(ideKind)
 
-        val builder = Ld_NamespacePropertyDslBuilder(ldType, pure = pure, ideInfo = ideInfo)
+        val builder = Ld_NamespacePropertyDslBuilder(ldType, pure = pure)
         val property = builder.build(block)
 
         val member = Ld_NamespaceMember_Property(simpleName, property)
@@ -363,7 +360,7 @@ class Ld_NamespaceBuilder(
         addMember(member)
     }
 
-    override fun function(name: String, fn: C_GlobalFunction) {
+    override fun function(name: String, fn: C_SpecialLibGlobalFunctionBody) {
         val simpleName = getSimpleName(name)
         val member = Ld_NamespaceMember_SpecialFunction(simpleName, fn)
         addMember(member)
@@ -411,10 +408,10 @@ class Ld_Namespace(
 ) {
     fun declare(ctx: Ld_DeclareContext): Declaration {
         val namespaceDecs = namespaces.map { (simpleName, ns) ->
-            val qualifiedName = ctx.getQualifiedName(simpleName)
+            val fullName = ctx.getFullName(simpleName)
             val subCtx = ctx.nestedNamespaceContext(simpleName)
             val dec = ns.declare(subCtx)
-            MemDeclaration(qualifiedName, dec)
+            MemDeclaration(fullName, dec)
         }
 
         val memberDecs = members.map { it.declare(ctx) }
@@ -424,12 +421,23 @@ class Ld_Namespace(
     }
 
     private class MemDeclaration(
-        qualifiedName: R_QualifiedName,
+        fullName: L_FullName,
         private val ns: Declaration,
-    ): Ld_NamespaceMember.Declaration(qualifiedName) {
+    ): Ld_NamespaceMember.Declaration(fullName) {
         override fun finish(ctx: Ld_NamespaceFinishContext): List<L_NamespaceMember> {
             val lNs = ns.finish(ctx)
-            return immListOf(L_NamespaceMember_Namespace(qualifiedName, lNs))
+            val doc = finishDoc()
+            return immListOf(L_NamespaceMember_Namespace(qualifiedName, lNs, doc))
+        }
+
+        private fun finishDoc(): DocSymbol {
+            return DocSymbol(
+                kind = DocSymbolKind.NAMESPACE,
+                symbolName = DocSymbolName.global(fullName.moduleName.str(), fullName.qName.str()),
+                mountName = null,
+                declaration = DocDeclaration_Namespace(DocModifiers.NONE, fullName.last),
+                comment = null,
+            )
         }
     }
 
@@ -477,15 +485,15 @@ class Ld_Namespace(
                 .toImmList()
         }
 
-        private fun makeLink(member: L_NamespaceMember, sourceName: R_QualifiedName, pos: Exception): L_NamespaceMember {
-            return when (member) {
-                is L_NamespaceMember_Constant -> L_NamespaceMember_Constant(sourceName, member.constant)
-                is L_NamespaceMember_Function -> L_NamespaceMember_Function(sourceName, member.function, member.deprecated)
-                is L_NamespaceMember_SpecialFunction -> L_NamespaceMember_SpecialFunction(sourceName, member.function)
-                is L_NamespaceMember_Property -> L_NamespaceMember_Property(sourceName, member.property)
-                is L_NamespaceMember_SpecialProperty -> L_NamespaceMember_SpecialProperty(sourceName, member.property)
-                is L_NamespaceMember_Struct -> L_NamespaceMember_Struct(sourceName, member.struct)
-                is L_NamespaceMember_Type -> L_NamespaceMember_Type(sourceName, member.typeDef, member.deprecated)
+        private fun makeLink(m: L_NamespaceMember, sourceName: R_QualifiedName, pos: Exception): L_NamespaceMember {
+            return when (m) {
+                is L_NamespaceMember_Constant -> L_NamespaceMember_Constant(sourceName, m.docSymbol, m.constant)
+                is L_NamespaceMember_Function -> L_NamespaceMember_Function(sourceName, m.docSymbol, m.function, m.deprecated)
+                is L_NamespaceMember_SpecialFunction -> L_NamespaceMember_SpecialFunction(sourceName, m.docSymbol, m.fn)
+                is L_NamespaceMember_Property -> L_NamespaceMember_Property(sourceName, m.docSymbol, m.property)
+                is L_NamespaceMember_SpecialProperty -> L_NamespaceMember_SpecialProperty(sourceName, m.docSymbol, m.property)
+                is L_NamespaceMember_Struct -> L_NamespaceMember_Struct(sourceName, m.docSymbol, m.struct)
+                is L_NamespaceMember_Type -> L_NamespaceMember_Type(sourceName, m.typeDef, m.deprecated)
                 is L_NamespaceMember_Namespace -> {
                     val msg = "Links to a namespace are not supported: $sourceName"
                     throw Ld_Exception("namespace:bad_link:${sourceName}", msg, pos)
@@ -513,45 +521,55 @@ private class Ld_NamespaceMember_Function(
     override fun getAliases(): List<Ld_Alias> = function.aliases
 
     override fun declare(ctx: Ld_DeclareContext): Declaration {
-        val qualifiedName = ctx.getQualifiedName(simpleName)
-        return MemDeclaration(qualifiedName, function)
+        val fullName = ctx.getFullName(simpleName)
+        return MemDeclaration(fullName, function)
     }
 
     private class MemDeclaration(
-        qualifiedName: R_QualifiedName,
+        fullName: L_FullName,
         private val function: Ld_Function,
-    ): Declaration(qualifiedName) {
+    ): Declaration(fullName) {
         override fun finish(ctx: Ld_NamespaceFinishContext): List<L_NamespaceMember> {
-            val lFunction = function.finish(ctx.typeCtx, qualifiedName)
+            val lFunction = function.finish(ctx.typeCtx, fullName)
 
             val res = mutableListOf<L_NamespaceMember>()
-            res.add(L_NamespaceMember_Function(qualifiedName, lFunction, function.deprecated))
+            res.add(makeMember(qualifiedName, lFunction, function.deprecated))
 
             for (alias in function.aliases) {
                 val qName = qualifiedName.replaceLast(alias.simpleName)
-                res.add(L_NamespaceMember_Function(qName, lFunction, alias.deprecated ?: function.deprecated))
+                res.add(makeMember(qName, lFunction, alias.deprecated ?: function.deprecated))
             }
 
             return res.toImmList()
+        }
+
+        private fun makeMember(
+            qName: R_QualifiedName,
+            lFunction: L_Function,
+            deprecated: C_Deprecated?,
+        ): L_NamespaceMember {
+            val doc = Ld_DocSymbols.function(fullName.moduleName, qName, lFunction, false, deprecated)
+            return L_NamespaceMember_Function(qName, doc, lFunction, deprecated)
         }
     }
 }
 
 private class Ld_NamespaceMember_SpecialFunction(
     simpleName: R_Name,
-    private val function: C_GlobalFunction,
+    private val fn: C_SpecialLibGlobalFunctionBody,
 ): Ld_NamespaceMember(simpleName) {
     override fun declare(ctx: Ld_DeclareContext): Declaration {
-        val qualifiedName = ctx.getQualifiedName(simpleName)
-        return MemDeclaration(qualifiedName, function)
+        val fullName = ctx.getFullName(simpleName)
+        return MemDeclaration(fullName, fn)
     }
 
     private class MemDeclaration(
-        qualifiedName: R_QualifiedName,
-        private val function: C_GlobalFunction,
-    ): Declaration(qualifiedName) {
+        fullName: L_FullName,
+        private val fn: C_SpecialLibGlobalFunctionBody,
+    ): Declaration(fullName) {
         override fun finish(ctx: Ld_NamespaceFinishContext): List<L_NamespaceMember> {
-            return immListOf(L_NamespaceMember_SpecialFunction(qualifiedName, function))
+            val doc = Ld_DocSymbols.specialFunction(fullName)
+            return immListOf(L_NamespaceMember_SpecialFunction(qualifiedName, doc, fn))
         }
     }
 }
@@ -561,18 +579,29 @@ private class Ld_NamespaceMember_Struct(
     private val struct: Ld_Struct,
 ): Ld_NamespaceMember(simpleName) {
     override fun declare(ctx: Ld_DeclareContext): Declaration {
-        val qualifiedName = ctx.getQualifiedName(simpleName)
-        val structDec = struct.declare(ctx, qualifiedName)
-        return MemDeclaration(qualifiedName, structDec)
+        val fullName = ctx.getFullName(simpleName)
+        val structDec = struct.declare(ctx, fullName.qName)
+        return MemDeclaration(fullName, structDec)
     }
 
     private class MemDeclaration(
-        qualifiedName: R_QualifiedName,
+        fullName: L_FullName,
         private val struct: Ld_Struct.Declaration,
-    ): Declaration(qualifiedName) {
+    ): Declaration(fullName) {
         override fun finish(ctx: Ld_NamespaceFinishContext): List<L_NamespaceMember> {
-            val lStruct = struct.finish(ctx)
-            return immListOf(L_NamespaceMember_Struct(qualifiedName, lStruct))
+            val lStruct = struct.finish(ctx, fullName)
+            val doc = finishDoc(fullName)
+            return immListOf(L_NamespaceMember_Struct(qualifiedName, doc, lStruct))
+        }
+
+        private fun finishDoc(fullName: L_FullName): DocSymbol {
+            return DocSymbol(
+                kind = DocSymbolKind.STRUCT,
+                symbolName = DocSymbolName.global(fullName.moduleName.str(), fullName.qName.str()),
+                mountName = null,
+                declaration = DocDeclaration_Struct(DocModifiers.NONE, fullName.last),
+                comment = null,
+            )
         }
     }
 }
@@ -582,17 +611,18 @@ private class Ld_NamespaceMember_Constant(
     private val constant: Ld_Constant,
 ): Ld_NamespaceMember(simpleName) {
     override fun declare(ctx: Ld_DeclareContext): Declaration {
-        val qualifiedName = ctx.getQualifiedName(simpleName)
-        return MemDeclaration(qualifiedName, constant)
+        val fullName = ctx.getFullName(simpleName)
+        return MemDeclaration(fullName, constant)
     }
 
     private class MemDeclaration(
-        qualifiedName: R_QualifiedName,
+        fullName: L_FullName,
         private val constant: Ld_Constant,
-    ): Declaration(qualifiedName) {
+    ): Declaration(fullName) {
         override fun finish(ctx: Ld_NamespaceFinishContext): List<L_NamespaceMember> {
-            val lConstant = constant.finish(ctx.typeCtx)
-            return immListOf(L_NamespaceMember_Constant(qualifiedName, lConstant))
+            val lConstant = constant.finish(ctx.typeCtx, fullName.last)
+            val doc = Ld_DocSymbols.constant(fullName, lConstant.type, lConstant.value)
+            return immListOf(L_NamespaceMember_Constant(fullName.qName, doc, lConstant))
         }
     }
 }
@@ -602,17 +632,18 @@ private class Ld_NamespaceMember_Property(
     private val property: Ld_NamespaceProperty,
 ): Ld_NamespaceMember(simpleName) {
     override fun declare(ctx: Ld_DeclareContext): Declaration {
-        val qualifiedName = ctx.getQualifiedName(simpleName)
-        return MemDeclaration(qualifiedName, property)
+        val fullName = ctx.getFullName(simpleName)
+        return MemDeclaration(fullName, property)
     }
 
     private class MemDeclaration(
-        qualifiedName: R_QualifiedName,
+        fullName: L_FullName,
         private val property: Ld_NamespaceProperty,
-    ): Declaration(qualifiedName) {
+    ): Declaration(fullName) {
         override fun finish(ctx: Ld_NamespaceFinishContext): List<L_NamespaceMember> {
             val lProperty = property.finish(ctx.typeCtx)
-            return immListOf(L_NamespaceMember_Property(qualifiedName, lProperty))
+            val doc = Ld_DocSymbols.property(fullName, lProperty.type, lProperty.pure)
+            return immListOf(L_NamespaceMember_Property(qualifiedName, doc, lProperty))
         }
     }
 }
@@ -622,16 +653,27 @@ private class Ld_NamespaceMember_SpecialProperty(
     private val property: C_NamespaceProperty,
 ): Ld_NamespaceMember(simpleName) {
     override fun declare(ctx: Ld_DeclareContext): Declaration {
-        val qualifiedName = ctx.getQualifiedName(simpleName)
-        return MemDeclaration(qualifiedName, property)
+        val fullName = ctx.getFullName(simpleName)
+        return MemDeclaration(fullName, property)
     }
 
     private class MemDeclaration(
-        qualifiedName: R_QualifiedName,
+        fullName: L_FullName,
         private val property: C_NamespaceProperty,
-    ): Declaration(qualifiedName) {
+    ): Declaration(fullName) {
         override fun finish(ctx: Ld_NamespaceFinishContext): List<L_NamespaceMember> {
-            return immListOf(L_NamespaceMember_SpecialProperty(qualifiedName, property))
+            val doc = finishDoc()
+            return immListOf(L_NamespaceMember_SpecialProperty(qualifiedName, doc, property))
+        }
+
+        private fun finishDoc(): DocSymbol {
+            return DocSymbol(
+                kind = DocSymbolKind.PROPERTY,
+                symbolName = DocSymbolName.global(fullName.moduleName.str(), fullName.qName.str()),
+                mountName = null,
+                declaration = DocDeclaration_SpecialProperty(fullName.last),
+                comment = null,
+            )
         }
     }
 }

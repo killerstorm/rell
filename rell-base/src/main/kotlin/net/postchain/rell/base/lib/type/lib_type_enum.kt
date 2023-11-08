@@ -4,7 +4,7 @@
 
 package net.postchain.rell.base.lib.type
 
-import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.compiler.base.lib.C_TypeStaticMember
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty_RtValue
 import net.postchain.rell.base.lmodel.L_TypeUtils
@@ -32,7 +32,7 @@ object Lib_Type_Enum {
             }
 
             // Db-function is effectively a no-op, as enums are represented by their numeric values on SQL level.
-            property("value", type = "integer", fn = C_SysFunction.simple(
+            property("value", type = "integer", body = C_SysFunctionBody.simple(
                 pure = true,
                 dbFn = Db_SysFunction.template("enum_value", 1, "(#0)")
             ) { a ->
@@ -98,8 +98,8 @@ object Lib_Type_Enum {
         return type.enum.attrs
             .map { attr ->
                 val defName = defPath.subName(attr.rName)
-                val prop = C_NamespaceProperty_RtValue(attr.ideInfo, Rt_EnumValue(type, attr))
-                C_TypeStaticMember.makeProperty(defName, attr.rName, prop, type)
+                val prop = C_NamespaceProperty_RtValue(Rt_EnumValue(type, attr))
+                C_TypeStaticMember.makeProperty(defName, attr.rName, prop, type, attr.ideInfo)
             }
             .toImmList()
     }

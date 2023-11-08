@@ -8,6 +8,7 @@ import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.ast.S_Statement
 import net.postchain.rell.base.compiler.base.def.C_AttrHeader
 import net.postchain.rell.base.compiler.base.expr.*
+import net.postchain.rell.base.compiler.base.utils.C_LateInit
 import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.lib.Lib_Rell
@@ -17,7 +18,11 @@ import net.postchain.rell.base.model.stmt.*
 import net.postchain.rell.base.mtype.M_Type
 import net.postchain.rell.base.mtype.M_TypeParamsResolver
 import net.postchain.rell.base.mtype.M_Types
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
+import net.postchain.rell.base.utils.Nullable
+import net.postchain.rell.base.utils.doc.DocDeclaration_Variable
+import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.doc.DocSymbolKind
+import net.postchain.rell.base.utils.doc.DocSymbolName
 import net.postchain.rell.base.utils.toImmList
 
 class C_Statement(
@@ -146,12 +151,13 @@ class C_WildcardVarDeclarator(
 }
 
 class C_SimpleVarDeclarator(
-        ctx: C_StmtContext,
-        mutable: Boolean,
-        private val attrHeader: C_AttrHeader,
-        private val name: C_Name,
-        private val explicitType: R_Type?,
-        private val ideInfo: IdeSymbolInfo
+    ctx: C_StmtContext,
+    mutable: Boolean,
+    private val attrHeader: C_AttrHeader,
+    private val name: C_Name,
+    private val explicitType: R_Type?,
+    private val ideInfo: C_IdeSymbolInfo,
+    private val docSymbolLate: C_LateInit<Nullable<DocSymbol>>,
 ): C_VarDeclarator(ctx, mutable) {
     override fun getHintType() = explicitType?.mType ?: M_Types.NOTHING
 
@@ -177,6 +183,9 @@ class C_SimpleVarDeclarator(
         val rVarType = rType ?: rExprType ?: R_CtErrorType
         val cVarRef = ctx.blkCtx.addLocalVar(name, rVarType, mutable, null, ideInfo)
 
+        val docSymbol = makeDocSymbol(rVarType)
+        docSymbolLate.set(Nullable.of(docSymbol), allowEarly = true)
+
         varFacts.putFacts(calcVarFacts(rExprType, rVarType, cVarRef.target.uid))
 
         val rTypeAdapter = typeAdapter.toRAdapter()
@@ -192,6 +201,16 @@ class C_SimpleVarDeclarator(
             val inited = mapOf(varUid to C_VarFact.NO)
             C_VarFacts.of(inited = inited)
         }
+    }
+
+    private fun makeDocSymbol(rType: R_Type): DocSymbol {
+        return DocSymbol(
+            DocSymbolKind.VAR,
+            DocSymbolName.local(name.str),
+            null,
+            DocDeclaration_Variable(name.rName, rType.mType, mutable),
+            null,
+        )
     }
 }
 

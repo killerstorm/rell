@@ -5,14 +5,19 @@
 package net.postchain.rell.base.compiler.base.module
 
 import com.google.common.collect.Multimap
+import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.ast.S_RellFile
 import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.modifier.C_ModifierContext
+import net.postchain.rell.base.compiler.base.modifier.C_RawMountAnnotationValue
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_QualifiedName
-import net.postchain.rell.base.utils.*import net.postchain.rell.base.utils.ide.*
+import net.postchain.rell.base.utils.*
+import net.postchain.rell.base.utils.doc.DocModifiers
+import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.ide.*
 
 object C_ModuleUtils {
     const val FILE_SUFFIX = ".rell"
@@ -390,7 +395,12 @@ private class S_PrivateModuleContext(appCtx: S_AppContext, moduleName: R_ModuleN
             val recs = namespaces[name].toList()
             for ((i, rec) in recs.withIndex()) {
                 val link = if (recs.size == 1) null else recs[(i + 1) % recs.size].link
-                val ideInfo = IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE, defId = rec.defId, link = link)
+                val ideInfo = C_IdeSymbolInfo.late(
+                    IdeSymbolKind.DEF_NAMESPACE,
+                    defId = rec.defId,
+                    link = link,
+                    docGetter = rec.docSymbolGetter,
+                )
                 rec.nameHand.setIdeInfo(ideInfo)
             }
         }
@@ -404,12 +414,14 @@ sealed class S_FileContext(
     val idePath: IdeFilePath,
 ) {
     fun createDefinitionContext(): S_DefinitionContext {
-        //val defIdeInfo = IdeSymbolInfo(IdeSymbolKind.DEF_NAMESPACE, defId = ideId)
-        //nameHand.setIdeInfo(ideDef.defInfo)
         return S_DefinitionContext.root(this)
     }
 
-    abstract fun addNamespaceName(nameHand: C_NameHandle, fullName: R_QualifiedName): IdeSymbolId
+    abstract fun addNamespaceName(
+        nameHand: C_NameHandle,
+        fullName: R_QualifiedName,
+        docSymbolGetter: C_LateGetter<Nullable<DocSymbol>>,
+    ): IdeSymbolId
 }
 
 private class S_PrivateFileContext(
@@ -421,20 +433,29 @@ private class S_PrivateFileContext(
 ): S_FileContext(modCtx, symCtx, path, idePath) {
     private val namespaces = mutableMultisetOf<R_QualifiedName>()
 
-    override fun addNamespaceName(nameHand: C_NameHandle, fullName: R_QualifiedName): IdeSymbolId {
+    override fun addNamespaceName(
+        nameHand: C_NameHandle,
+        fullName: R_QualifiedName,
+        docSymbolGetter: C_LateGetter<Nullable<DocSymbol>>,
+    ): IdeSymbolId {
         val count = namespaces.count(fullName)
         val fullNameStr = fullName.str()
         val defName = if (count == 0) fullNameStr else "$fullNameStr:$count"
         val defId = IdeSymbolId(IdeSymbolCategory.NAMESPACE, defName, immListOf())
         val link = IdeGlobalSymbolLink(IdeSymbolGlobalId(nameHand.pos.idePath(), defId))
-        val rec = NamespaceNameInfoRec(nameHand, defId, link)
+        val rec = NamespaceNameInfoRec(nameHand, defId, link, docSymbolGetter)
         namespaces.add(fullName)
         modNamespaces.put(fullName, rec)
         return defId
     }
 }
 
-private class NamespaceNameInfoRec(val nameHand: C_NameHandle, val defId: IdeSymbolId, val link: IdeSymbolLink)
+private class NamespaceNameInfoRec(
+    val nameHand: C_NameHandle,
+    val defId: IdeSymbolId,
+    val link: IdeSymbolLink,
+    val docSymbolGetter: C_LateGetter<Nullable<DocSymbol>>,
+)
 
 class S_DefinitionContext private constructor(val fileCtx: S_FileContext, val namespacePath: C_RNamePath) {
     val modCtx = fileCtx.modCtx
@@ -456,8 +477,17 @@ class S_DefinitionContext private constructor(val fileCtx: S_FileContext, val na
     }
 }
 
+class C_SourceModuleHeader(
+    val pos: S_Pos,
+    val mount: C_RawMountAnnotationValue?,
+    val abstract: S_Pos?,
+    val external: Boolean,
+    val test: Boolean,
+    val docModifiers: DocModifiers,
+)
+
 sealed class C_ModuleSource(protected val appCtx: S_AppContext, val moduleName: R_ModuleName) {
-    private val compiledHeader by lazy {
+    private val compiledHeader: C_SourceModuleHeader? by lazy {
         compileHeader0()
     }
 
@@ -470,10 +500,10 @@ sealed class C_ModuleSource(protected val appCtx: S_AppContext, val moduleName: 
     abstract fun isDirectory(): Boolean
     abstract fun idePath(): IdeFilePath
 
-    protected abstract fun compileHeader0(): C_MidModuleHeader?
+    protected abstract fun compileHeader0(): C_SourceModuleHeader?
     protected abstract fun compile0(modCtx: S_ModuleContext): List<C_MidModuleFile>
 
-    fun compileHeader(): C_MidModuleHeader? = compiledHeader
+    fun compileHeader(): C_SourceModuleHeader? = compiledHeader
     fun compile(): List<C_MidModuleFile> = compiledFiles
 }
 
@@ -485,7 +515,7 @@ class C_FileModuleSource(
     override fun isDirectory() = false
     override fun idePath() = file.idePath
 
-    override fun compileHeader0(): C_MidModuleHeader? {
+    override fun compileHeader0(): C_SourceModuleHeader? {
         val symCtx = appCtx.symCtxProvider.getSymbolContext(file.path)
         val modifierCtx = C_ModifierContext(appCtx.msgCtx, symCtx)
         return file.compileHeader(modifierCtx)
@@ -515,7 +545,7 @@ class C_DirModuleSource(
     override fun isDirectory() = true
     override fun idePath() = idePath
 
-    override fun compileHeader0(): C_MidModuleHeader? {
+    override fun compileHeader0(): C_SourceModuleHeader? {
         mainFile ?: return null
         val symCtx = appCtx.symCtxProvider.getSymbolContext(mainFile.path)
         val modifierCtx = C_ModifierContext(appCtx.msgCtx, symCtx)
@@ -532,7 +562,7 @@ class C_ParsedRellFile(
     val idePath: IdeFilePath,
     private val ast: S_RellFile?,
 ) {
-    fun compileHeader(modifierCtx: C_ModifierContext): C_MidModuleHeader? {
+    fun compileHeader(modifierCtx: C_ModifierContext): C_SourceModuleHeader? {
         return ast?.compileHeader(modifierCtx)
     }
 

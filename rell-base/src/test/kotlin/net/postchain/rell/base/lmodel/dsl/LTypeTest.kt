@@ -85,7 +85,7 @@ class LTypeTest: BaseLTest() {
     }
 
     @Test fun testRecursion() {
-        chkModuleErr("LDE:type_cycle:foo,bar,foo") {
+        chkModuleErr("LDE:type_cycle:test:foo,test:bar,test:foo") {
             type("foo") {
                 parent("bar")
             }
@@ -96,7 +96,7 @@ class LTypeTest: BaseLTest() {
     }
 
     @Test fun testRecursion2() {
-        chkModuleErr("LDE:type_cycle:b,c,b") {
+        chkModuleErr("LDE:type_cycle:test:b,test:c,test:b") {
             type("a") {
                 parent("b")
             }
@@ -154,6 +154,15 @@ class LTypeTest: BaseLTest() {
             }
         }
         chkTypeMems(mod, "data", "constructor (text)")
+    }
+
+    @Test fun testConstructorPure() {
+        val mod = makeModule("test") {
+            type("data") {
+                constructor(pure = true) { body { -> Rt_UnitValue } }
+            }
+        }
+        chkTypeMems(mod, "data", "pure constructor ()")
     }
 
     @Test fun testGenericTypeDef() {
@@ -484,6 +493,29 @@ class LTypeTest: BaseLTest() {
         }
 
         chkDefs(mod, "@extension type data1<A>")
+    }
+
+    @Test fun testExtensionOfStruct() {
+        val mod = makeModule("test") {
+            struct("data") {}
+            type("data_ext", extension = true) {
+                generic("T", subOf = "data")
+            }
+        }
+        chkDefs(mod, "struct data", "@extension type data_ext<T:-data>")
+    }
+
+    @Test fun testExtensionOfStructImported() {
+        val mod = makeModule("test") {
+            struct("data") {}
+        }
+        val mod2 = makeModule("client") {
+            imports(mod)
+            type("data_ext", extension = true) {
+                generic("T", subOf = "data")
+            }
+        }
+        chkDefs(mod2, "@extension type data_ext<T:-data>")
     }
 
     @Test fun testAliasConflict() {

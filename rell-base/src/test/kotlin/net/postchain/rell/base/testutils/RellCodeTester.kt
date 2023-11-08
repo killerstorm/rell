@@ -208,11 +208,11 @@ class RellCodeTester(
     }
 
     private fun <T> callQuery0(
-            code: String,
-            name: String,
-            args: List<T>,
-            decoder: (List<R_Param>, List<T>) -> List<Rt_Value>,
-            encoder: (R_Type, Rt_Value) -> String,
+        code: String,
+        name: String,
+        args: List<T>,
+        decoder: (List<R_FunctionParam>, List<T>) -> List<Rt_Value>,
+        encoder: (R_Type, Rt_Value) -> String,
     ): String {
         val evalRes = eval.eval {
             if (wrapInit) {
@@ -244,7 +244,7 @@ class RellCodeTester(
         return callOp0(code, "o", args, GtvTestUtils::decodeGtvStrOpArgs)
     }
 
-    private fun <T> callOp0(code: String, name: String, args: List<T>, decoder: (List<R_Param>, List<T>) -> List<Rt_Value>): String {
+    private fun <T> callOp0(code: String, name: String, args: List<T>, decoder: (List<R_FunctionParam>, List<T>) -> List<Rt_Value>): String {
         init()
         val moduleCode = moduleCode(code)
         return processWithAppSqlCtx(moduleCode) { appCtx, sqlCtx ->

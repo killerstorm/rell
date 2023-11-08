@@ -20,16 +20,14 @@ import net.postchain.rell.base.model.expr.R_ColAtParam
 import net.postchain.rell.base.model.expr.R_ColAtWhatExtras
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.ide.IdeLocalSymbolLink
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
-import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.toImmList
 
 
 class C_AtFrom_Iterable(
-        outerExprCtx: C_ExprContext,
-        fromCtx: C_AtFromContext,
-        alias: C_Name?,
-        private val item: C_AtFromItem_Iterable
+    outerExprCtx: C_ExprContext,
+    fromCtx: C_AtFromContext,
+    alias: C_Name?,
+    private val item: C_AtFromItem_Iterable,
 ): C_AtFrom(outerExprCtx, fromCtx) {
     private val pos = fromCtx.pos
 
@@ -39,7 +37,9 @@ class C_AtFrom_Iterable(
     }
 
     private val varPtr: R_VarPtr = let {
-        val ideInfo = IdeSymbolInfo(IdeSymbolKind.LOC_AT_ALIAS, link = IdeLocalSymbolLink(alias?.pos ?: item.pos))
+        val ideLink = IdeLocalSymbolLink(alias?.pos ?: item.pos)
+        val ideInfo = item.ideInfo.update(defId = null, link = ideLink)
+
         val phEntry = C_BlockEntry_Var(placeholderVar, ideInfo)
         if (alias == null) {
             innerBlkCtx.addAtPlaceholder(phEntry)

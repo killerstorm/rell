@@ -4,6 +4,7 @@
 
 package net.postchain.rell.base.compiler.base.lib
 
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty
@@ -12,6 +13,8 @@ import net.postchain.rell.base.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.base.compiler.base.utils.C_RNamePath
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_Struct
+import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.immMapOf
 import net.postchain.rell.base.utils.toImmMap
 
@@ -30,7 +33,7 @@ class C_LibNamespace private constructor(
 
     abstract class Maker(val basePath: C_RNamePath) {
         abstract fun addMember(name: R_Name, member: C_LibNamespaceMember)
-        abstract fun addNamespace(name: R_Name, block: (Maker) -> Unit)
+        abstract fun addNamespace(name: R_Name, doc: DocSymbol, block: (Maker) -> Unit)
     }
 
     class Builder private constructor(
@@ -51,7 +54,7 @@ class C_LibNamespace private constructor(
             members[name] = BuilderMember_Simple(member)
         }
 
-        override fun addNamespace(name: R_Name, block: (Maker) -> Unit) {
+        override fun addNamespace(name: R_Name, doc: DocSymbol, block: (Maker) -> Unit) {
             check(active)
             check(!done)
 
@@ -59,7 +62,7 @@ class C_LibNamespace private constructor(
             if (ns == null) {
                 checkNameConflict(name)
                 val builder = Builder(basePath.append(name), active = false)
-                ns = BuilderMember_Namespace(builder)
+                ns = BuilderMember_Namespace(builder, doc)
                 namespaces[name] = ns
                 members[name] = ns
             }
@@ -101,10 +104,10 @@ class C_LibNamespace private constructor(
             override fun build() = member
         }
 
-        private class BuilderMember_Namespace(val builder: Builder): BuilderMember() {
+        private class BuilderMember_Namespace(val builder: Builder, private val doc: DocSymbol): BuilderMember() {
             override fun build(): C_LibNamespaceMember {
                 val ns = builder.build()
-                return C_LibNamespaceMember_Namespace(ns)
+                return C_LibNamespaceMember_Namespace(ns, doc)
             }
         }
     }
@@ -129,7 +132,7 @@ class C_LibNamespace private constructor(
         private fun mergeMember(m: Maker, name: R_Name, member: C_LibNamespaceMember) {
             when (member) {
                 is C_LibNamespaceMember_Namespace -> {
-                    m.addNamespace(name) { subB ->
+                    m.addNamespace(name, member.doc) { subB ->
                         mergeNamespace(subB, member.namespace)
                     }
                 }
@@ -145,62 +148,69 @@ sealed class C_LibNamespaceMember {
     abstract fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name)
 
     companion object {
-        fun makeType(typeDef: C_TypeDef, deprecated: C_Deprecated?): C_LibNamespaceMember {
-            return C_LibNamespaceMember_Type(typeDef, deprecated)
+        fun makeType(typeDef: C_LibTypeDef, ideInfo: C_IdeSymbolInfo, deprecated: C_Deprecated?): C_LibNamespaceMember {
+            return C_LibNamespaceMember_Type(typeDef, ideInfo, deprecated)
         }
 
-        fun makeStruct(rStruct: R_Struct): C_LibNamespaceMember {
-            return C_LibNamespaceMember_Struct(rStruct)
+        fun makeStruct(rStruct: R_Struct, doc: DocSymbol): C_LibNamespaceMember {
+            return C_LibNamespaceMember_Struct(rStruct, doc)
         }
 
-        fun makeProperty(property: C_NamespaceProperty): C_LibNamespaceMember {
-            return C_LibNamespaceMember_Property(property)
+        fun makeProperty(property: C_NamespaceProperty, ideInfo: C_IdeSymbolInfo): C_LibNamespaceMember {
+            return C_LibNamespaceMember_Property(property, ideInfo)
         }
 
-        fun makeFunction(function: C_GlobalFunction): C_LibNamespaceMember {
-            return C_LibNamespaceMember_Function(function)
+        fun makeFunction(function: C_GlobalFunction, defaultIdeInfo: C_IdeSymbolInfo): C_LibNamespaceMember {
+            return C_LibNamespaceMember_Function(function, defaultIdeInfo)
         }
     }
 }
 
 private class C_LibNamespaceMember_Namespace(
     val namespace: C_LibNamespace,
+    val doc: DocSymbol,
 ): C_LibNamespaceMember() {
     override fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name) {
         val ns = namespace.toSysNsProto().toNamespace()
-        b.addNamespace(name.str, ns)
+        val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_NAMESPACE, doc = doc)
+        b.addNamespace(name.str, ns, ideInfo)
     }
 }
 
 private class C_LibNamespaceMember_Type(
-    private val typeDef: C_TypeDef,
+    private val typeDef: C_LibTypeDef,
+    private val ideInfo: C_IdeSymbolInfo,
     private val deprecated: C_Deprecated?,
 ): C_LibNamespaceMember() {
     override fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name) {
-        b.addType(name, typeDef, deprecated)
+        b.addType(name, typeDef, ideInfo, deprecated)
     }
 }
 
 private class C_LibNamespaceMember_Struct(
     private val rStruct: R_Struct,
+    private val doc: DocSymbol,
 ): C_LibNamespaceMember() {
     override fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name) {
-        b.addStruct(name.str, rStruct)
+        val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_STRUCT, doc = doc)
+        b.addStruct(name.str, rStruct, ideInfo)
     }
 }
 
 private class C_LibNamespaceMember_Property(
     private val property: C_NamespaceProperty,
+    private val ideInfo: C_IdeSymbolInfo,
 ): C_LibNamespaceMember() {
     override fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name) {
-        b.addProperty(name, property)
+        b.addProperty(name, property, ideInfo)
     }
 }
 
 private class C_LibNamespaceMember_Function(
     private val function: C_GlobalFunction,
+    private val ideInfo: C_IdeSymbolInfo,
 ): C_LibNamespaceMember() {
     override fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name) {
-        b.addFunction(name, function)
+        b.addFunction(name, function, ideInfo)
     }
 }

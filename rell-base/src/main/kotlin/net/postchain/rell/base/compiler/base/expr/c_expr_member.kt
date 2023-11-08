@@ -6,6 +6,8 @@ package net.postchain.rell.base.compiler.base.expr
 
 import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_Pos
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfoHandle
 import net.postchain.rell.base.compiler.base.core.C_Name
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.fn.C_FullCallArguments
@@ -24,7 +26,10 @@ import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.runtime.Rt_CallFrame
 import net.postchain.rell.base.runtime.Rt_Value
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
+import net.postchain.rell.base.utils.doc.DocDeclaration_EntityAttribute
+import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.doc.DocSymbolKind
+import net.postchain.rell.base.utils.doc.DocSymbolName
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
@@ -37,13 +42,11 @@ class C_MemberLink(
     val safe: Boolean,
 )
 
-abstract class C_TypeValueMember(private val ideName: R_IdeName?): C_TypeMember(ideName?.rName) {
+abstract class C_TypeValueMember(optionalName: R_Name?): C_TypeMember(optionalName) {
     abstract fun nameMsg(): C_CodeMsg
     abstract override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_TypeValueMember
 
-    open fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember {
-        throw C_NoValueExpr.errNoValue(linkPos, kindMsg(), nameMsg().msg)
-    }
+    abstract fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember
 
     open fun call(
         ctx: C_ExprContext,
@@ -53,22 +56,25 @@ abstract class C_TypeValueMember(private val ideName: R_IdeName?): C_TypeMember(
         resTypeHint: C_TypeHint,
     ): V_TypeValueMember? = null
 
-    fun compile(ctx: C_ExprContext, link: C_MemberLink): C_ExprMember {
-        val expr: C_Expr = C_ValueMemberExpr(ctx, link, this)
-        val ideInfo = ideName?.ideInfo ?: IdeSymbolInfo.UNKNOWN
-        return C_ExprMember(expr, ideInfo)
-    }
+    abstract fun compile(ctx: C_ExprContext, link: C_MemberLink, ideInfoHand: C_IdeSymbolInfoHandle): C_Expr
 }
 
 abstract class C_TypeValueMember_Value(
-    ideName: R_IdeName?,
+    private val ideName: R_IdeName?,
     val valueType: R_Type,
-): C_TypeValueMember(ideName) {
+): C_TypeValueMember(ideName?.rName) {
     final override fun isValue() = true
     final override fun isCallable() = valueType is R_FunctionType
 
     // Not supported yet.
     final override fun replaceTypeParams(rep: C_TypeMemberReplacement) = this
+
+    final override fun compile(ctx: C_ExprContext, link: C_MemberLink, ideInfoHand: C_IdeSymbolInfoHandle): C_Expr {
+        val expr: C_Expr = C_ValueMemberExpr(ctx, link, this, C_IdeSymbolInfoHandle.NOP_HANDLE)
+        val ideInfo = ideName?.ideInfo ?: C_IdeSymbolInfo.UNKNOWN
+        ideInfoHand.setIdeInfo(ideInfo)
+        return expr
+    }
 }
 
 class C_TypeValueMember_BasicAttr(
@@ -79,17 +85,17 @@ class C_TypeValueMember_BasicAttr(
 
     override fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember {
         val vAttr = attr.vAttr(ctx, linkPos)
-        return V_TypeValueMember_BasicAttr(attr.ideName, vAttr, linkPos, linkName)
+        val ideInfo = attr.ideName?.ideInfo ?: C_IdeSymbolInfo.UNKNOWN
+        return V_TypeValueMember_BasicAttr(vAttr, linkPos, linkName, ideInfo)
     }
 
     private class V_TypeValueMember_BasicAttr(
-        private val ideName: R_IdeName?,
         private val attr: V_MemberAttr,
         private val memberPos: S_Pos,
         private val memberName: C_Name?,
-    ): V_TypeValueMember(attr.type) {
+        ideInfo: C_IdeSymbolInfo,
+    ): V_TypeValueMember(attr.type, ideInfo) {
         override fun implicitAttrName() = memberName
-        override fun ideInfo() = ideName?.ideInfo ?: IdeSymbolInfo.UNKNOWN
         override fun vExprs() = immListOf<V_Expr>()
         override fun calculator() = attr.calculator()
 
@@ -105,12 +111,10 @@ class C_TypeValueMember_BasicAttr(
 }
 
 class C_TypeValueMember_Function(
-    ideName: R_IdeName,
+    private val rName: R_Name,
     private val fn: C_LibMemberFunction,
-): C_TypeValueMember(ideName) {
-    private val realIdeName = ideName
-    private val rName: R_Name = ideName.rName
-
+    private val defaultIdeInfo: C_IdeSymbolInfo,
+): C_TypeValueMember(rName) {
     override fun kindMsg() = "function"
     override fun nameMsg() = rName.str toCodeMsg rName.str
     override fun isValue() = false
@@ -118,7 +122,12 @@ class C_TypeValueMember_Function(
 
     override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_TypeValueMember {
         val fn2 = fn.replaceTypeParams(rep)
-        return if (fn2 === fn) this else C_TypeValueMember_Function(realIdeName, fn2)
+        return if (fn2 === fn) this else C_TypeValueMember_Function(rName, fn2, defaultIdeInfo)
+    }
+
+    override fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember {
+        ctx.msgCtx.error(C_NoValueExpr.errNoValue(linkPos, kindMsg(), nameMsg().msg))
+        return C_ExprUtils.errorVMember(linkPos, ideInfo = defaultIdeInfo)
     }
 
     override fun call(
@@ -146,20 +155,22 @@ class C_TypeValueMember_Function(
             }
         }
 
-        vCall ?: return C_ExprUtils.errorVMember(linkPos)
+        vCall ?: return C_ExprUtils.errorVMember(linkPos, ideInfo = defaultIdeInfo)
 
         val retType = vCall.returnType()
-        return V_TypeValueMember_FunctionCall(retType, vCall, linkPos, fn.ideInfo)
+        return V_TypeValueMember_FunctionCall(retType, vCall, linkPos)
+    }
+
+    override fun compile(ctx: C_ExprContext, link: C_MemberLink, ideInfoHand: C_IdeSymbolInfoHandle): C_Expr {
+        return C_ValueMemberExpr(ctx, link, this, ideInfoHand)
     }
 
     private class V_TypeValueMember_FunctionCall(
         type: R_Type,
         private val call: V_MemberFunctionCall,
         private val memberPos: S_Pos,
-        private val ideInfo: IdeSymbolInfo,
-    ): V_TypeValueMember(type) {
+    ): V_TypeValueMember(type, call.ideInfo) {
         override fun implicitAttrName() = null
-        override fun ideInfo() = ideInfo
         override fun postVarFacts() = call.postVarFacts()
         override fun vExprs() = call.vExprs()
         override fun globalConstantRestriction() = call.globalConstantRestriction()
@@ -271,9 +282,9 @@ class C_MemberAttr_SysProperty(
 }
 
 sealed class C_EntityAttrRef(
-        val rEntity: R_EntityDefinition,
-        val ideName: R_IdeName,
-        val type: R_Type,
+    val rEntity: R_EntityDefinition,
+    val ideName: R_IdeName,
+    val type: R_Type,
 ) {
     val attrName = ideName.rName
 
@@ -283,7 +294,7 @@ sealed class C_EntityAttrRef(
 
     companion object {
         private const val ROWID_NAME = "rowid"
-        val ROWID_IDENAME = C_LibUtils.ideName(ROWID_NAME, IdeSymbolKind.MEM_ENTITY_ATTR_ROWID)
+        val ROWID_RNAME = R_Name.of(ROWID_NAME)
         val ROWID_TYPE: R_Type = R_RowidType
 
         fun isAllowedRegularAttrName(name: String) = name != ROWID_NAME
@@ -293,9 +304,25 @@ sealed class C_EntityAttrRef(
         }
 
         fun getEntityAttrs(rEntity: R_EntityDefinition): List<C_EntityAttrRef> {
-            val rowid = immListOf(C_EntityAttrRef_Rowid(rEntity))
+            val docSymbol = makeRowidDocSymbol(rEntity)
+            val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.MEM_ENTITY_ATTR_ROWID, doc = docSymbol)
+            val rowid = C_EntityAttrRef_Rowid(rEntity, ideInfo)
+
             val attrs = rEntity.attributes.values.map { C_EntityAttrRef_Regular(rEntity, it) }
-            return (rowid + attrs).toImmList()
+            return (immListOf(rowid) + attrs).toImmList()
+        }
+
+        private fun makeRowidDocSymbol(rEntity: R_EntityDefinition): DocSymbol {
+            val docName = DocSymbolName.global(rEntity.defName.module, "${rEntity.defName.qualifiedName}.${ROWID_NAME}")
+
+            val docDec = DocDeclaration_EntityAttribute(
+                simpleName = ROWID_RNAME,
+                mType = R_RowidType.mType,
+                isMutable = false,
+                keyIndexKind = R_KeyIndexKind.KEY,
+            )
+
+            return DocSymbol(DocSymbolKind.ENTITY_ATTR, docName, null, docDec, null)
         }
     }
 }
@@ -321,7 +348,10 @@ private class C_EntityAttrRef_Regular(
     }
 }
 
-private class C_EntityAttrRef_Rowid(rEntity: R_EntityDefinition): C_EntityAttrRef(rEntity, ROWID_IDENAME, ROWID_TYPE) {
+private class C_EntityAttrRef_Rowid(
+    rEntity: R_EntityDefinition,
+    ideInfo: C_IdeSymbolInfo,
+): C_EntityAttrRef(rEntity, R_IdeName(ROWID_RNAME, ideInfo), ROWID_TYPE) {
     override fun attribute() = null
 
     override fun createDbContextAttrExpr(baseExpr: Db_TableExpr): Db_Expr {

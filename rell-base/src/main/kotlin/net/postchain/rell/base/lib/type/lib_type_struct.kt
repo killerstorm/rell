@@ -4,6 +4,7 @@
 
 package net.postchain.rell.base.lib.type
 
+import net.postchain.gtv.Gtv
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.utils.C_Errors
@@ -19,6 +20,7 @@ import net.postchain.rell.base.model.expr.R_StructMemberExpr
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.utils.PostchainGtvUtils
+import net.postchain.rell.base.utils.doc.DocCode
 import net.postchain.rell.base.utils.toImmList
 
 object Lib_Type_Struct {
@@ -46,8 +48,10 @@ object Lib_Type_Struct {
                 ms?.mutable?.type
             }
 
-            strCode { t ->
-                "struct<mutable ${t.strCode()}>"
+            docCode { t ->
+                DocCode.builder()
+                    .keyword("struct").raw("<").keyword("mutable").raw(" ").append(t).raw(">")
+                    .build()
             }
 
             supertypeStrategySpecial { mType ->
@@ -57,7 +61,7 @@ object Lib_Type_Struct {
 
             function("to_immutable", result = "immutable_mirror_struct<T>", pure = true) {
                 body { a ->
-                    toMutableOrImmutable(a, false, "to_mutable")
+                    toMutableOrImmutable(a, false, "to_immutable")
                 }
             }
         }
@@ -75,8 +79,10 @@ object Lib_Type_Struct {
                 ms?.immutable?.type
             }
 
-            strCode { t ->
-                "struct<${t.strCode()}>"
+            docCode { t ->
+                DocCode.builder()
+                    .keyword("struct").raw("<").append(t).raw(">")
+                    .build()
             }
 
             supertypeStrategySpecial { mType ->
@@ -120,7 +126,7 @@ object Lib_Type_Struct {
                 Lib_Type_Gtv.makeToGtvBody(this, pretty = true)
             }
 
-            staticFunction("from_bytes", result = "T") {
+            staticFunction("from_bytes", result = "T", pure = true) {
                 alias("fromBytes", C_MessageType.ERROR)
                 param(type = "byte_array")
 
@@ -128,7 +134,6 @@ object Lib_Type_Struct {
                     val resType = fnBodyMeta.rResultType
                     Lib_Type_Gtv.validateFromGtvBody(this, resType)
 
-                    pure(resType.completeFlags().pure)
                     bodyContext { ctx, a ->
                         val bytes = a.asByteArray()
                         Rt_Utils.wrapErr("fn:struct:from_bytes") {
@@ -144,13 +149,13 @@ object Lib_Type_Struct {
 
             // Right from_gtv*() functions are added by default, and here we add deprecated functions for compatibility
             // (they used to exist only for structs, not for all types).
-            staticFunction("fromGTXValue", result = "T") {
+            staticFunction("fromGTXValue", result = "T", pure = true) {
                 deprecated(newName = "from_gtv")
                 param(type = "gtv")
                 Lib_Type_Gtv.makeFromGtvBody(this, pretty = false)
             }
 
-            staticFunction("fromPrettyGTXValue", result = "T") {
+            staticFunction("fromPrettyGTXValue", result = "T", pure = true) {
                 deprecated(newName = "from_gtv_pretty")
                 param(type = "gtv")
                 Lib_Type_Gtv.makeFromGtvBody(this, pretty = true)
@@ -163,6 +168,21 @@ object Lib_Type_Struct {
             val mem = C_MemberAttr_RegularStructAttr(it)
             C_TypeValueMember_BasicAttr(mem)
         }.toImmList()
+    }
+
+    fun decodeOperation(v: Rt_Value): Pair<R_MountName, List<Gtv>> {
+        val sv = v.asStruct()
+
+        val structType = sv.type()
+        val op = Rt_Utils.checkNotNull(structType.struct.mirrorStructs?.operation) {
+            // Must not happen, checking for extra safety.
+            "bad_struct_type:${sv.type()}" toCodeMsg "Wrong struct type: ${sv.type()}"
+        }
+
+        val rtArgs = structType.struct.attributesList.map { sv.get(it.index) }
+        val gtvArgs = rtArgs.map { it.type().rtToGtv(it, false) }
+
+        return op.mountName to gtvArgs
     }
 
     private class C_MemberAttr_RegularStructAttr(attr: R_Attribute): C_MemberAttr_StructAttr(attr.type, attr) {

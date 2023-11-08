@@ -94,7 +94,7 @@ class MirrorStructOperationTest: BaseRellTest(false) {
         chkCompile("operation op2(a: integer, b: struct<op2>) {}", "OK")
     }
 
-    @Test fun testToOperation() {
+    @Test fun testToTestOp() {
         tst.testLib = true
         def("operation new_user(name, rating: integer) {}")
         chk("struct<new_user>('Bob',123).to_test_op()", """op[new_user("Bob",123)]""")
@@ -102,6 +102,17 @@ class MirrorStructOperationTest: BaseRellTest(false) {
         tst.testLib = false
         chk("struct<new_user>('Bob',123).to_test_op()", "ct_err:unknown_member:[struct<new_user>]:to_test_op")
         chk("struct<mutable new_user>('Bob',123).to_test_op()", "ct_err:unknown_member:[struct<mutable new_user>]:to_test_op")
+    }
+
+    @Test fun testToGtxOperation() {
+        def("operation new_user(name, rating: integer) {}")
+
+        chk("_type_of(struct<new_user>('Bob',123).to_gtx_operation())", "text[gtx_operation]")
+        chk("_type_of(struct<mutable new_user>('Bob',123).to_gtx_operation())", "text[gtx_operation]")
+
+        val expected = """gtx_operation[name=text[new_user],args=list<gtv>[gtv["Bob"],gtv[123]]]"""
+        chk("struct<new_user>('Bob',123).to_gtx_operation()", expected)
+        chk("struct<mutable new_user>('Bob',123).to_gtx_operation()", expected)
     }
 
     @Test fun testMutableBasic() {

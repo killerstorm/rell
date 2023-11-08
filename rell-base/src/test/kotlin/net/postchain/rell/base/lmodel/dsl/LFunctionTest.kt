@@ -4,6 +4,7 @@
 
 package net.postchain.rell.base.lmodel.dsl
 
+import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.lmodel.L_ParamArity
 import net.postchain.rell.base.runtime.Rt_UnitValue
 import org.junit.Test
@@ -152,6 +153,37 @@ class LFunctionTest: BaseLTest() {
             "function f(): anything",
             "function g(): anything",
             "function h(): anything",
+        )
+    }
+
+    @Test fun testPure() {
+        val bodyFalse = C_SysFunctionBody(pure = false, { _, _ -> Rt_UnitValue }, null)
+        val bodyTrue = C_SysFunctionBody(pure = true, { _, _ -> Rt_UnitValue }, null)
+
+        val mod = makeModule("test") {
+            function("f", result = "anything") { body { -> Rt_UnitValue } }
+            function("g", result = "anything", pure = true) { body { -> Rt_UnitValue } }
+            function("h", result = "anything", pure = false) { body { -> Rt_UnitValue } }
+            function("p", result = "anything") { bodyRaw(bodyTrue) }
+            function("q", result = "anything") { bodyRaw(bodyFalse) }
+            function("r", result = "anything", pure = true) { bodyRaw(bodyTrue) }
+            function("s", result = "anything", pure = false) { bodyRaw(bodyFalse) }
+            chkErr("LDE:body:pure_diff:true:false") {
+                function("t", result = "anything", pure = true) { bodyRaw(bodyFalse) }
+            }
+            chkErr("LDE:body:pure_diff:false:true") {
+                function("u", result = "anything", pure = false) { bodyRaw(bodyTrue) }
+            }
+        }
+
+        chkDefs(mod,
+            "function f(): anything",
+            "pure function g(): anything",
+            "function h(): anything",
+            "pure function p(): anything",
+            "function q(): anything",
+            "pure function r(): anything",
+            "function s(): anything",
         )
     }
 }

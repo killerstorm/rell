@@ -12,16 +12,15 @@ import net.postchain.rell.base.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
-import net.postchain.rell.base.lmodel.L_Module
-import net.postchain.rell.base.lmodel.L_Type
-import net.postchain.rell.base.lmodel.L_TypeDef
-import net.postchain.rell.base.lmodel.L_TypeUtils
+import net.postchain.rell.base.lmodel.*
 import net.postchain.rell.base.lmodel.dsl.Ld_ModuleDsl
 import net.postchain.rell.base.model.R_CtErrorType
 import net.postchain.rell.base.model.R_EntityType
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.mtype.*
 import net.postchain.rell.base.utils.LazyPosString
+import net.postchain.rell.base.utils.checkEquals
+import net.postchain.rell.base.utils.doc.DocCode
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmMap
 
@@ -86,36 +85,88 @@ sealed class C_LibType(val mType: M_Type) {
     abstract fun getValueMembers(): C_LibTypeMembers<C_TypeValueMember>
 
     companion object {
-        fun make(rType: R_Type): C_LibType = make(L_TypeUtils.makeMType(rType))
-        fun make(mType: M_Type): C_LibType = C_LibType_MType(mType)
+        fun make(
+            rType: R_Type,
+            doc: DocCode,
+            constructorFn: C_GlobalFunction? = null,
+            staticMembers: List<C_TypeStaticMember> = immListOf(),
+            valueMembers: Lazy<List<C_TypeValueMember>> = lazyOf(immListOf()),
+        ): C_LibType {
+            val docCodeStrategy = L_TypeDefDocCodeStrategy { doc }
+            val mType = L_TypeUtils.makeMType(rType, null, docCodeStrategy)
+            return make(mType, constructorFn = constructorFn, staticMembers = staticMembers, valueMembers = valueMembers)
+        }
 
-        fun make(typeDef: C_LibTypeDef, vararg args: R_Type): C_LibType {
+        fun make(
+            mType: M_Type,
+            constructorFn: C_GlobalFunction? = null,
+            staticMembers: List<C_TypeStaticMember> = immListOf(),
+            valueMembers: Lazy<List<C_TypeValueMember>> = lazyOf(immListOf()),
+        ): C_LibType {
+            return C_LibType_MType(
+                mType,
+                constructorFn = constructorFn,
+                staticMembers = staticMembers,
+                valueMembers = valueMembers,
+            )
+        }
+
+        fun make(
+            typeDef: C_LibTypeDef,
+            vararg args: R_Type,
+            constructorFn: C_GlobalFunction? = null,
+            valueMembers: Lazy<List<C_TypeValueMember>> = lazyOf(immListOf()),
+        ): C_LibType {
+            checkEquals(args.size, typeDef.mGenericType.params.size) {
+                "Wrong number of type arguments for '${typeDef.typeName}'"
+            }
             val mArgs = args.map { it.mType }
             val lType = L_Type.make(typeDef.lTypeDef, mArgs)
-            return C_LibType_TypeDef(typeDef, lType)
+            return C_LibType_TypeDef(typeDef, lType, extraConstructor = constructorFn, extraValueMembers = valueMembers)
         }
     }
 }
 
-private class C_LibType_MType(mType: M_Type): C_LibType(mType) {
-    override fun hasConstructor() = false
-    override fun getConstructor() = null
-    override fun getStaticMembers() = C_LibTypeMembers.EMPTY_STATIC
-    override fun getValueMembers() = C_LibTypeMembers.EMPTY_VALUE
+private class C_LibType_MType(
+    mType: M_Type,
+    private val constructorFn: C_GlobalFunction?,
+    staticMembers: List<C_TypeStaticMember>,
+    valueMembers: Lazy<List<C_TypeValueMember>>,
+): C_LibType(mType) {
+    private val staticMembers: C_LibTypeMembers<C_TypeStaticMember> = C_LibTypeMembers.simple(staticMembers)
+
+    private val valueMembersLazy: C_LibTypeMembers<C_TypeValueMember> by lazy {
+        C_LibTypeMembers.simple(valueMembers.value)
+    }
+
+    override fun hasConstructor() = constructorFn != null
+    override fun getConstructor() = constructorFn
+    override fun getStaticMembers() = staticMembers
+    override fun getValueMembers() = valueMembersLazy
 }
 
 private class C_LibType_TypeDef(
     private val typeDef: C_LibTypeDef,
     private val lType: L_Type,
+    private val extraConstructor: C_GlobalFunction?,
+    private val extraValueMembers: Lazy<List<C_TypeValueMember>>,
 ): C_LibType(lType.mType) {
     private val constructorLazy: C_GlobalFunction? by lazy {
         C_LibAdapter.makeConstructor(lType)
     }
 
-    override fun hasConstructor() = constructorLazy != null
-    override fun getConstructor() = constructorLazy
+    private val valueMembersLazy: C_LibTypeMembers<C_TypeValueMember> by lazy {
+        val extraMems = extraValueMembers.value
+        if (extraMems.isEmpty()) typeDef.valueMembers else {
+            val extraValueMembersTbl = C_LibTypeMembers.simple(extraMems)
+            C_LibTypeMembers.combined(listOf(extraValueMembersTbl, typeDef.valueMembers))
+        }
+    }
+
+    override fun hasConstructor() = extraConstructor != null || constructorLazy != null
+    override fun getConstructor() = extraConstructor ?: constructorLazy
     override fun getStaticMembers() = typeDef.staticMembers
-    override fun getValueMembers() = typeDef.valueMembers
+    override fun getValueMembers() = valueMembersLazy
 }
 
 sealed class C_TypeDef {
@@ -134,7 +185,7 @@ sealed class C_TypeDef {
 private class C_RTypeDef(
     private val rType: R_Type,
 ): C_TypeDef() {
-    override fun hasConstructor() = rType.hasConstructor()
+    override fun hasConstructor() = false
     override fun isEntity() = rType is R_EntityType
     override fun compileExpr(msgCtx: C_MessageContext, pos: S_Pos): C_Expr = C_SpecificTypeExpr(pos, rType)
 
@@ -164,11 +215,15 @@ class C_LibTypeDef(
     override fun hasConstructor() = rawConstructor != null
 
     override fun compileExpr(msgCtx: C_MessageContext, pos: S_Pos): C_Expr {
+        return compileExprLibType(msgCtx, pos, C_UniqueDefaultIdeInfoPtr())
+    }
+
+    fun compileExprLibType(msgCtx: C_MessageContext, pos: S_Pos, ideInfoPtr: C_UniqueDefaultIdeInfoPtr): C_Expr {
         return if (mGenericType.params.isEmpty()) {
             val rType = getRType(msgCtx, pos, immListOf())
-            C_SpecificTypeExpr(pos, rType)
+            C_SpecificTypeExpr(pos, rType, ideInfoPtr)
         } else {
-            C_RawGenericTypeExpr(pos, this)
+            C_RawGenericTypeExpr(pos, this, ideInfoPtr)
         }
     }
 
@@ -252,14 +307,18 @@ class C_LibTypeDef(
 private class C_RawGenericTypeExpr(
     private val pos: S_Pos,
     private val typeDef: C_LibTypeDef,
+    private val ideInfoPtr: C_UniqueDefaultIdeInfoPtr,
 ): C_NoValueExpr() {
     override fun startPos() = pos
 
-    override fun member(ctx: C_ExprContext, memberName: C_Name, exprHint: C_ExprHint): C_ExprMember {
+    override fun member(ctx: C_ExprContext, memberNameHand: C_NameHandle, exprHint: C_ExprHint): C_Expr {
+        ideInfoPtr.setDefault()
+        val memberName = memberNameHand.name
         val nameCode = "[${typeDef.lTypeDef.qualifiedName}]:$memberName"
         val nameMsg = "${typeDef.typeName}.$memberName"
         C_Errors.errUnknownName(ctx.msgCtx, pos, nameCode, nameMsg)
-        return C_ExprUtils.errorMember(ctx, memberName.pos)
+        memberNameHand.setIdeInfo(C_IdeSymbolInfo.UNKNOWN)
+        return C_ExprUtils.errorExpr(ctx, memberName.pos)
     }
 
     override fun isCallable(): Boolean {
@@ -268,11 +327,17 @@ private class C_RawGenericTypeExpr(
 
     override fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): C_Expr {
         val fn = typeDef.rawConstructor
-        // Handle no-constructor case: super throws error; TODO better handling
-        fn ?: return super.call(ctx, pos, args, resTypeHint)
+        if (fn == null) {
+            ideInfoPtr.setDefault()
+            // Handle no-constructor case: super throws error; TODO better handling
+            return super.call(ctx, pos, args, resTypeHint)
+        }
 
         val lazyName = LazyPosString.of(this.pos) { typeDef.typeName }
-        val vExpr = fn.compileCall(ctx, lazyName, args, resTypeHint).vExpr()
+        val vCall = fn.compileCall(ctx, lazyName, args, resTypeHint)
+        ideInfoPtr.setIdeInfoOrDefault(vCall.ideInfo)
+
+        val vExpr = vCall.vExpr()
         return C_ValueExpr(vExpr)
     }
 

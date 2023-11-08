@@ -173,7 +173,9 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         throw C_Errors.errBadDestination(pos)
     }
 
-    fun member(ctx: C_ExprContext, memberName: C_Name, safe: Boolean, exprHint: C_ExprHint): C_ExprMember {
+    fun member(ctx: C_ExprContext, memberNameHand: C_NameHandle, safe: Boolean, exprHint: C_ExprHint): C_Expr {
+        val memberName = memberNameHand.name
+
         if (safe) {
             if (asNullable().unwrap().type !is R_NullableType && type.isNotError()) {
                 val typeStr = type.strCode()
@@ -191,21 +193,26 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
 
         val members = ctx.typeMgr.getValueMembers(selfType, memberName.rName)
         val member = C_TypeMember.getMember(ctx.msgCtx, members, exprHint, memberName, selfType, "type_value_member")
-        member ?: return C_ExprUtils.errorMember(ctx, memberName.pos)
 
-        return member0(ctx, selfType, memberName, member, safe && (type is R_NullableType), exprHint)
+        if (member == null) {
+            memberNameHand.setIdeInfo(C_IdeSymbolInfo.UNKNOWN)
+            return C_ExprUtils.errorExpr(ctx, memberName.pos)
+        }
+
+        return member0(ctx, selfType, memberNameHand, member, safe && (type is R_NullableType), exprHint)
     }
 
     protected open fun member0(
         ctx: C_ExprContext,
         selfType: R_Type,
-        memberName: C_Name,
+        memberNameHand: C_NameHandle,
         memberValue: C_TypeValueMember,
         safe: Boolean,
         exprHint: C_ExprHint,
-    ): C_ExprMember {
+    ): C_Expr {
+        val memberName = memberNameHand.name
         val link = C_MemberLink(this, selfType, memberName.pos, memberName, safe)
-        return memberValue.compile(ctx, link)
+        return memberValue.compile(ctx, link, memberNameHand)
     }
 
     open fun call(ctx: C_ExprContext, pos: S_Pos, args: List<S_CallArgument>, resTypeHint: C_TypeHint): V_Expr {
@@ -275,5 +282,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
     open fun globalConstantId(): R_GlobalConstantId? = null
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
     open fun asNullable(): V_ExprWrapper = asWrapper()
+    open fun getDefMeta(): C_ExprDefMeta? = null
+
     fun asWrapper(): V_ExprWrapper = V_ExprWrapper(msgCtx, this)
 }

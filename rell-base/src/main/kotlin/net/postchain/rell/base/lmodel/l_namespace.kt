@@ -7,11 +7,16 @@ package net.postchain.rell.base.lmodel
 import com.google.common.collect.Iterables
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_QualifiedName
+import net.postchain.rell.base.utils.doc.DocDefinition
+import net.postchain.rell.base.utils.doc.DocSymbol
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
 
-sealed class L_NamespaceMember(val qualifiedName: R_QualifiedName) {
+sealed class L_NamespaceMember(
+    val qualifiedName: R_QualifiedName,
+    override val docSymbol: DocSymbol,
+): DocDefinition {
     val simpleName: R_Name = qualifiedName.last
 
     abstract fun strCode(): String
@@ -86,6 +91,12 @@ class L_Namespace(members: List<L_NamespaceMember>) {
         return Iterables.concat(extensionTypes, subTypes)
     }
 
+    fun getDocMemberOrNull(name: String): DocDefinition? {
+        val rName = R_Name.of(name)
+        val mem = membersMap[rName]
+        return mem
+    }
+
     companion object {
         val EMPTY = L_Namespace(immListOf())
     }
@@ -94,6 +105,11 @@ class L_Namespace(members: List<L_NamespaceMember>) {
 class L_NamespaceMember_Namespace(
     qualifiedName: R_QualifiedName,
     val namespace: L_Namespace,
-): L_NamespaceMember(qualifiedName) {
+    doc: DocSymbol,
+): L_NamespaceMember(qualifiedName, doc) {
     override fun strCode() = "namespace $qualifiedName"
+
+    override fun getDocMember(name: String): DocDefinition? {
+        return namespace.getDocMemberOrNull(name)
+    }
 }

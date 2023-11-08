@@ -193,5 +193,13 @@ fun <K, V> MutableMap<K, V>.putAllAbsent(map: Map<K, V>) {
 
 fun <T> queueOf(): Queue<T> = ArrayDeque()
 
+fun <T> Iterable<T>.toPair(): Pair<T, T> {
+    val iter = this.iterator()
+    val first = iter.next()
+    val second = iter.next()
+    check(!iter.hasNext())
+    return first to second
+}
+
 // Needs to be in a different file than List<Gtv>.toGtv() because of a name conflict...
 fun List<String>.toGtv(): Gtv = GtvFactory.gtv(this.map { it.toGtv() })

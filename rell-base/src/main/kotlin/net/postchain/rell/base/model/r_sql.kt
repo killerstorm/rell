@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.model
@@ -9,7 +9,9 @@ import net.postchain.rell.base.runtime.Rt_ChainSqlMapping
 import net.postchain.rell.base.runtime.Rt_SqlContext
 import net.postchain.rell.base.sql.SqlConstants
 
-abstract class R_EntitySqlMapping {
+abstract class R_EntitySqlMapping(val mountName: R_MountName) {
+    abstract val metaName: String
+
     abstract fun rowidColumn(): String
     abstract fun autoCreateTable(): Boolean
     abstract fun isSystemEntity(): Boolean
@@ -35,7 +37,9 @@ abstract class R_EntitySqlMapping {
     }
 }
 
-class R_EntitySqlMapping_Regular(private val mountName: R_MountName): R_EntitySqlMapping() {
+class R_EntitySqlMapping_Regular(mountName: R_MountName): R_EntitySqlMapping(mountName) {
+    override val metaName = mountName.str()
+
     override fun rowidColumn() = SqlConstants.ROWID_COLUMN
     override fun autoCreateTable() = true
     override fun isSystemEntity() = false
@@ -52,7 +56,12 @@ class R_EntitySqlMapping_Regular(private val mountName: R_MountName): R_EntitySq
     }
 }
 
-class R_EntitySqlMapping_External(private val mountName: R_MountName, private val chain: R_ExternalChainRef): R_EntitySqlMapping() {
+class R_EntitySqlMapping_External(
+    mountName: R_MountName,
+    private val chain: R_ExternalChainRef,
+): R_EntitySqlMapping(mountName) {
+    override val metaName = mountName.str()
+
     override fun rowidColumn() = SqlConstants.ROWID_COLUMN
     override fun autoCreateTable() = false
     override fun isSystemEntity() = false
@@ -94,9 +103,11 @@ class R_EntitySqlMapping_External(private val mountName: R_MountName, private va
 }
 
 abstract class R_EntitySqlMapping_TxBlk(
-        private val rowid: String,
-        protected val chain: R_ExternalChainRef?
-): R_EntitySqlMapping() {
+    tableName: String,
+    final override val metaName: String,
+    private val rowid: String,
+    protected val chain: R_ExternalChainRef?,
+): R_EntitySqlMapping(R_MountName.of(tableName)) {
     final override fun rowidColumn() = rowid
     final override fun autoCreateTable() = false
     final override fun isSystemEntity() = true
@@ -117,7 +128,9 @@ abstract class R_EntitySqlMapping_TxBlk(
     }
 }
 
-class R_EntitySqlMapping_Transaction(chain: R_ExternalChainRef?): R_EntitySqlMapping_TxBlk("tx_iid", chain) {
+class R_EntitySqlMapping_Transaction(
+    chain: R_ExternalChainRef?,
+): R_EntitySqlMapping_TxBlk(SqlConstants.TRANSACTIONS_TABLE, "transaction", "tx_iid", chain) {
     override fun table(chainMapping: Rt_ChainSqlMapping) = chainMapping.transactionsTable
 
     override fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr? {
@@ -140,7 +153,9 @@ class R_EntitySqlMapping_Transaction(chain: R_ExternalChainRef?): R_EntitySqlMap
     }
 }
 
-class R_EntitySqlMapping_Block(chain: R_ExternalChainRef?): R_EntitySqlMapping_TxBlk("block_iid", chain) {
+class R_EntitySqlMapping_Block(
+    chain: R_ExternalChainRef?,
+): R_EntitySqlMapping_TxBlk(SqlConstants.BLOCKS_TABLE, "block", "block_iid", chain) {
     override fun table(chainMapping: Rt_ChainSqlMapping) = chainMapping.blocksTable
 
     override fun extraWhereExpr0(entity: R_EntityDefinition, entityExpr: Db_EntityExpr, chain: R_ExternalChainRef?): Db_Expr? {

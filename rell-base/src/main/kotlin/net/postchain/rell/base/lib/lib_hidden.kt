@@ -6,13 +6,20 @@ package net.postchain.rell.base.lib
 
 import net.postchain.rell.base.compiler.ast.S_Expr
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
+import net.postchain.rell.base.compiler.base.expr.C_ExprDefMeta
+import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.base.compiler.base.lib.C_LibModule
-import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunction
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunctionBody
 import net.postchain.rell.base.compiler.vexpr.V_ConstantValueExpr
-import net.postchain.rell.base.compiler.vexpr.V_ExprInfo
-import net.postchain.rell.base.compiler.vexpr.V_GlobalFunctionCall
+import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.model.R_BooleanType
+import net.postchain.rell.base.model.R_NullableType
+import net.postchain.rell.base.model.R_TextType
+import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.runtime.Rt_Exception
+import net.postchain.rell.base.runtime.Rt_NullValue
 import net.postchain.rell.base.runtime.Rt_TextValue
+import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.base.utils.LazyPosString
 import net.postchain.rell.base.utils.checkEquals
@@ -39,6 +46,9 @@ object Lib_RellHidden {
                     throw Rt_Exception.common("throw:$code", msg)
                 }
             }
+
+            function("mount_name", C_SysFn_MountName)
+            function("external_chain", C_SysFn_ExternalChain)
         }
 
         function("_type_of", C_SysFn_TypeOf)
@@ -87,10 +97,10 @@ object Lib_RellHidden {
     }
 }
 
-private object C_SysFn_TypeOf: C_SpecialLibGlobalFunction() {
+private object C_SysFn_TypeOf: C_SpecialLibGlobalFunctionBody() {
     override fun paramCount() = 1 .. 1
 
-    override fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_GlobalFunctionCall {
+    override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr {
         checkEquals(1, args.size)
 
         val arg = args[0]
@@ -101,8 +111,43 @@ private object C_SysFn_TypeOf: C_SpecialLibGlobalFunction() {
         val str = type.strCode()
         val value = Rt_TextValue(str)
 
-        val exprInfo = V_ExprInfo.simple(value.type(), dependsOnAtExprs = vArg.info.dependsOnAtExprs)
-        val vExpr = V_ConstantValueExpr(ctx, name.pos, value, exprInfo)
-        return V_GlobalFunctionCall(vExpr)
+        return V_ConstantValueExpr(ctx, name.pos, value, dependsOnAtExprs = vArg.info.dependsOnAtExprs)
+    }
+}
+
+private abstract class C_SysFn_BaseMeta(private val resultType: R_Type): C_SpecialLibGlobalFunctionBody() {
+    final override fun paramCount() = 1 .. 1
+
+    protected abstract fun compileCall0(meta: C_ExprDefMeta): Rt_Value?
+
+    final override fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr {
+        checkEquals(1, args.size)
+
+        val arg = args[0]
+        val cArg = arg.compile(ctx)
+        val meta = cArg.getDefMeta()
+
+        val value = if (meta == null) null else compileCall0(meta)
+
+        if (value == null) {
+            cArg.value()
+            ctx.msgCtx.error(name.pos, "expr_call:bad_arg:${name.str}", "Bad argument for function '${name.str}'")
+            return C_ExprUtils.errorVExpr(ctx, name.pos, R_BooleanType)
+        }
+
+        return V_ConstantValueExpr(ctx, name.pos, value, resultType)
+    }
+}
+
+private object C_SysFn_MountName: C_SysFn_BaseMeta(R_TextType) {
+    override fun compileCall0(meta: C_ExprDefMeta): Rt_Value? {
+        return if (meta.mountName == null) null else Rt_TextValue(meta.mountName.str())
+    }
+}
+
+private object C_SysFn_ExternalChain: C_SysFn_BaseMeta(R_NullableType(R_TextType)) {
+    override fun compileCall0(meta: C_ExprDefMeta): Rt_Value? {
+        meta.externalChain ?: return null
+        return if (meta.externalChain.value == null) Rt_NullValue else Rt_TextValue(meta.externalChain.value)
     }
 }

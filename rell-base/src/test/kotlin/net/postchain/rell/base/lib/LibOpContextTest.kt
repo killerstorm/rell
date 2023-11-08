@@ -154,6 +154,20 @@ class LibOpContextTest: BaseRellTest(false) {
         )
     }
 
+    @Test fun testGetCurrentOperation() {
+        val ops = listOf("""foo[123,"Bob"]""", """bar["Alice",456]""")
+        tst.opContext = opContext(ops = ops)
+        chkFn("= _type_of(op_context.get_current_operation());", "text[gtx_operation]")
+
+        tst.opContext = opContext(ops = ops, opIndex = 0)
+        chkFn("= op_context.get_current_operation();",
+            """gtx_operation[name=text[foo],args=list<gtv>[gtv[123],gtv["Bob"]]]""")
+
+        tst.opContext = opContext(ops = ops, opIndex = 1)
+        chkFn("= op_context.get_current_operation();",
+            """gtx_operation[name=text[bar],args=list<gtv>[gtv["Alice"],gtv[456]]]""")
+    }
+
     @Test fun testEmitEvent() {
         tst.opContext = opContext()
         chkOp("op_context.emit_event('bob', gtv.from_json('{}'));", "rt_err:not_supported")

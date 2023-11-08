@@ -4,7 +4,7 @@
 
 package net.postchain.rell.base.lib.type
 
-import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.lib.Lib_Math
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
@@ -24,11 +24,11 @@ import java.util.*
 object Lib_Type_BigInteger {
     val FromInteger_Db = Db_SysFunction.cast("big_integer(integer)", Lib_BigIntegerMath.SQL_TYPE_STR)
 
-    val FromInteger = C_SysFunction.simple(FromInteger_Db, pure = true) { a ->
+    val FromInteger = C_SysFunctionBody.simple(FromInteger_Db, pure = true) { a ->
         calcFromInteger(a)
     }
 
-    private val FromText_1 = C_SysFunction.simple(
+    private val FromText_1 = C_SysFunctionBody.simple(
         Db_SysFunction.simple("big_integer(text)", SqlConstants.FN_BIGINTEGER_FROM_TEXT),
         pure = true
     ) { a ->
@@ -47,12 +47,12 @@ object Lib_Type_BigInteger {
 
             constructor {
                 param(type = "text")
-                bodyFunction(FromText_1)
+                bodyRaw(FromText_1)
             }
 
             constructor {
                 param(type = "integer")
-                bodyFunction(FromInteger)
+                bodyRaw(FromInteger)
             }
 
             staticFunction("from_bytes", result = "big_integer", pure = true) {
@@ -75,7 +75,7 @@ object Lib_Type_BigInteger {
 
             staticFunction("from_text", result = "big_integer") {
                 param(type = "text")
-                bodyFunction(FromText_1)
+                bodyRaw(FromText_1)
             }
 
             staticFunction("from_text", result = "big_integer", pure = true) {
@@ -100,12 +100,12 @@ object Lib_Type_BigInteger {
             }
 
             function("abs", "big_integer") {
-                bodyFunction(Lib_Math.Abs_BigInteger)
+                bodyRaw(Lib_Math.Abs_BigInteger)
             }
 
             function("min", "big_integer") {
                 param("big_integer")
-                bodyFunction(Lib_Math.Min_BigInteger)
+                bodyRaw(Lib_Math.Min_BigInteger)
             }
 
             function("min", "decimal", pure = true) {
@@ -121,7 +121,7 @@ object Lib_Type_BigInteger {
 
             function("max", "big_integer") {
                 param("big_integer")
-                bodyFunction(Lib_Math.Max_BigInteger)
+                bodyRaw(Lib_Math.Max_BigInteger)
             }
 
             function("max", "decimal", pure = true) {
@@ -169,7 +169,7 @@ object Lib_Type_BigInteger {
             }
 
             function("to_decimal", "decimal") {
-                bodyFunction(Lib_Type_Decimal.FromBigInteger)
+                bodyRaw(Lib_Type_Decimal.FromBigInteger)
             }
 
             function("to_hex", "text", pure = true) {

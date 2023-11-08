@@ -9,8 +9,8 @@ import net.postchain.rell.base.compiler.base.core.C_MountContext
 import net.postchain.rell.base.compiler.base.core.C_NamespaceContext
 import net.postchain.rell.base.compiler.base.modifier.*
 import net.postchain.rell.base.compiler.base.module.C_MidModuleFile
-import net.postchain.rell.base.compiler.base.module.C_MidModuleHeader
 import net.postchain.rell.base.compiler.base.module.C_ModuleUtils
+import net.postchain.rell.base.compiler.base.module.C_SourceModuleHeader
 import net.postchain.rell.base.compiler.base.module.S_FileContext
 import net.postchain.rell.base.compiler.base.namespace.C_NsAsm_ComponentAssembler
 import net.postchain.rell.base.compiler.base.namespace.C_UserNsProtoBuilder
@@ -23,14 +23,14 @@ import net.postchain.rell.base.utils.ide.IdeOutlineTreeBuilder
 import net.postchain.rell.base.utils.toImmSet
 
 class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
-    fun compile(ctx: C_ModifierContext): C_MidModuleHeader {
+    fun compile(ctx: C_ModifierContext): C_SourceModuleHeader {
         val mods = C_ModifierValues(C_ModifierTargetType.MODULE, null)
         val modAbstract = mods.field(C_ModifierFields.ABSTRACT)
         val modExternal = mods.field(C_ModifierFields.EXTERNAL_MODULE)
         val modMount = mods.field(C_ModifierFields.MOUNT)
         val modTest = mods.field(C_ModifierFields.TEST)
+        val docModifiers = modifiers.compile(ctx, mods)
 
-        modifiers.compile(ctx, mods)
         C_AnnUtils.checkModsZeroOne(ctx.msgCtx, modAbstract, modTest)
         C_AnnUtils.checkModsZeroOne(ctx.msgCtx, modMount, modTest)
 
@@ -39,7 +39,7 @@ class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
         val external = modExternal.hasValue()
         val test = modTest.hasValue()
 
-        return C_MidModuleHeader(pos, mount, abstractPos, external, test)
+        return C_SourceModuleHeader(pos, mount, abstractPos, external, test, docModifiers)
     }
 
     fun ideIsTestFile(): Boolean {
@@ -50,7 +50,7 @@ class S_ModuleHeader(val modifiers: S_Modifiers, val pos: S_Pos) {
 class S_RellFile(val header: S_ModuleHeader?, val definitions: List<S_Definition>): S_Node() {
     val startPos = header?.pos ?: definitions.firstOrNull()?.startPos
 
-    fun compileHeader(modifierCtx: C_ModifierContext): C_MidModuleHeader? {
+    fun compileHeader(modifierCtx: C_ModifierContext): C_SourceModuleHeader? {
         return header?.compile(modifierCtx)
     }
 

@@ -7,14 +7,9 @@ package net.postchain.rell.base.lmodel.dsl
 import net.postchain.rell.base.compiler.base.utils.C_RNamePath
 import net.postchain.rell.base.lmodel.L_Module
 import net.postchain.rell.base.model.R_ModuleName
+import net.postchain.rell.base.utils.doc.*
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
-
-class Ld_ModulePart(private val block: Ld_ModuleDsl.() -> Unit) {
-    fun make(dsl: Ld_ModuleDsl) {
-        block(dsl)
-    }
-}
 
 @RellLibDsl
 interface Ld_ModuleDsl: Ld_NamespaceDsl {
@@ -84,10 +79,19 @@ private class Ld_ModuleDslBuilder(
         val finishCtx = declareCtx.finish(imports.toImmMap())
         val lNs = nsDeclaration.finish(finishCtx)
 
+        val doc = DocSymbol(
+            kind = DocSymbolKind.MODULE,
+            symbolName = DocSymbolName.module(moduleName.str()),
+            mountName = null,
+            declaration = DocDeclaration_Module(DocModifiers.NONE),
+            comment = null,
+        )
+
         return L_Module(
             moduleName = moduleName,
             namespace = lNs,
             allImports = allImports.values.sortedBy { it.moduleName }.toImmList(),
+            docSymbol = doc,
         )
     }
 }

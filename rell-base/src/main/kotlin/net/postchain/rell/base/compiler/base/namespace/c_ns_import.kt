@@ -6,14 +6,13 @@ package net.postchain.rell.base.compiler.base.namespace
 
 import com.google.common.collect.Multimap
 import net.postchain.rell.base.compiler.base.core.C_DefinitionName
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.core.C_MessageContext
 import net.postchain.rell.base.compiler.base.core.C_Name
 import net.postchain.rell.base.compiler.base.module.C_ModuleKey
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.utils.*
-import net.postchain.rell.base.utils.ide.IdeGlobalSymbolLink
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import java.util.*
 
 class C_NsImp_Namespace(directDefs: Map<R_Name, C_NsImp_Def>, importDefs: Multimap<R_Name, C_NsImp_Def>) {
@@ -30,7 +29,7 @@ class C_NsImp_Def_Simple(val item: C_NamespaceItem): C_NsImp_Def()
 class C_NsImp_Def_Namespace(
     private val getter: LateGetter<C_NsImp_Namespace>,
     val defName: C_DefinitionName,
-    val ideInfo: IdeSymbolInfo,
+    val ideInfo: C_IdeSymbolInfo,
     val deprecated: C_Deprecated?,
 ): C_NsImp_Def() {
     fun ns() = getter.get()
@@ -168,11 +167,8 @@ private class C_NsImp_InternalImportsProcessor(
         return when (resDef) {
             null -> {}
             is C_NsAsm_Def_Simple -> {
-                val aliasIdeId = impDef.names.aliasIdeId
-                val item = if (aliasIdeId == null) resDef.item else {
-                    val ideInfo = resDef.item.ideInfo.update(link = IdeGlobalSymbolLink(aliasIdeId))
-                    C_NamespaceItem(resDef.item.member, ideInfo)
-                }
+                val aliasIdeInfo = impDef.names.aliasRefIdeInfo(resDef.item.ideInfo.kind)
+                val item = if (aliasIdeInfo == null) resDef.item else C_NamespaceItem(resDef.item.member, aliasIdeInfo)
                 builder.addDirectDef(name, item)
             }
             is C_NsAsm_Def_Namespace -> {
@@ -333,7 +329,7 @@ private class C_NsImp_ImportResolver(
 
     fun resolveNamespaceByPath(module: C_ModuleKey, path: List<C_Name>): C_NsImp_Result<C_NsAsm_Namespace> {
         var ns = preModules[module] ?: modules[module] ?: C_NsAsm_Namespace.EMPTY
-        val ideInfos = mutableListOf<IdeSymbolInfo>()
+        val ideInfos = mutableListOf<C_IdeSymbolInfo>()
 
         for (name in path) {
             val res = resolveNamespaceByName(ns, name.rName)
@@ -384,7 +380,7 @@ private class C_NsImp_ImportResolver(
             }
 
             def = def2
-            val lastIdeInfo = res2.ideInfos.lastOrNull() ?: IdeSymbolInfo.UNKNOWN
+            val lastIdeInfo = res2.ideInfos.lastOrNull() ?: C_IdeSymbolInfo.UNKNOWN
             defRes = C_NsImp_NameRes(def, lastIdeInfo)
         }
 
@@ -453,7 +449,7 @@ private class C_NsImp_ImportResolver(
 
     private fun <T> convertResult(
             name: C_Name,
-            nsIdeInfos: List<IdeSymbolInfo>,
+            nsIdeInfos: List<C_IdeSymbolInfo>,
             heteroRes: C_RecursionSafeResult<C_Name, C_NsImp_NameRes<T>>
     ): C_NsImp_Result<T> {
         return if (heteroRes.value != null) {
@@ -525,7 +521,7 @@ private class C_NsImp_ImportResolver(
         val ideInfo = when (def) {
             is C_NsAsm_Def_Simple -> def.item.ideInfo
             is C_NsAsm_Def_Namespace -> def.ideSymbolInfo()
-            is C_NsAsm_Def_ExactImport -> IdeSymbolInfo.UNKNOWN
+            is C_NsAsm_Def_ExactImport -> C_IdeSymbolInfo.UNKNOWN
         }
         return C_RecursionSafeResult(C_NsImp_NameRes(def, ideInfo))
     }
@@ -549,20 +545,20 @@ private class C_NsImp_ImportResolver(
     }
 }
 
-private class C_NsImp_NameRes<T>(val value: T, val ideInfo: IdeSymbolInfo)
+private class C_NsImp_NameRes<T>(val value: T, val ideInfo: C_IdeSymbolInfo)
 
-private class C_NsImp_QNameRes<T>(val value: T, ideInfos: List<IdeSymbolInfo>) {
+private class C_NsImp_QNameRes<T>(val value: T, ideInfos: List<C_IdeSymbolInfo>) {
     val ideInfos = ideInfos.toImmList()
 }
 
 private class C_NsImp_Result<T> private constructor(
         val value: T?,
-        ideInfos: List<IdeSymbolInfo>,
+        ideInfos: List<C_IdeSymbolInfo>,
         val error: Getter<C_Error>
 ) {
     val ideInfos = ideInfos.toImmList()
 
-    constructor(value: T, ideInfos: List<IdeSymbolInfo>): this(value, ideInfos, { throw IllegalStateException("error: no error") })
+    constructor(value: T, ideInfos: List<C_IdeSymbolInfo>): this(value, ideInfos, { throw IllegalStateException("error: no error") })
     constructor(target: C_NsImp_QNameRes<T>): this(target.value, target.ideInfos)
 
     fun <R> castType(): C_NsImp_Result<R> {
@@ -579,6 +575,6 @@ private class C_NsImp_Result<T> private constructor(
     }
 
     companion object {
-        fun <T> error(ideInfos: List<IdeSymbolInfo>, error: Getter<C_Error>) = C_NsImp_Result<T>(null, ideInfos, error)
+        fun <T> error(ideInfos: List<C_IdeSymbolInfo>, error: Getter<C_Error>) = C_NsImp_Result<T>(null, ideInfos, error)
     }
 }

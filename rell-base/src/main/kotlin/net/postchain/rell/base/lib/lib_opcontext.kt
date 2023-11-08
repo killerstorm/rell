@@ -14,13 +14,13 @@ import net.postchain.rell.base.compiler.base.lib.C_SysFunctionCtx
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty
 import net.postchain.rell.base.compiler.base.namespace.C_NamespacePropertyContext
 import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.lib.type.Lib_Type_Gtv
+import net.postchain.rell.base.lib.type.Lib_Type_Struct
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.R_Expr
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.utils.LazyString
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
-import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.toBytes
 
 object Lib_OpContext {
@@ -33,8 +33,6 @@ object Lib_OpContext {
     private val TRANSACTION_FN_LAZY = LazyString.of(TRANSACTION_FN)
 
     private val GET_SIGNERS_RETURN_TYPE: R_Type = R_ListType(R_ByteArrayType)
-
-    private val PROP_IDE_INFO = IdeSymbolInfo.get(IdeSymbolKind.MEM_SYS_PROPERTY)
 
     val NAMESPACE = Ld_NamespaceDsl.make {
         struct("gtx_operation") {
@@ -63,6 +61,21 @@ object Lib_OpContext {
                 val bytes = a.asByteArray().toBytes()
                 val r = ctx.exeCtx.opCtx.isSigner(bytes)
                 Rt_BooleanValue(r)
+            }
+        }
+
+        type("struct_of_operation_opcontext_extension", abstract = true, extension = true, hidden = true) {
+            generic("T", subOf = "mirror_struct<-operation>")
+
+            function("to_gtx_operation", "gtx_operation") {
+                body { a ->
+                    val (mountName, gtvArgs) = Lib_Type_Struct.decodeOperation(a)
+                    val nameValue = Rt_TextValue(mountName.str())
+                    val rtArgs = gtvArgs.map<Gtv, Rt_Value> { Rt_GtvValue(it) }.toMutableList()
+                    val argsValue = Rt_ListValue(Lib_Type_Gtv.LIST_OF_GTV_TYPE, rtArgs)
+                    val attrs = mutableListOf(nameValue, argsValue)
+                    Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, attrs)
+                }
             }
         }
 
@@ -124,6 +137,13 @@ object Lib_OpContext {
                 }
             }
 
+            function("get_current_operation", result = "gtx_operation") {
+                validate(::checkCtx)
+                bodyContext { ctx ->
+                    ctx.exeCtx.opCtx.currentOperation()
+                }
+            }
+
             function("emit_event", result = "unit") {
                 param(type = "text")
                 param(type = "gtv")
@@ -166,10 +186,10 @@ object Lib_OpContext {
     fun gtxTransactionStructValue(name: String, args: List<Gtv>): Rt_Value {
         val nameValue = Rt_TextValue(name)
         val argsValue = Rt_ListValue(LIST_OF_GTV_TYPE, args.map { Rt_GtvValue(it) }.toMutableList())
-        return Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, mutableListOf(nameValue, argsValue)) as Rt_Value
+        return Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, mutableListOf(nameValue, argsValue))
     }
 
-    private object PropTransaction: C_NamespaceProperty(PROP_IDE_INFO) {
+    private object PropTransaction: C_NamespaceProperty() {
         override fun toExpr(ctx: C_NamespacePropertyContext, name: C_QualifiedName): V_Expr {
             checkCtx(ctx.exprCtx, name.pos)
             return transactionExpr(ctx, name.pos)

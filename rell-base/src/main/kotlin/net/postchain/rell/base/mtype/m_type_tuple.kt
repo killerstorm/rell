@@ -34,7 +34,7 @@ object M_TupleTypeUtils {
     }
 
     fun makeType(types: List<M_Type>, names: List<Nullable<String>>): M_Type {
-        return M_Type_InternalTuple(types, names)
+        return M_Type_Tuple_Internal(types, names)
     }
 }
 
@@ -51,7 +51,7 @@ sealed class M_Type_Tuple(
     }
 }
 
-private class M_Type_InternalTuple(
+private class M_Type_Tuple_Internal(
     fieldTypes: List<M_Type>,
     fieldNames: List<Nullable<String>>,
 ): M_Type_Tuple(fieldTypes, fieldNames) {
@@ -66,7 +66,7 @@ private class M_Type_InternalTuple(
     }
 
     override fun equalsComposite0(other: M_Type_Composite): Boolean =
-        other is M_Type_InternalTuple && fieldNames == other.fieldNames
+        other is M_Type_Tuple_Internal && fieldNames == other.fieldNames
 
     override fun hashCodeComposite0() = fieldNames.hashCode()
 
@@ -77,11 +77,11 @@ private class M_Type_InternalTuple(
     override fun newInstance(newArgs: List<M_TypeSet>): M_Type_Composite {
         checkEquals(newArgs.size, fieldNames.size)
         val newFieldTypes = newArgs.map { it.canonicalOutType() }
-        return M_Type_InternalTuple(newFieldTypes, fieldNames)
+        return M_Type_Tuple_Internal(newFieldTypes, fieldNames)
     }
 
     override fun getCorrespondingSuperType(otherType: M_Type_Composite): M_Type_Composite? {
-        return if (otherType is M_Type_InternalTuple && otherType.fieldNames == fieldNames) this else null
+        return if (otherType is M_Type_Tuple_Internal && otherType.fieldNames == fieldNames) this else null
     }
 
     override fun validate() {

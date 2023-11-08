@@ -33,9 +33,9 @@ object M_TypeSets {
 }
 
 object M_TypeSetUtils {
-    fun newOne(type: M_Type): M_TypeSet = M_TypeSet_One(type)
-    fun newSuperOf(type: M_Type): M_TypeSet = M_TypeSet_SuperOf(type)
-    fun newSubOf(type: M_Type): M_TypeSet = M_TypeSet_SubOf(type)
+    fun newOne(type: M_Type): M_TypeSet = M_TypeSet_One_Internal(type)
+    fun newSuperOf(type: M_Type): M_TypeSet = M_TypeSet_SuperOf_Internal(type)
+    fun newSubOf(type: M_Type): M_TypeSet = M_TypeSet_SubOf_Internal(type)
 }
 
 sealed class M_TypeSet {
@@ -124,7 +124,7 @@ sealed class M_TypeSet_Many: M_TypeSet() {
     final override fun captureTypeSet(): M_TypeSet = M_TypeSets.one(captureType())
 }
 
-private object M_TypeSet_All: M_TypeSet_Many() {
+object M_TypeSet_All: M_TypeSet_Many() {
     override fun strCode() = "*"
 
     override fun hashCode0() = javaClass.hashCode()
@@ -150,7 +150,7 @@ private object M_TypeSet_All: M_TypeSet_Many() {
     override fun validate() = Unit
 }
 
-private class M_TypeSet_One(val type: M_Type): M_TypeSet() {
+sealed class M_TypeSet_One(val type: M_Type): M_TypeSet() {
     override fun strCode() = type.strCode()
 
     override fun hashCode0() = Objects.hash(javaClass, type)
@@ -239,7 +239,9 @@ private class M_TypeSet_One(val type: M_Type): M_TypeSet() {
     }
 }
 
-private class M_TypeSet_SubOf(val boundType: M_Type): M_TypeSet_Many() {
+private class M_TypeSet_One_Internal(type: M_Type): M_TypeSet_One(type)
+
+sealed class M_TypeSet_SubOf(val boundType: M_Type): M_TypeSet_Many() {
     override fun strCode() = "-${boundType.strCode()}"
 
     override fun hashCode0() = Objects.hash(javaClass, boundType)
@@ -316,7 +318,9 @@ private class M_TypeSet_SubOf(val boundType: M_Type): M_TypeSet_Many() {
     }
 }
 
-private class M_TypeSet_SuperOf(val boundType: M_Type): M_TypeSet_Many() {
+private class M_TypeSet_SubOf_Internal(boundType: M_Type): M_TypeSet_SubOf(boundType)
+
+sealed class M_TypeSet_SuperOf(val boundType: M_Type): M_TypeSet_Many() {
     override fun strCode() = "+${boundType.strCode()}"
 
     override fun hashCode0() = Objects.hash(javaClass, boundType)
@@ -403,6 +407,8 @@ private class M_TypeSet_SuperOf(val boundType: M_Type): M_TypeSet_Many() {
         boundType.validate()
     }
 }
+
+private class M_TypeSet_SuperOf_Internal(boundType: M_Type): M_TypeSet_SuperOf(boundType)
 
 private object M_TypeSetInternals {
     fun getCommonSuperSet(set1: M_TypeSet_One, set2: M_TypeSet_SubOf): M_TypeSet {

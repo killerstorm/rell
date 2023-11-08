@@ -14,7 +14,7 @@ object M_NullableTypeUtils {
             M_Types.NOTHING -> M_Type_Null
             M_Types.ANY -> M_Types.ANYTHING
             is M_Type_Nullable -> valueType
-            else -> M_Type_InternalNullable(valueType)
+            else -> M_Type_Nullable_Internal(valueType)
         }
     }
 }
@@ -26,7 +26,7 @@ private object M_Type_Null: M_Type_Simple("null") {
 
 sealed class M_Type_Nullable(val valueType: M_Type): M_Type()
 
-private class M_Type_InternalNullable(valueType: M_Type): M_Type_Nullable(valueType) {
+private class M_Type_Nullable_Internal(valueType: M_Type): M_Type_Nullable(valueType) {
     init {
         check(valueType != M_Types.ANYTHING)
         check(valueType != M_Types.ANY)

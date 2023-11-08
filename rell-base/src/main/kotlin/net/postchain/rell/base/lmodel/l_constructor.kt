@@ -6,6 +6,7 @@ package net.postchain.rell.base.lmodel
 
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.mtype.M_TypeParam
+import net.postchain.rell.base.utils.doc.DocSymbol
 
 class L_ConstructorHeader(
     val typeParams: List<M_TypeParam>,
@@ -23,13 +24,18 @@ class L_Constructor(
     val header: L_ConstructorHeader,
     val deprecated: C_Deprecated?,
     val body: L_FunctionBody,
+    val pure: Boolean,
 ) {
     fun strCode(): String {
-        val ann = if (deprecated != null) "@deprecated " else ""
-        return "${ann}constructor ${header.strCode()}"
+        val parts = mutableListOf<String>()
+        if (deprecated != null) parts.add("@deprecated")
+        if (pure) parts.add("pure")
+        parts.add("constructor")
+        parts.add(header.strCode())
+        return parts.joinToString(" ")
     }
 }
 
-class L_TypeDefMember_Constructor(val constructor: L_Constructor): L_TypeDefMember() {
+class L_TypeDefMember_Constructor(val constructor: L_Constructor, doc: DocSymbol): L_TypeDefMember("!init", doc) {
     override fun strCode() = constructor.strCode()
 }

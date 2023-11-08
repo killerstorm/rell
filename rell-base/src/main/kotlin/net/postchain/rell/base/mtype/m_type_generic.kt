@@ -177,21 +177,21 @@ sealed class M_Type_Generic(
         .toImmList()
 }
 
-private class M_Type_InternalGeneric(
+private class M_Type_Generic_Internal(
     private val genericType0: M_InternalGenericType,
     typeArgs: List<M_TypeSet>,
 ): M_Type_Generic(genericType0, typeArgs) {
     override val canonicalArgs: List<M_TypeSet> get() = typeArgs
 
-    private val parentType: M_Type_InternalGeneric? = genericType0.parent?.let { genParentType ->
+    private val parentType: M_Type_Generic_Internal? = genericType0.parent?.let { genParentType ->
         val argsMap = this.typeArgs.mapIndexed { i, arg -> genericType0.params[i] to arg }.toMap()
         val parentArgs = genParentType.args.map { it.replaceParams(argsMap, false).typeSet() }
         M_GenericTypeInternals.newType(genParentType.genericType as M_InternalGenericType, parentArgs)
     }
 
-    private val parentList: List<M_Type_InternalGeneric> = CommonUtils.chainToList(this) { it.parentType }.toImmList()
+    private val parentList: List<M_Type_Generic_Internal> = CommonUtils.chainToList(this) { it.parentType }.toImmList()
 
-    private val parentListReversed: List<M_Type_InternalGeneric> by lazy {
+    private val parentListReversed: List<M_Type_Generic_Internal> by lazy {
         parentList.asReversed()
     }
 
@@ -200,7 +200,7 @@ private class M_Type_InternalGeneric(
     }
 
     override fun equalsComposite0(other: M_Type_Composite): Boolean {
-        return other is M_Type_InternalGeneric && genericType0 == other.genericType0
+        return other is M_Type_Generic_Internal && genericType0 == other.genericType0
     }
 
     override fun hashCodeComposite0(): Int {
@@ -229,7 +229,7 @@ private class M_Type_InternalGeneric(
     }
 
     override fun getCommonSuperType0(type: M_Type): M_Type? {
-        if (type !is M_Type_InternalGeneric) return null
+        if (type !is M_Type_Generic_Internal) return null
 
         if (genericType0 == type.genericType0) {
             return super.getCommonSuperType0(type)
@@ -258,7 +258,7 @@ private class M_Type_InternalGeneric(
     }
 
     override fun getCorrespondingSuperType(otherType: M_Type_Composite): M_Type_Composite? {
-        if (otherType !is M_Type_InternalGeneric) {
+        if (otherType !is M_Type_Generic_Internal) {
             return null
         }
         return parentList.firstOrNull { it.genericType0 == otherType.genericType0 }
@@ -280,8 +280,8 @@ private class M_Type_InternalGeneric(
 }
 
 private object M_GenericTypeInternals {
-    fun newType(genType: M_InternalGenericType, args: List<M_TypeSet>): M_Type_InternalGeneric {
-        return M_Type_InternalGeneric(genType, args)
+    fun newType(genType: M_InternalGenericType, args: List<M_TypeSet>): M_Type_Generic_Internal {
+        return M_Type_Generic_Internal(genType, args)
     }
 
     fun checkTypeArgs(genType: M_GenericType, args: List<M_TypeSet>) {

@@ -13,6 +13,10 @@ import net.postchain.rell.base.mtype.M_FunctionParam
 import net.postchain.rell.base.mtype.M_ParamArity
 import net.postchain.rell.base.mtype.M_Type_Nullable
 import net.postchain.rell.base.mtype.M_Types
+import net.postchain.rell.base.utils.doc.DocDeclaration_Parameter
+import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.doc.DocSymbolKind
+import net.postchain.rell.base.utils.doc.DocSymbolName
 import net.postchain.rell.base.utils.toImmList
 
 @RellLibDsl
@@ -118,6 +122,7 @@ abstract class Ld_CommonFunctionBuilder(
         }
 
         val param = Ld_FunctionParam(
+            index = params.size,
             name = if (name == null) null else R_Name.of(name),
             type = Ld_Type.parse(type),
             arity = arity.mArity,
@@ -163,6 +168,7 @@ class Ld_CommonFunction(
 )
 
 class Ld_FunctionParam(
+    val index: Int,
     val name: R_Name?,
     val type: Ld_Type,
     val arity: M_ParamArity,
@@ -189,11 +195,22 @@ class Ld_FunctionParam(
             nullable = nullable,
         )
 
+        val docName = if (name != null) name.str else "#$index"
+
+        val doc = DocSymbol(
+            kind = DocSymbolKind.PARAMETER,
+            symbolName = DocSymbolName.local(docName),
+            mountName = null,
+            declaration = DocDeclaration_Parameter(mParam, lazy, implies, null),
+            comment = null,
+        )
+
         return L_FunctionParam(
             name = name,
             mParam = mParam,
             lazy = lazy,
             implies = implies,
+            docSymbol = doc,
         )
     }
 }

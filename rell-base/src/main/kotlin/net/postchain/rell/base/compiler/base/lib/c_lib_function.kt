@@ -8,21 +8,16 @@ import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_CallArgumentValue_Expr
 import net.postchain.rell.base.compiler.ast.S_CallArgumentValue_Wildcard
 import net.postchain.rell.base.compiler.ast.S_Expr
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.base.compiler.base.expr.C_CallTypeHints
-import net.postchain.rell.base.compiler.base.expr.C_CallTypeHints_None
-import net.postchain.rell.base.compiler.base.expr.C_ExprContext
-import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.fn.*
 import net.postchain.rell.base.compiler.base.utils.C_Errors
-import net.postchain.rell.base.compiler.vexpr.V_Expr
-import net.postchain.rell.base.compiler.vexpr.V_FunctionCall
-import net.postchain.rell.base.compiler.vexpr.V_GlobalFunctionCall
-import net.postchain.rell.base.compiler.vexpr.V_MemberFunctionCall
+import net.postchain.rell.base.compiler.vexpr.*
 import net.postchain.rell.base.model.*
+import net.postchain.rell.base.model.expr.R_MemberCalculator
 import net.postchain.rell.base.utils.LazyPosString
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.mapOrSame
 import net.postchain.rell.base.utils.toImmList
 
@@ -46,8 +41,6 @@ abstract class C_LibGlobalFunction: C_GlobalFunction() {
 }
 
 sealed class C_LibMemberFunction {
-    val ideInfo: IdeSymbolInfo = IdeSymbolInfo.DEF_FUNCTION_SYSTEM
-
     abstract fun getCallTypeHints(selfType: R_Type): C_CallTypeHints
 
     abstract fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibMemberFunction
@@ -69,15 +62,21 @@ sealed class C_LibMemberFunction {
     ): V_MemberFunctionCall?
 }
 
-abstract class C_SpecialLibGlobalFunction: C_LibGlobalFunction() {
-    protected open fun paramCount(): IntRange? = null
-    protected abstract fun compileCall0(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_GlobalFunctionCall
+abstract class C_SpecialLibGlobalFunctionBody {
+    open fun paramCount(): IntRange? = null
 
-    final override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibGlobalFunction {
+    abstract fun compileCall(ctx: C_ExprContext, name: LazyPosString, args: List<S_Expr>): V_Expr
+}
+
+class C_SpecialLibGlobalFunction(
+    private val body: C_SpecialLibGlobalFunctionBody,
+    private val ideInfo: C_IdeSymbolInfo,
+): C_LibGlobalFunction() {
+    override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibGlobalFunction {
         return this
     }
 
-    final override fun compileCall(
+    override fun compileCall(
         ctx: C_ExprContext,
         name: LazyPosString,
         args: List<S_CallArgument>,
@@ -105,7 +104,7 @@ abstract class C_SpecialLibGlobalFunction: C_LibGlobalFunction() {
             return C_ExprUtils.errorVGlobalCall(ctx, name.pos)
         }
 
-        val paramCountRange = paramCount()
+        val paramCountRange = body.paramCount()
         val argCount = argExprs.size
         if (paramCountRange != null && argCount !in paramCountRange) {
             val paramsMin = paramCountRange.first
@@ -117,24 +116,77 @@ abstract class C_SpecialLibGlobalFunction: C_LibGlobalFunction() {
             return C_ExprUtils.errorVGlobalCall(ctx, name.pos, R_BooleanType)
         }
 
-        return compileCall0(ctx, name, argExprs)
+        val vExpr = body.compileCall(ctx, name, argExprs)
+        return V_GlobalFunctionCall(vExpr, ideInfo)
     }
 }
 
-abstract class C_SpecialLibMemberFunction: C_LibMemberFunction() {
-    final override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibMemberFunction = this
+abstract class C_SpecialLibMemberFunctionBody {
+    abstract fun compileCall(
+        ctx: C_ExprContext,
+        callCtx: C_LibFuncCaseCtx,
+        selfType: R_Type,
+        args: List<V_Expr>,
+    ): V_SpecialMemberFunctionCall?
+}
+
+abstract class V_SpecialMemberFunctionCall(protected val exprCtx: C_ExprContext, val returnType: R_Type) {
+    abstract fun calculator(): R_MemberCalculator
+
+    open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
+    open fun canBeDbExpr(): Boolean = false
+    open fun dbExprWhat(base: V_Expr, safe: Boolean): C_DbAtWhatValue? = null
+}
+
+class C_SpecialLibMemberFunction(
+    private val body: C_SpecialLibMemberFunctionBody,
+    private val ideInfo: C_IdeSymbolInfo,
+): C_LibMemberFunction() {
+    override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibMemberFunction = this
 
     override fun getCallTypeHints(selfType: R_Type): C_CallTypeHints = C_CallTypeHints_None
 
-    final override fun compileCallPartial(
+    override fun compileCallFull(
+        ctx: C_ExprContext,
+        callCtx: C_LibFuncCaseCtx,
+        selfType: R_Type,
+        args: List<V_Expr>,
+        resTypeHint: C_TypeHint,
+    ): V_MemberFunctionCall {
+        val vCall = body.compileCall(ctx, callCtx, selfType, args)
+        vCall ?: return V_MemberFunctionCall_Error(ctx, ideInfo)
+        return V_MemberFunctionCall_SpecialLibFunction(ctx, ideInfo, args, vCall)
+    }
+
+    override fun compileCallPartial(
         ctx: C_ExprContext,
         caseCtx: C_LibFuncCaseCtx,
         selfType: R_Type,
         args: C_PartialCallArguments,
-        resTypeHint: R_FunctionType?
+        resTypeHint: R_FunctionType?,
     ): V_MemberFunctionCall? {
         args.errPartialNotSupportedFn(caseCtx.qualifiedNameMsg())
         return null
+    }
+
+    private class V_MemberFunctionCall_SpecialLibFunction(
+        exprCtx: C_ExprContext,
+        ideInfo: C_IdeSymbolInfo,
+        private val vExprs: List<V_Expr>,
+        private val specialCall: V_SpecialMemberFunctionCall,
+    ): V_MemberFunctionCall(exprCtx, ideInfo) {
+        override fun vExprs() = vExprs
+        override fun globalConstantRestriction() = specialCall.globalConstantRestriction()
+        override fun returnType() = specialCall.returnType
+        override fun canBeDbExpr() = specialCall.canBeDbExpr()
+
+        override fun calculator(): R_MemberCalculator {
+            return specialCall.calculator()
+        }
+
+        override fun dbExprWhat(base: V_Expr, safe: Boolean): C_DbAtWhatValue? {
+            return specialCall.dbExprWhat(base, safe)
+        }
     }
 }
 
@@ -156,7 +208,7 @@ private class C_RegularLibGlobalFunction(
     ): V_GlobalFunctionCall {
         val target = C_FunctionCallTarget_LibGlobalFunction(ctx, name)
         val vCall = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
-        return vCall ?: C_ExprUtils.errorVGlobalCall(ctx, name.pos)
+        return vCall ?: C_ExprUtils.errorVGlobalCall(ctx, name.pos, ideInfo = cases.first().ideInfo)
     }
 
     private fun matchCase(
@@ -299,7 +351,7 @@ private class C_RegularLibMemberFunction(
         resTypeHint: C_TypeHint,
     ): V_MemberFunctionCall {
         val match = matchCase(ctx, callCtx, selfType, args, resTypeHint)
-        match ?: return C_ExprUtils.errorVMemberCall(ctx)
+        match ?: return C_ExprUtils.errorVMemberCall(ctx, ideInfo = cases.first().ideInfo)
         return match.compileCall(ctx, callCtx)
     }
 

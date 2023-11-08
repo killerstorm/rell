@@ -20,7 +20,7 @@ object Lib_Type_Collection {
 
             function("to_text", "text") {
                 alias("str")
-                bodyFunction(AnyFns.ToText_NoDb)
+                bodyRaw(AnyFns.ToText_NoDb)
             }
 
             function("empty", "boolean", pure = true) {

@@ -7,8 +7,8 @@ package net.postchain.rell.base.lmodel.dsl
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.lmodel.L_Constructor
 import net.postchain.rell.base.lmodel.L_ConstructorHeader
+import net.postchain.rell.base.lmodel.L_FullName
 import net.postchain.rell.base.model.R_Name
-import net.postchain.rell.base.model.R_QualifiedName
 import net.postchain.rell.base.utils.toImmList
 
 interface Ld_ConstructorMaker: Ld_CommonFunctionMaker
@@ -56,9 +56,9 @@ class Ld_Constructor(
     private val deprecated: C_Deprecated?,
     private val body: Ld_FunctionBody,
 ) {
-    fun finish(ctx: Ld_TypeFinishContext, qualifiedName: R_QualifiedName): L_Constructor {
+    fun finish(ctx: Ld_TypeFinishContext, fullName: L_FullName): L_Constructor {
         val lHeader = header.finish(ctx)
-        val lBody = body.finish(qualifiedName)
-        return L_Constructor(header = lHeader, deprecated = deprecated, body = lBody)
+        val lBody = body.finish(fullName.qName)
+        return L_Constructor(header = lHeader, deprecated = deprecated, body = lBody, pure = body.pure)
     }
 }

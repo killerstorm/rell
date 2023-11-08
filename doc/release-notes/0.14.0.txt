@@ -4,3 +4,143 @@ RELEASE NOTES 0.14.0 (2023-??-??)
 1. Tools: postchain.sh removed
 
 Obsolete script postchain.sh removed from distribution archive.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+2. Runtime: changed the structure of the rell.get_app_structure query result
+
+Attributes (values) of entities, objects, structs and enums are now returned as an array instead of a dictionary.
+Reason: to preserve the order of attributes. Particularly important for structs (values must use same order as
+attributes).
+
+Rell code example:
+
+    struct module_args {
+        x: integer;
+        y: text;
+    }
+
+Corresponding app structure example (fragment):
+
+    {
+        "structs": {
+            "module_args": {
+                "attributes": [
+                    { "mutable": 0, "name": "x", "type": "integer" },
+                    { "mutable": 0, "name": "y", "type": "text" }
+                ]
+            }
+        }
+    }
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+3. Tests: Block time determinism and library API
+
+Test block time is now deterministic. By default, the first block timestamp is 2020-01-01 00:00:00 UTC, and interval
+between blocks is 10 seconds.
+
+More precisely, when a block is run, it's timestamp is determined this way:
+
+1. If block timestamp was set to a specific value via the rell.test.set_next_block_time() function, that value is used
+   and discarded (so subsequent blocks won't use it).
+2. Otherwise, if there is the last block, the new timestamp is the last block timestamp plus the block interval.
+3. Otherwise, the timestamp is 2020-01-01 00:00:00 UTC.
+
+All library API is defined in the rell.test namespace.
+
+val DEFAULT_FIRST_BLOCK_TIME: timestamp = 1577836800000;
+val DEFAULT_BLOCK_INTERVAL: integer = 10000;
+
+    Constants for default first block timestamp and default block interval, both in milliseconds.
+
+last_block_time: timestamp;
+
+    Last block timestamp. Throws an exception if last block doesn't exist.
+
+last_block_time_or_null: timestamp?;
+
+    Last block timestamp, or null if last block doesn't exist.
+
+next_block_time: timestamp;
+
+    Next block timestamp. Calculated on every read by the rules described above.
+
+block_interval: integer;
+
+    Block interval in milliseconds. Default is 10000 (10 seconds).
+
+set_block_interval(interval: integer): integer;
+
+    Sets a new block interval, returns the old interval.
+
+set_next_block_time(time: timestamp);
+
+    Sets the next block time to a specific value. Affects only the next block.
+
+set_next_block_time_delta(delta: integer);
+
+    Equivalent of set_next_block_time(last_block_time + delta), except that the call has no effect if the last block
+    doesn't exist.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+4. Library: op_context.get_current_operation()
+
+op_context.get_current_operation(): gtx_operation;
+
+    Returns the current operation. Equivalent of op_context.get_all_operations()[op_context.op_index], but faster - does
+    not create a list of all operations.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+5. Library: Conversion between different operation types
+
+Rell has three types that represent operations: gtx_operation, struct<operation> and rell.test.op. New library
+functions and properties were added to them.
+
+rell.test.op.name: text;
+
+    Read the name of the operation.
+
+rell.test.op.args: list<gtv>;
+
+    Returns arguments of the operation. A new mutable list is created on every read.
+
+rell.test.op.to_gtx_operation(): gtx_operation;
+gtx_operation.to_test_op(): rell.test.op;
+
+    Conversions between gtx_operation and rell.test.op.
+
+struct<operation>.to_gtx_operation(): gtx_operation;
+
+    Converts a struct<operation> to gtx_operation.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+6. Library: Crypto functions for keys and addresses
+
+crypto.eth_privkey_to_address(privkey: byte_array): byte_array;
+
+    Takes 32-byte private key, returns 20-byte Ethereum address. Same result can be calculated by:
+    crypto.keccak256(crypto.privkey_to_pubkey(privkey).sub(1)).sub(12)
+
+crypto.eth_pubkey_to_address(pubkey: byte_array): byte_array;
+
+    Takes a public key (33, 64 or 65 bytes), returns 20-byte Ethereum address.
+
+crypto.pubkey_encode(pubkey: byte_array, compressed: boolean = false): byte_array;
+
+    Calculates a compressed (33-byte) or uncompressed (65-byte) public key from an input public key. Allows to convert
+    a compressed key to an uncompressed key or vice versa.
+
+crypto.pubkey_to_xy(pubkey: byte_array): (big_integer, big_integer);
+
+    Takes a public key, returns corresponding EC point coordinates.
+
+crypto.xy_to_pubkey(x: big_integer, y: big_integer, compressed: boolean = false): byte_array;
+
+    Takes EC point coordinates, returns a public key (compressed or uncompressed). Fails if the coordinates are not a
+    valid public key point.
+
+All added functions that take a public key, support three kinds of public keys:
+
+1. Compressed 33-byte public key.
+2. Uncompressed 65-byte public key.
+3. Uncompressed 64-byte public key - same as the 65-byte key, but without the first byte; such key is returned by the
+   crypto.eth_ecrecover() function and supported for convenience.

@@ -6,7 +6,6 @@ package net.postchain.rell.base.compiler.ast
 
 import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
-import net.postchain.rell.base.compiler.base.expr.C_StmtContext
 import net.postchain.rell.base.compiler.base.modifier.C_ModifierContext
 import net.postchain.rell.base.compiler.base.utils.C_ParserFilePath
 import net.postchain.rell.base.compiler.base.utils.C_SourcePath
@@ -15,13 +14,12 @@ import net.postchain.rell.base.model.R_FilePos
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.utils.ThreadLocalContext
 import net.postchain.rell.base.utils.ide.IdeFilePath
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
 import java.util.*
 import java.util.function.Supplier
 
-abstract class S_Pos {
+abstract class S_Pos: Comparable<S_Pos> {
     abstract fun path(): C_SourcePath
     abstract fun idePath(): IdeFilePath
     abstract fun line(): Int
@@ -31,6 +29,14 @@ abstract class S_Pos {
     fun strLine() = "${path()}:${line()}"
 
     fun toFilePos() = R_FilePos(path().str(), line())
+
+    final override fun compareTo(other: S_Pos): Int {
+        var d = path().compareTo(other.path())
+        if (d == 0) d = line().compareTo(other.line())
+        if (d == 0) d = column().compareTo(other.column())
+        return d
+    }
+
     final override fun toString() = str()
 }
 
@@ -95,17 +101,13 @@ class S_Name(val pos: S_Pos, private val rName: R_Name): S_Node() {
     fun compile(ctx: C_DefinitionContext) = compile(ctx.symCtx)
     fun compile(ctx: C_ExprContext) = compile(ctx.symCtx)
 
-    fun compile(ctx: C_SymbolContext, ideInfo: IdeSymbolInfo): C_Name {
+    fun compile(ctx: C_SymbolContext, ideInfo: C_IdeSymbolInfo): C_Name {
         val hand = ctx.addName(this, rName)
         hand.setIdeInfo(ideInfo)
         return hand.name
     }
 
-    fun compile(ctx: C_NamespaceContext, ideInfo: IdeSymbolInfo) = compile(ctx.symCtx, ideInfo)
-    fun compile(ctx: C_MountContext, ideInfo: IdeSymbolInfo) = compile(ctx.nsCtx.symCtx, ideInfo)
-    fun compile(ctx: C_DefinitionContext, ideInfo: IdeSymbolInfo) = compile(ctx.symCtx, ideInfo)
-    fun compile(ctx: C_StmtContext, ideInfo: IdeSymbolInfo) = compile(ctx.symCtx, ideInfo)
-    fun compile(ctx: C_ExprContext, ideInfo: IdeSymbolInfo) = compile(ctx.symCtx, ideInfo)
+    fun compile(ctx: C_ExprContext, ideInfo: C_IdeSymbolInfo) = compile(ctx.symCtx, ideInfo)
 
     fun getRNameSpecial(): R_Name {
         // This method shall be called only in special cases. Whenever possible, one of compile(...) methods must be
@@ -139,5 +141,5 @@ class S_QualifiedName(parts: List<S_Name>): S_Node() {
     fun compile(ctx: C_NamespaceContext) = compile(ctx.symCtx)
     fun compile(ctx: C_DefinitionContext) = compile(ctx.symCtx)
 
-    fun compile(ctx: C_SymbolContext, ideInfo: IdeSymbolInfo) = C_QualifiedName(parts.map { it.compile(ctx, ideInfo) })
+    fun compile(ctx: C_SymbolContext, ideInfo: C_IdeSymbolInfo) = C_QualifiedName(parts.map { it.compile(ctx, ideInfo) })
 }

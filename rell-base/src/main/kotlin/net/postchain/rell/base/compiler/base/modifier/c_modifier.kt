@@ -4,17 +4,21 @@
 
 package net.postchain.rell.base.compiler.base.modifier
 
-import net.postchain.rell.base.compiler.ast.*
-import net.postchain.rell.base.compiler.base.core.C_MessageContext
-import net.postchain.rell.base.compiler.base.core.C_Name
-import net.postchain.rell.base.compiler.base.core.C_SymbolContext
+import net.postchain.rell.base.compiler.ast.S_KeywordModifierKind
+import net.postchain.rell.base.compiler.ast.S_Name
+import net.postchain.rell.base.compiler.ast.S_Pos
+import net.postchain.rell.base.compiler.ast.S_PosValue
+import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.*
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
+import net.postchain.rell.base.utils.doc.DocAnnotationArg
+import net.postchain.rell.base.utils.doc.DocModifier
+import net.postchain.rell.base.utils.doc.DocModifier_Annotation
+import net.postchain.rell.base.utils.doc.DocModifier_Keyword
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import java.util.*
 
@@ -53,26 +57,30 @@ class C_ModifierTarget(
 
 sealed class C_AnnotationArg(val pos: S_Pos) {
     abstract fun value(ctx: C_ModifierContext): Rt_Value?
-    abstract fun name(ctx: C_ModifierContext): S_QualifiedName?
+    abstract fun name(ctx: C_ModifierContext): C_QualifiedNameHandle?
+    abstract fun docArg(): DocAnnotationArg
 }
 
 class C_AnnotationArg_Value(pos: S_Pos, private val value: Rt_Value): C_AnnotationArg(pos) {
     override fun value(ctx: C_ModifierContext) = value
 
-    override fun name(ctx: C_ModifierContext): S_QualifiedName? {
+    override fun name(ctx: C_ModifierContext): C_QualifiedNameHandle? {
         ctx.msgCtx.error(pos, "ann:arg:value_not_name:${value.strCode()}", "Name expected")
         return null
     }
+
+    override fun docArg() = DocAnnotationArg.makeValue(value)
 }
 
-class C_AnnotationArg_Name(private val name: S_QualifiedName): C_AnnotationArg(name.pos) {
+class C_AnnotationArg_Name(private val nameHand: C_QualifiedNameHandle): C_AnnotationArg(nameHand.pos) {
     override fun value(ctx: C_ModifierContext): Rt_Value? {
-        val nameStr = name.str()
+        val nameStr = nameHand.str()
         ctx.msgCtx.error(pos, "ann:arg:name_not_value:$nameStr", "Value expected")
         return null
     }
 
-    override fun name(ctx: C_ModifierContext) = name
+    override fun name(ctx: C_ModifierContext) = nameHand
+    override fun docArg() = DocAnnotationArg.makeName(nameHand.rName)
 }
 
 sealed class C_ModifierKey {
@@ -161,8 +169,8 @@ class C_ModifierValues(
 }
 
 sealed class C_FixedModifierValues {
-    abstract fun compileKeyword(ctx: C_ModifierContext, kw: C_Name, kind: S_KeywordModifierKind)
-    abstract fun compileAnnotation(ctx: C_ModifierContext, name: S_Name, args: List<C_AnnotationArg>)
+    abstract fun compileKeyword(ctx: C_ModifierContext, kw: C_Name, kind: S_KeywordModifierKind): DocModifier
+    abstract fun compileAnnotation(ctx: C_ModifierContext, name: S_Name, args: List<C_AnnotationArg>): DocModifier
 }
 
 private class C_FixedModifierValues_Impl(
@@ -171,13 +179,14 @@ private class C_FixedModifierValues_Impl(
 ): C_FixedModifierValues() {
     private val mods = mods.toImmMap()
 
-    override fun compileKeyword(ctx: C_ModifierContext, kw: C_Name, kind: S_KeywordModifierKind) {
+    override fun compileKeyword(ctx: C_ModifierContext, kw: C_Name, kind: S_KeywordModifierKind): DocModifier {
         val key = C_ModifierKey_Keyword.of(kind)
         val link = C_ModifierLink(key, kw, target)
         compile0(ctx, link, immListOf())
+        return DocModifier_Keyword(kw.str)
     }
 
-    override fun compileAnnotation(ctx: C_ModifierContext, name: S_Name, args: List<C_AnnotationArg>) {
+    override fun compileAnnotation(ctx: C_ModifierContext, name: S_Name, args: List<C_AnnotationArg>): DocModifier {
         val nameHand = name.compile(ctx)
 
         val key = C_ModifierKey_Annotation.of(nameHand.rName)
@@ -185,8 +194,11 @@ private class C_FixedModifierValues_Impl(
 
         val ok = compile0(ctx, link, args)
 
-        val ideInfo = if (ok) IdeSymbolInfo.get(IdeSymbolKind.MOD_ANNOTATION) else IdeSymbolInfo.UNKNOWN
+        val ideInfo = if (ok) C_IdeSymbolInfo.get(IdeSymbolKind.MOD_ANNOTATION) else C_IdeSymbolInfo.UNKNOWN
         nameHand.setIdeInfo(ideInfo)
+
+        val docArgs = args.map { it.docArg() }.toImmList()
+        return DocModifier_Annotation(nameHand.rName, docArgs)
     }
 
     private fun compile0(ctx: C_ModifierContext, link: C_ModifierLink, args: List<C_AnnotationArg>): Boolean {

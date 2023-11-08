@@ -5,6 +5,7 @@
 package net.postchain.rell.base.lib.type
 
 import net.postchain.rell.base.compiler.base.lib.C_SysFunction
+import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.model.expr.Db_SysFunction
 import net.postchain.rell.base.runtime.Rt_TextValue
 
@@ -17,5 +18,5 @@ object Lib_Type_Any {
     val ToText_Db = Db_SysFunction.cast("to_text", "TEXT")
 
     // No DB-operation, as most types do not support it.
-    val ToText_NoDb = C_SysFunction.direct(ToText_R, pure = true)
+    val ToText_NoDb = C_SysFunctionBody.direct(ToText_R, pure = true)
 }

@@ -6,10 +6,10 @@ package net.postchain.rell.base.lmodel.dsl
 
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.compiler.base.utils.C_MessageType
+import net.postchain.rell.base.lmodel.L_FullName
 import net.postchain.rell.base.lmodel.L_Function
 import net.postchain.rell.base.lmodel.L_FunctionHeader
 import net.postchain.rell.base.model.R_Name
-import net.postchain.rell.base.model.R_QualifiedName
 import net.postchain.rell.base.mtype.M_FunctionHeader
 import net.postchain.rell.base.utils.toImmList
 
@@ -32,7 +32,7 @@ class Ld_FunctionDsl(
 }
 
 class Ld_FunctionBuilder(
-    private val simpleName: R_Name,
+    simpleName: R_Name,
     outerTypeParams: Set<R_Name>,
     bodyBuilder: Ld_FunctionBodyBuilder,
 ): Ld_CommonFunctionBuilder(outerTypeParams, bodyBuilder), Ld_FunctionMaker {
@@ -122,9 +122,9 @@ class Ld_Function(
     private val header: Ld_FunctionHeader,
     private val body: Ld_FunctionBody,
 ) {
-    fun finish(ctx: Ld_TypeFinishContext, qualifiedName: R_QualifiedName): L_Function {
+    fun finish(ctx: Ld_TypeFinishContext, fullName: L_FullName): L_Function {
         val lHeader = header.finish(ctx)
-        val lBody = body.finish(qualifiedName)
-        return L_Function(qualifiedName, header = lHeader, body = lBody)
+        val lBody = body.finish(fullName.qName)
+        return L_Function(fullName.qName, header = lHeader, body = lBody, pure = body.pure)
     }
 }

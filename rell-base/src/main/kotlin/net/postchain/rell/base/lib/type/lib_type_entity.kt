@@ -7,19 +7,23 @@ package net.postchain.rell.base.lib.type
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_LambdaBlock
 import net.postchain.rell.base.compiler.base.core.C_Name
-import net.postchain.rell.base.compiler.base.core.C_TypeHint
+import net.postchain.rell.base.compiler.base.core.C_NameHandle
 import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.lib.C_LibFuncCaseCtx
 import net.postchain.rell.base.compiler.base.lib.C_LibFuncCaseUtils
-import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunction
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunctionBody
+import net.postchain.rell.base.compiler.base.lib.V_SpecialMemberFunctionCall
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
-import net.postchain.rell.base.compiler.vexpr.*
+import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.compiler.vexpr.V_GlobalConstantRestriction
+import net.postchain.rell.base.compiler.vexpr.V_TypeValueMember
 import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.model.R_EntityDefinition
 import net.postchain.rell.base.model.R_EntityType
+import net.postchain.rell.base.model.R_Struct
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.utils.CommonUtils
@@ -74,11 +78,10 @@ object Lib_Type_Entity {
         private val memberName: C_Name?,
         private val attrRef: C_EntityAttrRef,
         private val prev: V_TypeValueMember_EntityAttr?,
-    ): V_TypeValueMember(attrRef.type) {
+    ): V_TypeValueMember(attrRef.type, attrRef.ideName.ideInfo) {
         private val cLambda = EntityUtils.createLambda(exprCtx, attrRef.rEntity)
 
         override fun implicitAttrName() = if (prev != null) null else memberName
-        override fun ideInfo() = attrRef.ideName.ideInfo
         override fun vExprs() = immListOf<V_Expr>()
         override fun globalConstantRestriction() = V_GlobalConstantRestriction("entity_attr", null)
 
@@ -121,41 +124,41 @@ object Lib_Type_Entity {
 
         override fun member(
             ctx: C_ExprContext,
-            memberName: C_Name,
+            memberNameHand: C_NameHandle,
             member: C_TypeValueMember,
             safe: Boolean,
             exprHint: C_ExprHint,
         ): V_TypeValueMember? {
             if (member !is C_TypeValueMember_EntityAttr) return null
+            memberNameHand.setIdeInfo(member.attr.ideName.ideInfo)
+            val memberName = memberNameHand.name
             return V_TypeValueMember_EntityAttr(ctx, memberName.pos, memberName, member.attr, this)
         }
     }
 
-    abstract class C_SysFn_ToStruct_Common: C_SpecialLibMemberFunction() {
-        protected abstract fun compile0(ctx: C_ExprContext, selfType: R_Type): V_MemberFunctionCall?
+    abstract class C_SysFn_ToStruct_Common: C_SpecialLibMemberFunctionBody() {
+        protected abstract fun compile0(ctx: C_ExprContext, selfType: R_Type): V_SpecialMemberFunctionCall?
 
-        final override fun compileCallFull(
+        final override fun compileCall(
             ctx: C_ExprContext,
             callCtx: C_LibFuncCaseCtx,
             selfType: R_Type,
             args: List<V_Expr>,
-            resTypeHint: C_TypeHint,
-        ): V_MemberFunctionCall {
+        ): V_SpecialMemberFunctionCall? {
             if (args.isNotEmpty()) {
                 val argTypes = args.map { it.type }
                 C_LibFuncCaseUtils.errNoMatch(ctx, callCtx.linkPos, callCtx.qualifiedNameMsg(), argTypes)
             }
-
-            val vCall = compile0(ctx, selfType)
-            return vCall ?: V_MemberFunctionCall_Error(ctx)
+            return compile0(ctx, selfType)
         }
     }
 
     private class C_Fn_ToStruct(private val mutable: Boolean): C_SysFn_ToStruct_Common() {
-        override fun compile0(ctx: C_ExprContext, selfType: R_Type): V_MemberFunctionCall? {
+        override fun compile0(ctx: C_ExprContext, selfType: R_Type): V_SpecialMemberFunctionCall? {
             val entityType = selfType as? R_EntityType
             entityType ?: return null
-            return V_MemberFunctionCall_EntityToStruct(ctx, entityType, mutable)
+            val struct = entityType.rEntity.mirrorStructs.getStruct(mutable)
+            return V_SpecialMemberFunctionCall_EntityToStruct(ctx, entityType, struct)
         }
     }
 }
@@ -210,18 +213,15 @@ private object EntityUtils {
     }
 }
 
-private class V_MemberFunctionCall_EntityToStruct(
+private class V_SpecialMemberFunctionCall_EntityToStruct(
     exprCtx: C_ExprContext,
     private val entityType: R_EntityType,
-    mutable: Boolean,
-): V_MemberFunctionCall(exprCtx) {
-    private val struct = entityType.rEntity.mirrorStructs.getStruct(mutable)
+    private val struct: R_Struct,
+): V_SpecialMemberFunctionCall(exprCtx, struct.type) {
     private val structType = struct.type
     private val cLambda = EntityUtils.createLambda(exprCtx, entityType.rEntity)
 
-    override fun vExprs() = immListOf<V_Expr>()
     override fun globalConstantRestriction() = V_GlobalConstantRestriction("entity_to_struct", null)
-    override fun returnType() = structType
 
     override fun calculator(): R_MemberCalculator {
         val atEntity = exprCtx.makeAtEntity(entityType.rEntity, exprCtx.appCtx.nextAtExprId())

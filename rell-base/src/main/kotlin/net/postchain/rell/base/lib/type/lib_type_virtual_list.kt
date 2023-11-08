@@ -6,6 +6,7 @@ package net.postchain.rell.base.lib.type
 
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.model.R_ListType
+import net.postchain.rell.base.utils.doc.DocCode
 
 object Lib_Type_VirtualList {
     val NAMESPACE = Ld_NamespaceDsl.make {
@@ -18,8 +19,12 @@ object Lib_Type_VirtualList {
                 R_ListType(t).virtualType
             }
 
-            strCode { t, _ ->
-                "virtual<list<${t.strCode()}>>"
+            docCode { t, _ ->
+                DocCode.builder()
+                    .keyword("virtual").raw("<")
+                    .link("list").raw("<").append(t).raw(">")
+                    .raw(">")
+                    .build()
             }
 
             function("get", result = "T2", pure = true) {
@@ -33,7 +38,7 @@ object Lib_Type_VirtualList {
             }
 
             function("to_full", result = "list<T>") {
-                bodyFunction(Lib_Type_Virtual.ToFull)
+                bodyRaw(Lib_Type_Virtual.ToFull)
             }
         }
     }

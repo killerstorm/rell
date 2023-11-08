@@ -7,6 +7,7 @@ package net.postchain.rell.base.compiler.base.expr
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_AppContext
 import net.postchain.rell.base.compiler.base.core.C_BlockEntry_AtEntity
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.compiler.vexpr.*
@@ -14,16 +15,16 @@ import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.utils.chainToIterable
 import net.postchain.rell.base.utils.checkEquals
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.toImmList
 
 class C_AtEntity(
     val declPos: S_Pos,
     val rEntity: R_EntityDefinition,
     val alias: R_Name,
-    val aliasPos: S_Pos,
     val explicitAlias: Boolean,
     atEntityId: R_AtEntityId,
+    val ideRefInfo: C_IdeSymbolInfo,
+    val ideRefInfoPh: C_IdeSymbolInfo,
 ) {
     val atExprId = atEntityId.exprId
 
@@ -69,10 +70,11 @@ class C_AtFrom_Entities(
 
         val ph = entities.any { !it.explicitAlias }
         for (entity in entities) {
-            val entry = C_BlockEntry_AtEntity(entity)
+            val entry = C_BlockEntry_AtEntity(entity, entity.ideRefInfo)
             innerBlkCtx.addEntry(entity.declPos, entity.alias, entity.explicitAlias, entry)
             if (ph) {
-                innerBlkCtx.addAtPlaceholder(entry)
+                val phEntry = C_BlockEntry_AtEntity(entity, entity.ideRefInfoPh)
+                innerBlkCtx.addAtPlaceholder(phEntry)
             }
         }
     }
@@ -81,7 +83,7 @@ class C_AtFrom_Entities(
 
     override fun makeDefaultWhat(): V_DbAtWhat {
         val fields = entities.map {
-            val name = if (entities.size == 1) null else R_IdeName(it.alias, IdeSymbolInfo.MEM_TUPLE_ATTR)
+            val name = if (entities.size == 1) null else R_IdeName(it.alias, C_IdeSymbolInfo.MEM_TUPLE_ATTR)
             val vExpr = it.toVExpr(innerExprCtx, it.declPos, false)
             V_DbAtWhatField(outerExprCtx.appCtx, name, vExpr.type, vExpr, V_AtWhatFieldFlags.DEFAULT, null)
         }

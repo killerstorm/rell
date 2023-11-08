@@ -98,6 +98,11 @@ class Rt_TestOpContext(
         }
     }
 
+    override fun currentOperation(): Rt_Value {
+        val op = allOperations[opIndex]
+        return Lib_OpContext.gtxTransactionStructValue(op.first, op.second)
+    }
+
     override fun emitEvent(type: String, data: Gtv) {
         throw Rt_Utils.errNotSupported("Not supported in tests")
     }

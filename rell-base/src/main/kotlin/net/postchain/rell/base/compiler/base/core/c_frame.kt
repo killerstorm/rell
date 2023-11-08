@@ -16,9 +16,6 @@ import net.postchain.rell.base.compiler.vexpr.V_SmartNullableExpr
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.utils.*
-import net.postchain.rell.base.utils.ide.IdeLocalSymbolLink
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
-import net.postchain.rell.base.utils.ide.IdeSymbolKind
 
 class C_LocalVarRef(val target: C_LocalVar, val ptr: R_VarPtr) {
     fun toRExpr(): R_DestinationExpr = R_VarExpr(target.type, ptr, target.metaName)
@@ -99,7 +96,7 @@ class C_CallFrameProto(val size: Int, val rootBlockScope: C_BlockScope) {
     companion object { val EMPTY = C_CallFrameProto(0, C_BlockScope.EMPTY) }
 }
 
-class C_BlockScopeVar(val localVar: C_LocalVar, val ideInfo: IdeSymbolInfo)
+class C_BlockScopeVar(val localVar: C_LocalVar, val ideInfo: C_IdeSymbolInfo)
 
 class C_BlockScope(variables: Map<R_Name, C_BlockScopeVar>) {
     val localVars = variables.toImmMap()
@@ -109,13 +106,13 @@ class C_BlockScope(variables: Map<R_Name, C_BlockScopeVar>) {
 
 sealed class C_BlockEntry {
     abstract fun toLocalVarOpt(): C_LocalVar?
-    abstract fun ideSymbolInfo(): IdeSymbolInfo
+    abstract fun ideSymbolInfo(): C_IdeSymbolInfo
     abstract fun compile(ctx: C_ExprContext, pos: S_Pos, ambiguous: Boolean): V_Expr
 }
 
 class C_BlockEntry_Var(
-        private val localVar: C_LocalVar,
-        private val ideInfo: IdeSymbolInfo
+    private val localVar: C_LocalVar,
+    private val ideInfo: C_IdeSymbolInfo,
 ): C_BlockEntry() {
     override fun toLocalVarOpt() = localVar
     override fun ideSymbolInfo() = ideInfo
@@ -132,9 +129,10 @@ class C_BlockEntry_Var(
     }
 }
 
-class C_BlockEntry_AtEntity(private val atEntity: C_AtEntity): C_BlockEntry() {
-    private val ideInfo = IdeSymbolInfo(IdeSymbolKind.LOC_AT_ALIAS, link = IdeLocalSymbolLink(atEntity.aliasPos))
-
+class C_BlockEntry_AtEntity(
+    private val atEntity: C_AtEntity,
+    private val ideInfo: C_IdeSymbolInfo,
+): C_BlockEntry() {
     override fun toLocalVarOpt() = null
     override fun ideSymbolInfo() = ideInfo
 
@@ -246,7 +244,7 @@ sealed class C_BlockContext(val frameCtx: C_FrameContext, val blockUid: R_FrameB
             type: R_Type,
             mutable: Boolean,
             atExprId: R_AtExprId?,
-            ideInfo: IdeSymbolInfo
+            ideInfo: C_IdeSymbolInfo,
     ): C_LocalVarRef
 
     abstract fun newLocalVar(
@@ -261,7 +259,7 @@ sealed class C_BlockContext(val frameCtx: C_FrameContext, val blockUid: R_FrameB
 class C_FrameBlock(val rBlock: R_FrameBlock, val scope: C_BlockScope)
 
 sealed class C_BlockEntryResolution {
-    abstract fun ideSymbolInfo(): IdeSymbolInfo
+    abstract fun ideSymbolInfo(): C_IdeSymbolInfo
     abstract fun compile(ctx: C_ExprContext, pos: S_Pos): V_Expr
 }
 
@@ -398,7 +396,7 @@ class C_OwnerBlockContext(
             type: R_Type,
             mutable: Boolean,
             atExprId: R_AtExprId?,
-            ideInfo: IdeSymbolInfo
+            ideInfo: C_IdeSymbolInfo,
     ): C_LocalVarRef {
         val localVar = scopeBuilder.newVar(name.str, name.rName, type, mutable, atExprId)
         if (checkNameConflict(name.pos, name.rName)) {

@@ -5,16 +5,15 @@
 package net.postchain.rell.base.compiler.base.namespace
 
 import net.postchain.rell.base.compiler.ast.S_Pos
-import net.postchain.rell.base.compiler.base.core.C_DefinitionName
-import net.postchain.rell.base.compiler.base.core.C_MessageContext
-import net.postchain.rell.base.compiler.base.core.C_QualifiedName
+import net.postchain.rell.base.compiler.base.core.*
+import net.postchain.rell.base.compiler.base.expr.C_Expr
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
-import net.postchain.rell.base.compiler.base.expr.C_ExprMember
 import net.postchain.rell.base.compiler.base.utils.C_MessageType
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.utils.*
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
+import net.postchain.rell.base.utils.doc.DocDefinition
+import net.postchain.rell.base.utils.doc.DocSymbol
 
 class C_Deprecated(
     private val useInstead: String?,
@@ -64,7 +63,7 @@ class C_NamespaceElement(
 ) {
     private val allItems = allItems.toImmList()
 
-    val member = item.member
+    val member: C_NamespaceMember = item.member
 
     fun access(msgCtx: C_MessageContext, nameFn: () -> C_QualifiedName) {
         if (allItems.size > 1) {
@@ -87,10 +86,17 @@ class C_NamespaceElement(
         }
     }
 
-    fun toExprMember(ctx: C_ExprContext, qName: C_QualifiedName): C_ExprMember {
+    fun toExprMember(ctx: C_ExprContext, qName: C_QualifiedName, ideInfoHand: C_IdeSymbolInfoHandle): C_Expr {
         access(ctx.msgCtx) { qName }
-        val expr = member.toExpr(ctx, qName)
-        return C_ExprMember(expr, item.ideInfo)
+
+        val ideInfoPtr = C_UniqueDefaultIdeInfoPtr(ideInfoHand, item.ideInfo)
+        val expr = member.toExpr(ctx, qName, ideInfoPtr)
+
+        if (ideInfoPtr.isValid()) {
+            ideInfoPtr.setDefault()
+        }
+
+        return expr
     }
 
     companion object {
@@ -117,8 +123,14 @@ class C_NamespaceElement(
 
 // This class is needed to override IDE info. Exact import alias must have different IDE info than the referenced
 // member (def ID and link).
-class C_NamespaceItem(val member: C_NamespaceMember, val ideInfo: IdeSymbolInfo) {
+class C_NamespaceItem(val member: C_NamespaceMember, val ideInfo: C_IdeSymbolInfo): DocDefinition {
+    override val docSymbol: DocSymbol get() = ideInfo.getIdeInfo().doc ?: DocSymbol.NONE
+
     constructor(member: C_NamespaceMember): this(member, member.ideInfo)
+
+    override fun getDocMember(name: String): DocDefinition? {
+        return member.getDocMember(name)
+    }
 }
 
 class C_NamespaceEntry(
@@ -157,7 +169,6 @@ class C_NamespaceEntry(
 
 sealed class C_Namespace {
     abstract fun getEntry(name: R_Name): C_NamespaceEntry?
-    abstract fun addTo(b: C_NamespaceBuilder)
 
     fun getElement(name: R_Name, tags: List<C_NamespaceMemberTag> = immListOf()): C_NamespaceElement? {
         val entry = getEntry(name)
@@ -170,18 +181,6 @@ sealed class C_Namespace {
         fun makeLate(getter: LateGetter<C_Namespace>): C_Namespace {
             return C_LateNamespace(getter)
         }
-
-        fun join(vararg namespaces: C_Namespace): C_Namespace {
-            return join(namespaces.toList())
-        }
-
-        fun join(namespaces: List<C_Namespace>): C_Namespace {
-            val b = C_NamespaceBuilder()
-            for (ns in namespaces) {
-                ns.addTo(b)
-            }
-            return b.build()
-        }
     }
 }
 
@@ -191,15 +190,10 @@ private class C_BasicNamespace(entries: Map<R_Name, C_NamespaceEntry>): C_Namesp
     override fun getEntry(name: R_Name): C_NamespaceEntry? {
         return entries[name]
     }
-
-    override fun addTo(b: C_NamespaceBuilder) {
-        entries.forEach { b.add(it.key, it.value) }
-    }
 }
 
 private class C_LateNamespace(private val getter: LateGetter<C_Namespace>): C_Namespace() {
     override fun getEntry(name: R_Name) = getter.get().getEntry(name)
-    override fun addTo(b: C_NamespaceBuilder) = getter.get().addTo(b)
 }
 
 class C_NamespaceBuilder {

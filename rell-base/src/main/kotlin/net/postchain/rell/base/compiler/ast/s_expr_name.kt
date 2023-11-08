@@ -15,7 +15,6 @@ import net.postchain.rell.base.model.R_EnumType
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_NullType
 import net.postchain.rell.base.runtime.Rt_EnumValue
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.toImmList
 
 class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
@@ -30,16 +29,14 @@ class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
         val hint0 = if (qNameHand.size == 1) hint else C_ExprHint.DEFAULT
         val res = resolveName(ctx, hint0, qNameHand.first)
         if (res == null) {
-            qNameHand.setIdeInfo(IdeSymbolInfo.UNKNOWN)
+            qNameHand.setIdeInfo(C_IdeSymbolInfo.UNKNOWN)
             throw C_Error.stop(C_Errors.errUnknownName(qNameHand.first.name))
         }
 
         var expr: C_Expr = res
         for ((i, nameHand) in qNameHand.parts.withIndex().drop(1)) {
             val hintI = if (i == qNameHand.parts.indices.last) hint else C_ExprHint.DEFAULT
-            val exprMem = expr.member(ctx, nameHand.name, hintI)
-            nameHand.setIdeInfo(exprMem.ideInfo)
-            expr = exprMem.expr
+            expr = expr.member(ctx, nameHand, hintI)
         }
 
         return expr
@@ -79,7 +76,7 @@ class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
         return if (nameRes.isValid()) NameRes_Global(ctx, nameRes) else null
     }
 
-    override fun compileFromItem(ctx: C_ExprContext): C_AtFromItem {
+    override fun compileFromItem(ctx: C_ExprContext, explicitAlias: R_Name?): C_AtFromItem {
         val qNameHand = qName.compile(ctx)
 
         val entity = ctx.nsCtx.getEntity(qNameHand, error = false, unknownInfo = false)
@@ -91,7 +88,7 @@ class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
             compile0(ctx, C_ExprHint.DEFAULT, qNameHand)
         } ?: C_ExprUtils.errorExpr(ctx, qName.pos)
 
-        return exprToFromItem(ctx, cExpr)
+        return exprToFromItem(ctx, explicitAlias, cExpr)
     }
 
     override fun compileWhenEnum(ctx: C_ExprContext, type: R_EnumType): C_Expr {
@@ -146,7 +143,7 @@ class S_AttrExpr(pos: S_Pos, private val name: S_Name): S_Expr(pos) {
 
             val members = findMembers(ctx, hint, cName.rName)
             if (members.isEmpty()) {
-                nameHand.setIdeInfo(IdeSymbolInfo.UNKNOWN)
+                nameHand.setIdeInfo(C_IdeSymbolInfo.UNKNOWN)
                 throw C_Errors.errUnknownAttr(cName)
             }
 
@@ -160,10 +157,7 @@ class S_AttrExpr(pos: S_Pos, private val name: S_Name): S_Expr(pos) {
             }
 
             val attr = members[0]
-            val res = attr.compile(ctx, cName)
-            nameHand.setIdeInfo(res.ideInfo)
-
-            return res.expr
+            return attr.compile(ctx, nameHand)
         }
 
         private fun findMembers(ctx: C_ExprContext, hint: C_ExprHint, name: R_Name): List<C_AtContextMember> {
@@ -180,27 +174,27 @@ class S_MemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos) {
     override fun compile(ctx: C_ExprContext, hint: C_ExprHint): C_Expr {
         val nameHand = name.compile(ctx)
 
-        var member = compileNullMember(ctx, nameHand.name)
+        var resExpr = compileNullMember(ctx, nameHand)
 
-        if (member == null) {
+        if (resExpr == null) {
             val cBase = base.compileSafe(ctx)
-            member = cBase.member(ctx, nameHand.name, hint)
+            resExpr = cBase.member(ctx, nameHand, hint)
         }
 
-        nameHand.setIdeInfo(member.ideInfo)
-        return member.expr
+        return resExpr
     }
 
-    private fun compileNullMember(ctx: C_ExprContext, cName: C_Name): C_ExprMember? {
+    private fun compileNullMember(ctx: C_ExprContext, cNameHand: C_NameHandle): C_Expr? {
         if (base !is S_NullLiteralExpr) return null
 
+        val cName = cNameHand.name
         val members = Lib_Rell.NULL_EXTENSION_TYPE.valueMembers.getByName(cName.rName)
         if (members.size != 1) return null
         val member = members[0]
 
         val vBase = base.compileSafe(ctx, C_ExprHint.DEFAULT).value()
         val link = C_MemberLink(vBase, R_NullType, cName.pos, cName, false)
-        return member.compile(ctx, link)
+        return member.compile(ctx, link, cNameHand)
     }
 }
 
@@ -209,9 +203,7 @@ class S_SafeMemberExpr(val base: S_Expr, val name: S_Name): S_Expr(base.startPos
         val cBase = base.compile(ctx)
         val vBase = cBase.value()
         val nameHand = name.compile(ctx)
-        val member = vBase.member(ctx, nameHand.name, true, hint)
-        nameHand.setIdeInfo(member.ideInfo)
-        return member.expr
+        return vBase.member(ctx, nameHand, true, hint)
     }
 }
 

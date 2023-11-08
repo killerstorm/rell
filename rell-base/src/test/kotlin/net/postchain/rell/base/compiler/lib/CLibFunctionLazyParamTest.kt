@@ -6,10 +6,9 @@ package net.postchain.rell.base.compiler.lib
 
 import net.postchain.rell.base.compiler.base.core.C_DefinitionName
 import net.postchain.rell.base.compiler.base.lib.C_LibModule
-import net.postchain.rell.base.compiler.base.lib.C_LibType
 import net.postchain.rell.base.lib.Lib_Rell
 import net.postchain.rell.base.lmodel.L_ParamArity
-import net.postchain.rell.base.model.R_SimpleType
+import net.postchain.rell.base.model.R_LibSimpleType
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.runtime.*
 import org.junit.Test
@@ -203,9 +202,9 @@ class CLibFunctionLazyParamTest: BaseCLibTest() {
             }
         }
 
-        private object R_TestType: R_SimpleType(TYPE_NAME, C_DefinitionName("rell", TYPE_NAME)) {
+        private object R_TestType: R_LibSimpleType(TYPE_NAME, C_DefinitionName("rell", TYPE_NAME)) {
             override fun createGtvConversion() = GtvRtConversion_None
-            override fun getLibType0() = C_LibType.make(MODULE.getTypeDef("test_type"))
+            override fun getLibTypeDef() = MODULE.getTypeDef("test_type")
         }
 
         private class Rt_TestTypeValue: Rt_Value() {

@@ -10,25 +10,33 @@ import net.postchain.rell.base.compiler.base.def.C_AttrUtils
 import net.postchain.rell.base.compiler.base.expr.C_StmtContext
 import net.postchain.rell.base.compiler.base.expr.C_VarFact
 import net.postchain.rell.base.compiler.base.expr.C_VarFacts
+import net.postchain.rell.base.compiler.base.utils.C_LateGetter
 import net.postchain.rell.base.compiler.base.utils.C_ParameterDefaultValue
 import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.model.*
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
+import net.postchain.rell.base.mtype.M_FunctionParam
+import net.postchain.rell.base.utils.Nullable
+import net.postchain.rell.base.utils.checkEquals
+import net.postchain.rell.base.utils.doc.DocDeclaration
+import net.postchain.rell.base.utils.doc.DocSymbol
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
 
 class C_FormalParameter(
-        val name: C_Name,
-        val type: R_Type,
-        val ideInfo: IdeSymbolInfo,
-        private val index: Int,
-        private val defaultValue: C_ParameterDefaultValue?
+    val name: C_Name,
+    val type: R_Type,
+    val ideInfo: C_IdeSymbolInfo,
+    val mParam: M_FunctionParam,
+    private val index: Int,
+    private val defaultValue: C_ParameterDefaultValue?,
+    docSymbolGetter: C_LateGetter<Nullable<DocSymbol>>,
+    private val docDeclarationGetter: C_LateGetter<DocDeclaration>,
 ) {
-    fun toCallParameter() = C_FunctionCallParameter(name.rName, type, index, ideInfo, defaultValue)
+    val rParam = R_FunctionParam(name.rName, type, docSymbolGetter)
 
-    fun createVarParam(ptr: R_VarPtr): R_VarParam {
-        return R_VarParam(name.rName, type, ptr)
-    }
+    val docDeclaration: DocDeclaration get() = docDeclarationGetter.get()
+
+    fun toCallParameter() = C_FunctionCallParameter(name.rName, type, index, ideInfo, defaultValue)
 
     fun createMirrorAttr(mutable: Boolean): R_Attribute {
         val keyIndexKind: R_KeyIndexKind? = null
@@ -53,14 +61,27 @@ class C_FormalParameters(list: List<C_FormalParameter>) {
     val map = list.associateBy { it.name.str }.toMap().toImmMap()
 
     val callParameters by lazy {
-        val params = list.map { it.toCallParameter() }
+        val params = this.list.map { it.toCallParameter() }
         C_FunctionCallParameters(params)
+    }
+
+    val mParams: List<M_FunctionParam> by lazy {
+        this.list.map { it.mParam }.toImmList()
+    }
+
+    val docParams: List<Lazy<DocDeclaration>> by lazy {
+        this.list
+            .map {
+                lazy { it.docDeclaration }
+            }
+            .toImmList()
     }
 
     fun compile(frameCtx: C_FrameContext): C_ActualParameters {
         val inited = mutableMapOf<C_VarUid, C_VarFact>()
         val names = mutableSetOf<String>()
-        val rParams = mutableListOf<R_VarParam>()
+        val rParams = mutableListOf<R_FunctionParam>()
+        val rParamVars = mutableListOf<R_ParamVar>()
 
         val blkCtx = frameCtx.rootBlkCtx
 
@@ -73,17 +94,16 @@ class C_FormalParameters(list: List<C_FormalParameter>) {
             } else if (param.type.isNotError()) {
                 val cVarRef = blkCtx.addLocalVar(name, param.type, false, null, param.ideInfo)
                 inited[cVarRef.target.uid] = C_VarFact.YES
-                val rVarParam = param.createVarParam(cVarRef.ptr)
-                rParams.add(rVarParam)
+                rParams.add(param.rParam)
+                rParamVars.add(R_ParamVar(param.type, cVarRef.ptr))
             }
         }
 
         val varFacts = C_VarFacts.of(inited = inited.toMap())
-
         val stmtCtx = C_StmtContext.createRoot(blkCtx)
                 .updateFacts(varFacts)
 
-        return C_ActualParameters(stmtCtx, rParams)
+        return C_ActualParameters(stmtCtx, rParams, rParamVars)
     }
 
     companion object {
@@ -116,6 +136,11 @@ class C_FormalParameters(list: List<C_FormalParameter>) {
     }
 }
 
-class C_ActualParameters(val stmtCtx: C_StmtContext, rParams: List<R_VarParam>) {
+class C_ActualParameters(val stmtCtx: C_StmtContext, rParams: List<R_FunctionParam>, rParamVars: List<R_ParamVar>) {
     val rParams = rParams.toImmList()
+    val rParamVars = rParamVars.toImmList()
+
+    init {
+        checkEquals(this.rParamVars.size, this.rParams.size)
+    }
 }

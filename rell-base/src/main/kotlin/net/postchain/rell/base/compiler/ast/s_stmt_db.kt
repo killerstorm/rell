@@ -4,7 +4,9 @@
 
 package net.postchain.rell.base.compiler.ast
 
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.core.C_LambdaBlock
+import net.postchain.rell.base.compiler.base.core.C_Name
 import net.postchain.rell.base.compiler.base.core.C_Statement
 import net.postchain.rell.base.compiler.base.expr.*
 import net.postchain.rell.base.compiler.base.utils.C_Error
@@ -13,7 +15,6 @@ import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.model.stmt.*
-import net.postchain.rell.base.utils.ide.IdeSymbolInfo
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
@@ -64,18 +65,18 @@ class S_UpdateTarget_Simple(
     }
 
     private fun compileFromEntity(ctx: C_ExprContext, atExprId: R_AtExprId, from: S_AtExprFrom): C_AtEntity? {
-        val explicitAlias = from.alias?.compile(ctx, IdeSymbolInfo(IdeSymbolKind.LOC_AT_ALIAS))
-
+        val explicitAliasHand = from.alias?.compile(ctx)
         val entityNameHand = from.entityName.compile(ctx.symCtx)
-        val entityName = entityNameHand.qName
-        val alias = explicitAlias ?: entityName.last
 
         val entity = ctx.nsCtx.getEntity(entityNameHand)
-        entity ?: return null
+        if (entity == null) {
+            explicitAliasHand?.setIdeInfo(C_IdeSymbolInfo.get(IdeSymbolKind.LOC_AT_ALIAS))
+            return null
+        }
 
+        val alias = explicitAliasHand?.name ?: entityNameHand.last.name
         val atEntityId = ctx.appCtx.nextAtEntityId(atExprId)
-        val atEntity = C_AtEntity(alias.pos, entity, alias.rName, alias.pos, explicitAlias != null, atEntityId)
-        return atEntity
+        return S_AtExpr.makeDbAtEntity(entity, alias, explicitAliasHand, atEntityId)
     }
 }
 
@@ -156,9 +157,10 @@ class S_UpdateTarget_Expr(private val expr: S_Expr): S_UpdateTarget() {
     }
 
     private fun compileFrom(ctx: C_ExprContext, stmtPos: S_Pos, rAtEntity: R_DbAtEntity): C_AtFrom_Entities {
-        val cEntity = C_AtEntity(expr.startPos, rAtEntity.rEntity, rAtEntity.rEntity.rName, expr.startPos, false, rAtEntity.id)
-        val fromCtx = C_AtFromContext(stmtPos, cEntity.atExprId, null)
-        return C_AtFrom_Entities(ctx, fromCtx, listOf(cEntity))
+        val cAlias = C_Name.make(expr.startPos, rAtEntity.rEntity.rName)
+        val cAtEntity = S_AtExpr.makeDbAtEntity(rAtEntity.rEntity, cAlias, null, rAtEntity.id)
+        val fromCtx = C_AtFromContext(stmtPos, cAtEntity.atExprId, null)
+        return C_AtFrom_Entities(ctx, fromCtx, immListOf(cAtEntity))
     }
 
     private class C_TargetContext(
@@ -232,12 +234,12 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
         subValues.addAll(args.map { it.vExpr })
 
         val attrs = C_AttributeResolver.resolveUpdate(ctx, entity, args)
-        val entity = target.entity()
+        val atEntity = target.entity()
 
         val updAttrs = attrs.mapNotNull { (arg, attr) ->
             val w = what[arg.index]
             val op = if (w.op == null) S_AssignOp_Eq else w.op.op
-            op.compileDbUpdate(ctx, w.pos, entity, attr, arg.vExpr)
+            op.compileDbUpdate(ctx, w.pos, atEntity, attr, arg.vExpr)
         }.toImmList()
 
         return updAttrs

@@ -4,20 +4,15 @@
 
 package net.postchain.rell.base.compiler.ast
 
-import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
-import net.postchain.rell.base.compiler.base.core.C_ExtReplCommand
-import net.postchain.rell.base.compiler.base.core.C_MessageContext
-import net.postchain.rell.base.compiler.base.core.C_SymbolContextManager
+import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.module.C_MidModuleCompiler
-import net.postchain.rell.base.compiler.base.module.C_ModuleKey
 import net.postchain.rell.base.compiler.base.module.C_ModuleLoader
-import net.postchain.rell.base.compiler.base.module.C_PrecompiledModule
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.compiler.base.utils.C_SourcePath
 import net.postchain.rell.base.compiler.base.utils.IdeSourcePathFilePath
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.utils.toImmList
-import net.postchain.rell.base.utils.toImmSet
+import net.postchain.rell.base.utils.toImmMap
 
 class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
     private val defs = steps.mapNotNull { it.definition() }.toImmList()
@@ -27,17 +22,17 @@ class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
             msgCtx: C_MessageContext,
             sourceDir: C_SourceDir,
             currentModuleName: R_ModuleName?,
-            preModules: Map<C_ModuleKey, C_PrecompiledModule>
+            appState: C_ReplAppState,
     ): C_ExtReplCommand {
         val symCtxManager = C_SymbolContextManager(C_CompilerOptions.DEFAULT)
-        val preModuleNames = preModules.map { it.key.name }.toImmSet()
-        val modLdr = C_ModuleLoader(msgCtx, symCtxManager.provider, sourceDir, preModuleNames)
+        val modLdr = C_ModuleLoader(msgCtx, symCtxManager.provider, sourceDir, appState.moduleHeaders)
 
         if (currentModuleName != null) {
             modLdr.loadModule(currentModuleName)
         }
 
-        val midMembers = modLdr.readerCtx.appCtx.withModuleContext(currentModuleName ?: R_ModuleName.EMPTY) { modCtx ->
+        val moduleName = currentModuleName ?: R_ModuleName.EMPTY
+        val midMembers = modLdr.readerCtx.appCtx.withModuleContext(moduleName) { modCtx ->
             val sourcePath = C_SourcePath.EMPTY
             val idePath = IdeSourcePathFilePath(sourcePath)
             val fileCtx = modCtx.createFileContext(sourcePath, idePath)
@@ -52,10 +47,12 @@ class S_ReplCommand(steps: List<S_ReplStep>, expr: S_Expr?) {
             midCompiler.compileModule(currentModuleName, null)
         }
 
-        val extMembers = midCompiler.compileReplMembers(midMembers)
+        val extMembers = midCompiler.compileReplMembers(moduleName, midMembers)
         val extModules = midCompiler.getExtModules()
 
-        return C_ExtReplCommand(extModules, extMembers, currentModuleName, stmts, preModules)
+        val newModuleHeaders = midModules.associate { it.moduleName to it.compiledHeader }.toImmMap()
+
+        return C_ExtReplCommand(extModules, extMembers, currentModuleName, stmts, appState.modules, newModuleHeaders)
     }
 }
 

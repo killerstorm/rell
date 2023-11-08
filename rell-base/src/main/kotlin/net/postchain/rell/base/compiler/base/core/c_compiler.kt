@@ -15,7 +15,6 @@ import net.postchain.rell.base.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.lib.C_SystemLibrary
 import net.postchain.rell.base.lib.Lib_SysQueries
-import net.postchain.rell.base.lmodel.L_Module
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.*
 import net.postchain.rell.base.utils.ide.IdeSymbolInfo
@@ -32,6 +31,7 @@ enum class C_CompilerPass {
     APPDEFS,
     EXPRESSIONS,
     FRAMES,
+    DOCS,
     VALIDATION,
     APPLICATION,
     FINISH
@@ -144,7 +144,8 @@ class C_SystemDefs private constructor(
             nsBuilder.addAll(libScope.nsProto)
 
             for (entity in sysEntities) {
-                nsBuilder.addEntity(entity.rName, entity, IdeSymbolInfo.get(IdeSymbolKind.DEF_ENTITY))
+                val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_ENTITY, doc = entity.docSymbol)
+                nsBuilder.addEntity(entity.rName, entity, ideInfo)
             }
 
             val nsProto = nsBuilder.build()
@@ -275,6 +276,7 @@ class C_CompilerOptions(
         @Suppress("UNUSED") fun ide(v: Boolean) = apply { ide = v }
         @Suppress("UNUSED") fun blockCheck(v: Boolean) = apply { blockCheck = v }
         @Suppress("UNUSED") fun atAttrShadowing(v: C_AtAttrShadowing) = apply { atAttrShadowing = v }
+        @Suppress("UNUSED") fun testLib(v: Boolean) = apply { testLib = v }
         @Suppress("UNUSED") fun hiddenLib(v: Boolean) = apply { hiddenLib = v }
         @Suppress("UNUSED") fun allowDbModificationsInObjectExprs(v: Boolean) = apply { allowDbModificationsInObjectExprs = v }
         @Suppress("UNUSED") fun symbolInfoFile(v: C_SourcePath?) = apply { symbolInfoFile = v }
@@ -356,11 +358,18 @@ object C_Compiler {
         val symCtxManager = C_SymbolContextManager(msgCtx.globalCtx.compilerOptions)
         val symCtxProvider = symCtxManager.provider
 
-        val extModules = msgCtx.consumeError {
-            compileMidModules(msgCtx, sourceDir, moduleSelection, symCtxProvider)
+        val midModules = msgCtx.consumeError {
+            val midModules = loadMidModules(msgCtx, sourceDir, moduleSelection, symCtxProvider)
+            checkMainModules(msgCtx, moduleSelection, midModules)
+            midModules
         } ?: immListOf()
 
-        val appCtx = C_AppContext(msgCtx, controller.executor, false, C_ReplAppState.EMPTY, extraLibMod)
+        val extModules = msgCtx.consumeError {
+            compileMidModules(msgCtx, midModules)
+        } ?: immListOf()
+
+        val moduleHeaders = midModules.associate { it.moduleName to it.compiledHeader }.toImmMap()
+        val appCtx = C_AppContext(msgCtx, controller.executor, false, C_ReplAppState.EMPTY, moduleHeaders, extraLibMod)
 
         msgCtx.consumeError {
             val extCompiler = C_ExtModuleCompiler(appCtx, extModules, immMapOf())
@@ -382,15 +391,9 @@ object C_Compiler {
     }
 
     private fun compileMidModules(
-            msgCtx: C_MessageContext,
-            sourceDir: C_SourceDir,
-            modSel: C_CompilerModuleSelection,
-            symCtxProvider: C_SymbolContextProvider
+        msgCtx: C_MessageContext,
+        midModules: List<C_MidModule>,
     ): List<C_ExtModule> {
-        val midModules = loadMidModules(msgCtx, sourceDir, modSel, symCtxProvider)
-
-        checkMainModules(msgCtx, modSel, midModules)
-
         val selModules = midModules.filter { it.isSelected }
 
         val midCompiler = C_MidModuleCompiler(msgCtx, midModules)
@@ -407,7 +410,7 @@ object C_Compiler {
             modSel: C_CompilerModuleSelection,
             symCtxProvider: C_SymbolContextProvider
     ): List<C_MidModule> {
-        val modLdr = C_ModuleLoader(msgCtx, symCtxProvider, sourceDir, immSetOf())
+        val modLdr = C_ModuleLoader(msgCtx, symCtxProvider, sourceDir, immMapOf())
 
         if (modSel.appModules == null) {
             modLdr.loadAllModules()
@@ -503,10 +506,10 @@ abstract class C_AbstractResult(messages: List<C_Message>) {
 }
 
 class C_CompilationResult(
-        val app: R_App?,
-        messages: List<C_Message>,
-        files: List<C_SourcePath>,
-        ideSymbolInfos: Map<S_Pos, IdeSymbolInfo>
+    val app: R_App?,
+    messages: List<C_Message>,
+    files: List<C_SourcePath>,
+    ideSymbolInfos: Map<S_Pos, IdeSymbolInfo>,
 ): C_AbstractResult(messages) {
     val files = files.toImmList()
     val ideSymbolInfos = ideSymbolInfos.toImmMap()
