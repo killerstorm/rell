@@ -1,3 +1,5 @@
+#  Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+
 import json
 import os
 import re
@@ -53,12 +55,11 @@ class LogFormat:
         self.__format % {'time':'2022-02-22', 'level':'INFO', 'message':'Test'} #Test
 
     def make_regex(self, level, message_regex_str):
-        regex_str = self.__format % {
+        return self.__format % {
             'time': LogFormat.__LOG_TIME_REGEX_STR,
             'level': level,
             'message': message_regex_str
         }
-        return re.compile(regex_str)
 
 LOG_FORMAT_RELL = LogFormat(r'%(time)s %(level)-5s %(message)s')
 LOG_FORMAT_POSTCHAIN = LogFormat(r'%(level)-5s %(time)s \[[^\]]+\] %(message)s')
@@ -93,6 +94,7 @@ class LineMatcherFactory:
     __LOG_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR']
     __LOG_PREFIXES = [('<LOG:%s>' % s, s) for s in __LOG_LEVELS]
     __REGEX_PREFIX = '<RE>'
+    __TEST_PREFIX = '<TEST>'
 
     def __init__(self, log_format):
         self.__log_format = log_format
@@ -108,18 +110,17 @@ class LineMatcherFactory:
                 log_level = level
                 break
 
+        is_test, expected = LineMatcherFactory.__remove_prefix(expected, LineMatcherFactory.__TEST_PREFIX)
         is_regex, expected = LineMatcherFactory.__remove_prefix(expected, LineMatcherFactory.__REGEX_PREFIX)
 
-        if log_level == None:
-            if is_regex:
-                return RegexLineMatcher(re.compile(expected))
-            else:
-                return ExactLineMatcher(expected)
-        else:
-            if not is_regex:
-                expected = re.escape(expected)
-            regex = self.__log_format.make_regex(log_level, expected)
-            return RegexLineMatcher(regex)
+        if not is_regex:
+            expected = re.escape(expected)
+        if is_test:
+            expected = expected + r' \([0-9]+(\.[0-9]+)?s\)'
+        if log_level != None:
+            expected = self.__log_format.make_regex(log_level, expected)
+
+        return RegexLineMatcher(re.compile(expected))
 
     def __remove_prefix(s, prefix):
         if s.startswith(prefix):
@@ -157,7 +158,12 @@ def check_json(actual_str, expected):
 def check_output(actual, expected, ignored = [], log_format = LOG_FORMAT_RELL):
     matcher_factory = LineMatcherFactory(log_format)
 
-    act_list = actual[:-1].split('\n')
+    if type(actual) == list:
+        act_list = actual
+    else:
+        assert actual == '' or actual.endswith('\n')
+        act_list = actual[:-1].split('\n')
+
     ignored_matchers = [matcher_factory.matcher(s) for s in ignored]
     act_list = [s for s in act_list if not [m for m in ignored_matchers if m.match(s)]]
 
@@ -167,7 +173,6 @@ def check_output(actual, expected, ignored = [], log_format = LOG_FORMAT_RELL):
         assert actual == expected
         return
 
-    assert actual.endswith('\n')
     assert type(expected) == list
     exp_list = expected
 
@@ -176,7 +181,9 @@ def check_output(actual, expected, ignored = [], log_format = LOG_FORMAT_RELL):
         act_line = act_list.pop(0)
         matcher = matcher_factory.matcher(exp_line)
         #print(matcher)
-        assert matcher.match(act_line), (exp_line, matcher)
+        if not matcher.match(act_line):
+            assert act_line == exp_line
+            assert 0 # just in case
 
     assert act_list == []
 
@@ -211,4 +218,4 @@ def check_tests(command, code, expected):
 
     i = act_list.index(exp_list[0])
     act_list = act_list[i:]
-    assert act_list == exp_list
+    check_output(act_list, exp_list)

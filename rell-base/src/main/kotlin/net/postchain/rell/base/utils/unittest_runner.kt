@@ -15,13 +15,30 @@ import net.postchain.rell.base.sql.SqlInitProjExt
 import net.postchain.rell.base.sql.SqlManager
 import net.postchain.rell.base.sql.SqlUtils
 import org.apache.commons.lang3.StringUtils
+import java.time.Duration
 import java.util.regex.Pattern
 
 private val PRINT_SEPARATOR = "-".repeat(72)
 
-class UnitTestResult(val error: Throwable?) {
+class UnitTestResult(val duration: Duration, val error: Throwable?) {
     val isOk = error == null
-    override fun toString() = if (isOk) "OK" else "FAILED"
+
+    private fun statusStr() = if (isOk) "OK" else "FAILED"
+    override fun toString() = statusStr()
+
+    fun caseResultToString(case: UnitTestCase): String {
+        val durationStr = durationToString(duration)
+        val res = "${statusStr()} ${case.name} ($durationStr)"
+        return res
+    }
+
+    companion object {
+        fun durationToString(duration: Duration): String {
+            val durationMs = duration.toMillis()
+            val durationSecStr = if (durationMs == 0L) "0" else String.format("%.3f", durationMs / 1000.0)
+            return "${durationSecStr}s"
+        }
+    }
 }
 
 class UnitTestRunnerContext(
@@ -106,7 +123,10 @@ class UnitTestRunnerResults {
         val nOk = okTests.size
         val nFailed = failedTests.size
 
-        printer.print("\nSUMMARY: $nFailed FAILED / $nOk PASSED / $nTests TOTAL\n")
+        val sumDuration = results.fold(Duration.ZERO) { a, b -> a.plus(b.res.duration) }
+        val sumDurationStr = UnitTestResult.durationToString(sumDuration)
+
+        printer.print("\nSUMMARY: $nFailed FAILED / $nOk PASSED / $nTests TOTAL ($sumDurationStr)\n")
 
         val allOk = nFailed == 0
         printer.print("\n***** ${if (allOk) "OK" else "FAILED"} *****")
@@ -118,7 +138,8 @@ class UnitTestRunnerResults {
         if (list.isNotEmpty()) {
             printer.print("")
             for (r in list) {
-                printer.print("${r.res} ${r.case}")
+                val str = r.res.caseResultToString(r.case)
+                printer.print(str)
             }
         }
     }
@@ -165,6 +186,7 @@ object UnitTestRunner {
 
     private fun runTestCase(testCtx: UnitTestRunnerContext, case: UnitTestCase): UnitTestResult {
         val caseName = case.name
+        val startTs = System.nanoTime()
 
         val printer = testCtx.casePrinter
         printer.print(PRINT_SEPARATOR)
@@ -187,14 +209,20 @@ object UnitTestRunner {
             val exeCtx = Rt_ExecutionContext(appCtx, Rt_NullOpContext, testCtx.sqlCtx, sqlExec)
             try {
                 case.fn.callTop(exeCtx, listOf())
-                printer.print("OK $caseName")
-                UnitTestResult(null)
+                processResult(printer, case, startTs, null)
             } catch (e: Throwable) {
                 printException(printer, e)
-                printer.print("FAILED ${case.name}")
-                UnitTestResult(e)
+                processResult(printer, case, startTs, e)
             }
         }
+    }
+
+    private fun processResult(printer: Rt_Printer, case: UnitTestCase, startTs: Long, e: Throwable?): UnitTestResult {
+        val endTs = System.nanoTime()
+        val duration = Duration.ofNanos(endTs - startTs)
+        val res = UnitTestResult(duration, e)
+        printer.print(res.caseResultToString(case))
+        return res
     }
 }
 

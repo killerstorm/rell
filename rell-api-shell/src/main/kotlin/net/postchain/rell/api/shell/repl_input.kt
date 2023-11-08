@@ -19,7 +19,7 @@ object ReplIo {
     val DEFAULT_OUTPUT_FACTORY: ReplOutputChannelFactory = CliReplOutputChannelFactory
 }
 
-private object JlineReplInputChannelFactory: ReplInputChannelFactory() {
+private object JlineReplInputChannelFactory: ReplInputChannelFactory {
     override fun createInputChannel(historyFile: File?): ReplInputChannel {
         val terminal = TerminalBuilder.builder()
             .dumb(true) // Suppress "dump terminal" warning, but use normal terminal if possible.

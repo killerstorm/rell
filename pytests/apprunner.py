@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+#  Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+
 import os
 import re
 import subprocess
@@ -153,18 +155,6 @@ class Multirun(NodeRunner):
         self.__wait_till_up_called = True
         self.read_until_line(r'.+ INFO  PostchainApp - POSTCHAIN APP STARTED')
         port_str, = self.read_until_line(r'.+ INFO  PostchainApp - [ ]*REST API port: (\d+)')
-        self.api_port = int(port_str)
-
-class Postchain(NodeRunner):
-    def __init__(self, command, verbose = False):
-        super().__init__(command, verbose, log_format = testlib.LOG_FORMAT_POSTCHAIN)
-        self.__wait_till_up_called = False
-
-    def wait_till_up(self):
-        assert not self.__wait_till_up_called
-        self.__wait_till_up_called = True
-        port_str, = self.read_until_line(r'.+ RestApi - Rest API listening on port (\d+).*')
-        self.read_until_line('Postchain node is running')
         self.api_port = int(port_str)
 
 class ReplRunner(AppRunner):

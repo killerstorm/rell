@@ -177,3 +177,20 @@ Example. Getting a mount name of an operation:
 
     operation my_op() {}
     query get_op_name() = rell.meta(my_op).mount_name;
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+8. Tools: Unit tests duration output
+
+Unit tests will print duration of each test case and the total duration. The duration is also returned by Rell API
+in the UnitTestResult class.
+
+Output example:
+
+    TEST RESULTS:
+
+    OK tests.foobar:test_foo (0.005s)
+
+    FAILED tests.foobar:test_fail_require (0.001s)
+    FAILED tests.foobar:test_fail_assert_equals (0.001s)
+
+    SUMMARY: 2 FAILED / 1 PASSED / 3 TOTAL (0.007s)
