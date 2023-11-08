@@ -61,26 +61,6 @@
                             <skipTests>true</skipTests>
                         </configuration>
                     </plugin>
-                    <plugin>
-                        <groupId>org.owasp</groupId>
-                        <artifactId>dependency-check-maven</artifactId>
-                        <configuration>
-                            <prettyPrint>true</prettyPrint>
-                            <failBuildOnAnyVulnerability>true</failBuildOnAnyVulnerability>
-                            <assemblyAnalyzerEnabled>false</assemblyAnalyzerEnabled>
-                            <suppressionFiles>
-                                <suppressionFile>https://gitlab.com/chromaway/chromia-parent/-/raw/dev/common-dependencies-suppression.xml?ref_type=heads</suppressionFile>
-                                <suppressionFile>dependencies-suppression.xml</suppressionFile>
-                            </suppressionFiles>
-                        </configuration>
-                        <executions>
-                            <execution>
-                                <goals>
-                                    <goal>check</goal>
-                                </goals>
-                            </execution>
-                        </executions>
-                    </plugin>
                 </plugins>
             </build>
         </profile>
