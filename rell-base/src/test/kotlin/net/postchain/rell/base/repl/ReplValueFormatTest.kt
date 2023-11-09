@@ -16,20 +16,25 @@ class ReplValueFormatTest: BaseRellTest(false) {
         repl.chk("m2", "{Hello=123, Bye=456}")
     }
 
-    @Test fun testStrict() {
-        initRepl("os")
-        repl.chk("123", "int[123]")
-        repl.chk("l", "list<(integer,text)>[(int[123],text[Hello]),(int[456],text[Bye])]")
-        repl.chk("m", "map<integer,text>[int[123]=text[Hello],int[456]=text[Bye]]")
-        repl.chk("m2", "map<text,integer>[text[Hello]=int[123],text[Bye]=int[456]]")
-    }
-
     @Test fun testOneItemPerLine() {
         initRepl("ol")
         repl.chk("123", "123")
         repl.chk("l", "(123,Hello)\n(456,Bye)")
         repl.chk("m", "123=Hello\n456=Bye")
         repl.chk("m2", "Hello=123\nBye=456")
+    }
+
+    @Test fun testGtvString() {
+        initRepl("og")
+        repl.chk("123", "123")
+        repl.chk("123L", "123L")
+        repl.chk("123.0", "\"123\"")
+        repl.chk("true", "1")
+        repl.chk("x'1234'", "x\"1234\"")
+        repl.chk("'Hello'", "\"Hello\"")
+        repl.chk("l", "[[123, \"Hello\"], [456, \"Bye\"]]")
+        repl.chk("m", "[[123, \"Hello\"], [456, \"Bye\"]]")
+        repl.chk("m2", "{Bye=456, Hello=123}")
     }
 
     @Test fun testGtvJson() {

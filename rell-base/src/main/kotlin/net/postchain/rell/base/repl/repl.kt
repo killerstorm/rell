@@ -274,11 +274,11 @@ class ReplInterpreter private constructor(
                 rawQuitCmd to exit,
                 "db-update" to dbUpdate,
                 "db-auto" to dbAuto,
+                "og" to formatCtrl("Gtv.toString()", ReplValueFormat.GTV_STRING),
                 "oj" to formatCtrl("JSON (Gtv)", ReplValueFormat.GTV_JSON),
                 "ox" to formatCtrl("XML (Gtv)", ReplValueFormat.GTV_XML),
                 "ol" to formatCtrl("one collection item per line", ReplValueFormat.ONE_ITEM_PER_LINE),
                 "od" to formatCtrl("default text representation (result of to_text())", ReplValueFormat.DEFAULT),
-                "os" to formatCtrl("\"strict\" text representation", ReplValueFormat.STRICT)
         )
 
         val map = rawMap.mapKeys { (k, _) -> fullCmd(k) }.toImmMap()

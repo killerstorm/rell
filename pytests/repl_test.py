@@ -1,3 +1,5 @@
+#  Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+
 import re
 import pytest
 
@@ -205,22 +207,6 @@ def test__output_format__od():
     finally:
         app.stop()
 
-def test__output_format__os():
-    app = apprunner.ReplRunner('rell.sh')
-    try:
-        init_output_format(app)
-        app.input('\\os\n')
-        app.check_output(['>>> '])
-        app.input('l\n')
-        app.check_output(['list<(integer,text)>[(int[123],text[Hello]),(int[456],text[Bye]),(int[789],text[Ciao])]', '>>> '])
-        app.input('m\n')
-        app.check_output(['map<integer,text>[int[123]=text[Hello],int[456]=text[Bye],int[789]=text[Ciao]]', '>>> '])
-        app.input('m2\n')
-        app.check_output(['map<text,integer>[text[Hello]=int[123],text[Bye]=int[456],text[Ciao]=int[789]]', '>>> '])
-        check_quit(app)
-    finally:
-        app.stop()
-
 def test__output_format__ol():
     app = apprunner.ReplRunner('rell.sh')
     try:
@@ -233,6 +219,36 @@ def test__output_format__ol():
         app.check_output(['123=Hello', '456=Bye', '789=Ciao', '>>> '])
         app.input('m2\n')
         app.check_output(['Hello=123', 'Bye=456', 'Ciao=789', '>>> '])
+        check_quit(app)
+    finally:
+        app.stop()
+
+def test__output_format__og():
+    app = apprunner.ReplRunner('rell.sh')
+    try:
+        init_output_format(app)
+        app.input('\\og\n')
+        app.check_output(['>>> '])
+
+        app.input('123\n')
+        app.check_output(['123', '>>> '])
+        app.input('123L\n')
+        app.check_output(['123L', '>>> '])
+        app.input('123.0\n')
+        app.check_output(['"123"', '>>> '])
+        app.input('true\n')
+        app.check_output(['1', '>>> '])
+        app.input('x"1234"\n')
+        app.check_output(['x"1234"', '>>> '])
+        app.input('"Hello"\n')
+        app.check_output(['"Hello"', '>>> '])
+
+        app.input('l\n')
+        app.check_output(['[[123, "Hello"], [456, "Bye"], [789, "Ciao"]]', '>>> '])
+        app.input('m\n')
+        app.check_output(['[[123, "Hello"], [456, "Bye"], [789, "Ciao"]]', '>>> '])
+        app.input('m2\n')
+        app.check_output(['{Bye=456, Ciao=789, Hello=123}', '>>> '])
         check_quit(app)
     finally:
         app.stop()

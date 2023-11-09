@@ -39,8 +39,8 @@ interface ReplOutputChannel {
 
 enum class ReplValueFormat {
     DEFAULT,
-    STRICT,
     ONE_ITEM_PER_LINE,
+    GTV_STRING,
     GTV_JSON,
     GTV_XML
 }
@@ -49,8 +49,8 @@ object ReplValueFormatter {
     fun format(v: Rt_Value, format: ReplValueFormat): String? {
         val res = when (format) {
             ReplValueFormat.DEFAULT -> formatDefault(v)
-            ReplValueFormat.STRICT -> formatStrict(v)
             ReplValueFormat.ONE_ITEM_PER_LINE -> formatOneItemPerLine(v)
+            ReplValueFormat.GTV_STRING -> formatGtvString(v)
             ReplValueFormat.GTV_JSON -> formatGtvJson(v)
             ReplValueFormat.GTV_XML -> formatGtvXml(v)
         }
@@ -77,6 +77,12 @@ object ReplValueFormatter {
 
     private fun <T> collectionToLines(c: Collection<T>, stringifier: (T) -> String): String? {
         return if (c.isEmpty()) null else c.joinToString("\n") { stringifier(it) }
+    }
+
+    private fun formatGtvString(v: Rt_Value): String? {
+        return formatGtv(v) {
+            it.toString()
+        }
     }
 
     private fun formatGtvJson(v: Rt_Value): String? {
