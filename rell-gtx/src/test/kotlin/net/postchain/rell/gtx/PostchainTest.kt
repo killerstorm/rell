@@ -5,8 +5,7 @@
 package net.postchain.rell.gtx
 
 import net.postchain.base.BaseEContext
-import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.base.data.SQLDatabaseAccess
+import net.postchain.base.data.DatabaseAccess
 import net.postchain.common.BlockchainRid
 import net.postchain.common.hexStringToByteArray
 import net.postchain.core.EContext
@@ -132,7 +131,7 @@ class PostchainTest: BaseResourcefulTest() {
         }
 
         val postchainTables = createAndDumpTables(con) {
-            val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
+            val sqlAccess = PostchainBaseUtils.createDatabaseAccess()
             sqlAccess.initializeApp(con, PostchainBaseUtils.DATABASE_VERSION)
         }
 
@@ -157,7 +156,7 @@ class PostchainTest: BaseResourcefulTest() {
         }
 
         val postchainTables = createAndDumpTables(con) {
-            val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
+            val sqlAccess = PostchainBaseUtils.createDatabaseAccess()
             sqlAccess.initializeApp(con, PostchainBaseUtils.DATABASE_VERSION)
 
             val blockchainRid = BlockchainRid(RellTestUtils.strToRidHex("DEADBEEF").hexStringToByteArray())
@@ -231,5 +230,5 @@ class PostchainTest: BaseResourcefulTest() {
         assertEquals(rExpected, actual.sorted())
     }
 
-    private fun sqlAccess(): SQLDatabaseAccess = PostgreSQLDatabaseAccess()
+    private fun sqlAccess(): DatabaseAccess = PostchainBaseUtils.createDatabaseAccess()
 }

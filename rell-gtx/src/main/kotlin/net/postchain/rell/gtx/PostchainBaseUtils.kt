@@ -5,6 +5,8 @@
 package net.postchain.rell.gtx
 
 import net.postchain.StorageBuilder
+import net.postchain.base.data.DatabaseAccess
+import net.postchain.base.data.DatabaseAccessFactory
 import net.postchain.common.exception.UserMistake
 import net.postchain.gtv.Gtv
 import net.postchain.rell.base.model.R_App
@@ -45,5 +47,9 @@ object PostchainBaseUtils {
         }
 
         return Rt_ChainContext(rawConfig, moduleArgs, blockchainRid)
+    }
+
+    fun createDatabaseAccess(): DatabaseAccess {
+        return DatabaseAccessFactory.createDatabaseAccess(DatabaseAccessFactory.POSTGRES_DRIVER_CLASS)
     }
 }

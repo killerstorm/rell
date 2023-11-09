@@ -7,8 +7,6 @@ package net.postchain.rell.api.gtx
 import net.postchain.base.BaseBlockchainContext
 import net.postchain.base.BaseEContext
 import net.postchain.base.configuration.BlockchainConfigurationData
-import net.postchain.base.data.DatabaseAccess
-import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.common.BlockchainRid
 import net.postchain.common.hexStringToByteArray
 import net.postchain.core.*
@@ -31,6 +29,7 @@ import net.postchain.rell.base.lib.test.Rt_TestBlockValue
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.utils.*
+import net.postchain.rell.gtx.PostchainBaseUtils
 import net.postchain.rell.gtx.Rt_PostchainTxContext
 import net.postchain.rell.gtx.Rt_PostchainTxContextFactory
 import net.postchain.rell.module.RellPostchainModuleEnvironment
@@ -152,7 +151,7 @@ class Rt_PostchainUnitTestBlockRunner(
     }
 
     private fun createEContext(con: Connection, bcCtx: BlockchainContext): EContext {
-        val dbAccess: DatabaseAccess = PostgreSQLDatabaseAccess()
+        val dbAccess = PostchainBaseUtils.createDatabaseAccess()
         return BaseEContext(con, bcCtx.chainID, dbAccess)
     }
 }

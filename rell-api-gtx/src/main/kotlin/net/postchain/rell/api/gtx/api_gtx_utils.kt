@@ -5,7 +5,6 @@
 package net.postchain.rell.api.gtx
 
 import net.postchain.StorageBuilder
-import net.postchain.base.data.PostgreSQLDatabaseAccess
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
@@ -13,6 +12,7 @@ import net.postchain.rell.base.runtime.utils.Rt_SqlManager
 import net.postchain.rell.base.sql.ConnectionSqlManager
 import net.postchain.rell.base.sql.NoConnSqlManager
 import net.postchain.rell.base.sql.SqlManager
+import net.postchain.rell.gtx.PostchainBaseUtils
 import org.apache.http.client.utils.URLEncodedUtils
 import java.net.URI
 import java.sql.Connection
@@ -56,7 +56,7 @@ object RellApiGtxUtils {
             jdbcProperties.setProperty("binaryTransfer", "false")
             DriverManager.getConnection(dbUrl, jdbcProperties).use { con ->
                 con.autoCommit = true
-                PostgreSQLDatabaseAccess().checkCollation(con, suppressError = false)
+                PostchainBaseUtils.createDatabaseAccess().checkCollation(con, suppressError = false)
                 val sqlMgr = ConnectionSqlManager(con, sqlLog)
                 runWithSqlManager(schema, sqlMgr, sqlErrorLog, code)
             }

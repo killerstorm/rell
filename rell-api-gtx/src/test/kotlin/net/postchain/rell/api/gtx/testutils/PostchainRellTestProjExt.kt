@@ -4,8 +4,6 @@
 
 package net.postchain.rell.api.gtx.testutils
 
-import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.gtv.Gtv
 import net.postchain.rell.api.base.RellApiCompile
 import net.postchain.rell.api.gtx.*
@@ -31,7 +29,7 @@ object PostchainRellTestProjExt: RellTestProjExt() {
     }
 
     override fun initSysAppTables(sqlExec: SqlExecutor) {
-        val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
+        val sqlAccess = PostchainBaseUtils.createDatabaseAccess()
         sqlExec.connection { con ->
             sqlAccess.initializeApp(con, PostchainBaseUtils.DATABASE_VERSION)
         }

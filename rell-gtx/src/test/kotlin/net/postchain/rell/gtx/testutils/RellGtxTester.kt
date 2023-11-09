@@ -31,6 +31,7 @@ import net.postchain.rell.base.testutils.RellBaseTester
 import net.postchain.rell.base.testutils.RellTestContext
 import net.postchain.rell.base.testutils.RellTestUtils
 import net.postchain.rell.base.utils.CommonUtils
+import net.postchain.rell.gtx.PostchainBaseUtils
 import net.postchain.rell.module.RellPostchainModuleEnvironment
 import net.postchain.rell.module.RellPostchainModuleFactory
 import kotlin.test.assertEquals
@@ -58,7 +59,7 @@ class RellGtxTester(
 
         val gtxModule = createGtxModule(moduleCode)
 
-        val dbAccess = createDatabaseAccess()
+        val dbAccess = PostchainBaseUtils.createDatabaseAccess()
         sqlExec.connection { con ->
             val ctx = BaseEContext(con, chainId, dbAccess)
             dbAccess.initializeBlockchain(ctx, bRid)
@@ -178,7 +179,7 @@ class RellGtxTester(
         init()
         val res = tstCtx.sqlMgr().execute(tx) { sqlExec ->
             sqlExec.connection { con ->
-                val dbAccess = createDatabaseAccess()
+                val dbAccess = PostchainBaseUtils.createDatabaseAccess()
                 val ctx = BaseEContext(con, chainId, dbAccess)
                 code(ctx)
             }

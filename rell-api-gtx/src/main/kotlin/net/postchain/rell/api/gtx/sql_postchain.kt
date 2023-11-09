@@ -6,8 +6,6 @@ package net.postchain.rell.api.gtx
 
 import net.postchain.base.BaseEContext
 import net.postchain.base.data.DatabaseAccess
-import net.postchain.base.data.PostgreSQLDatabaseAccess
-import net.postchain.base.data.SQLDatabaseAccess
 import net.postchain.base.withReadConnection
 import net.postchain.base.withWriteConnection
 import net.postchain.common.BlockchainRid
@@ -57,7 +55,7 @@ object PostchainSqlInitProjExt: SqlInitProjExt() {
         val chainId = exeCtx.sqlCtx.mainChainMapping().chainId
         val bcRid = BlockchainRid(exeCtx.appCtx.chainCtx.blockchainRid.toByteArray())
 
-        val sqlAccess: SQLDatabaseAccess = PostgreSQLDatabaseAccess()
+        val sqlAccess = PostchainBaseUtils.createDatabaseAccess()
         exeCtx.sqlExec.connection { con ->
             sqlAccess.initializeApp(con, PostchainBaseUtils.DATABASE_VERSION)
             val eCtx: EContext = BaseEContext(con, chainId, sqlAccess)
