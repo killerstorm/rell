@@ -4,6 +4,7 @@
 
 package net.postchain.rell.gtx
 
+import net.postchain.StorageBuilder
 import net.postchain.common.exception.UserMistake
 import net.postchain.gtv.Gtv
 import net.postchain.rell.base.model.R_App
@@ -14,7 +15,7 @@ import net.postchain.rell.base.utils.Bytes32
 import net.postchain.rell.base.utils.PostchainGtvUtils
 
 object PostchainBaseUtils {
-    const val DATABASE_VERSION = 10
+    val DATABASE_VERSION: Int = StorageBuilder.getCurrentDbVersion()
 
     fun calcBlockchainRid(config: Gtv): Bytes32 {
         val hash = PostchainGtvUtils.merkleHash(config)

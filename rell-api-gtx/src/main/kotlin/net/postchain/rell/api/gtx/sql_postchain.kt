@@ -37,17 +37,17 @@ class PostchainStorageSqlManager(private val storage: Storage, logging: Boolean)
             }
         } else {
             storage.withReadConnection { ctx ->
-                executeWithConnection(ctx.conn, true, code)
+                executeWithConnection(ctx.conn, ctx.conn.autoCommit, code)
             }
         }
         return res
     }
 
-    private fun <T> executeWithConnection(con: Connection, autoCommit: Boolean, code: (SqlExecutor) -> T): T {
-        checkEquals(con.autoCommit, autoCommit)
+    private fun <T> executeWithConnection(con: Connection, expectedAutoCommit: Boolean, code: (SqlExecutor) -> T): T {
+        checkEquals(con.autoCommit, expectedAutoCommit)
         val sqlExec = ConnectionSqlExecutor(con, conLogger)
         val res = code(sqlExec)
-        checkEquals(con.autoCommit, autoCommit)
+        checkEquals(con.autoCommit, expectedAutoCommit)
         return res
     }
 }
