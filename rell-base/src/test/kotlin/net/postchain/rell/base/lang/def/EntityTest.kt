@@ -482,6 +482,17 @@ class EntityTest: BaseRellTest(false) {
         chkKeyIndex("$defs entity data { KW b.foo; a.foo; }", "ct_err:entity:attr:type_diff:[a.foo]:[b.foo]")
     }
 
+    private fun chkKeyIndex(code: String, exp: String) {
+        chkEntityKeyIndex0(code, exp, "key")
+        chkEntityKeyIndex0(code, exp, "index")
+    }
+
+    private fun chkEntityKeyIndex0(code: String, exp: String, kw: String) {
+        val code2 = code.replace("KW", kw)
+        val exp2 = exp.replace("KW", if (exp.startsWith("ct_err:")) kw.toUpperCase() else kw)
+        chkEntity(code2, exp2)
+    }
+
     @Test fun testPathQueryCount() {
         tstCtx.useSql = true
         def("entity e1 { v: integer; }")
@@ -495,19 +506,19 @@ class EntityTest: BaseRellTest(false) {
         insert("c0.e4", "e3", "14,13")
         insert("c0.e5", "e4", "15,14")
 
-        resetSqlCtr()
+        chkSqlCtr(0)
         chkEx("{ val e = e5@{}; return e; }", "e5[15]")
-        chkSql(1)
+        chkSqlCtr(1)
         chkEx("{ val e = e5@{}; return e.e4; }", "e4[14]")
-        chkSql(2)
+        chkSqlCtr(2)
         chkEx("{ val e = e5@{}; return e.e4.e3; }", "e3[13]")
-        chkSql(2)
+        chkSqlCtr(2)
         chkEx("{ val e = e5@{}; return e.e4.e3.e2; }", "e2[12]")
-        chkSql(2)
+        chkSqlCtr(2)
         chkEx("{ val e = e5@{}; return e.e4.e3.e2.e1; }", "e1[11]")
-        chkSql(2)
+        chkSqlCtr(2)
         chkEx("{ val e = e5@{}; return e.e4.e3.e2.e1.v; }", "int[123]")
-        chkSql(2)
+        chkSqlCtr(2)
     }
 
     @Test fun testPathQueryCountNullable() {
@@ -523,32 +534,47 @@ class EntityTest: BaseRellTest(false) {
         insert("c0.e4", "e3", "14,13")
         insert("c0.e5", "e4", "15,14")
 
+        chkSqlCtr(0)
         chkEx("{ val e = e5@?{}; return e; }", "e5[15]")
-        chkSql(1)
+        chkSqlCtr(1)
         chkEx("{ val e = e5@?{}; return e?.e4; }", "e4[14]")
-        chkSql(2)
+        chkSqlCtr(2)
         chkEx("{ val e = e5@?{}; return e?.e4?.e3; }", "e3[13]")
-        chkSql(2)
+        chkSqlCtr(2)
         chkEx("{ val e = e5@?{}; return e?.e4?.e3?.e2; }", "e2[12]")
-        chkSql(2)
+        chkSqlCtr(2)
         chkEx("{ val e = e5@?{}; return e?.e4?.e3?.e2?.e1; }", "e1[11]")
-        chkSql(2)
+        chkSqlCtr(2)
         chkEx("{ val e = e5@?{}; return e?.e4?.e3?.e2?.e1?.v; }", "int[123]")
-        chkSql(2)
-
+        chkSqlCtr(2)
         chkEx("{ val e = e5@?{false}; return e?.e4?.e3?.e2?.e1?.v; }", "null")
-        chkSql(1)
+        chkSqlCtr(1)
     }
 
-    private fun chkKeyIndex(code: String, exp: String) {
-        chkEntityKeyIndex0(code, exp, "key")
-        chkEntityKeyIndex0(code, exp, "index")
+    @Test fun testAttributeReadSql() {
+        tstCtx.useSql = true
+        def("entity data { value: integer; }")
+        insert("c0.data", "value", "10,123")
+
+        chkSql()
+        chkEx("{ val e = data@{}; return e.value; }", "int[123]")
+        chkSql(
+            """SELECT A00."rowid" FROM "c0.data" A00""",
+            """SELECT A00."value" FROM "c0.data" A00 WHERE A00."rowid" = ?""",
+        )
     }
 
-    private fun chkEntityKeyIndex0(code: String, exp: String, kw: String) {
-        val code2 = code.replace("KW", kw)
-        val exp2 = exp.replace("KW", if (exp.startsWith("ct_err:")) kw.toUpperCase() else kw)
-        chkEntity(code2, exp2)
+    @Test fun testToStructSql() {
+        tstCtx.useSql = true
+        def("entity data { value: integer; }")
+        insert("c0.data", "value", "10,123")
+
+        chkSql()
+        chkEx("{ val e = data@{}; return e.to_struct(); }", "struct<data>[value=int[123]]")
+        chkSql(
+            """SELECT A00."rowid" FROM "c0.data" A00""",
+            """SELECT A00."value" FROM "c0.data" A00 WHERE A00."rowid" = ?""",
+        )
     }
 
     private fun chkEntity(code: String, exp: String) {

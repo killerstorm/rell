@@ -97,7 +97,7 @@ abstract class RellBaseTester(
             }
         }
 
-        tstCtx.resetSqlCounter()
+        tstCtx.resetSqlBuffer()
     }
 
     private fun initCompile(code: String): R_App {
@@ -258,7 +258,7 @@ abstract class RellBaseTester(
     private fun dumpDatabaseEntities(): List<String> {
         init()
         val sqlMapping = createChainSqlMapping()
-        val res = tstCtx.sqlMgr().access { sqlExec ->
+        val res = tstCtx.innerSqlMgr().access { sqlExec ->
             SqlTestUtils.dumpDatabaseEntity(sqlExec, sqlMapping, appProto!!)
         }
         return res

@@ -78,7 +78,7 @@ object Lib_Type_Object {
             val whatExpr = Db_AttrExpr(Db_EntityExpr(atEntity), attr)
             val whatValue = Db_AtWhatValue_DbExpr(whatExpr, whatExpr.type)
             val whatField = Db_AtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
-            val rExpr: R_Expr = ObjectUtils.createRExpr(rObject, atEntity, whatField, attr.type)
+            val rExpr: R_Expr = ObjectUtils.createObjectMemberRExpr(rObject, atEntity, whatField, attr.type)
             return R_MemberCalculator_ObjectAttr(rExpr, attr.type)
         }
 
@@ -174,7 +174,7 @@ private class V_SpecialMemberFunctionCall_ObjectToStruct(
         val atEntity = exprCtx.makeAtEntity(objectType.rObject.rEntity, exprCtx.appCtx.nextAtExprId())
         val whatValue = createWhatValue(Db_EntityExpr(atEntity))
         val whatField = Db_AtWhatField(R_AtWhatFieldFlags.DEFAULT, whatValue)
-        val rExpr = ObjectUtils.createRExpr(objectType.rObject, atEntity, whatField, structType)
+        val rExpr = ObjectUtils.createObjectMemberRExpr(objectType.rObject, atEntity, whatField, structType)
         return R_MemberCalculator_ObjectAttr(rExpr, structType)
     }
 
@@ -196,7 +196,7 @@ private class V_SpecialMemberFunctionCall_ObjectToStruct(
 }
 
 private object ObjectUtils {
-    fun createRExpr(
+    fun createObjectMemberRExpr(
         rObject: R_ObjectDefinition,
         atEntity: R_DbAtEntity,
         whatField: Db_AtWhatField,
@@ -204,7 +204,7 @@ private object ObjectUtils {
     ): R_Expr {
         val from = listOf(atEntity)
         val what = listOf(whatField)
-        val atBase = Db_AtExprBase(from, what, null)
+        val atBase = Db_AtExprBase(from, what, null, isMany = false)
         return R_ObjectAttrExpr(resType, rObject, atBase)
     }
 }

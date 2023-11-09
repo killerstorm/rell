@@ -271,12 +271,16 @@ class RellCodeTester(
         assertEquals(expected, actual)
     }
 
-    fun resetSqlCtr() {
-        tstCtx.resetSqlCounter()
+    fun resetSqlBuffer() {
+        tstCtx.resetSqlBuffer()
     }
 
-    fun chkSql(expected: Int) {
-        assertEquals(expected, tstCtx.sqlCounter())
+    fun chkSql(vararg expected: String) {
+        tstCtx.chkSql(expected.toList())
+    }
+
+    fun chkSqlCtr(expected: Int) {
+        tstCtx.chkSqlCtr(expected)
     }
 
     fun createRepl(): RellReplTester {

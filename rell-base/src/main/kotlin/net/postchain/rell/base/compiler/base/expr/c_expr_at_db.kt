@@ -183,7 +183,12 @@ class C_AtFrom_Entities(
 
     private fun compileBase(details: C_AtDetails): V_AtExprBase {
         val rFrom = entities.map { it.toRAtEntity() }
-        return V_AtExprBase(rFrom, details.base.what.materialFields, details.base.where)
+        return V_AtExprBase(
+            rFrom,
+            details.base.what.materialFields,
+            details.base.where,
+            isMany = details.cardinality.value.many,
+        )
     }
 
     fun compileUpdate(): R_FrameBlock {

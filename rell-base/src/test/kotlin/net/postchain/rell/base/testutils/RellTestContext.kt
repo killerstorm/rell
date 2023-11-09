@@ -11,6 +11,9 @@ import java.io.Closeable
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.util.ArrayDeque
+import java.util.Queue
+import kotlin.test.assertEquals
 
 class RellTestContext(
     val projExt: RellTestProjExt = BaseRellTestProjExt,
@@ -42,7 +45,7 @@ class RellTestContext(
     private var inited = false
     private var destroyed = false
     private var sqlResource: AutoCloseable? = null
-    private var sqlMgr: SqlManager? = null
+    private var sqlMgrHolder: SqlMgrHolder? = null
     private val sqlStats = TestSqlStats()
 
     var sqlLogging = false
@@ -71,9 +74,9 @@ class RellTestContext(
         try {
             conn.autoCommit = true
 
-            val sqlMgr = Rt_SqlManager(TestSqlManager(ConnectionSqlManager(conn, sqlLogging), sqlStats), true)
+            val sqlMgrHolder = createSqlManager(conn)
 
-            sqlMgr.transaction { sqlExec ->
+            sqlMgrHolder.innerMgr.transaction { sqlExec ->
                 SqlUtils.dropAll(sqlExec, true)
 
                 projExt.initSysAppTables(sqlExec)
@@ -85,12 +88,18 @@ class RellTestContext(
                 }
             }
 
-            this.sqlMgr = sqlMgr
+            this.sqlMgrHolder = sqlMgrHolder
             sqlResource = conn
             closeable = null
         } finally {
             closeable?.close()
         }
+    }
+
+    private fun createSqlManager(conn: Connection): SqlMgrHolder {
+        val innerMgr = ConnectionSqlManager(conn, sqlLogging)
+        val outerMgr = Rt_SqlManager(TestSqlManager(innerMgr, sqlStats), true)
+        return SqlMgrHolder(innerMgr, outerMgr)
     }
 
     private fun initSqlInsertBlockchains(sqlExecLoc: SqlExecutor) {
@@ -136,17 +145,30 @@ class RellTestContext(
 
     fun sqlMgr(): SqlManager {
         init()
-        return if (useSql) sqlMgr!! else NoConnSqlManager
+        return if (useSql) sqlMgrHolder!!.outerMgr else NoConnSqlManager
     }
 
-    fun resetSqlCounter() {
-        sqlStats.count = 0
+    fun innerSqlMgr(): SqlManager {
+        init()
+        return if (useSql) sqlMgrHolder!!.innerMgr else NoConnSqlManager
     }
 
-    fun sqlCounter() = sqlStats.count
+    fun resetSqlBuffer() {
+        sqlStats.sqls.clear()
+    }
+
+    fun chkSql(expected: List<String>) {
+        assertEquals(expected, sqlStats.sqls.toList())
+        sqlStats.sqls.clear()
+    }
+
+    fun chkSqlCtr(expected: Int) {
+        assertEquals(expected, sqlStats.sqls.size)
+        sqlStats.sqls.clear()
+    }
 
     private class TestSqlStats {
-        var count = 0
+        val sqls: Queue<String> = ArrayDeque()
     }
 
     private class TestSqlManager(private val mgr: SqlManager, private val stats: TestSqlStats): SqlManager() {
@@ -162,19 +184,21 @@ class RellTestContext(
             override fun <T> connection(code: (Connection) -> T): T = exec.connection(code)
 
             override fun execute(sql: String) {
-                stats.count++
+                stats.sqls.add(sql)
                 exec.execute(sql)
             }
 
             override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) {
-                stats.count++
+                stats.sqls.add(sql)
                 exec.execute(sql, preparator)
             }
 
             override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
-                stats.count++
+                stats.sqls.add(sql)
                 exec.executeQuery(sql, preparator, consumer)
             }
         }
     }
+
+    private class SqlMgrHolder(val innerMgr: SqlManager, val outerMgr: SqlManager)
 }

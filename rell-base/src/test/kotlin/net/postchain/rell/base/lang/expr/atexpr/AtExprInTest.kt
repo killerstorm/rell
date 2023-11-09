@@ -442,8 +442,8 @@ class AtExprInTest: BaseRellTest() {
     }
 
     private fun chkSql(selects: Int, expr: String, expected: String) {
-        resetSqlCtr()
+        chkSqlCtr(0)
         chk(expr, expected)
-        chkSql(selects)
+        chkSqlCtr(selects)
     }
 }

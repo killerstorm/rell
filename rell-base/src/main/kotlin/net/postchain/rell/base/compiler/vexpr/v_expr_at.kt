@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.vexpr
@@ -92,9 +92,10 @@ class V_DbAtWhat(allFields: List<V_DbAtWhatField>) {
 }
 
 class V_AtExprBase(
-        from: List<R_DbAtEntity>,
-        what: List<V_DbAtWhatField>,
-        private val where: V_Expr?
+    from: List<R_DbAtEntity>,
+    what: List<V_DbAtWhatField>,
+    private val where: V_Expr?,
+    private val isMany: Boolean,
 ) {
     private val from = from.toImmList()
     private val what = what.toImmList()
@@ -108,7 +109,7 @@ class V_AtExprBase(
     fun toDbBase(nested: Boolean): Db_AtExprBase {
         val dbWhat = what.map { it.toDbField(nested) }
         val dbWhere = where?.toDbExpr()
-        return Db_AtExprBase(from, dbWhat, dbWhere)
+        return Db_AtExprBase(from, dbWhat, dbWhere, isMany)
     }
 }
 

@@ -53,8 +53,9 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
     fun chkWarn(vararg  expected: String) = tst.chkWarn(*expected)
     fun chkStack(vararg expected: String) = tst.chkStack(*expected)
 
-    fun resetSqlCtr() = tst.resetSqlCtr()
-    fun chkSql(expected: Int) = tst.chkSql(expected)
+    fun resetSqlBuffer() = tst.resetSqlBuffer()
+    fun chkSql(vararg expected: String) = tst.chkSql(*expected)
+    fun chkSqlCtr(expected: Int) = tst.chkSqlCtr(expected)
 
     fun chkTests(testModule: String, expected: String) = tst.chkTests(testModule, expected)
 

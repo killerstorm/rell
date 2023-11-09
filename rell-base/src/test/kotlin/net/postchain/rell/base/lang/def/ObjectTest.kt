@@ -339,4 +339,20 @@ class ObjectTest: BaseRellTest() {
         def("object state { mutable x: decimal = 123; }")
         chk("state.x", "dec[123]")
     }
+
+    @Test fun testAttributeReadSql() {
+        tstCtx.useSql = true
+        def("object state { mutable value: integer = 123; }")
+        chkSql()
+        chk("state.value", "int[123]")
+        chkSql("""SELECT A00."value" FROM "c0.state" A00""")
+    }
+
+    @Test fun testToStructSql() {
+        tstCtx.useSql = true
+        def("object state { mutable value: integer = 123; }")
+        chkSql()
+        chk("state.to_struct()", "struct<state>[value=int[123]]")
+        chkSql("""SELECT A00."value" FROM "c0.state" A00""")
+    }
 }

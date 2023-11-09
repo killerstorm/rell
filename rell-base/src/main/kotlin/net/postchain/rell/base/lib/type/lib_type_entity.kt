@@ -199,7 +199,7 @@ private object EntityUtils {
         val what = listOf(whatField)
 
         val from = listOf(atEntity)
-        val atBase = Db_AtExprBase(from, what, where)
+        val atBase = Db_AtExprBase(from, what, where, isMany = false)
         return R_MemberCalculator_DataAttribute(resType, atBase, cLambda.rLambda)
     }
 

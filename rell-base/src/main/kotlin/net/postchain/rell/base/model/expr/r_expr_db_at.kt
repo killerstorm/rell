@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.model.expr
@@ -194,7 +194,12 @@ class Db_AtWhatField(val flags: R_AtWhatFieldFlags, val value: Db_AtWhatValue)
 
 class RedDb_AtWhatField(val expr: RedDb_Expr, val flags: R_AtWhatFieldFlags)
 
-class RedDb_AtExprBase(from: List<R_DbAtEntity>, private val where: RedDb_Expr?, what: List<RedDb_AtWhatField>) {
+class RedDb_AtExprBase(
+    from: List<R_DbAtEntity>,
+    private val where: RedDb_Expr?,
+    what: List<RedDb_AtWhatField>,
+    private val isMany: Boolean,
+) {
     private val from = from.toImmList()
     private val what = what.toImmList()
 
@@ -211,7 +216,7 @@ class RedDb_AtExprBase(from: List<R_DbAtEntity>, private val where: RedDb_Expr?,
     }
 
     private fun buildSql0(ctx: SqlGenContext, b: SqlBuilder, extras: Rt_AtExprExtras) {
-        val sqlParts = AtExprSqlParts(ctx)
+        val sqlParts = AtExprSqlParts(ctx, extras)
         appendClause(b, "SELECT", sqlParts.whatSqls)
         appendClause(b, " FROM", sqlParts.fromSqls)
         appendClause(b, " WHERE", sqlParts.whereSql)
@@ -239,7 +244,7 @@ class RedDb_AtExprBase(from: List<R_DbAtEntity>, private val where: RedDb_Expr?,
         appendClause(b, clause, sql)
     }
 
-    private inner class AtExprSqlParts(ctx: SqlGenContext) {
+    private inner class AtExprSqlParts(ctx: SqlGenContext, private val extras: Rt_AtExprExtras) {
         val whereSql = translateWhere(ctx, where)
         val whatSqls = translateWhat(ctx, what)
         val groupBySqls = translateGroupBy(ctx, what)
@@ -313,7 +318,7 @@ class RedDb_AtExprBase(from: List<R_DbAtEntity>, private val where: RedDb_Expr?,
                         elements.add(OrderByElement_Expr(field.expr, R_AtWhatSort.ASC))
                     }
                 }
-            } else {
+            } else if (isMany || extras.limit != null || extras.offset != null) {
                 for (entity in from) {
                     elements.add(OrderByElement_Entity(entity))
                 }
@@ -345,9 +350,10 @@ class RedDb_AtExprBase(from: List<R_DbAtEntity>, private val where: RedDb_Expr?,
 }
 
 class Db_AtExprBase(
-        from: List<R_DbAtEntity>,
-        what: List<Db_AtWhatField>,
-        private val where: Db_Expr?
+    from: List<R_DbAtEntity>,
+    what: List<Db_AtWhatField>,
+    private val where: Db_Expr?,
+    private val isMany: Boolean,
 ) {
     private val from = from.toImmList()
     private val what = what.toImmList()
@@ -367,7 +373,7 @@ class Db_AtExprBase(
             redExprs.map { RedDb_AtWhatField(it, whatField.flags) }
         }
 
-        return RedDb_AtExprBase(from, redWhere, redWhat)
+        return RedDb_AtExprBase(from, redWhere, redWhat, isMany)
     }
 
     private fun makeFullWhere(frame: Rt_CallFrame): RedDb_Expr? {

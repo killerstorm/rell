@@ -675,14 +675,14 @@ class UpdateDeleteTest: BaseRellTest() {
 
         chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
 
-        resetSqlCtr()
+        chkSqlCtr(0)
         chkOp("val u = user @ {}; u.company.city = 'Seattle';")
-        chkSql(2)
+        chkSqlCtr(2)
         chkData("group(300,Foo)", "company(100,Adidas,Seattle,300)", "user(200,Bob,100)")
 
-        resetSqlCtr()
+        chkSqlCtr(0)
         chkOp("val u = user @ {}; u.company.group.name = 'Bar';")
-        chkSql(2)
+        chkSqlCtr(2)
         chkData("group(300,Bar)", "company(100,Adidas,Seattle,300)", "user(200,Bob,100)")
     }
 
@@ -695,9 +695,9 @@ class UpdateDeleteTest: BaseRellTest() {
         chkOp("val u = user @? {}; u?.company.city = 'Dallas';", "ct_err:expr_mem_null:company?:city")
         chkData("group(300,Foo)", "company(100,Adidas,Boston,300)", "user(200,Bob,100)")
 
-        resetSqlCtr()
+        resetSqlBuffer()
         chkOp("val u = user @? {}; u?.company?.city = 'Dallas';")
-        chkSql(2)
+        chkSqlCtr(2)
         chkData("group(300,Foo)", "company(100,Adidas,Dallas,300)", "user(200,Bob,100)")
 
         chkOp("val u = user @? { 'Alice' }; u?.company?.city = 'Chicago';")

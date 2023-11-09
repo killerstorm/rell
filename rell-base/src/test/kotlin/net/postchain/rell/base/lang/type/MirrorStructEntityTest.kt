@@ -267,17 +267,18 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         insert("c0.company", "name,city", "55,'ChromaWay','Stockholm'")
         insert("c0.user", "name,company", "33,'Bob',55")
 
+        chkSqlCtr(0)
         chk("user@{} (user.to_struct())", "struct<user>[name=text[Bob],company=company[55]]")
-        chkSql(1)
+        chkSqlCtr(1)
 
         chk("user@{} (user.company.to_struct())", "struct<company>[name=text[ChromaWay],city=text[Stockholm]]")
-        chkSql(1)
+        chkSqlCtr(1)
 
         chkEx("{ val u = user@{}; return u.to_struct(); }", "struct<user>[name=text[Bob],company=company[55]]")
-        chkSql(2)
+        chkSqlCtr(2)
 
         chkEx("{ val u = user@{}; return u.company.to_struct(); }", "struct<company>[name=text[ChromaWay],city=text[Stockholm]]")
-        chkSql(3) //TODO shall be 2, not 3
+        chkSqlCtr(3) //TODO shall be 2, not 3
     }
 
     private fun initToStructEntity() {
