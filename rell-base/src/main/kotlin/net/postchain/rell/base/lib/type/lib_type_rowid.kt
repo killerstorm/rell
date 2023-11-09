@@ -19,7 +19,7 @@ object Lib_Type_Rowid {
                 body { a ->
                     val v = a.asInteger()
                     Rt_Utils.check(v >= 0) { "rowid(integer):negative:$v" toCodeMsg "Negative value: $v" }
-                    Rt_RowidValue(v)
+                    Rt_RowidValue.get(v)
                 }
             }
 
@@ -27,7 +27,7 @@ object Lib_Type_Rowid {
                 dbFunctionTemplate("rowid.to_integer", 1, "#0")
                 body { a ->
                     val v = a.asRowid()
-                    Rt_IntValue(v)
+                    Rt_IntValue.get(v)
                 }
             }
         }

@@ -125,19 +125,31 @@ object GtvRtConversion_Null: GtvRtConversion() {
 object GtvRtConversion_Boolean: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvInteger(if (rt.asBoolean()) 1L else 0L)
-    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_BooleanValue(GtvRtUtils.gtvToBoolean(ctx, gtv, R_BooleanType))
+
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
+        val v = GtvRtUtils.gtvToBoolean(ctx, gtv, R_BooleanType)
+        return Rt_BooleanValue.get(v)
+    }
 }
 
 object GtvRtConversion_Text: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvString(rt.asString())
-    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_TextValue(GtvRtUtils.gtvToString(ctx, gtv, R_TextType))
+
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
+        val s = GtvRtUtils.gtvToString(ctx, gtv, R_TextType)
+        return Rt_TextValue.get(s)
+    }
 }
 
 object GtvRtConversion_Integer: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvInteger(rt.asInteger())
-    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_IntValue(GtvRtUtils.gtvToInteger(ctx, gtv, R_IntegerType))
+
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
+        val v = GtvRtUtils.gtvToInteger(ctx, gtv, R_IntegerType)
+        return Rt_IntValue.get(v)
+    }
 }
 
 object GtvRtConversion_BigInteger: GtvRtConversion() {
@@ -146,7 +158,7 @@ object GtvRtConversion_BigInteger: GtvRtConversion() {
 
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         val v = GtvRtUtils.gtvToBigInteger(ctx, gtv, R_BigIntegerType)
-        return Rt_BigIntegerValue.of(v)
+        return Rt_BigIntegerValue.get(v)
     }
 }
 
@@ -158,16 +170,16 @@ object GtvRtConversion_Decimal: GtvRtConversion() {
         return when (gtv.type) {
             GtvType.INTEGER -> {
                 val v = GtvRtUtils.gtvToInteger(ctx, gtv, R_DecimalType)
-                Rt_DecimalValue.of(v)
+                Rt_DecimalValue.get(v)
             }
             GtvType.BIGINTEGER -> {
                 val v = gtv.asBigInteger()
                 val bd = BigDecimal(v)
-                Rt_DecimalValue.of(bd)
+                Rt_DecimalValue.get(bd)
             }
             else -> {
                 val s = GtvRtUtils.gtvToString(ctx, gtv, R_DecimalType)
-                Rt_DecimalValue.of(s)
+                Rt_DecimalValue.get(s)
             }
         }
     }
@@ -176,7 +188,11 @@ object GtvRtConversion_Decimal: GtvRtConversion() {
 object GtvRtConversion_ByteArray: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = GtvByteArray(rt.asByteArray())
-    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_ByteArrayValue(GtvRtUtils.gtvToByteArray(ctx, gtv, R_ByteArrayType))
+
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
+        val v = GtvRtUtils.gtvToByteArray(ctx, gtv, R_ByteArrayType)
+        return Rt_ByteArrayValue.get(v)
+    }
 }
 
 object GtvRtConversion_Rowid: GtvRtConversion() {
@@ -188,7 +204,7 @@ object GtvRtConversion_Rowid: GtvRtConversion() {
         if (v < 0) {
             throw GtvRtUtils.errGtv(ctx, "rowid:negative:$v", "Negative value of $R_RowidType type: $v")
         }
-        return Rt_RowidValue(v)
+        return Rt_RowidValue.get(v)
     }
 }
 
@@ -314,7 +330,7 @@ class GtvRtConversion_Enum(private val enum: R_EnumDefinition): GtvRtConversion(
             }
             attr
         }
-        return Rt_EnumValue(enum.type, attr)
+        return enum.type.getValue(attr)
     }
 }
 
@@ -397,7 +413,7 @@ class GtvRtConversion_Map(val type: R_MapType): GtvRtConversion() {
     override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv): Rt_Value {
         val map = if (type.keyType == R_TextType && gtv.type == GtvType.DICT) {
             GtvRtUtils.gtvToMap(ctx, gtv, type)
-                    .mapKeys { (k, _) -> Rt_TextValue(k) as Rt_Value }
+                    .mapKeys { (k, _) -> Rt_TextValue.get(k) as Rt_Value }
                     .mapValues { (_, v) -> type.valueType.gtvToRt(ctx, v) }
                     .toMutableMap()
         } else {
@@ -500,7 +516,7 @@ class GtvRtConversion_Tuple(val type: R_TupleType): GtvRtConversion() {
 object GtvRtConversion_Gtv: GtvRtConversion() {
     override fun directCompatibility() = R_GtvCompatibility(true, true)
     override fun rtToGtv(rt: Rt_Value, pretty: Boolean) = rt.asGtv()
-    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_GtvValue(gtv)
+    override fun gtvToRt(ctx: GtvToRtContext, gtv: Gtv) = Rt_GtvValue.get(gtv)
 }
 
 sealed class GtvRtConversion_Virtual: GtvRtConversion() {
@@ -642,7 +658,7 @@ class GtvRtConversion_VirtualMap(private val type: R_VirtualMapType): GtvRtConve
             val gtvMap = decodeMap(ctx, v, type)
             val rtMap = gtvMap
                     .mapValues { (_, v) -> decodeVirtualElement(ctx, type.innerType.valueType, v) }
-                    .mapKeys { (k, _) -> Rt_TextValue(k) as Rt_Value }
+                    .mapKeys { (k, _) -> Rt_TextValue.get(k) }
             return Rt_VirtualMapValue(v, type, rtMap)
         }
 

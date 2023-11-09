@@ -102,8 +102,8 @@ class S_UnaryOp_IncDec(val inc: Boolean, val post: Boolean): S_UnaryOp(if (inc) 
 
     companion object {
         private val INTEGER_ONE = R_ConstantValueExpr.makeInt(1)
-        private val BIG_INTEGER_ONE = R_ConstantValueExpr(Rt_BigIntegerValue.of(1))
-        private val DECIMAL_ONE = R_ConstantValueExpr(Rt_DecimalValue.of(1))
+        private val BIG_INTEGER_ONE = R_ConstantValueExpr(Rt_BigIntegerValue.get(1))
+        private val DECIMAL_ONE = R_ConstantValueExpr(Rt_DecimalValue.get(1))
 
         private val INTEGER_INCREMENT = C_IncDecOp("++", R_BinaryOp_Add_Integer, Db_BinaryOp_Add_Integer, INTEGER_ONE)
         private val INTEGER_DECREMENT = C_IncDecOp("--", R_BinaryOp_Sub_Integer, Db_BinaryOp_Sub_Integer, INTEGER_ONE)

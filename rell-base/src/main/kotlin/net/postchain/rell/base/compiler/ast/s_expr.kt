@@ -111,15 +111,15 @@ sealed class S_LiteralExpr(pos: S_Pos): S_Expr(pos) {
 }
 
 class S_StringLiteralExpr(pos: S_Pos, val literal: String): S_LiteralExpr(pos) {
-    override fun value() = Rt_TextValue(literal)
+    override fun value() = Rt_TextValue.get(literal)
 }
 
 class S_ByteArrayLiteralExpr(pos: S_Pos, val bytes: ByteArray): S_LiteralExpr(pos) {
-    override fun value() = Rt_ByteArrayValue(bytes)
+    override fun value() = Rt_ByteArrayValue.get(bytes)
 }
 
 class S_IntegerLiteralExpr(pos: S_Pos, val value: Long): S_LiteralExpr(pos) {
-    override fun value() = Rt_IntValue(value)
+    override fun value() = Rt_IntValue.get(value)
 }
 
 class S_CommonLiteralExpr(pos: S_Pos, val value: Rt_Value): S_LiteralExpr(pos) {
@@ -127,7 +127,7 @@ class S_CommonLiteralExpr(pos: S_Pos, val value: Rt_Value): S_LiteralExpr(pos) {
 }
 
 class S_BooleanLiteralExpr(pos: S_Pos, val value: Boolean): S_LiteralExpr(pos) {
-    override fun value() = Rt_BooleanValue(value)
+    override fun value() = Rt_BooleanValue.get(value)
 }
 
 class S_NullLiteralExpr(pos: S_Pos): S_LiteralExpr(pos) {

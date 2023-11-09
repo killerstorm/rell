@@ -50,8 +50,9 @@ class Rt_RellVersion private constructor(
 
             val properties = getRtProperties(raw)
 
-            val rtProperties = properties.map { Rt_TextValue(it.key.key) to Rt_TextValue(it.value) }
-                    .toMap<Rt_Value, Rt_Value>().toImmMap()
+            val rtProperties = properties
+                .map { Rt_TextValue.get(it.key.key) to Rt_TextValue.get(it.value) }
+                .toImmMap()
 
             val buildDescriptor = getBuildDescriptor(properties)
             return Rt_RellVersion(properties, rtProperties, buildDescriptor)

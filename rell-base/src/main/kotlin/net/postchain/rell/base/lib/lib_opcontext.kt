@@ -60,7 +60,7 @@ object Lib_OpContext {
             bodyContext { ctx, a ->
                 val bytes = a.asByteArray().toBytes()
                 val r = ctx.exeCtx.opCtx.isSigner(bytes)
-                Rt_BooleanValue(r)
+                Rt_BooleanValue.get(r)
             }
         }
 
@@ -70,8 +70,8 @@ object Lib_OpContext {
             function("to_gtx_operation", "gtx_operation") {
                 body { a ->
                     val (mountName, gtvArgs) = Lib_Type_Struct.decodeOperation(a)
-                    val nameValue = Rt_TextValue(mountName.str())
-                    val rtArgs = gtvArgs.map<Gtv, Rt_Value> { Rt_GtvValue(it) }.toMutableList()
+                    val nameValue = Rt_TextValue.get(mountName.str())
+                    val rtArgs = gtvArgs.map<Gtv, Rt_Value> { Rt_GtvValue.get(it) }.toMutableList()
                     val argsValue = Rt_ListValue(Lib_Type_Gtv.LIST_OF_GTV_TYPE, rtArgs)
                     val attrs = mutableListOf(nameValue, argsValue)
                     Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, attrs)
@@ -83,28 +83,28 @@ object Lib_OpContext {
             property("exists", type = "boolean", pure = false) {
                 bodyContext { ctx ->
                     val v = ctx.exeCtx.opCtx.exists()
-                    Rt_BooleanValue(v)
+                    Rt_BooleanValue.get(v)
                 }
             }
 
             property("last_block_time", type = "integer", pure = false) {
                 validate(::checkCtx)
                 bodyContext { ctx ->
-                    Rt_IntValue(ctx.exeCtx.opCtx.lastBlockTime())
+                    Rt_IntValue.get(ctx.exeCtx.opCtx.lastBlockTime())
                 }
             }
 
             property("block_height", type = "integer", pure = false) {
                 validate(::checkCtx)
                 bodyContext { ctx ->
-                    Rt_IntValue(ctx.exeCtx.opCtx.blockHeight())
+                    Rt_IntValue.get(ctx.exeCtx.opCtx.blockHeight())
                 }
             }
 
             property("op_index", type = "integer", pure = false) {
                 validate(::checkCtx)
                 bodyContext { ctx ->
-                    Rt_IntValue(ctx.exeCtx.opCtx.opIndex().toLong())
+                    Rt_IntValue.get(ctx.exeCtx.opCtx.opIndex().toLong())
                 }
             }
 
@@ -114,7 +114,7 @@ object Lib_OpContext {
                 validate(::checkCtx)
                 bodyContext { ctx ->
                     val opCtx = ctx.exeCtx.opCtx
-                    val elements = opCtx.signers().map { Rt_ByteArrayValue(it.toByteArray()) }.toMutableList<Rt_Value>()
+                    val elements = opCtx.signers().map { Rt_ByteArrayValue.get(it.toByteArray()) }.toMutableList()
                     Rt_ListValue(GET_SIGNERS_RETURN_TYPE, elements)
                 }
             }
@@ -125,7 +125,7 @@ object Lib_OpContext {
                 bodyContext { ctx, a ->
                     val bytes = a.asByteArray().toBytes()
                     val r = ctx.exeCtx.opCtx.isSigner(bytes)
-                    Rt_BooleanValue(r)
+                    Rt_BooleanValue.get(r)
                 }
             }
 
@@ -184,8 +184,8 @@ object Lib_OpContext {
     private val LIST_OF_GTV_TYPE = R_ListType(R_GtvType)
 
     fun gtxTransactionStructValue(name: String, args: List<Gtv>): Rt_Value {
-        val nameValue = Rt_TextValue(name)
-        val argsValue = Rt_ListValue(LIST_OF_GTV_TYPE, args.map { Rt_GtvValue(it) }.toMutableList())
+        val nameValue = Rt_TextValue.get(name)
+        val argsValue = Rt_ListValue(LIST_OF_GTV_TYPE, args.map { Rt_GtvValue.get(it) }.toMutableList())
         return Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, mutableListOf(nameValue, argsValue))
     }
 

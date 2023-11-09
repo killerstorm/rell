@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.model.expr
@@ -151,26 +151,26 @@ sealed class R_BinaryOp(val code: String) {
 }
 
 object R_BinaryOp_Eq: R_BinaryOp("==") {
-    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue(left == right)
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue.get(left == right)
 }
 
 object R_BinaryOp_Ne: R_BinaryOp("!=") {
-    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue(left != right)
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue.get(left != right)
 }
 
 object R_BinaryOp_EqRef: R_BinaryOp("===") {
-    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue(left === right)
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue.get(left === right)
 }
 
 object R_BinaryOp_NeRef: R_BinaryOp("!==") {
-    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue(left !== right)
+    override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value = Rt_BooleanValue.get(left !== right)
 }
 
 class R_BinaryOp_Cmp(val cmpOp: R_CmpOp, val cmpType: R_CmpType): R_BinaryOp(cmpOp.code) {
     override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val cmp = cmpType.compare(left, right)
         val res = cmpOp.check(cmp)
-        return Rt_BooleanValue(res)
+        return Rt_BooleanValue.get(res)
     }
 }
 
@@ -181,14 +181,14 @@ sealed class R_BinaryOp_Logic(code: String): R_BinaryOp(code) {
     override fun evaluate(left: Rt_Value): Rt_Value? {
         val lb = left.asBoolean()
         val res = evaluate(lb)
-        return if (res == null) null else Rt_BooleanValue(res)
+        return if (res == null) null else Rt_BooleanValue.get(res)
     }
 
     override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val lb = left.asBoolean()
         val rb = right.asBoolean()
         val res = evaluate(lb, rb)
-        return Rt_BooleanValue(res)
+        return Rt_BooleanValue.get(res)
     }
 }
 
@@ -232,7 +232,7 @@ sealed class R_BinaryOp_Arith_Integer(code: String): R_BinaryOp(code) {
             throw errIntOverflow(code, leftVal, rightVal)
         }
 
-        return Rt_IntValue(resVal)
+        return Rt_IntValue.get(resVal)
     }
 }
 
@@ -243,7 +243,7 @@ sealed class R_BinaryOp_Arith_BigInteger(code: String): R_BinaryOp(code) {
         val leftVal = left.asBigInteger()
         val rightVal = right.asBigInteger()
         val resVal = evaluate(leftVal, rightVal)
-        return Rt_BigIntegerValue.ofTry(resVal) ?: throw errDecOverflow(code)
+        return Rt_BigIntegerValue.getTry(resVal) ?: throw errDecOverflow(code)
     }
 }
 
@@ -254,7 +254,7 @@ sealed class R_BinaryOp_Arith_Decimal(code: String): R_BinaryOp(code) {
         val leftVal = left.asDecimal()
         val rightVal = right.asDecimal()
         val resVal = evaluate(leftVal, rightVal)
-        return Rt_DecimalValue.ofTry(resVal) ?: throw errDecOverflow(code)
+        return Rt_DecimalValue.getTry(resVal) ?: throw errDecOverflow(code)
     }
 }
 
@@ -353,7 +353,7 @@ object R_BinaryOp_Concat_Text: R_BinaryOp("+") {
         val leftVal = left.asString()
         val rightVal = right.asString()
         val resVal = leftVal + rightVal
-        return Rt_TextValue(resVal)
+        return Rt_TextValue.get(resVal)
     }
 }
 
@@ -362,7 +362,7 @@ object R_BinaryOp_Concat_ByteArray: R_BinaryOp("+") {
         val leftVal = left.asByteArray()
         val rightVal = right.asByteArray()
         val resVal = leftVal + rightVal
-        return Rt_ByteArrayValue(resVal)
+        return Rt_ByteArrayValue.get(resVal)
     }
 }
 
@@ -370,7 +370,7 @@ object R_BinaryOp_In_Collection: R_BinaryOp("in") {
     override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val c = right.asCollection()
         val r = c.contains(left)
-        return Rt_BooleanValue(r)
+        return Rt_BooleanValue.get(r)
     }
 }
 
@@ -379,7 +379,7 @@ object R_BinaryOp_In_VirtualList: R_BinaryOp("in") {
         val index = left.asInteger()
         val list = right.asVirtualList()
         val r = list.contains(index)
-        return Rt_BooleanValue(r)
+        return Rt_BooleanValue.get(r)
     }
 }
 
@@ -387,7 +387,7 @@ object R_BinaryOp_In_VirtualSet: R_BinaryOp("in") {
     override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val set = right.asVirtualSet()
         val r = set.contains(left)
-        return Rt_BooleanValue(r)
+        return Rt_BooleanValue.get(r)
     }
 }
 
@@ -395,7 +395,7 @@ object R_BinaryOp_In_Map: R_BinaryOp("in") {
     override fun evaluate(left: Rt_Value, right: Rt_Value): Rt_Value {
         val c = right.asMap()
         val r = c.containsKey(left)
-        return Rt_BooleanValue(r)
+        return Rt_BooleanValue.get(r)
     }
 }
 
@@ -404,16 +404,12 @@ object R_BinaryOp_In_Range: R_BinaryOp("in") {
         val x = left.asInteger()
         val c = right.asRange()
         val r = c.contains(x)
-        return Rt_BooleanValue(r)
+        return Rt_BooleanValue.get(r)
     }
 }
 
 private fun errIntOverflow(op: String, left: Long, right: Long): Rt_Exception {
     return Rt_Exception.common("expr:$op:overflow:$left:$right", "Integer overflow: $left $op $right")
-}
-
-private fun errBigIntOverflow(op: String): Rt_Exception {
-    return Rt_BigIntegerValue.errOverflow("expr:$op:overflow", "Big integer overflow: operator '$op'")
 }
 
 private fun errDecOverflow(op: String): Rt_Exception {

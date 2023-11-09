@@ -62,7 +62,7 @@ object Lib_Type_List {
                 param("T")
                 body { a, b ->
                     val list = a.asList()
-                    Rt_IntValue(list.indexOf(b).toLong())
+                    Rt_IntValue.get(list.indexOf(b).toLong())
                 }
             }
 
@@ -142,7 +142,7 @@ object Lib_Type_List {
                     }
 
                     list.add(i.toInt(), c)
-                    Rt_BooleanValue(true)
+                    Rt_BooleanValue.TRUE
                 }
             }
 
@@ -160,7 +160,7 @@ object Lib_Type_List {
                     }
 
                     val r = list.addAll(i.toInt(), col)
-                    Rt_BooleanValue(r)
+                    Rt_BooleanValue.get(r)
                 }
             }
 

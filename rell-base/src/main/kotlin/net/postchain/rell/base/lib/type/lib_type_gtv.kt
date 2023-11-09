@@ -31,7 +31,7 @@ object Lib_Type_Gtv {
                     val bytes = a.asByteArray()
                     Rt_Utils.wrapErr("fn:gtv.from_bytes") {
                         val gtv = PostchainGtvUtils.bytesToGtv(bytes)
-                        Rt_GtvValue(gtv)
+                        Rt_GtvValue.get(gtv)
                     }
                 }
             }
@@ -45,7 +45,7 @@ object Lib_Type_Gtv {
                     } catch (e: Throwable) {
                         null
                     }
-                    if (gtv == null) Rt_NullValue else Rt_GtvValue(gtv)
+                    if (gtv == null) Rt_NullValue else Rt_GtvValue.get(gtv)
                 }
             }
 
@@ -56,7 +56,7 @@ object Lib_Type_Gtv {
                     val str = a.asString()
                     Rt_Utils.wrapErr("fn:gtv.from_json(text)") {
                         val gtv = PostchainGtvUtils.jsonToGtv(str)
-                        Rt_GtvValue(gtv)
+                        Rt_GtvValue.get(gtv)
                     }
                 }
             }
@@ -68,7 +68,7 @@ object Lib_Type_Gtv {
                     val str = a.asJsonString()
                     Rt_Utils.wrapErr("fn:gtv.from_json(json)") {
                         val gtv = PostchainGtvUtils.jsonToGtv(str)
-                        Rt_GtvValue(gtv)
+                        Rt_GtvValue.get(gtv)
                     }
                 }
             }
@@ -78,7 +78,7 @@ object Lib_Type_Gtv {
                 body { a ->
                     val gtv = a.asGtv()
                     val bytes = PostchainGtvUtils.gtvToBytes(gtv)
-                    Rt_ByteArrayValue(bytes)
+                    Rt_ByteArrayValue.get(bytes)
                 }
             }
 
@@ -117,7 +117,7 @@ object Lib_Type_Gtv {
                             val hash = Rt_Utils.wrapErr("fn:virtual:hash") {
                                 PostchainGtvUtils.merkleHash(gtv)
                             }
-                            Rt_ByteArrayValue(hash)
+                            Rt_ByteArrayValue.get(hash)
                         }
                     } else {
                         validateToGtvBody(this, selfType)
@@ -126,7 +126,7 @@ object Lib_Type_Gtv {
                                 val gtv = selfType.rtToGtv(a, false)
                                 PostchainGtvUtils.merkleHash(gtv)
                             }
-                            Rt_ByteArrayValue(hash)
+                            Rt_ByteArrayValue.get(hash)
                         }
                     }
                 }
@@ -154,7 +154,7 @@ object Lib_Type_Gtv {
                 } catch (e: Throwable) {
                     throw Rt_Exception.common(fnNameCopy, e.message ?: "error")
                 }
-                Rt_GtvValue(gtv)
+                Rt_GtvValue.get(gtv)
             }
         }
     }

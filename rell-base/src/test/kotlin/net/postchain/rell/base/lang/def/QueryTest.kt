@@ -21,10 +21,12 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testResultParameter() {
-        chkFull("query q(a: integer) = a;", listOf(Rt_IntValue(12345)), "int[12345]")
-        chkFull("query q(a: text) = a;", listOf(Rt_TextValue("Hello")), "text[Hello]")
-        chkFull("query q(a: integer, b: text) = a;", listOf(Rt_IntValue(12345), Rt_TextValue("Hello")), "int[12345]")
-        chkFull("query q(a: integer, b: text) = b;", listOf(Rt_IntValue(12345), Rt_TextValue("Hello")), "text[Hello]")
+        chkFull("query q(a: integer) = a;", listOf(Rt_IntValue.get(12345)), "int[12345]")
+        chkFull("query q(a: text) = a;", listOf(Rt_TextValue.get("Hello")), "text[Hello]")
+        chkFull("query q(a: integer, b: text) = a;", listOf(Rt_IntValue.get(12345), Rt_TextValue.get("Hello")),
+            "int[12345]")
+        chkFull("query q(a: integer, b: text) = b;", listOf(Rt_IntValue.get(12345), Rt_TextValue.get("Hello")),
+            "text[Hello]")
     }
 
     @Test fun testReturnLiteral() {
@@ -91,17 +93,18 @@ class QueryTest: BaseRellTest() {
 
     @Test fun testWrongNumberOfArguments() {
         val code = "query q(x: integer, y: text) = x;"
-        chkFull(code, listOf(Rt_IntValue(12345), Rt_TextValue("abc")), "int[12345]")
+        chkFull(code, listOf(Rt_IntValue.get(12345), Rt_TextValue.get("abc")), "int[12345]")
         chkFull(code, listOf(), "rt_err:fn_wrong_arg_count:q:2:0")
-        chkFull(code, listOf(Rt_IntValue(12345)), "rt_err:fn_wrong_arg_count:q:2:1")
-        chkFull(code, listOf(Rt_IntValue(12345), Rt_TextValue("abc"), Rt_BooleanValue(true)), "rt_err:fn_wrong_arg_count:q:2:3")
+        chkFull(code, listOf(Rt_IntValue.get(12345)), "rt_err:fn_wrong_arg_count:q:2:1")
+        chkFull(code, listOf(Rt_IntValue.get(12345), Rt_TextValue.get("abc"), Rt_BooleanValue.TRUE),
+            "rt_err:fn_wrong_arg_count:q:2:3")
     }
 
     @Test fun testWrongArgumentType() {
         val code = "query q(x: integer) = x;"
-        chkFull(code, listOf(Rt_IntValue(12345)), "int[12345]")
-        chkFull(code, listOf(Rt_TextValue("Hello")), "rt_err:fn_wrong_arg_type:q:integer:text")
-        chkFull(code, listOf(Rt_BooleanValue(true)), "rt_err:fn_wrong_arg_type:q:integer:boolean")
+        chkFull(code, listOf(Rt_IntValue.get(12345)), "int[12345]")
+        chkFull(code, listOf(Rt_TextValue.get("Hello")), "rt_err:fn_wrong_arg_type:q:integer:text")
+        chkFull(code, listOf(Rt_BooleanValue.TRUE), "rt_err:fn_wrong_arg_type:q:integer:boolean")
     }
 
     @Test fun testCreateUpdateDelete() {

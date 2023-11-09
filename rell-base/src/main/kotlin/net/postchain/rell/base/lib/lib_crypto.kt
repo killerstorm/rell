@@ -30,7 +30,7 @@ object Lib_Crypto {
     val Sha256 = C_SysFunctionBody.simple(pure = true) { a ->
         val ba = a.asByteArray()
         val md = MessageDigest.getInstance("SHA-256")
-        Rt_ByteArrayValue(md.digest(ba))
+        Rt_ByteArrayValue.get(md.digest(ba))
     }
 
     private val POINT_TYPE = R_TupleType.create(R_BigIntegerType, R_BigIntegerType)
@@ -52,7 +52,7 @@ object Lib_Crypto {
                 body { a ->
                     val data = a.asByteArray()
                     val res = keccak256(data)
-                    Rt_ByteArrayValue(res)
+                    Rt_ByteArrayValue.get(res)
                 }
             }
 
@@ -69,7 +69,7 @@ object Lib_Crypto {
                     } catch (e: Exception) {
                         throw Rt_Exception.common("verify_signature", e.message ?: "Signature verification crashed")
                     }
-                    Rt_BooleanValue(res)
+                    Rt_BooleanValue.get(res)
                 }
             }
 
@@ -92,7 +92,7 @@ object Lib_Crypto {
                     val signature = net.postchain.rell.base.utils.etherjar.Signature(hash, v, rVal, sVal)
                     val res = Signer.ecrecover(signature)
 
-                    Rt_ByteArrayValue(res)
+                    Rt_ByteArrayValue.get(res)
                 }
             }
 
@@ -119,7 +119,11 @@ object Lib_Crypto {
                     checkEquals(r.size, 32)
                     checkEquals(s.size, 32)
 
-                    val elems = immListOf(Rt_ByteArrayValue(r), Rt_ByteArrayValue(s), Rt_IntValue(recId.toLong()))
+                    val elems = immListOf(
+                        Rt_ByteArrayValue.get(r),
+                        Rt_ByteArrayValue.get(s),
+                        Rt_IntValue.get(recId.toLong()),
+                    )
                     Rt_TupleValue(signatureType, elems)
                 }
             }
@@ -148,7 +152,7 @@ object Lib_Crypto {
                     val compressed = arg2?.asBoolean() ?: false
                     val point = privkeyToPubkeyPoint(arg1)
                     val bytes = pointToBytes(point, compressed)
-                    Rt_ByteArrayValue(bytes)
+                    Rt_ByteArrayValue.get(bytes)
                 }
             }
 
@@ -159,7 +163,7 @@ object Lib_Crypto {
                     val compressed = arg2?.asBoolean() ?: false
                     val point = pubkeyToPoint(arg1)
                     val bytes = pointToBytes(point, compressed)
-                    Rt_ByteArrayValue(bytes)
+                    Rt_ByteArrayValue.get(bytes)
                 }
             }
 
@@ -169,8 +173,8 @@ object Lib_Crypto {
                     val point = pubkeyToPoint(arg)
                     val x = point.xCoord.toBigInteger()
                     val y = point.yCoord.toBigInteger()
-                    val xValue = Rt_BigIntegerValue.of(x)
-                    val yValue = Rt_BigIntegerValue.of(y)
+                    val xValue = Rt_BigIntegerValue.get(x)
+                    val yValue = Rt_BigIntegerValue.get(y)
                     Rt_TupleValue.make(POINT_TYPE, xValue, yValue)
                 }
             }
@@ -184,7 +188,7 @@ object Lib_Crypto {
                     val point = xyToPoint(arg1, arg2)
                     val bytes = pointToBytes(point, compressed)
                     bytesToPoint(bytes) // Check that it's a valid public key.
-                    Rt_ByteArrayValue(bytes)
+                    Rt_ByteArrayValue.get(bytes)
                 }
             }
         }
@@ -252,7 +256,7 @@ object Lib_Crypto {
         checkEquals(hash.size, 32)
 
         val res = hash.sliceArray(12 until 32)
-        return Rt_ByteArrayValue(res)
+        return Rt_ByteArrayValue.get(res)
     }
 
     private fun pointToBytes(point: ECPoint, compressed: Boolean): ByteArray {

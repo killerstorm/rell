@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.model.expr
@@ -46,11 +46,11 @@ sealed class Db_BinaryOp_Basic(code: String, private val sql: String): Db_Binary
 }
 
 object Db_BinaryOp_Eq: Db_BinaryOp_Basic("==", "=") {
-    override fun evaluate(left: Rt_Value, right: Rt_Value) = Rt_BooleanValue(left == right)
+    override fun evaluate(left: Rt_Value, right: Rt_Value) = Rt_BooleanValue.get(left == right)
 }
 
 object Db_BinaryOp_Ne: Db_BinaryOp_Basic("!=", "<>") {
-    override fun evaluate(left: Rt_Value, right: Rt_Value) = Rt_BooleanValue(left != right)
+    override fun evaluate(left: Rt_Value, right: Rt_Value) = Rt_BooleanValue.get(left != right)
 }
 
 object Db_BinaryOp_Lt: Db_BinaryOp_Basic("<", "<")
@@ -268,7 +268,7 @@ class Db_InExpr(val keyExpr: Db_Expr, val exprs: List<Db_Expr>, val not: Boolean
         return if (redExprs != null) {
             RedDb_Utils.makeRedDbInExpr(redKeyExpr, redExprs, not)
         } else {
-            RedDb_ConstantExpr(Rt_BooleanValue(!not))
+            RedDb_ConstantExpr(Rt_BooleanValue.get(!not))
         }
     }
 
@@ -355,12 +355,12 @@ class Db_InCollectionExpr(val left: Db_Expr, val right: R_Expr, val not: Boolean
 
         val rightValue = right.evaluate(frame).asCollection()
         if (rightValue.isEmpty()) {
-            return RedDb_ConstantExpr(Rt_BooleanValue(not))
+            return RedDb_ConstantExpr(Rt_BooleanValue.get(not))
         }
 
         val leftValue = redLeft.constantValue()
         if (leftValue != null && leftValue in rightValue) {
-            return RedDb_ConstantExpr(Rt_BooleanValue(!not))
+            return RedDb_ConstantExpr(Rt_BooleanValue.get(!not))
         }
 
         return RedDb_InCollectionExpr(redLeft, rightValue, not)
@@ -390,7 +390,7 @@ object RedDb_Utils {
 
     fun makeRedDbInExpr(left: RedDb_Expr, right: List<RedDb_Expr>, not: Boolean): RedDb_Expr {
         return if (right.isEmpty()) {
-            RedDb_ConstantExpr(Rt_BooleanValue(not))
+            RedDb_ConstantExpr(Rt_BooleanValue.get(not))
         } else if (right.size == 1) {
             val op = if (not) Db_BinaryOp_Ne else Db_BinaryOp_Eq
             RedDb_BinaryExpr(op, left, right[0])

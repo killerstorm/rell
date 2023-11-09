@@ -131,7 +131,7 @@ class LNamespaceNameConflictTest: BaseLTest() {
             namespace("ns") {}
             type("t")
             struct("s") {}
-            constant("c", "integer", Rt_IntValue(0))
+            constant("c", "integer", Rt_IntValue.ZERO)
             property("p1", "anything") { bodyContext { Rt_UnitValue } }
             property("p2", makeSpecProp())
             function("f1", "anything") { body { -> Rt_UnitValue } }
@@ -183,6 +183,6 @@ class LNamespaceNameConflictTest: BaseLTest() {
     private fun makeBlock(block: Ld_NamespaceDsl.() -> Unit): Ld_NamespaceDsl.() -> Unit = block
 
     private fun makeSpecProp(): C_NamespaceProperty {
-        return C_NamespaceProperty_RtValue(Rt_IntValue(123))
+        return C_NamespaceProperty_RtValue(Rt_IntValue.get(123))
     }
 }

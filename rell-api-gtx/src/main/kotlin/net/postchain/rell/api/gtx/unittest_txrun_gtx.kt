@@ -246,8 +246,8 @@ private class Rt_UnitTestPostchainTxContextFactory: Rt_PostchainTxContextFactory
 
     private inner class Rt_UnitTestPostchainTxContext: Rt_PostchainTxContext() {
         override fun emitEvent(type: String, data: Gtv) {
-            val rtType = Rt_TextValue(type)
-            val rtData = Rt_GtvValue(data)
+            val rtType = Rt_TextValue.get(type)
+            val rtData = Rt_GtvValue.get(data)
             val v = Rt_TupleValue(Lib_Test_Events.EVENT_TUPLE_TYPE, immListOf(rtType, rtData))
             events.add(v)
         }

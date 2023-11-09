@@ -86,7 +86,7 @@ private object Rt_ExtendableFunctionCombiner_Unit: Rt_ExtendableFunctionCombiner
 }
 
 private class Rt_ExtendableFunctionCombiner_Boolean: Rt_ExtendableFunctionCombiner() {
-    private var result: Rt_Value = Rt_BooleanValue(false)
+    private var result: Rt_Value = Rt_BooleanValue.FALSE
 
     override fun addExtensionResult(value: Rt_Value): Boolean {
         val v = value.asBoolean()

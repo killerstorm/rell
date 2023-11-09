@@ -136,15 +136,15 @@ class Ld_CommonNamespaceDslBuilder(
     private val maker: Ld_CommonNamespaceMaker,
 ): Ld_CommonNamespaceDsl {
     override fun constant(name: String, value: Long) {
-        constant(name, type = "integer", value = Rt_IntValue(value))
+        constant(name, type = "integer", value = Rt_IntValue.get(value))
     }
 
     override fun constant(name: String, value: BigInteger) {
-        constant(name, type = "big_integer", value = Rt_BigIntegerValue.of(value))
+        constant(name, type = "big_integer", value = Rt_BigIntegerValue.get(value))
     }
 
     override fun constant(name: String, value: BigDecimal) {
-        constant(name, type = "decimal", value = Rt_DecimalValue.of(value))
+        constant(name, type = "decimal", value = Rt_DecimalValue.get(value))
     }
 
     override fun constant(name: String, type: String, value: Rt_Value) {

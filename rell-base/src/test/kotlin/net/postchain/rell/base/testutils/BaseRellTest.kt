@@ -59,7 +59,7 @@ abstract class BaseRellTest(useSql: Boolean = true, gtv: Boolean = false): BaseT
 
     fun chkTests(testModule: String, expected: String) = tst.chkTests(testModule, expected)
 
-    private fun rtVal(v: Long?) = if (v == null) Rt_NullValue else Rt_IntValue(v)
-    private fun rtVal(v: String?) = if (v == null) Rt_NullValue else Rt_TextValue(v)
-    private fun rtVal(v: Boolean?) = if (v == null) Rt_NullValue else Rt_BooleanValue(v)
+    private fun rtVal(v: Long?) = if (v == null) Rt_NullValue else Rt_IntValue.get(v)
+    private fun rtVal(v: String?) = if (v == null) Rt_NullValue else Rt_TextValue.get(v)
+    private fun rtVal(v: Boolean?) = if (v == null) Rt_NullValue else Rt_BooleanValue.get(v)
 }

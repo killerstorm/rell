@@ -33,7 +33,7 @@ object Lib_Type_BigInteger {
         pure = true
     ) { a ->
         val s = a.asString()
-        Rt_BigIntegerValue.of(s)
+        Rt_BigIntegerValue.get(s)
     }
 
     private val BIGINT_MIN_LONG = BigInteger.valueOf(Long.MIN_VALUE)
@@ -60,7 +60,7 @@ object Lib_Type_BigInteger {
                 body { a ->
                     val bytes = a.asByteArray()
                     val bigInt = BigInteger(bytes)
-                    Rt_BigIntegerValue.of(bigInt)
+                    Rt_BigIntegerValue.get(bigInt)
                 }
             }
 
@@ -69,7 +69,7 @@ object Lib_Type_BigInteger {
                 body { a ->
                     val bytes = a.asByteArray()
                     val bigInt = BigInteger(1, bytes)
-                    Rt_BigIntegerValue.of(bigInt)
+                    Rt_BigIntegerValue.get(bigInt)
                 }
             }
 
@@ -115,7 +115,7 @@ object Lib_Type_BigInteger {
                     val v1 = a.asBigInteger()
                     val v2 = b.asDecimal()
                     val r = v1.toBigDecimal().min(v2)
-                    Rt_DecimalValue.of(r)
+                    Rt_DecimalValue.get(r)
                 }
             }
 
@@ -131,7 +131,7 @@ object Lib_Type_BigInteger {
                     val v1 = a.asBigInteger()
                     val v2 = b.asDecimal()
                     val r = v1.toBigDecimal().max(v2)
-                    Rt_DecimalValue.of(r)
+                    Rt_DecimalValue.get(r)
                 }
             }
 
@@ -140,7 +140,7 @@ object Lib_Type_BigInteger {
                 body { a ->
                     val v = a.asBigInteger()
                     val r = v.signum()
-                    Rt_IntValue(r.toLong())
+                    Rt_IntValue.get(r.toLong())
                 }
             }
 
@@ -148,7 +148,7 @@ object Lib_Type_BigInteger {
                 body { a ->
                     val bigInt = a.asBigInteger()
                     val bytes = bigInt.toByteArray()
-                    Rt_ByteArrayValue(bytes)
+                    Rt_ByteArrayValue.get(bytes)
                 }
             }
 
@@ -164,7 +164,7 @@ object Lib_Type_BigInteger {
                         checkEquals(n, bytes.size - 1)
                         bytes = Arrays.copyOfRange(bytes, 1, bytes.size)
                     }
-                    Rt_ByteArrayValue(bytes)
+                    Rt_ByteArrayValue.get(bytes)
                 }
             }
 
@@ -176,7 +176,7 @@ object Lib_Type_BigInteger {
                 body { a ->
                     val v = a.asBigInteger()
                     val s = v.toString(16)
-                    Rt_TextValue(s)
+                    Rt_TextValue.get(s)
                 }
             }
 
@@ -189,7 +189,7 @@ object Lib_Type_BigInteger {
                         throw Rt_Exception.common("big_integer.to_integer:overflow:$s", "Value out of range: $s")
                     }
                     val r = v.toLong()
-                    Rt_IntValue(r)
+                    Rt_IntValue.get(r)
                 }
             }
 
@@ -198,7 +198,7 @@ object Lib_Type_BigInteger {
                 body { a ->
                     val v = a.asBigInteger()
                     val r = v.toString()
-                    Rt_TextValue(r)
+                    Rt_TextValue.get(r)
                 }
             }
 
@@ -211,7 +211,7 @@ object Lib_Type_BigInteger {
                         throw Rt_Exception.common("fn:big_integer.to_text:radix:$r", "Invalid radix: $r")
                     }
                     val s = v.toString(r.toInt())
-                    Rt_TextValue(s)
+                    Rt_TextValue.get(s)
                 }
             }
         }
@@ -223,12 +223,12 @@ object Lib_Type_BigInteger {
         } catch (e: NumberFormatException) {
             throw Rt_Exception.common("fn:big_integer.$fnName:$s", "Invalid number: '$s'")
         }
-        return Rt_BigIntegerValue.of(r)
+        return Rt_BigIntegerValue.get(r)
     }
 
     fun calcFromInteger(a: Rt_Value): Rt_Value {
         val i = a.asInteger()
-        return Rt_BigIntegerValue.of(i)
+        return Rt_BigIntegerValue.get(i)
     }
 }
 

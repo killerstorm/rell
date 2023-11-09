@@ -42,14 +42,14 @@ object Lib_Test_KeyPairs {
 
             namespace("privkeys") {
                 for ((name, keyPair) in PREDEFINED_KEYPAIRS) {
-                    val value = Rt_ByteArrayValue(keyPair.priv.toByteArray())
+                    val value = Rt_ByteArrayValue.get(keyPair.priv.toByteArray())
                     constant(name, type = "byte_array", value = value)
                 }
             }
 
             namespace("pubkeys") {
                 for ((name, keyPair) in PREDEFINED_KEYPAIRS) {
-                    val value = Rt_ByteArrayValue(keyPair.pub.toByteArray())
+                    val value = Rt_ByteArrayValue.get(keyPair.pub.toByteArray())
                     constant(name, type = "byte_array", value = value)
                 }
             }
@@ -92,7 +92,7 @@ object Lib_Test_KeyPairs {
     private fun keyPairToStruct(rType: R_Type, keyPair: BytesKeyPair): Rt_Value {
         val structType = rType as R_StructType
         val attrs = listOf(keyPair.pub, keyPair.priv)
-            .map { Rt_ByteArrayValue(it.toByteArray()) }
+            .map { Rt_ByteArrayValue.get(it.toByteArray()) }
             .toMutableList<Rt_Value>()
         return Rt_StructValue(structType, attrs)
     }

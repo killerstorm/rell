@@ -30,7 +30,7 @@ private object SysQueryFns {
     object GetRellVersion: R_SysFunctionEx_N() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
-            return Rt_TextValue(RellVersions.VERSION_STR)
+            return Rt_TextValue.get(RellVersions.VERSION_STR)
         }
     }
 
@@ -39,7 +39,7 @@ private object SysQueryFns {
             checkEquals(args.size, 0)
             val ver = ctx.globalCtx.rellVersion()
             val postchainVer = ver.properties.getValue(Rt_RellVersionProperty.POSTCHAIN_VERSION)
-            return Rt_TextValue(postchainVer)
+            return Rt_TextValue.get(postchainVer)
         }
     }
 
@@ -47,7 +47,7 @@ private object SysQueryFns {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
             val ver = ctx.globalCtx.rellVersion()
-            return Rt_TextValue(ver.buildDescriptor)
+            return Rt_TextValue.get(ver.buildDescriptor)
         }
     }
 
@@ -65,7 +65,7 @@ private object SysQueryFns {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
             val v = ctx.appCtx.app.toMetaGtv()
-            return Rt_GtvValue(v)
+            return Rt_GtvValue.get(v)
         }
     }
 }

@@ -19,61 +19,61 @@ object Lib_Math {
             throw Rt_Exception.common("abs:integer:overflow:$v", "Integer overflow: $v")
         }
         val r = Math.abs(v)
-        Rt_IntValue(r)
+        Rt_IntValue.get(r)
     }
 
     val Abs_BigInteger = C_SysFunctionBody.simple(Db_SysFunction.simple("abs", "ABS"), pure = true) { a ->
         val v = a.asBigInteger()
         val r = v.abs()
-        Rt_BigIntegerValue.of(r)
+        Rt_BigIntegerValue.get(r)
     }
 
     val Abs_Decimal = C_SysFunctionBody.simple(Db_SysFunction.simple("abs", "ABS"), pure = true) { a ->
         val v = a.asDecimal()
         val r = v.abs()
-        Rt_DecimalValue.of(r)
+        Rt_DecimalValue.get(r)
     }
 
     val Min_Integer = C_SysFunctionBody.simple(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
         val v1 = a.asInteger()
         val v2 = b.asInteger()
         val r = Math.min(v1, v2)
-        Rt_IntValue(r)
+        Rt_IntValue.get(r)
     }
 
     val Min_BigInteger = C_SysFunctionBody.simple(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
         val v1 = a.asBigInteger()
         val v2 = b.asBigInteger()
         val r = v1.min(v2)
-        Rt_BigIntegerValue.of(r)
+        Rt_BigIntegerValue.get(r)
     }
 
     val Min_Decimal = C_SysFunctionBody.simple(Db_SysFunction.simple("min", "LEAST"), pure = true) { a, b ->
         val v1 = a.asDecimal()
         val v2 = b.asDecimal()
         val r = v1.min(v2)
-        Rt_DecimalValue.of(r)
+        Rt_DecimalValue.get(r)
     }
 
     val Max_Integer = C_SysFunctionBody.simple(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
         val v1 = a.asInteger()
         val v2 = b.asInteger()
         val r = Math.max(v1, v2)
-        Rt_IntValue(r)
+        Rt_IntValue.get(r)
     }
 
     val Max_BigInteger = C_SysFunctionBody.simple(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
         val v1 = a.asBigInteger()
         val v2 = b.asBigInteger()
         val r = v1.max(v2)
-        Rt_BigIntegerValue.of(r)
+        Rt_BigIntegerValue.get(r)
     }
 
     val Max_Decimal = C_SysFunctionBody.simple(Db_SysFunction.simple("max", "GREATEST"), pure = true) { a, b ->
         val v1 = a.asDecimal()
         val v2 = b.asDecimal()
         val r = v1.max(v2)
-        Rt_DecimalValue.of(r)
+        Rt_DecimalValue.get(r)
     }
 
     val NAMESPACE = Ld_NamespaceDsl.make {

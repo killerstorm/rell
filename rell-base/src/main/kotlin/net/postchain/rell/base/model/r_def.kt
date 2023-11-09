@@ -268,22 +268,18 @@ class R_EnumDefinition(
     val type = R_EnumType(this)
 
     private val attrMap = attrs.associateBy { it.name }.toImmMap()
-    private val rtValues = attrs.map { Rt_EnumValue(type, it) }.toImmList()
 
     fun attr(name: String): R_EnumAttr? {
         return attrMap[name]
     }
 
     fun attr(value: Long): R_EnumAttr? {
-        if (value < 0 || value >= attrs.size) {
-            return null
+        return if (value < 0 || value >= attrs.size) null else {
+            attrs[value.toInt()]
         }
-        return attrs[value.toInt()]
     }
 
-    fun values(): List<Rt_Value> {
-        return rtValues
-    }
+    fun values(): List<Rt_Value> = type.values
 
     override fun toMetaGtv(): Gtv {
         return mapOf(

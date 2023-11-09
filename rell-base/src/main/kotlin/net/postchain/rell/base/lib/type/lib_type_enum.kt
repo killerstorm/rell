@@ -28,7 +28,7 @@ object Lib_Type_Enum {
 
             property("name", type = "text", pure = true) { a ->
                 val attr = a.asEnum()
-                Rt_TextValue(attr.name)
+                Rt_TextValue.get(attr.name)
             }
 
             // Db-function is effectively a no-op, as enums are represented by their numeric values on SQL level.
@@ -37,7 +37,7 @@ object Lib_Type_Enum {
                 dbFn = Db_SysFunction.template("enum_value", 1, "(#0)")
             ) { a ->
                 val attr = a.asEnum()
-                Rt_IntValue(attr.value.toLong())
+                Rt_IntValue.get(attr.value.toLong())
             })
 
             staticFunction("values", result = "list<T>", pure = true) {
@@ -67,7 +67,7 @@ object Lib_Type_Enum {
                                 "Enum '${enum.simpleName}' has no value '$name'",
                             )
                         }
-                        Rt_EnumValue(enum.type, attr)
+                        enum.type.getValue(attr)
                     }
                 }
             }
@@ -86,7 +86,7 @@ object Lib_Type_Enum {
                                 "Enum '${enum.simpleName}' has no value $value",
                             )
                         }
-                        Rt_EnumValue(enum.type, attr)
+                        enum.type.getValue(attr)
                     }
                 }
             }
@@ -98,7 +98,7 @@ object Lib_Type_Enum {
         return type.enum.attrs
             .map { attr ->
                 val defName = defPath.subName(attr.rName)
-                val prop = C_NamespaceProperty_RtValue(Rt_EnumValue(type, attr))
+                val prop = C_NamespaceProperty_RtValue(type.getValue(attr))
                 C_TypeStaticMember.makeProperty(defName, attr.rName, prop, type, attr.ideInfo)
             }
             .toImmList()

@@ -32,7 +32,7 @@ object Lib_Type_Json {
                 dbFunctionCast("json.to_text", "TEXT")
                 body { a ->
                     val s = a.asJsonString()
-                    Rt_TextValue(s)
+                    Rt_TextValue.get(s)
                 }
             }
         }

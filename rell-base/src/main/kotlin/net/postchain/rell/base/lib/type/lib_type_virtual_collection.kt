@@ -22,14 +22,14 @@ object Lib_Type_VirtualCollection {
             function("empty", "boolean", pure = true) {
                 body { a ->
                     val col = a.asVirtualCollection()
-                    Rt_BooleanValue(col.size() == 0)
+                    Rt_BooleanValue.get(col.size() == 0)
                 }
             }
 
             function("size", "integer", pure = true) {
                 body { a ->
                     val col = a.asVirtualCollection()
-                    Rt_IntValue(col.size().toLong())
+                    Rt_IntValue.get(col.size().toLong())
                 }
             }
         }

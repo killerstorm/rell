@@ -501,9 +501,9 @@ class ExpressionTest: BaseRellTest(false) {
             query q(a: boolean) = if (a) f('Yes', 123) else f('No', 456);
         """
 
-        chkFull(code, listOf(Rt_BooleanValue(true)), "int[123]")
+        chkFull(code, listOf(Rt_BooleanValue.TRUE), "int[123]")
         chkOut("Yes")
-        chkFull(code, listOf(Rt_BooleanValue(false)), "int[456]")
+        chkFull(code, listOf(Rt_BooleanValue.FALSE), "int[456]")
         chkOut("No")
     }
 

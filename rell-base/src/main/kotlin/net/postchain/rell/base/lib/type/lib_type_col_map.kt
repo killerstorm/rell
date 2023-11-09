@@ -145,7 +145,7 @@ object Lib_Type_Map {
         function("empty", result = "boolean", pure = true) {
             body { a ->
                 val map = a.asMap()
-                Rt_BooleanValue(map.isEmpty())
+                Rt_BooleanValue.get(map.isEmpty())
             }
         }
 
@@ -153,7 +153,7 @@ object Lib_Type_Map {
             alias("len", C_MessageType.ERROR)
             body { a ->
                 val map = a.asMap()
-                Rt_IntValue(map.size.toLong())
+                Rt_IntValue.get(map.size.toLong())
             }
         }
 
@@ -190,7 +190,7 @@ object Lib_Type_Map {
             param(type = "K")
             body { self, a ->
                 val map = self.asMap()
-                Rt_BooleanValue(a in map)
+                Rt_BooleanValue.get(a in map)
             }
         }
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.model.expr
@@ -157,7 +157,7 @@ class SqlBuilder {
 
     fun append(param: Long) {
         sqlBuf.append("?")
-        paramsBuf.add(Rt_IntValue(param))
+        paramsBuf.add(Rt_IntValue.get(param))
     }
 
     fun append(value: Rt_Value) {

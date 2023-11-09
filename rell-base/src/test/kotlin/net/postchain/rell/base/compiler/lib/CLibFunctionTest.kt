@@ -35,19 +35,19 @@ class CLibFunctionTest: BaseCLibTest() {
     private fun makeTypeHintNs() = makeModule {
         function("_type_hint", "text") {
             param("list<integer>")
-            body { arg -> Rt_TextValue("A:${arg.strCode()}") }
+            body { arg -> Rt_TextValue.get("A:${arg.strCode()}") }
         }
         function("_type_hint", "text") {
             param("set<text>")
-            body { arg -> Rt_TextValue("B:${arg.strCode()}") }
+            body { arg -> Rt_TextValue.get("B:${arg.strCode()}") }
         }
         function("_type_hint", "text") {
             param("map<decimal,integer>")
-            body { arg -> Rt_TextValue("C:${arg.strCode()}") }
+            body { arg -> Rt_TextValue.get("C:${arg.strCode()}") }
         }
         function("_type_hint", "text") {
             param("(big_integer) -> decimal")
-            body { arg -> Rt_TextValue("D:${arg.strCode()}") }
+            body { arg -> Rt_TextValue.get("D:${arg.strCode()}") }
         }
     }
 
@@ -55,23 +55,23 @@ class CLibFunctionTest: BaseCLibTest() {
         tst.extraMod = makeModule {
             function("f_list", "text") {
                 param("list<integer>")
-                body { arg -> Rt_TextValue(arg.strCode()) }
+                body { arg -> Rt_TextValue.get(arg.strCode()) }
             }
             function("f_set", "text") {
                 param("set<integer>")
-                body { arg -> Rt_TextValue(arg.strCode()) }
+                body { arg -> Rt_TextValue.get(arg.strCode()) }
             }
             function("f_collection", "text") {
                 param("collection<integer>")
-                body { arg -> Rt_TextValue(arg.strCode()) }
+                body { arg -> Rt_TextValue.get(arg.strCode()) }
             }
             function("f_iterable", "text") {
                 param("iterable<(integer,text)>")
-                body { arg -> Rt_TextValue(arg.strCode()) }
+                body { arg -> Rt_TextValue.get(arg.strCode()) }
             }
             function("f_map", "text") {
                 param("map<integer,text>")
-                body { arg -> Rt_TextValue(arg.strCode()) }
+                body { arg -> Rt_TextValue.get(arg.strCode()) }
             }
         }
 
@@ -105,15 +105,15 @@ class CLibFunctionTest: BaseCLibTest() {
         tst.extraMod = makeModule {
             function("f", "text") {
                 param("text?", nullable = true)
-                body { _ -> Rt_TextValue("f(text?)") }
+                body { _ -> Rt_TextValue.get("f(text?)") }
             }
             function("f", "text") {
                 param("integer?", nullable = true)
-                body { _ -> Rt_TextValue("f(integer?)") }
+                body { _ -> Rt_TextValue.get("f(integer?)") }
             }
             function("f", "text") {
                 param("boolean?", nullable = true)
-                body { _ -> Rt_TextValue("f(boolean?)") }
+                body { _ -> Rt_TextValue.get("f(boolean?)") }
             }
         }
 
@@ -237,7 +237,7 @@ class CLibFunctionTest: BaseCLibTest() {
         fun makeBody(d: Ld_FunctionBodyDsl) = with(d) {
             bodyMeta {
                 val name = this.fnQualifiedName
-                bodyN { Rt_TextValue(name) }
+                bodyN { Rt_TextValue.get(name) }
             }
         }
 

@@ -109,7 +109,7 @@ object Lib_Type_Struct {
                     body { a ->
                         val gtv = selfType.rtToGtv(a, false)
                         val bytes = PostchainGtvUtils.gtvToBytes(gtv)
-                        Rt_ByteArrayValue(bytes)
+                        Rt_ByteArrayValue.get(bytes)
                     }
                 }
             }

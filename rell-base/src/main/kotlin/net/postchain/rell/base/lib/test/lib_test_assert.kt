@@ -266,7 +266,7 @@ private object R_TestFailureType: R_LibSimpleType(FAILURE_QNAME.str(), Lib_RellT
 }
 
 private class Rt_TestFailureValue(val message: String): Rt_Value() {
-    val messageValue = Rt_TextValue(message)
+    val messageValue = Rt_TextValue.get(message)
 
     override val valueType = VALUE_TYPE
     override fun type(): R_Type = R_TestFailureType

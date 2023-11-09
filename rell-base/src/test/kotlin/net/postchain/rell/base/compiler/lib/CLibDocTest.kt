@@ -64,43 +64,45 @@ class CLibDocTest: BaseCLibTest() {
         chkValue("unit", Rt_UnitValue, "TYPE = unit")
         chkValue("boolean", Rt_BooleanValue.FALSE, "TYPE = <false>")
         chkValue("boolean", Rt_BooleanValue.TRUE, "TYPE = <true>")
-        chkValue("integer", Rt_IntValue(123456), "TYPE = 123456")
+        chkValue("integer", Rt_IntValue.get(123456), "TYPE = 123456")
 
-        chkValue("big_integer", Rt_BigIntegerValue.of(123456), "TYPE = 123456L")
-        chkValue("big_integer", Rt_BigIntegerValue.of(BigInteger.TWO.pow(4096)), "TYPE")
+        chkValue("big_integer", Rt_BigIntegerValue.get(123456), "TYPE = 123456L")
+        chkValue("big_integer", Rt_BigIntegerValue.get(BigInteger.TWO.pow(4096)), "TYPE")
 
-        chkValue("decimal", Rt_DecimalValue.of("123"), "TYPE = 123.0")
-        chkValue("decimal", Rt_DecimalValue.of("123.456"), "TYPE = 123.456")
-        chkValue("decimal", Rt_DecimalValue.of("123.456e6"), "TYPE = 123456000.0")
-        chkValue("decimal", Rt_DecimalValue.of("123.456e2000"), "TYPE")
+        chkValue("decimal", Rt_DecimalValue.get("123"), "TYPE = 123.0")
+        chkValue("decimal", Rt_DecimalValue.get("123.456"), "TYPE = 123.456")
+        chkValue("decimal", Rt_DecimalValue.get("123.456e6"), "TYPE = 123456000.0")
+        chkValue("decimal", Rt_DecimalValue.get("123.456e2000"), "TYPE")
 
-        chkValue("byte_array", Rt_ByteArrayValue("".hexStringToByteArray()), "TYPE = x\"\"")
-        chkValue("byte_array", Rt_ByteArrayValue("12ab".hexStringToByteArray()), "TYPE = x\"12AB\"")
-        chkValue("byte_array", Rt_ByteArrayValue("12ab".repeat(100).hexStringToByteArray()),
+        chkValue("byte_array", Rt_ByteArrayValue.EMPTY, "TYPE = x\"\"")
+        chkValue("byte_array", Rt_ByteArrayValue.get("12ab".hexStringToByteArray()), "TYPE = x\"12AB\"")
+        chkValue("byte_array", Rt_ByteArrayValue.get("12ab".repeat(100).hexStringToByteArray()),
             "TYPE = x\"${"12AB".repeat(25)}...")
 
-        chkValue("rowid", Rt_RowidValue(123456), "TYPE = rowid(123456)")
+        chkValue("rowid", Rt_RowidValue.get(123456), "TYPE = rowid(123456)")
     }
 
     @Test fun testValueText() {
-        chkValue("text", Rt_TextValue(""), "TYPE = \"\"")
-        chkValue("text", Rt_TextValue("abc"), "TYPE = \"abc\"")
-        chkValue("text", Rt_TextValue("foo'bar"), "TYPE = \"foo'bar\"")
-        chkValue("text", Rt_TextValue("foo\"bar"), "TYPE = \"foo\\\"bar\"")
-        chkValue("text", Rt_TextValue("foo\tbar"), "TYPE = \"foo\\tbar\"")
-        chkValue("text", Rt_TextValue("foo\nbar"), "TYPE = \"foo\\nbar\"")
-        chkValue("text", Rt_TextValue("foo\u001Fbar"), "TYPE = \"foo\\u001Fbar\"")
-        chkValue("text", Rt_TextValue("Привет"), "TYPE = \"Привет\"")
-        chkValue("text", Rt_TextValue("food".repeat(100)), "TYPE = \"${"food".repeat(25)}...")
+        chkValue("text", Rt_TextValue.get(""), "TYPE = \"\"")
+        chkValue("text", Rt_TextValue.get("abc"), "TYPE = \"abc\"")
+        chkValue("text", Rt_TextValue.get("foo'bar"), "TYPE = \"foo'bar\"")
+        chkValue("text", Rt_TextValue.get("foo\"bar"), "TYPE = \"foo\\\"bar\"")
+        chkValue("text", Rt_TextValue.get("foo\tbar"), "TYPE = \"foo\\tbar\"")
+        chkValue("text", Rt_TextValue.get("foo\nbar"), "TYPE = \"foo\\nbar\"")
+        chkValue("text", Rt_TextValue.get("foo\u001Fbar"), "TYPE = \"foo\\u001Fbar\"")
+        chkValue("text", Rt_TextValue.get("Привет"), "TYPE = \"Привет\"")
+        chkValue("text", Rt_TextValue.get("food".repeat(100)), "TYPE = \"${"food".repeat(25)}...")
     }
 
     @Test fun testValueComplex() {
         chkValue("list<integer>", Rt_ListValue(R_ListType(R_IntegerType), mutableListOf()), "[list]<[integer]>")
         chkValue("set<integer>", Rt_SetValue(R_SetType(R_IntegerType), mutableSetOf()), "[set]<[integer]>")
+
         chkValue("map<integer,text>", Rt_MapValue(R_MapType(R_IntegerType, R_TextType), mutableMapOf()),
             "[map]<[integer], [text]>")
-        chkValue("(integer,text)",
-            Rt_TupleValue(R_TupleType.create(R_IntegerType, R_TextType), listOf(Rt_IntValue(123), Rt_TextValue("abc"))),
+
+        val tupleType = R_TupleType.create(R_IntegerType, R_TextType)
+        chkValue("(integer,text)", Rt_TupleValue(tupleType, listOf(Rt_IntValue.get(123), Rt_TextValue.get("abc"))),
             "([integer], [text])")
     }
 

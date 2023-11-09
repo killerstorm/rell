@@ -26,7 +26,7 @@ object Lib_Type_ByteArray {
         val bytes = Rt_Utils.wrapErr("fn:byte_array.from_hex") {
             CommonUtils.hexToBytes(s)
         }
-        Rt_ByteArrayValue(bytes)
+        Rt_ByteArrayValue.get(bytes)
     }
 
     private val FromList = C_SysFunctionBody.simple(pure = true) { a ->
@@ -37,7 +37,7 @@ object Lib_Type_ByteArray {
             if (b < 0 || b > 255) throw Rt_Exception.common("fn:byte_array.from_list:$b", "Byte value out of range: $b")
             r[i] = b.toByte()
         }
-        Rt_ByteArrayValue(r)
+        Rt_ByteArrayValue.get(r)
     }
 
     private val LIST_OF_INTEGER = R_ListType(R_IntegerType)
@@ -76,7 +76,7 @@ object Lib_Type_ByteArray {
                     val bytes = Rt_Utils.wrapErr("fn:byte_array.from_base64") {
                         Base64.getDecoder().decode(s)
                     }
-                    Rt_ByteArrayValue(bytes)
+                    Rt_ByteArrayValue.get(bytes)
                 }
             }
 
@@ -84,7 +84,7 @@ object Lib_Type_ByteArray {
                 dbFunctionTemplate("byte_array.empty", 1, "(LENGTH(#0) = 0)")
                 body { a ->
                     val ba = a.asByteArray()
-                    Rt_BooleanValue(ba.isEmpty())
+                    Rt_BooleanValue.get(ba.isEmpty())
                 }
             }
 
@@ -93,7 +93,7 @@ object Lib_Type_ByteArray {
                 dbFunctionTemplate("byte_array.size", 1, "LENGTH(#0)")
                 body { a ->
                     val ba = a.asByteArray()
-                    Rt_IntValue(ba.size.toLong())
+                    Rt_IntValue.get(ba.size.toLong())
                 }
             }
 
@@ -101,7 +101,7 @@ object Lib_Type_ByteArray {
                 deprecated(newName = "text.from_bytes")
                 body { a ->
                     val ba = a.asByteArray()
-                    Rt_TextValue(String(ba))
+                    Rt_TextValue.get(String(ba))
                 }
             }
 
@@ -109,7 +109,7 @@ object Lib_Type_ByteArray {
                 alias("toList", C_MessageType.ERROR)
                 body { a ->
                     val ba = a.asByteArray()
-                    val list = MutableList<Rt_Value>(ba.size) { Rt_IntValue(ba[it].toLong() and 0xFF) }
+                    val list = MutableList<Rt_Value>(ba.size) { Rt_IntValue.get(ba[it].toLong() and 0xFF) }
                     Rt_ListValue(LIST_OF_INTEGER, list)
                 }
             }
@@ -123,7 +123,7 @@ object Lib_Type_ByteArray {
                     val total = Lib_Type_List.rtCheckRepeatArgs(s, n, "byte_array")
                     if (bs.isEmpty() || n == 1L) a else {
                         val res = ByteArray(total) { bs[it % s] }
-                        Rt_ByteArrayValue(res)
+                        Rt_ByteArrayValue.get(res)
                     }
                 }
             }
@@ -134,7 +134,7 @@ object Lib_Type_ByteArray {
                     if (bs.size <= 1) a else {
                         val n = bs.size
                         val res = ByteArray(n) { bs[n - 1 - it] }
-                        Rt_ByteArrayValue(res)
+                        Rt_ByteArrayValue.get(res)
                     }
                 }
             }
@@ -166,7 +166,7 @@ object Lib_Type_ByteArray {
                 body { a ->
                     val ba = a.asByteArray()
                     val r = CommonUtils.bytesToHex(ba)
-                    Rt_TextValue(r)
+                    Rt_TextValue.get(r)
                 }
             }
 
@@ -175,7 +175,7 @@ object Lib_Type_ByteArray {
                 body { a ->
                     val ba = a.asByteArray()
                     val r = Base64.getEncoder().encodeToString(ba)
-                    Rt_TextValue(r)
+                    Rt_TextValue.get(r)
                 }
             }
 
@@ -192,6 +192,6 @@ object Lib_Type_ByteArray {
                 "Invalid range: start = $start, end = $end (length $len)")
         }
         val r = obj.copyOfRange(start.toInt(), end.toInt())
-        return Rt_ByteArrayValue(r)
+        return Rt_ByteArrayValue.get(r)
     }
 }

@@ -21,11 +21,8 @@ import net.postchain.rell.base.mtype.M_Type
 import net.postchain.rell.base.mtype.M_Types
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.runtime.utils.*
-import net.postchain.rell.base.utils.CommonUtils
-import net.postchain.rell.base.utils.LazyString
-import net.postchain.rell.base.utils.checkEquals
+import net.postchain.rell.base.utils.*
 import net.postchain.rell.base.utils.doc.DocCode
-import net.postchain.rell.base.utils.toImmList
 import org.bouncycastle.util.Arrays
 import org.jooq.DataType
 import org.jooq.SQLDialect
@@ -104,14 +101,14 @@ private abstract class R_TypeSqlAdapter_Some(sqlType: DataType<*>?): R_TypeSqlAd
     override fun isSqlCompatible() = true
 
     protected fun checkSqlNull(suspect: Boolean, rs: ResultSet, type: R_Type, nullable: Boolean): Rt_Value? {
-        if (suspect && rs.wasNull()) {
+        return if (suspect && rs.wasNull()) {
             if (nullable) {
-                return Rt_NullValue
+                Rt_NullValue
             } else {
                 throw errSqlNull(type)
             }
         } else {
-            return null
+            null
         }
     }
 
@@ -299,13 +296,15 @@ object R_UnitType: R_PrimitiveType("unit") {
 }
 
 object R_BooleanType: R_PrimitiveType("boolean") {
-    override fun defaultValue() = Rt_BooleanValue(false)
+    override fun defaultValue() = Rt_BooleanValue.FALSE
     override fun comparator() = Rt_Comparator.create { it.asBoolean() }
 
     override fun fromCli(s: String): Rt_Value {
-        if (s == "false") return Rt_BooleanValue(false)
-        else if (s == "true") return Rt_BooleanValue(true)
-        else throw IllegalArgumentException(s)
+        return when (s) {
+            "false" -> Rt_BooleanValue.FALSE
+            "true" -> Rt_BooleanValue.TRUE
+            else -> throw IllegalArgumentException(s)
+        }
     }
 
     override fun createGtvConversion() = GtvRtConversion_Boolean
@@ -322,15 +321,15 @@ object R_BooleanType: R_PrimitiveType("boolean") {
 
         override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getBoolean(idx)
-            return checkSqlNull(!v, rs, R_BooleanType, nullable) ?: Rt_BooleanValue(v)
+            return checkSqlNull(!v, rs, R_BooleanType, nullable) ?: Rt_BooleanValue.get(v)
         }
     }
 }
 
 object R_TextType: R_PrimitiveType("text") {
-    override fun defaultValue() = Rt_TextValue("")
+    override fun defaultValue() = Rt_TextValue.EMPTY
     override fun comparator() = Rt_Comparator.create { it.asString() }
-    override fun fromCli(s: String): Rt_Value = Rt_TextValue(s)
+    override fun fromCli(s: String): Rt_Value = Rt_TextValue.get(s)
     override fun createGtvConversion() = GtvRtConversion_Text
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Text
 
@@ -345,15 +344,16 @@ object R_TextType: R_PrimitiveType("text") {
 
         override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getString(idx)
-            return checkSqlNull(v, R_TextType, nullable) ?: Rt_TextValue(v)
+            return checkSqlNull(v, R_TextType, nullable) ?: Rt_TextValue.get(v)
         }
     }
 }
 
 object R_IntegerType: R_PrimitiveType("integer") {
-    override fun defaultValue() = Rt_IntValue(0)
+    override fun defaultValue() = Rt_IntValue.ZERO
+
     override fun comparator() = Rt_Comparator.create { it.asInteger() }
-    override fun fromCli(s: String): Rt_Value = Rt_IntValue(s.toLong())
+    override fun fromCli(s: String): Rt_Value = Rt_IntValue.get(s.toLong())
 
     override fun createGtvConversion() = GtvRtConversion_Integer
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Integer
@@ -369,7 +369,7 @@ object R_IntegerType: R_PrimitiveType("integer") {
 
         override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getLong(idx)
-            return checkSqlNull(v == 0L, rs, R_IntegerType, nullable) ?: Rt_IntValue(v)
+            return checkSqlNull(v == 0L, rs, R_IntegerType, nullable) ?: Rt_IntValue.get(v)
         }
     }
 }
@@ -377,7 +377,7 @@ object R_IntegerType: R_PrimitiveType("integer") {
 object R_BigIntegerType: R_PrimitiveType("big_integer") {
     override fun defaultValue() = Rt_BigIntegerValue.ZERO
     override fun comparator() = Rt_Comparator.create { it.asBigInteger() }
-    override fun fromCli(s: String): Rt_Value = Rt_BigIntegerValue.of(s)
+    override fun fromCli(s: String): Rt_Value = Rt_BigIntegerValue.get(s)
 
     override fun createGtvConversion() = GtvRtConversion_BigInteger
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_BigInteger
@@ -401,7 +401,7 @@ object R_BigIntegerType: R_PrimitiveType("big_integer") {
 
         override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getBigDecimal(idx)
-            return checkSqlNull(v, R_BigIntegerType, nullable) ?: Rt_BigIntegerValue.of(v)
+            return checkSqlNull(v, R_BigIntegerType, nullable) ?: Rt_BigIntegerValue.get(v)
         }
     }
 }
@@ -409,7 +409,7 @@ object R_BigIntegerType: R_PrimitiveType("big_integer") {
 object R_DecimalType: R_PrimitiveType("decimal") {
     override fun defaultValue() = Rt_DecimalValue.ZERO
     override fun comparator() = Rt_Comparator.create { it.asDecimal() }
-    override fun fromCli(s: String): Rt_Value = Rt_DecimalValue.of(s)
+    override fun fromCli(s: String): Rt_Value = Rt_DecimalValue.get(s)
 
     override fun createGtvConversion() = GtvRtConversion_Decimal
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Decimal
@@ -433,15 +433,15 @@ object R_DecimalType: R_PrimitiveType("decimal") {
 
         override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getBigDecimal(idx)
-            return checkSqlNull(v, R_DecimalType, nullable) ?: Rt_DecimalValue.of(v)
+            return checkSqlNull(v, R_DecimalType, nullable) ?: Rt_DecimalValue.get(v)
         }
     }
 }
 
 object R_ByteArrayType: R_PrimitiveType("byte_array") {
-    override fun defaultValue() = Rt_ByteArrayValue(byteArrayOf())
+    override fun defaultValue() = Rt_ByteArrayValue.get(byteArrayOf())
     override fun comparator() = Rt_Comparator({ it.asByteArray() }, { x, y -> Arrays.compareUnsigned(x, y) })
-    override fun fromCli(s: String): Rt_Value = Rt_ByteArrayValue(CommonUtils.hexToBytes(s))
+    override fun fromCli(s: String): Rt_Value = Rt_ByteArrayValue.get(CommonUtils.hexToBytes(s))
 
     override fun createGtvConversion() = GtvRtConversion_ByteArray
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_ByteArray
@@ -454,15 +454,15 @@ object R_ByteArrayType: R_PrimitiveType("byte_array") {
 
         override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getBytes(idx)
-            return checkSqlNull(v, R_ByteArrayType, nullable) ?: Rt_ByteArrayValue(v)
+            return checkSqlNull(v, R_ByteArrayType, nullable) ?: Rt_ByteArrayValue.get(v)
         }
     }
 }
 
 object R_RowidType: R_PrimitiveType("rowid") {
-    override fun defaultValue() = Rt_RowidValue(0)
+    override fun defaultValue() = Rt_RowidValue.ZERO
     override fun comparator() = Rt_Comparator.create { it.asRowid() }
-    override fun fromCli(s: String): Rt_Value = Rt_RowidValue(s.toLong())
+    override fun fromCli(s: String): Rt_Value = Rt_RowidValue.get(s.toLong())
 
     override fun createGtvConversion() = GtvRtConversion_Rowid
     override fun createSqlAdapter(): R_TypeSqlAdapter = R_TypeSqlAdapter_Rowid
@@ -478,7 +478,7 @@ object R_RowidType: R_PrimitiveType("rowid") {
 
         override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
             val v = rs.getLong(idx)
-            return checkSqlNull(v == 0L, rs, R_RowidType, nullable) ?: Rt_RowidValue(v)
+            return checkSqlNull(v == 0L, rs, R_RowidType, nullable) ?: Rt_RowidValue.get(v)
         }
     }
 }
@@ -642,6 +642,19 @@ class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName, enum.cDe
         checkEquals(enum.type, null) // during initialization
     }
 
+    val values: List<Rt_Value> = enum.attrs.map { Rt_EnumValue(this, it) }.toImmList()
+    val valuesSet: Set<Rt_Value> = values.toImmSet()
+
+    fun getValueOrNull(index: Int): Rt_Value? {
+        return values.getOrNull(index)
+    }
+
+    fun getValue(attr: R_EnumAttr): Rt_Value {
+        val i = attr.value
+        check(enum.attrs[i] === attr)
+        return values[i]
+    }
+
     override fun equals0(other: R_Type) = false
     override fun hashCode0() = System.identityHashCode(this)
 
@@ -650,7 +663,7 @@ class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName, enum.cDe
     override fun fromCli(s: String): Rt_Value {
         val attr = enum.attr(s)
         requireNotNull(attr) { "$name: $s" }
-        return Rt_EnumValue(this, attr)
+        return values[attr.value]
     }
 
     override fun isDirectPure() = true
@@ -673,18 +686,30 @@ class R_EnumType(val enum: R_EnumDefinition): R_Type(enum.appLevelName, enum.cDe
         override fun toSql(stmt: PreparedStatement, idx: Int, value: Rt_Value) = stmt.setInt(idx, value.asEnum().value)
 
         override fun fromSql(rs: ResultSet, idx: Int, nullable: Boolean): Rt_Value {
-            val v = rs.getInt(idx).toLong()
-            val res = checkSqlNull(v == 0L, rs, type, nullable)
+            val v = rs.getInt(idx)
+            val res = checkSqlNull(v == 0, rs, type, nullable)
             return if (res != null) res else {
-                val attr = type.enum.attr(v)
-                requireNotNull(attr) { "$type: $v" }
-                Rt_EnumValue(type, attr)
+                val value = type.getValueOrNull(v)
+                requireNotNull(value) { "$type: $v" }
             }
         }
 
         override fun metaName(sqlCtx: Rt_SqlContext): String {
             return "enum:${type.name}"
         }
+    }
+
+    private class Rt_EnumValue(private val type: R_EnumType, private val attr: R_EnumAttr): Rt_Value() {
+        override val valueType = Rt_CoreValueTypes.ENUM.type()
+
+        override fun type() = type
+        override fun asEnum() = attr
+        override fun toFormatArg() = attr.name
+        override fun equals(other: Any?) = other is Rt_EnumValue && attr == other.attr
+        override fun hashCode() = type.hashCode() * 31 + attr.value
+
+        override fun str() = attr.name
+        override fun strCode(showTupleFieldNames: Boolean) = "${type.name}[${attr.name}]"
     }
 }
 

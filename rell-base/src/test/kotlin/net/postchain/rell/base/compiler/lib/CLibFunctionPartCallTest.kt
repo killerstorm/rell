@@ -18,7 +18,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
         tst.extraMod = makeModule {
             function("_foo", "text") {
                 param("text", arity = L_ParamArity.ZERO_ONE)
-                bodyN { args -> Rt_TextValue(args.joinToString(",", "${this.fnSimpleName}:") { it.strCode() }) }
+                bodyN { args -> Rt_TextValue.get(args.joinToString(",", "${this.fnSimpleName}:") { it.strCode() }) }
             }
         }
 
@@ -41,7 +41,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
             function("_foo", "text") {
                 param("integer")
                 param("text", arity = L_ParamArity.ZERO_ONE)
-                bodyN { args -> Rt_TextValue(args.joinToString(",", "${this.fnSimpleName}:") { it.strCode() }) }
+                bodyN { args -> Rt_TextValue.get(args.joinToString(",", "${this.fnSimpleName}:") { it.strCode() }) }
             }
         }
 
@@ -69,12 +69,12 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
             function("_foo", "text") {
                 param("integer")
                 param("text", arity = L_ParamArity.ZERO_ONE)
-                bodyN { args -> Rt_TextValue(args.joinToString(",", "${this.fnSimpleName}:a:") { it.strCode() }) }
+                bodyN { args -> Rt_TextValue.get(args.joinToString(",", "${this.fnSimpleName}:a:") { it.strCode() }) }
             }
             function("_foo", "text") {
                 param("decimal")
                 param("text")
-                bodyN { args -> Rt_TextValue(args.joinToString(",", "${this.fnSimpleName}:b:") { it.strCode() }) }
+                bodyN { args -> Rt_TextValue.get(args.joinToString(",", "${this.fnSimpleName}:b:") { it.strCode() }) }
             }
         }
 
@@ -99,10 +99,10 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
     @Test fun testPartCallCasesNoHintMany() {
         tst.extraMod = makeModule {
             function("_foo", "text", listOf("integer")) {
-                body { a -> Rt_TextValue("_foo(integer):${a.str()}") }
+                body { a -> Rt_TextValue.get("_foo(integer):${a.str()}") }
             }
             function("_foo", "text", listOf("boolean")) {
-                body { a -> Rt_TextValue("_foo(boolean):${a.str()}") }
+                body { a -> Rt_TextValue.get("_foo(boolean):${a.str()}") }
             }
         }
         chk("_foo(*)", "ct_err:expr:call:partial_ambiguous:_foo")
@@ -112,7 +112,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
         tst.extraMod = makeModule {
             function("_foo", "text") {
                 param("iterable<-any>")
-                body { a -> Rt_TextValue("_foo:${a.str()}") }
+                body { a -> Rt_TextValue.get("_foo:${a.str()}") }
             }
         }
         chk("_foo(*)", "ct_err:expr:call:partial_bad_case:_foo(iterable<-any>):text")
@@ -121,7 +121,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
     @Test fun testPartCallCasesNoHintOneGood() {
         tst.extraMod = makeModule {
             function("_foo", "text", listOf("integer")) {
-                body { a -> Rt_TextValue("_foo:${a.strCode()}") }
+                body { a -> Rt_TextValue.get("_foo:${a.strCode()}") }
             }
         }
         chk("_foo(*)", "fn[_foo(*)]")
@@ -131,10 +131,10 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
     @Test fun testPartCallCasesHintMany() {
         tst.extraMod = makeModule {
             function("_foo", "text", listOf("iterable<integer>")) {
-                body { a -> Rt_TextValue("_foo(iterable):${a.str()}") }
+                body { a -> Rt_TextValue.get("_foo(iterable):${a.str()}") }
             }
             function("_foo", "text", listOf("collection<integer>")) {
-                body { a -> Rt_TextValue("_foo(collection):${a.str()}") }
+                body { a -> Rt_TextValue.get("_foo(collection):${a.str()}") }
             }
         }
         chkEx("{ val f: (list<integer>) -> text = _foo(*); return f; }", "ct_err:expr:call:partial_ambiguous:_foo")
@@ -145,7 +145,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
         tst.extraMod = makeModule {
             function("_foo", "text") {
                 param("iterable<-any>")
-                body { a -> Rt_TextValue("_foo:${a.str()}") }
+                body { a -> Rt_TextValue.get("_foo:${a.str()}") }
             }
         }
         chkEx("{ val f = _foo(*); return f; }", "ct_err:expr:call:partial_bad_case:_foo(iterable<-any>):text")
@@ -156,7 +156,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
     @Test fun testPartCallCasesHintOneGood() {
         tst.extraMod = makeModule {
             function("_foo", "text", listOf("integer")) {
-                body { a -> Rt_TextValue("_foo:${a.strCode()}") }
+                body { a -> Rt_TextValue.get("_foo:${a.strCode()}") }
             }
         }
         chkEx("{ val f: (integer) -> text = _foo(*); return f; }", "fn[_foo(*)]")
@@ -169,15 +169,15 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
         tst.extraMod = makeModule {
             function("_foo", "text") {
                 param("(integer?,text)")
-                body { a -> Rt_TextValue("_foo_0:${a.strCode()}") }
+                body { a -> Rt_TextValue.get("_foo_0:${a.strCode()}") }
             }
             function("_foo", "text") {
                 param("(integer,text?)")
-                body { a -> Rt_TextValue("_foo_1:${a.strCode()}") }
+                body { a -> Rt_TextValue.get("_foo_1:${a.strCode()}") }
             }
             function("_foo", "text") {
                 param("(integer?,text?)")
-                body { a -> Rt_TextValue("_foo_2:${a.strCode()}") }
+                body { a -> Rt_TextValue.get("_foo_2:${a.strCode()}") }
             }
         }
 
@@ -199,13 +199,13 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
         tst.extraMod = makeModule {
             val tupleType = R_TupleType.create(R_IntegerType, R_TextType)
             function("_foo", "(integer?,text)") {
-                body { -> Rt_TupleValue.make(tupleType, Rt_IntValue(1), Rt_TextValue("_foo_0")) }
+                body { -> Rt_TupleValue.make(tupleType, Rt_IntValue.get(1), Rt_TextValue.get("_foo_0")) }
             }
             function("_foo", "(integer,text?)") {
-                body { -> Rt_TupleValue.make(tupleType, Rt_IntValue(1), Rt_TextValue("_foo_1")) }
+                body { -> Rt_TupleValue.make(tupleType, Rt_IntValue.get(1), Rt_TextValue.get("_foo_1")) }
             }
             function("_foo", "(integer?,text?)") {
-                body { -> Rt_TupleValue.make(tupleType, Rt_IntValue(1), Rt_TextValue("_foo_2")) }
+                body { -> Rt_TupleValue.make(tupleType, Rt_IntValue.get(1), Rt_TextValue.get("_foo_2")) }
             }
         }
 

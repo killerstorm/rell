@@ -86,7 +86,7 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
         extraModule {
             property("prop", type = "integer") { bodyContext { Rt_UnitValue } }
             property("pure_prop", pure = true, type = "integer") { bodyContext { Rt_UnitValue } }
-            property("spec_prop", C_NamespaceProperty_RtValue(Rt_IntValue(0)))
+            property("spec_prop", C_NamespaceProperty_RtValue(Rt_IntValue.ZERO))
         }
         chkSyms("query q() = prop;", "prop=MEM_SYS_PROPERTY;-;-", "?head=PROPERTY|mod:prop")
         chkSyms("query q() = pure_prop;", "pure_prop=MEM_SYS_PROPERTY_PURE;-;-", "?head=PROPERTY|mod:pure_prop")

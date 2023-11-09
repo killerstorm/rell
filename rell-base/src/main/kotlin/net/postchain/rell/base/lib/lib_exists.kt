@@ -100,6 +100,6 @@ private class R_SysFn_Exists(private val condition: R_RequireCondition, private 
         val value = condition.calculate(arg)
         val exists = value != null
         val res = if (not) !exists else exists
-        return Rt_BooleanValue(res)
+        return Rt_BooleanValue.get(res)
     }
 }

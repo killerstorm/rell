@@ -101,8 +101,8 @@ class RellCodeTester(
     fun chkEx(code: String, args: List<Any>, expected: String) {
         val args2 = args.map { v ->
             when (v) {
-                is Boolean -> "boolean" to Rt_BooleanValue(v)
-                is Long -> "integer" to Rt_IntValue(v)
+                is Boolean -> "boolean" to Rt_BooleanValue.get(v)
+                is Long -> "integer" to Rt_IntValue.get(v)
                 else -> throw IllegalArgumentException(v.javaClass.name)
             }
         }

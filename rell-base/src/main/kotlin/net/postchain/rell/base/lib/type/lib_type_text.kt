@@ -47,7 +47,7 @@ object Lib_Type_Text {
                         }
                         charBuffer.toString()
                     }
-                    Rt_TextValue(s)
+                    Rt_TextValue.get(s)
                 }
             }
 
@@ -55,7 +55,7 @@ object Lib_Type_Text {
                 dbFunctionTemplate("text.empty", 1, "(LENGTH(#0) = 0)")
                 body { a ->
                     val s = a.asString()
-                    Rt_BooleanValue(s.isEmpty())
+                    Rt_BooleanValue.get(s.isEmpty())
                 }
             }
 
@@ -64,7 +64,7 @@ object Lib_Type_Text {
                 dbFunctionSimple("text.size", "LENGTH")
                 body { a ->
                     val s = a.asString()
-                    Rt_IntValue(s.length.toLong())
+                    Rt_IntValue.get(s.length.toLong())
                 }
             }
 
@@ -73,7 +73,7 @@ object Lib_Type_Text {
                 dbFunctionSimple("text.upper_case", "UPPER")
                 body { a ->
                     val s = a.asString()
-                    Rt_TextValue(s.toUpperCase())
+                    Rt_TextValue.get(s.toUpperCase())
                 }
             }
 
@@ -82,7 +82,7 @@ object Lib_Type_Text {
                 dbFunctionSimple("text.lower_case", "LOWER")
                 body { a ->
                     val s = a.asString()
-                    Rt_TextValue(s.toLowerCase())
+                    Rt_TextValue.get(s.toLowerCase())
                 }
             }
 
@@ -92,7 +92,7 @@ object Lib_Type_Text {
                 body { a, b ->
                     val s1 = a.asString()
                     val s2 = b.asString()
-                    Rt_IntValue(s1.compareTo(s2).toLong())
+                    Rt_IntValue.get(s1.compareTo(s2).toLong())
                 }
             }
 
@@ -102,7 +102,7 @@ object Lib_Type_Text {
                 body { a, b ->
                     val s1 = a.asString()
                     val s2 = b.asString()
-                    Rt_BooleanValue(s1.contains(s2))
+                    Rt_BooleanValue.get(s1.contains(s2))
                 }
             }
 
@@ -113,7 +113,7 @@ object Lib_Type_Text {
                 body { a, b ->
                     val s1 = a.asString()
                     val s2 = b.asString()
-                    Rt_BooleanValue(s1.startsWith(s2))
+                    Rt_BooleanValue.get(s1.startsWith(s2))
                 }
             }
 
@@ -124,7 +124,7 @@ object Lib_Type_Text {
                 body { a, b ->
                     val s1 = a.asString()
                     val s2 = b.asString()
-                    Rt_BooleanValue(s1.endsWith(s2))
+                    Rt_BooleanValue.get(s1.endsWith(s2))
                 }
             }
 
@@ -139,7 +139,7 @@ object Lib_Type_Text {
                     } catch (e: IllegalFormatException) {
                         s
                     }
-                    Rt_TextValue(r)
+                    Rt_TextValue.get(r)
                 }
             }
 
@@ -151,7 +151,7 @@ object Lib_Type_Text {
                     val s1 = a.asString()
                     val s2 = b.asString()
                     val s3 = c.asString()
-                    Rt_TextValue(s1.replace(s2, s3))
+                    Rt_TextValue.get(s1.replace(s2, s3))
                 }
             }
 
@@ -161,7 +161,7 @@ object Lib_Type_Text {
                     val s1 = a.asString()
                     val s2 = b.asString()
                     val arr = s1.split(s2)
-                    val list = MutableList<Rt_Value>(arr.size) { Rt_TextValue(arr[it]) }
+                    val list = MutableList<Rt_Value>(arr.size) { Rt_TextValue.get(arr[it]) }
                     Rt_ListValue(SPLIT_TYPE, list)
                 }
             }
@@ -170,7 +170,7 @@ object Lib_Type_Text {
                 //dbFunction(Db_SysFunction.template("text.trim", 1, "TRIM(#0, ' '||CHR(9)||CHR(10)||CHR(13))"))
                 body { a ->
                     val s = a.asString()
-                    Rt_TextValue(s.trim())
+                    Rt_TextValue.get(s.trim())
                 }
             }
 
@@ -181,7 +181,7 @@ object Lib_Type_Text {
                     val s = a.asString()
                     val pattern = b.asString()
                     val res = Rt_TextValue.like(s, pattern)
-                    Rt_BooleanValue(res)
+                    Rt_BooleanValue.get(res)
                 }
             }
 
@@ -195,7 +195,7 @@ object Lib_Type_Text {
                     } catch (e: PatternSyntaxException) {
                         throw Rt_Exception.common("fn:text.matches:bad_regex", "Invalid regular expression: $pattern")
                     }
-                    Rt_BooleanValue(res)
+                    Rt_BooleanValue.get(res)
                 }
             }
 
@@ -213,7 +213,7 @@ object Lib_Type_Text {
                         )
                     }
                     val r = s[index.toInt()]
-                    Rt_IntValue(r.toLong())
+                    Rt_IntValue.get(r.toLong())
                 }
             }
 
@@ -224,7 +224,7 @@ object Lib_Type_Text {
                 body { a, b ->
                     val s1 = a.asString()
                     val s2 = b.asString()
-                    Rt_IntValue(s1.indexOf(s2).toLong())
+                    Rt_IntValue.get(s1.indexOf(s2).toLong())
                 }
             }
 
@@ -242,7 +242,7 @@ object Lib_Type_Text {
                             "Index out of bounds: $start (length ${s1.length})"
                         )
                     }
-                    Rt_IntValue(s1.indexOf(s2, start.toInt()).toLong())
+                    Rt_IntValue.get(s1.indexOf(s2, start.toInt()).toLong())
                 }
             }
 
@@ -252,7 +252,7 @@ object Lib_Type_Text {
                 body { a, b ->
                     val s1 = a.asString()
                     val s2 = b.asString()
-                    Rt_IntValue(s1.lastIndexOf(s2).toLong())
+                    Rt_IntValue.get(s1.lastIndexOf(s2).toLong())
                 }
             }
 
@@ -270,7 +270,7 @@ object Lib_Type_Text {
                             "Index out of bounds: $start (length ${s1.length})"
                         )
                     }
-                    Rt_IntValue(s1.lastIndexOf(s2, start.toInt()).toLong())
+                    Rt_IntValue.get(s1.lastIndexOf(s2, start.toInt()).toLong())
                 }
             }
 
@@ -283,7 +283,7 @@ object Lib_Type_Text {
                     Lib_Type_List.rtCheckRepeatArgs(s.length, n, "text")
                     if (s.isEmpty() || n == 1L) a else {
                         val res = s.repeat(n.toInt())
-                        Rt_TextValue(res)
+                        Rt_TextValue.get(res)
                     }
                 }
             }
@@ -294,7 +294,7 @@ object Lib_Type_Text {
                     val s = a.asString()
                     if (s.length <= 1) a else {
                         val res = s.reversed()
-                        Rt_TextValue(res)
+                        Rt_TextValue.get(res)
                     }
                 }
             }
@@ -326,7 +326,7 @@ object Lib_Type_Text {
                 body { a ->
                     val s = a.asString()
                     val ba = s.toByteArray(CHARSET)
-                    Rt_ByteArrayValue(ba)
+                    Rt_ByteArrayValue.get(ba)
                 }
             }
         }
@@ -340,6 +340,6 @@ object Lib_Type_Text {
                 "Invalid range: start = $start, end = $end (length $len)"
             )
         }
-        return Rt_TextValue(s.substring(start.toInt(), end.toInt()))
+        return Rt_TextValue.get(s.substring(start.toInt(), end.toInt()))
     }
 }

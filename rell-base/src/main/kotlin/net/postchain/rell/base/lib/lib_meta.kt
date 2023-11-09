@@ -95,10 +95,10 @@ private object R_RellMetaType: R_LibSimpleType("rell.meta", C_DefinitionName("re
 }
 
 private class Rt_RellMetaValue(private val meta: R_DefinitionMeta): Rt_Value() {
-    val simpleName: Rt_Value by lazy { Rt_TextValue(meta.simpleName) }
-    val moduleName: Rt_Value by lazy { Rt_TextValue(meta.moduleName) }
-    val fullName: Rt_Value by lazy { Rt_TextValue(meta.fullName) }
-    val mountName: Rt_Value by lazy { Rt_TextValue(meta.mountName.str()) }
+    val simpleName: Rt_Value by lazy { Rt_TextValue.get(meta.simpleName) }
+    val moduleName: Rt_Value by lazy { Rt_TextValue.get(meta.moduleName) }
+    val fullName: Rt_Value by lazy { Rt_TextValue.get(meta.fullName) }
+    val mountName: Rt_Value by lazy { Rt_TextValue.get(meta.mountName.str()) }
 
     override val valueType = VALUE_TYPE
     override fun type(): R_Type = R_RellMetaType

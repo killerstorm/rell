@@ -28,28 +28,28 @@ object Lib_Test_BlockClock {
                     val t = Rt_Utils.checkNotNull(t0) {
                         "no_last_block_time" toCodeMsg "No last block time"
                     }
-                    Rt_IntValue(t)
+                    Rt_IntValue.get(t)
                 }
             }
 
             property("last_block_time_or_null", type = "timestamp?") {
                 bodyContext { ctx ->
                     val t = ctx.exeCtx.testBlockClock.getLastBlockTime()
-                    if (t == null) Rt_NullValue else Rt_IntValue(t)
+                    if (t == null) Rt_NullValue else Rt_IntValue.get(t)
                 }
             }
 
             property("next_block_time", type = "timestamp") {
                 bodyContext { ctx ->
                     val t = ctx.exeCtx.testBlockClock.getNextBlockTime()
-                    Rt_IntValue(t)
+                    Rt_IntValue.get(t)
                 }
             }
 
             property("block_interval", type = "timestamp") {
                 bodyContext { ctx ->
                     val t = ctx.exeCtx.testBlockClock.getBlockInterval()
-                    Rt_IntValue(t)
+                    Rt_IntValue.get(t)
                 }
             }
 
@@ -59,7 +59,7 @@ object Lib_Test_BlockClock {
                     val clock = ctx.exeCtx.testBlockClock
                     val res = clock.getBlockInterval()
                     clock.setBlockInterval(a.asInteger())
-                    Rt_IntValue(res)
+                    Rt_IntValue.get(res)
                 }
             }
 

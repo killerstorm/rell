@@ -109,10 +109,10 @@ class R_ConstantValueExpr(type: R_Type, private val value: Rt_Value): R_Expr(typ
 
     companion object {
         fun makeNull() = R_ConstantValueExpr(Rt_NullValue)
-        fun makeBool(v: Boolean) = R_ConstantValueExpr(Rt_BooleanValue(v))
-        fun makeInt(v: Long) = R_ConstantValueExpr(Rt_IntValue(v))
-        fun makeText(v: String) = R_ConstantValueExpr(Rt_TextValue(v))
-        fun makeBytes(v: ByteArray) = R_ConstantValueExpr(Rt_ByteArrayValue(v))
+        fun makeBool(v: Boolean) = R_ConstantValueExpr(Rt_BooleanValue.get(v))
+        fun makeInt(v: Long) = R_ConstantValueExpr(Rt_IntValue.get(v))
+        fun makeText(v: String) = R_ConstantValueExpr(Rt_TextValue.get(v))
+        fun makeBytes(v: ByteArray) = R_ConstantValueExpr(Rt_ByteArrayValue.get(v))
     }
 }
 
@@ -231,7 +231,7 @@ class R_TextSubscriptExpr(val base: R_Expr, val expr: R_Expr): R_Expr(R_TextType
 
         val i = index.toInt()
         val res = str.substring(i, i + 1)
-        return Rt_TextValue(res)
+        return Rt_TextValue.get(res)
     }
 }
 
@@ -250,7 +250,7 @@ class R_ByteArraySubscriptExpr(val base: R_Expr, val expr: R_Expr): R_Expr(R_Int
         val i = index.toInt()
         val v = array[i].toLong()
         val res = if (v >= 0) v else v + 256
-        return Rt_IntValue(res)
+        return Rt_IntValue.get(res)
     }
 }
 
@@ -496,7 +496,7 @@ class R_StatementExpr(val stmt: R_Statement): R_Expr(R_UnitType) {
 class R_ChainHeightExpr(val chain: R_ExternalChainRef): R_Expr(R_IntegerType) {
     override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         val rtChain = frame.defCtx.sqlCtx.linkedChain(chain)
-        return Rt_IntValue(rtChain.height)
+        return Rt_IntValue.get(rtChain.height)
     }
 }
 
@@ -556,7 +556,7 @@ object R_TypeAdapter_BigIntegerToDecimal: R_TypeAdapter() {
     override fun adaptValue(value: Rt_Value): Rt_Value {
         val bigInt = value.asBigInteger()
         val bigDec = BigDecimal(bigInt)
-        val r = Rt_DecimalValue.of(bigDec)
+        val r = Rt_DecimalValue.get(bigDec)
         return r
     }
 }

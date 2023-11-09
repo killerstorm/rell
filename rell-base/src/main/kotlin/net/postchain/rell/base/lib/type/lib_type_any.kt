@@ -12,7 +12,7 @@ import net.postchain.rell.base.runtime.Rt_TextValue
 object Lib_Type_Any {
     val ToText_R = C_SysFunction.rSimple { a ->
         val s = a.str()
-        Rt_TextValue(s)
+        Rt_TextValue.get(s)
     }
 
     val ToText_Db = Db_SysFunction.cast("to_text", "TEXT")

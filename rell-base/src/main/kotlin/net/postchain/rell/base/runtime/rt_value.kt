@@ -9,8 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.collect.Iterables
 import com.google.common.math.LongMath
 import mu.KLogging
-import net.postchain.gtv.Gtv
-import net.postchain.gtv.GtvVirtual
+import net.postchain.gtv.*
 import net.postchain.rell.base.lib.type.Lib_BigIntegerMath
 import net.postchain.rell.base.lib.type.Lib_DecimalMath
 import net.postchain.rell.base.model.*
@@ -173,7 +172,7 @@ object Rt_UnitValue: Rt_Value() {
     override fun str() = "unit"
 }
 
-class Rt_BooleanValue(val value: Boolean): Rt_Value() {
+class Rt_BooleanValue private constructor(val value: Boolean): Rt_Value() {
     override val valueType = Rt_CoreValueTypes.BOOLEAN.type()
 
     override fun type() = R_BooleanType
@@ -185,12 +184,18 @@ class Rt_BooleanValue(val value: Boolean): Rt_Value() {
     override fun hashCode() = java.lang.Boolean.hashCode(value)
 
     companion object {
-        val TRUE = Rt_BooleanValue(true)
-        val FALSE = Rt_BooleanValue(false)
+        val TRUE: Rt_Value = Rt_BooleanValue(true)
+        val FALSE: Rt_Value = Rt_BooleanValue(false)
+
+        val ALL_VALUES: Set<Rt_Value> = immSetOf(FALSE, TRUE)
+
+        fun get(value: Boolean): Rt_Value {
+            return if (value) TRUE else FALSE
+        }
     }
 }
 
-class Rt_IntValue(val value: Long): Rt_Value() {
+class Rt_IntValue private constructor(val value: Long): Rt_Value() {
     override val valueType = Rt_CoreValueTypes.INTEGER.type()
 
     override fun type() = R_IntegerType
@@ -200,6 +205,22 @@ class Rt_IntValue(val value: Long): Rt_Value() {
     override fun str() = "" + value
     override fun equals(other: Any?) = other is Rt_IntValue && value == other.value
     override fun hashCode() = java.lang.Long.hashCode(value)
+
+    companion object {
+        private const val NVALUES = 1000
+
+        private val VALUES: List<Rt_Value> = (-NVALUES .. NVALUES).map { Rt_IntValue(it.toLong()) }.toImmList()
+
+        val ZERO: Rt_Value = get(0)
+
+        fun get(v: Long): Rt_Value {
+            return if (v >= -NVALUES && v <= NVALUES) {
+                VALUES[(v + NVALUES).toInt()]
+            } else {
+                Rt_IntValue(v)
+            }
+        }
+    }
 }
 
 class Rt_BigIntegerValue private constructor(val value: BigInteger): Rt_Value() {
@@ -216,45 +237,46 @@ class Rt_BigIntegerValue private constructor(val value: BigInteger): Rt_Value() 
     companion object : KLogging() {
         val ZERO = Rt_BigIntegerValue(BigInteger.ZERO)
 
-        fun of(v: BigInteger): Rt_Value {
+        fun get(v: BigInteger): Rt_Value {
             if (v.signum() == 0) {
                 return ZERO
             }
 
-            val res = ofTry(v)
-            return res ?: throw errOverflow("bigint:overflow", "Big integer value out of range")
+            val res = getTry(v)
+            if (res != null) {
+                return res
+            }
+
+            val p = Lib_BigIntegerMath.PRECISION
+            val msg = "Big integer value out of range (allowed range is -10^$p..10^$p, exclusive)"
+            throw Rt_Exception.common("bigint:overflow", msg)
         }
 
-        fun ofTry(v: BigInteger): Rt_Value? {
+        fun getTry(v: BigInteger): Rt_Value? {
             return if (v < Lib_BigIntegerMath.MIN_VALUE || v > Lib_BigIntegerMath.MAX_VALUE) null else Rt_BigIntegerValue(v)
         }
 
-        fun of(v: BigDecimal): Rt_Value {
+        fun get(v: BigDecimal): Rt_Value {
             val bigInt = try {
                 v.toBigIntegerExact()
             } catch (e: ArithmeticException) {
                 throw Rt_Exception.common("bigint:nonint:$v", "Value is not an integer: '$v'")
             }
-            return of(bigInt)
+            return get(bigInt)
         }
 
-        fun of(s: String): Rt_Value {
+        fun get(s: String): Rt_Value {
             val v = try {
                 BigInteger(s)
             } catch (e: NumberFormatException) {
                 throw Rt_Exception.common("bigint:invalid:$s", "Invalid big integer value: '$s'")
             }
-            return of(v)
+            return get(v)
         }
 
-        fun of(v: Long): Rt_Value {
+        fun get(v: Long): Rt_Value {
             val bi = BigInteger.valueOf(v)
-            return of(bi)
-        }
-
-        fun errOverflow(code: String, msg: String): Rt_Exception {
-            val p = Lib_BigIntegerMath.PRECISION
-            return Rt_Exception.common(code, "$msg (allowed range is -10^$p..10^$p, exclusive)")
+            return get(bi)
         }
     }
 }
@@ -273,33 +295,33 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
     companion object : KLogging() {
         val ZERO = Rt_DecimalValue(BigDecimal.ZERO)
 
-        fun of(v: BigDecimal): Rt_Value {
+        fun get(v: BigDecimal): Rt_Value {
             val t = v.unscaledValue()
             if (t.signum() == 0) {
                 return ZERO
             }
 
-            val res = ofTry(v)
+            val res = getTry(v)
             return res ?: throw errOverflow("decimal:overflow", "Decimal value out of range")
         }
 
-        fun ofTry(v: BigDecimal): Rt_Value? {
+        fun getTry(v: BigDecimal): Rt_Value? {
             val t = Lib_DecimalMath.scale(v)
             return if (t == null) null else Rt_DecimalValue(t)
         }
 
-        fun of(s: String): Rt_Value {
+        fun get(s: String): Rt_Value {
             val v = try {
                 Lib_DecimalMath.parse(s)
             } catch (e: NumberFormatException) {
                 throw Rt_Exception.common("decimal:invalid:$s", "Invalid decimal value: '$s'")
             }
-            return of(v)
+            return get(v)
         }
 
-        fun of(v: Long): Rt_Value {
+        fun get(v: Long): Rt_Value {
             val bd = BigDecimal(v)
-            return of(bd)
+            return get(bd)
         }
 
         fun errOverflow(code: String, msg: String): Rt_Exception {
@@ -309,7 +331,7 @@ class Rt_DecimalValue private constructor(val value: BigDecimal): Rt_Value() {
     }
 }
 
-class Rt_TextValue(val value: String): Rt_Value() {
+class Rt_TextValue private constructor(val value: String): Rt_Value() {
     override val valueType = Rt_CoreValueTypes.TEXT.type()
 
     override fun type() = R_TextType
@@ -326,6 +348,12 @@ class Rt_TextValue(val value: String): Rt_Value() {
     override fun hashCode() = value.hashCode()
 
     companion object {
+        val EMPTY: Rt_Value = Rt_TextValue("")
+
+        fun get(s: String): Rt_Value {
+            return if (s.isEmpty()) EMPTY else Rt_TextValue(s)
+        }
+
         fun like(s: String, pattern: String): Boolean {
             val regex = likePatternToRegex(pattern, '_', '%')
             val m = regex.matcher(s)
@@ -385,7 +413,7 @@ class Rt_TextValue(val value: String): Rt_Value() {
     }
 }
 
-class Rt_ByteArrayValue(private val value: ByteArray): Rt_Value() {
+class Rt_ByteArrayValue private constructor(private val value: ByteArray): Rt_Value() {
     override val valueType = Rt_CoreValueTypes.BYTE_ARRAY.type()
 
     override fun type() = R_ByteArrayType
@@ -400,12 +428,20 @@ class Rt_ByteArrayValue(private val value: ByteArray): Rt_Value() {
         return Iterables.transform(value.asIterable()) {
             val signed = it!!.toInt()
             val unsigned = if (signed >= 0) signed else (signed + 256)
-            Rt_IntValue(unsigned.toLong())
+            Rt_IntValue.get(unsigned.toLong())
+        }
+    }
+
+    companion object {
+        val EMPTY: Rt_Value = Rt_ByteArrayValue(ByteArray(0))
+
+        fun get(value: ByteArray): Rt_Value {
+            return if (value.isEmpty()) EMPTY else Rt_ByteArrayValue(value)
         }
     }
 }
 
-class Rt_RowidValue(val value: Long): Rt_Value() {
+class Rt_RowidValue private constructor(val value: Long): Rt_Value() {
     init {
         check(value >= 0) { "Negative rowid value: $value" }
     }
@@ -419,6 +455,16 @@ class Rt_RowidValue(val value: Long): Rt_Value() {
     override fun str() = "" + value
     override fun equals(other: Any?) = other is Rt_RowidValue && value == other.value
     override fun hashCode() = java.lang.Long.hashCode(value)
+
+    companion object {
+        private val VALUES: List<Rt_Value> = (0 .. 1000).map { Rt_RowidValue(it.toLong()) }.toImmList()
+
+        val ZERO = VALUES[0]
+
+        fun get(value: Long): Rt_Value {
+            return if (value >= 0 && value < VALUES.size) VALUES[value.toInt()] else Rt_RowidValue(value)
+        }
+    }
 }
 
 class Rt_EntityValue(val type: R_EntityType, val rowid: Long): Rt_Value() {
@@ -741,8 +787,8 @@ class Rt_StructValue(private val type: R_StructType, private val attributes: Mut
     }
 
     class Builder(private val type: R_StructType) {
-        private val v0 = Rt_IntValue(0)
-        private val values = MutableList<Rt_Value>(type.struct.attributes.size) { v0 }
+        private val v0: Rt_Value = Rt_RangeValue(0, 0, 0)
+        private val values = MutableList(type.struct.attributes.size) { v0 }
         private var done = false
 
         fun set(attr: R_Attribute, value: Rt_Value) {
@@ -824,19 +870,6 @@ class Rt_VirtualStructValue(
         val fullAttrValues = attributes.map { toFull(it!!) }.toMutableList()
         return Rt_StructValue(type.innerType, fullAttrValues)
     }
-}
-
-class Rt_EnumValue(private val type: R_EnumType, private val attr: R_EnumAttr): Rt_Value() {
-    override val valueType = Rt_CoreValueTypes.ENUM.type()
-
-    override fun type() = type
-    override fun asEnum() = attr
-    override fun toFormatArg() = attr.name
-    override fun equals(other: Any?) = other is Rt_EnumValue && attr == other.attr
-    override fun hashCode() = type.hashCode() * 31 + attr.value
-
-    override fun str() = attr.name
-    override fun strCode(showTupleFieldNames: Boolean) = "${type.name}[${attr.name}]"
 }
 
 class Rt_ObjectValue(private val type: R_ObjectType): Rt_Value() {
@@ -937,13 +970,13 @@ class Rt_RangeValue(val start: Long, val end: Long, val step: Long): Rt_Value(),
             override fun next(): Rt_Value {
                 val res = current
                 current = LongMath.saturatedAdd(current, range.step)
-                return Rt_IntValue(res)
+                return Rt_IntValue.get(res)
             }
         }
     }
 }
 
-class Rt_GtvValue(val value: Gtv): Rt_Value() {
+class Rt_GtvValue private constructor(val value: Gtv): Rt_Value() {
     override val valueType = Rt_CoreValueTypes.GTV.type()
 
     override fun type() = R_GtvType
@@ -956,6 +989,28 @@ class Rt_GtvValue(val value: Gtv): Rt_Value() {
     override fun hashCode() = value.hashCode()
 
     companion object {
+        val NULL: Rt_Value = Rt_GtvValue(GtvNull)
+
+        private val ZERO_INTEGER: Rt_Value = Rt_GtvValue(GtvFactory.gtv(0))
+        private val ZERO_BIG_INTEGER: Rt_Value = Rt_GtvValue(GtvFactory.gtv(BigInteger.ZERO))
+        private val EMPTY_STRING: Rt_Value = Rt_GtvValue(GtvFactory.gtv(""))
+        private val EMPTY_BYTE_ARRAY: Rt_Value = Rt_GtvValue(GtvFactory.gtv(ByteArray(0)))
+        private val EMPTY_ARRAY: Rt_Value = Rt_GtvValue(GtvFactory.gtv(immListOf()))
+        private val EMPTY_DICT: Rt_Value = Rt_GtvValue(GtvFactory.gtv(immMapOf()))
+
+        fun get(value: Gtv): Rt_Value {
+            return when (value) {
+                GtvNull -> NULL
+                is GtvInteger -> if (value.integer == 0L) ZERO_INTEGER else Rt_GtvValue(value)
+                is GtvBigInteger -> if (value.integer == BigInteger.ZERO) ZERO_BIG_INTEGER else Rt_GtvValue(value)
+                is GtvString -> if (value.string.isEmpty()) EMPTY_STRING else Rt_GtvValue(value)
+                is GtvByteArray -> if (value.bytearray.isEmpty()) EMPTY_BYTE_ARRAY else Rt_GtvValue(value)
+                is GtvArray -> if (value.array.isEmpty()) EMPTY_ARRAY else Rt_GtvValue(value)
+                is GtvDictionary -> if (value.dict.isEmpty()) EMPTY_DICT else Rt_GtvValue(value)
+                else -> Rt_GtvValue(value)
+            }
+        }
+
         fun toString(value: Gtv): String {
             return try {
                 PostchainGtvUtils.gtvToJson(value)

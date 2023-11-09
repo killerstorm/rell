@@ -26,7 +26,7 @@ object Lib_Type_Collection {
             function("empty", "boolean", pure = true) {
                 body { a ->
                     val col = a.asCollection()
-                    Rt_BooleanValue(col.isEmpty())
+                    Rt_BooleanValue.get(col.isEmpty())
                 }
             }
 
@@ -34,7 +34,7 @@ object Lib_Type_Collection {
                 alias("len", deprecated = C_MessageType.ERROR)
                 body { a ->
                     val col = a.asCollection()
-                    Rt_IntValue(col.size.toLong())
+                    Rt_IntValue.get(col.size.toLong())
                 }
             }
 
@@ -42,7 +42,7 @@ object Lib_Type_Collection {
                 param("T")
                 body { a, b ->
                     val col = a.asCollection()
-                    Rt_BooleanValue(col.contains(b))
+                    Rt_BooleanValue.get(col.contains(b))
                 }
             }
 
@@ -52,7 +52,7 @@ object Lib_Type_Collection {
                 body { a, b ->
                     val col1 = a.asCollection()
                     val col2 = b.asCollection()
-                    Rt_BooleanValue(col1.containsAll(col2))
+                    Rt_BooleanValue.get(col1.containsAll(col2))
                 }
             }
 
@@ -60,7 +60,7 @@ object Lib_Type_Collection {
                 param("T")
                 body { a, b ->
                     val col = a.asCollection()
-                    Rt_BooleanValue(col.add(b))
+                    Rt_BooleanValue.get(col.add(b))
                 }
             }
 
@@ -69,7 +69,7 @@ object Lib_Type_Collection {
                 param(type = "collection<-T>")
                 body { a, b ->
                     val col = a.asCollection()
-                    Rt_BooleanValue(col.addAll(b.asCollection()))
+                    Rt_BooleanValue.get(col.addAll(b.asCollection()))
                 }
             }
 
@@ -77,7 +77,7 @@ object Lib_Type_Collection {
                 param("T")
                 body { a, b ->
                     val col = a.asCollection()
-                    Rt_BooleanValue(col.remove(b))
+                    Rt_BooleanValue.get(col.remove(b))
                 }
             }
 
@@ -87,7 +87,7 @@ object Lib_Type_Collection {
                 body { a, b ->
                     val col1 = a.asCollection()
                     val col2 = b.asCollection()
-                    Rt_BooleanValue(col1.removeAll(col2))
+                    Rt_BooleanValue.get(col1.removeAll(col2))
                 }
             }
 

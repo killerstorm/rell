@@ -22,14 +22,14 @@ object Lib_ChainContext {
         namespace("chain_context") {
             property("raw_config", type = "gtv", pure = false) {
                 bodyContext { ctx ->
-                    Rt_GtvValue(ctx.chainCtx.rawConfig)
+                    Rt_GtvValue.get(ctx.chainCtx.rawConfig)
                 }
             }
 
             property("blockchain_rid", type = "byte_array", pure = false) {
                 bodyContext { ctx ->
                     val bcRid = ctx.chainCtx.blockchainRid
-                    Rt_ByteArrayValue(bcRid.toByteArray())
+                    Rt_ByteArrayValue.get(bcRid.toByteArray())
                 }
             }
 

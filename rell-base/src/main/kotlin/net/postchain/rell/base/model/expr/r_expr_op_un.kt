@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.model.expr
@@ -22,28 +22,28 @@ object R_UnaryOp_Minus_Integer: R_UnaryOp() {
             throw Rt_Exception.common("expr:-:overflow:$v", "Integer overflow: -($v)")
         }
 
-        return Rt_IntValue(res)
+        return Rt_IntValue.get(res)
     }
 }
 
 object R_UnaryOp_Minus_BigInteger: R_UnaryOp() {
     override fun evaluate(operand: Rt_Value): Rt_Value {
         val v = operand.asBigInteger()
-        return Rt_BigIntegerValue.of(v.negate())
+        return Rt_BigIntegerValue.get(v.negate())
     }
 }
 
 object R_UnaryOp_Minus_Decimal: R_UnaryOp() {
     override fun evaluate(operand: Rt_Value): Rt_Value {
         val v = operand.asDecimal()
-        return Rt_DecimalValue.of(v.negate())
+        return Rt_DecimalValue.get(v.negate())
     }
 }
 
 object R_UnaryOp_Not: R_UnaryOp() {
     override fun evaluate(operand: Rt_Value): Rt_Value {
         val v = operand.asBoolean()
-        return Rt_BooleanValue(!v)
+        return Rt_BooleanValue.get(!v)
     }
 }
 

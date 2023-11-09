@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.parser
@@ -504,7 +504,7 @@ class RellTokenizer(tokensEx: List<RellToken>) : Tokenizer {
                 throw RellTokenizerDecodingException(pos, "lex:bigint:invalid:$s", "Invalid big integer literal: '$s'")
             }
 
-            val v = Rt_BigIntegerValue.ofTry(bi)
+            val v = Rt_BigIntegerValue.getTry(bi)
             v ?: throw RellTokenizerDecodingException(pos, "lex:bigint:range:$s", "Big integer literal value out of range")
 
             return v
@@ -523,7 +523,7 @@ class RellTokenizer(tokensEx: List<RellToken>) : Tokenizer {
                 throw RellTokenizerDecodingException(pos, "lex:decimal:invalid:$s", "Invalid decimal literal: '$s'")
             }
 
-            val v = Rt_DecimalValue.ofTry(bd)
+            val v = Rt_DecimalValue.getTry(bd)
             if (v == null) {
                 throw RellTokenizerDecodingException(pos, "lex:decimal:range:$s", "Decimal literal value out of range")
             }

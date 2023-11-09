@@ -324,9 +324,9 @@ class StatementTest: BaseRellTest() {
             }
         """
 
-        chkFull(code, listOf(Rt_IntValue(0), Rt_IntValue(0)), "text[[[777, 1, 2], [10, 11, 12], [20, 21, 22]]]")
-        chkFull(code, listOf(Rt_IntValue(1), Rt_IntValue(1)), "text[[[0, 1, 2], [10, 777, 12], [20, 21, 22]]]")
-        chkFull(code, listOf(Rt_IntValue(2), Rt_IntValue(2)), "text[[[0, 1, 2], [10, 11, 12], [20, 21, 777]]]")
+        chkFull(code, listOf(Rt_IntValue.get(0), Rt_IntValue.get(0)), "text[[[777, 1, 2], [10, 11, 12], [20, 21, 22]]]")
+        chkFull(code, listOf(Rt_IntValue.get(1), Rt_IntValue.get(1)), "text[[[0, 1, 2], [10, 777, 12], [20, 21, 22]]]")
+        chkFull(code, listOf(Rt_IntValue.get(2), Rt_IntValue.get(2)), "text[[[0, 1, 2], [10, 11, 12], [20, 21, 777]]]")
     }
 
     @Test fun testCallChain() {
@@ -335,14 +335,14 @@ class StatementTest: BaseRellTest() {
             query q(i: integer)
         """
 
-        chkFull("$code = f(123);", listOf(Rt_IntValue(0)), "map<integer,text>[int[123]=text[Bob],int[246]=text[Alice]]")
-        chkFull("$code = f(123).values();", listOf(Rt_IntValue(0)), "list<text>[text[Bob],text[Alice]]")
-        chkFull("$code = f(123).values().get(i);", listOf(Rt_IntValue(0)), "text[Bob]")
-        chkFull("$code = f(123).values().get(i);", listOf(Rt_IntValue(1)), "text[Alice]")
-        chkFull("$code = f(123).values().get(i).upper_case();", listOf(Rt_IntValue(0)), "text[BOB]")
-        chkFull("$code = f(123).values().get(i).upper_case();", listOf(Rt_IntValue(1)), "text[ALICE]")
-        chkFull("$code = f(123).values().get(i).upper_case().size();", listOf(Rt_IntValue(0)), "int[3]")
-        chkFull("$code = f(123).values().get(i).upper_case().size();", listOf(Rt_IntValue(1)), "int[5]")
+        chkFull("$code = f(123);", listOf(Rt_IntValue.get(0)), "map<integer,text>[int[123]=text[Bob],int[246]=text[Alice]]")
+        chkFull("$code = f(123).values();", listOf(Rt_IntValue.get(0)), "list<text>[text[Bob],text[Alice]]")
+        chkFull("$code = f(123).values().get(i);", listOf(Rt_IntValue.get(0)), "text[Bob]")
+        chkFull("$code = f(123).values().get(i);", listOf(Rt_IntValue.get(1)), "text[Alice]")
+        chkFull("$code = f(123).values().get(i).upper_case();", listOf(Rt_IntValue.get(0)), "text[BOB]")
+        chkFull("$code = f(123).values().get(i).upper_case();", listOf(Rt_IntValue.get(1)), "text[ALICE]")
+        chkFull("$code = f(123).values().get(i).upper_case().size();", listOf(Rt_IntValue.get(0)), "int[3]")
+        chkFull("$code = f(123).values().get(i).upper_case().size();", listOf(Rt_IntValue.get(1)), "int[5]")
     }
 
     @Test fun testUninitializedVar() {

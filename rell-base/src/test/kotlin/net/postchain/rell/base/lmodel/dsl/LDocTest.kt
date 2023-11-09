@@ -94,8 +94,8 @@ class LDocTest: BaseLTest() {
         val mod = makeDocModule {
             constant("INT", 123L)
             constant("BIGINT", BigInteger.valueOf(123))
-            constant("FIXED_VAL", "integer", Rt_IntValue(456))
-            constant("LATE_VAL", "integer") { Rt_IntValue(789) }
+            constant("FIXED_VAL", "integer", Rt_IntValue.get(456))
+            constant("LATE_VAL", "integer") { Rt_IntValue.get(789) }
         }
         chkDoc(mod, "INT", "CONSTANT|mod:INT", "<val> INT: [integer] = 123")
         chkDoc(mod, "BIGINT", "CONSTANT|mod:BIGINT", "<val> BIGINT: [big_integer] = 123L")

@@ -54,7 +54,7 @@ object Lib_Type_Integer {
                     } catch (e: NumberFormatException) {
                         throw Rt_Exception.common("fn:integer.from_hex:$s", "Invalid hex number: '$s'")
                     }
-                    Rt_IntValue(r)
+                    Rt_IntValue.get(r)
                 }
             }
 
@@ -74,7 +74,7 @@ object Lib_Type_Integer {
                     val v1 = a.asInteger()
                     val v2 = b.asBigInteger()
                     val r = BigInteger.valueOf(v1).min(v2)
-                    Rt_BigIntegerValue.of(r)
+                    Rt_BigIntegerValue.get(r)
                 }
             }
 
@@ -85,7 +85,7 @@ object Lib_Type_Integer {
                     val v1 = a.asInteger()
                     val v2 = b.asDecimal()
                     val r = BigDecimal(v1).min(v2)
-                    Rt_DecimalValue.of(r)
+                    Rt_DecimalValue.get(r)
                 }
             }
 
@@ -101,7 +101,7 @@ object Lib_Type_Integer {
                     val v1 = a.asInteger()
                     val v2 = b.asBigInteger()
                     val r = BigInteger.valueOf(v1).max(v2)
-                    Rt_BigIntegerValue.of(r)
+                    Rt_BigIntegerValue.get(r)
                 }
             }
 
@@ -112,7 +112,7 @@ object Lib_Type_Integer {
                     val v1 = a.asInteger()
                     val v2 = b.asDecimal()
                     val r = BigDecimal(v1).max(v2)
-                    Rt_DecimalValue.of(r)
+                    Rt_DecimalValue.get(r)
                 }
             }
 
@@ -129,7 +129,7 @@ object Lib_Type_Integer {
                 dbFunctionCast("int.to_text", "TEXT")
                 body { a ->
                     val v = a.asInteger()
-                    Rt_TextValue(v.toString())
+                    Rt_TextValue.get(v.toString())
                 }
             }
 
@@ -143,7 +143,7 @@ object Lib_Type_Integer {
                         throw Rt_Exception.common("fn_int_str_radix:$r", "Invalid radix: $r")
                     }
                     val s = v.toString(r.toInt())
-                    Rt_TextValue(s)
+                    Rt_TextValue.get(s)
                 }
             }
 
@@ -151,7 +151,7 @@ object Lib_Type_Integer {
                 alias("hex", C_MessageType.ERROR)
                 body { a ->
                     val v = a.asInteger()
-                    Rt_TextValue(java.lang.Long.toHexString(v))
+                    Rt_TextValue.get(java.lang.Long.toHexString(v))
                 }
             }
 
@@ -161,7 +161,7 @@ object Lib_Type_Integer {
                 body { a ->
                     val v = a.asInteger()
                     val r = java.lang.Long.signum(v).toLong()
-                    Rt_IntValue(r)
+                    Rt_IntValue.get(r)
                 }
             }
         }
@@ -179,6 +179,6 @@ object Lib_Type_Integer {
             throw Rt_Exception.common("fn:integer.from_text:$s", "Invalid number: '$s'")
         }
 
-        return Rt_IntValue(r)
+        return Rt_IntValue.get(r)
     }
 }

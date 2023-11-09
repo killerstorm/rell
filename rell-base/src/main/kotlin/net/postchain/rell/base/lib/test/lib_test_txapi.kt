@@ -730,7 +730,7 @@ class Rt_TestOpValue(private val name: R_MountName, args: List<Gtv>): Rt_Value()
     val args = args.toImmList()
 
     val nameValue: Rt_Value by lazy {
-        Rt_TextValue(name.str())
+        Rt_TextValue.get(name.str())
     }
 
     override val valueType = VALUE_TYPE
@@ -746,7 +746,7 @@ class Rt_TestOpValue(private val name: R_MountName, args: List<Gtv>): Rt_Value()
     fun toRaw() = RawTestOpValue(name, args)
 
     fun argsValue(): Rt_Value {
-        val argValues: MutableList<Rt_Value> = args.map { Rt_GtvValue(it) }.toMutableList()
+        val argValues: MutableList<Rt_Value> = args.map { Rt_GtvValue.get(it) }.toMutableList()
         return Rt_ListValue(Lib_Type_Gtv.LIST_OF_GTV_TYPE, argValues)
     }
 

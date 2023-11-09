@@ -46,7 +46,7 @@ object Lib_RellHidden {
                 when {
                     meta.externalChain == null -> null
                     meta.externalChain.value == null -> Rt_NullValue
-                    else -> Rt_TextValue(meta.externalChain.value)
+                    else -> Rt_TextValue.get(meta.externalChain.value)
                 }
             })
         }
@@ -91,7 +91,7 @@ object Lib_RellHidden {
             param(type = "anything")
             body { a ->
                 val s = a.strCode()
-                Rt_TextValue(s)
+                Rt_TextValue.get(s)
             }
         }
     }
@@ -109,7 +109,7 @@ private object C_SysFn_TypeOf: C_SpecialLibGlobalFunctionBody() {
 
         val type = vArg.type
         val str = type.strCode()
-        val value = Rt_TextValue(str)
+        val value = Rt_TextValue.get(str)
 
         return V_ConstantValueExpr(ctx, name.pos, value, dependsOnAtExprs = vArg.info.dependsOnAtExprs)
     }

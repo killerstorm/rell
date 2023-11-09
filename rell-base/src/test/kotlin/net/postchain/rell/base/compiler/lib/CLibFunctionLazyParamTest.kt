@@ -43,7 +43,7 @@ class CLibFunctionLazyParamTest: BaseCLibTest() {
                 param("integer", arity = L_ParamArity.ONE_MANY, lazy = true)
                 bodyN { args ->
                     val sum = args.sumOf { it.asLazyValue().asInteger() }
-                    Rt_TextValue("${args.size}:$sum")
+                    Rt_TextValue.get("${args.size}:$sum")
                 }
             }
         }

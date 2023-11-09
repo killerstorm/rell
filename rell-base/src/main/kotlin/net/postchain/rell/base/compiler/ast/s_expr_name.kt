@@ -14,7 +14,6 @@ import net.postchain.rell.base.lib.Lib_Rell
 import net.postchain.rell.base.model.R_EnumType
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_NullType
-import net.postchain.rell.base.runtime.Rt_EnumValue
 import net.postchain.rell.base.utils.toImmList
 
 class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
@@ -98,7 +97,7 @@ class S_NameExpr(val qName: S_QualifiedName): S_Expr(qName.pos) {
         attr ?: return compile0(ctx, C_ExprHint.DEFAULT, qNameHand)
 
         qNameHand.setIdeInfo(attr.ideInfo)
-        val value = Rt_EnumValue(type, attr)
+        val value = type.getValue(attr)
         val vExpr = V_ConstantValueExpr(ctx, startPos, value)
         return C_ValueExpr(vExpr)
     }

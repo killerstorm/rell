@@ -101,32 +101,32 @@ class OperatorsInterpretedTest: OperatorsBaseTest() {
         abstract fun rt(c: ValCtx): Rt_Value
 
         class Bool(val v: Boolean): InterpTstVal("boolean") {
-            override fun rt(c: ValCtx): Rt_Value = Rt_BooleanValue(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_BooleanValue.get(v)
         }
 
         class Integer(val v: Long): InterpTstVal("integer") {
-            override fun rt(c: ValCtx): Rt_Value = Rt_IntValue(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_IntValue.get(v)
         }
 
         class BigInteger(val v: java.math.BigInteger): InterpTstVal("big_integer") {
-            override fun rt(c: ValCtx): Rt_Value = Rt_BigIntegerValue.of(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_BigIntegerValue.get(v)
         }
 
         class Decimal(val v: BigDecimal): InterpTstVal("decimal") {
-            override fun rt(c: ValCtx): Rt_Value = Rt_DecimalValue.of(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_DecimalValue.get(v)
         }
 
         class Text(val v: String): InterpTstVal("text") {
-            override fun rt(c: ValCtx): Rt_Value = Rt_TextValue(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_TextValue.get(v)
         }
 
         class Bytes(str: String): InterpTstVal("byte_array") {
             private val v = CommonUtils.hexToBytes(str)
-            override fun rt(c: ValCtx): Rt_Value = Rt_ByteArrayValue(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_ByteArrayValue.get(v)
         }
 
         class Rowid(val v: Long): InterpTstVal("rowid") {
-            override fun rt(c: ValCtx): Rt_Value = Rt_RowidValue(v)
+            override fun rt(c: ValCtx): Rt_Value = Rt_RowidValue.get(v)
         }
 
         class Json(val v: String): InterpTstVal("json") {

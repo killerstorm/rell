@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.ast
@@ -19,6 +19,7 @@ import net.postchain.rell.base.runtime.Rt_BooleanValue
 import net.postchain.rell.base.runtime.Rt_NullValue
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.immListOf
+import net.postchain.rell.base.utils.immSetOf
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
 
@@ -333,15 +334,14 @@ class S_WhenExpr(pos: S_Pos, val expr: S_Expr?, val cases: List<S_WhenExprCase>)
         }
 
         private fun allTypeValues(type: R_Type): Set<Rt_Value> {
-            if (type == R_BooleanType) {
-                return setOf(Rt_BooleanValue(false), Rt_BooleanValue(true))
-            } else if (type is R_EnumType) {
-                return type.enum.values().toSet()
-            } else if (type is R_NullableType) {
-                val values = allTypeValues(type.valueType)
-                return if (values.isEmpty()) values else (values + setOf(Rt_NullValue))
-            } else {
-                return setOf()
+            return when (type) {
+                R_BooleanType -> Rt_BooleanValue.ALL_VALUES
+                is R_EnumType -> type.valuesSet
+                is R_NullableType -> {
+                    val values = allTypeValues(type.valueType)
+                    if (values.isEmpty()) values else (values + setOf(Rt_NullValue))
+                }
+                else -> immSetOf()
             }
         }
     }

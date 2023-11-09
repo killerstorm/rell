@@ -66,7 +66,7 @@ object Lib_Type_Decimal {
                 body { a ->
                     val v = a.asDecimal()
                     val r = v.setScale(0, RoundingMode.CEILING)
-                    Rt_DecimalValue.of(r)
+                    Rt_DecimalValue.get(r)
                 }
             }
 
@@ -75,7 +75,7 @@ object Lib_Type_Decimal {
                 body { a ->
                     val v = a.asDecimal()
                     val r = v.setScale(0, RoundingMode.FLOOR)
-                    Rt_DecimalValue.of(r)
+                    Rt_DecimalValue.get(r)
                 }
             }
 
@@ -94,7 +94,7 @@ object Lib_Type_Decimal {
                 body { a ->
                     val v = a.asDecimal()
                     val r = v.setScale(0, RoundingMode.HALF_UP)
-                    Rt_DecimalValue.of(r)
+                    Rt_DecimalValue.get(r)
                 }
             }
 
@@ -108,7 +108,7 @@ object Lib_Type_Decimal {
                     scale = Math.max(scale, -Lib_DecimalMath.DECIMAL_INT_DIGITS.toLong())
                     scale = Math.min(scale, Lib_DecimalMath.DECIMAL_FRAC_DIGITS.toLong())
                     val r = v.setScale(scale.toInt(), RoundingMode.HALF_UP)
-                    Rt_DecimalValue.of(r)
+                    Rt_DecimalValue.get(r)
                 }
             }
 
@@ -120,7 +120,7 @@ object Lib_Type_Decimal {
                 body { a ->
                     val v = a.asDecimal()
                     val r = v.signum()
-                    Rt_IntValue(r.toLong())
+                    Rt_IntValue.get(r.toLong())
                 }
             }
 
@@ -131,7 +131,7 @@ object Lib_Type_Decimal {
                 body { a ->
                     val v = a.asDecimal()
                     val bi = v.toBigInteger()
-                    Rt_BigIntegerValue.of(bi)
+                    Rt_BigIntegerValue.get(bi)
                 }
             }
 
@@ -144,7 +144,7 @@ object Lib_Type_Decimal {
                 body { a ->
                     val v = a.asDecimal()
                     val r = Lib_DecimalMath.toString(v)
-                    Rt_TextValue(r)
+                    Rt_TextValue.get(r)
                 }
             }
 
@@ -158,7 +158,7 @@ object Lib_Type_Decimal {
                     } else {
                         Lib_DecimalMath.toString(v)
                     }
-                    Rt_TextValue(r)
+                    Rt_TextValue.get(r)
                 }
             }
         }
@@ -358,7 +358,7 @@ private object DecFns {
         }
 
         val r = Lib_DecimalMath.power(v, power.toInt())
-        Rt_DecimalValue.of(r)
+        Rt_DecimalValue.get(r)
     }
 
     val Sqrt = C_SysFunctionBody.simple(Db_SysFunction.simple("decimal.sqrt", "SQRT"), pure = true) { a ->
@@ -383,12 +383,12 @@ private object DecFns {
             throw Rt_Exception.common("decimal.to_integer:overflow:$s", "Value out of range: $s")
         }
         val r = bi.toLong()
-        Rt_IntValue(r)
+        Rt_IntValue.get(r)
     }
 
     fun calcFromInteger(a: Rt_Value): Rt_Value {
         val i = a.asInteger()
-        return Rt_DecimalValue.of(i)
+        return Rt_DecimalValue.get(i)
     }
 
     val FromInteger_Db = Db_SysFunction.cast("decimal(integer)", Lib_DecimalMath.DECIMAL_SQL_TYPE_STR)
@@ -402,7 +402,7 @@ private object DecFns {
     val FromBigInteger = C_SysFunctionBody.simple(FromBigInteger_Db, pure = true) { a ->
         val bigInt = a.asBigInteger()
         val bigDec = bigInt.toBigDecimal()
-        Rt_DecimalValue.of(bigDec)
+        Rt_DecimalValue.get(bigDec)
     }
 
     val FromText = C_SysFunctionBody.simple(
@@ -410,6 +410,6 @@ private object DecFns {
         pure = true
     ) { a ->
         val s = a.asString()
-        Rt_DecimalValue.of(s)
+        Rt_DecimalValue.get(s)
     }
 }

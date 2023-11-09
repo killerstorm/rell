@@ -29,10 +29,10 @@ class QueryTester(private val tst: RellCodeTester, private val code: String) {
 
     private fun argToRt(arg: Any?): Rt_Value {
         return when (arg) {
-            is Boolean -> Rt_BooleanValue(arg)
-            is Int -> Rt_IntValue(arg.toLong())
-            is Long -> Rt_IntValue(arg)
-            is String -> Rt_TextValue(arg)
+            is Boolean -> Rt_BooleanValue.get(arg)
+            is Int -> Rt_IntValue.get(arg.toLong())
+            is Long -> Rt_IntValue.get(arg)
+            is String -> Rt_TextValue.get(arg)
             null -> Rt_NullValue
             else -> throw IllegalArgumentException(arg.javaClass.canonicalName)
         }
