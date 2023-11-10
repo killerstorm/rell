@@ -159,6 +159,7 @@ class C_NamespaceEntry(
     private fun element0(tags: List<C_NamespaceMemberTag>): C_NamespaceElement? {
         val items = directItems.filter { it.member.hasTag(tags) }
             .ifEmpty { importItems.filter { it.member.hasTag(tags) } }
+            .toSet().toImmList()
         return when {
             items.isEmpty() -> null
             items.size == 1 -> C_NamespaceElement(items[0], immListOf())

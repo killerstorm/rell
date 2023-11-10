@@ -628,5 +628,35 @@ class ImportTest: BaseRellTest(false) {
         chkImport("import lib.*; namespace ns { function color() { return color.red; } }", "ns.color()", "lib:color[red]")
     }
 
-    private fun chkImport(imp: String, code: String, exp: String) = chkFull("$imp function __f() = $code; query q() = __f();", exp)
+    @Test fun testBugNameIsAmbiguous() {
+        file("lib.rell", "module; struct data {}")
+        file("a.rell", "module; import lib.*;")
+        file("b.rell", "module; import lib.*;")
+        file("c.rell", "module; import lib.{data};")
+        file("d.rell", "module; import lib.{data};")
+
+        chkCompile("import a.*; import b.*; struct foo { x: data; }", "OK")
+        chkCompile("import a.*; import c.*; struct foo { x: data; }", "OK")
+        chkCompile("import a.*; import d.*; struct foo { x: data; }", "OK")
+        chkCompile("import b.*; import c.*; struct foo { x: data; }", "OK")
+        chkCompile("import b.*; import d.*; struct foo { x: data; }", "OK")
+        chkCompile("import c.*; import d.*; struct foo { x: data; }", "OK")
+
+        chkCompile("import a.*; import lib.*; struct foo { x: data; }", "OK")
+        chkCompile("import lib.*; import a.*; struct foo { x: data; }", "OK")
+        chkCompile("import c.*; import lib.*; struct foo { x: data; }", "OK")
+        chkCompile("import lib.*; import c.*; struct foo { x: data; }", "OK")
+        chkCompile("import a.*; import lib.{data}; struct foo { x: data; }", "OK")
+        chkCompile("import lib.{data}; import a.*; struct foo { x: data; }", "OK")
+        chkCompile("import a.{data}; import lib.*; struct foo { x: data; }", "OK")
+        chkCompile("import lib.*; import a.{data}; struct foo { x: data; }", "OK")
+        chkCompile("import c.*; import lib.{data}; struct foo { x: data; }", "OK")
+        chkCompile("import lib.{data}; import c.*; struct foo { x: data; }", "OK")
+        chkCompile("import c.{data}; import lib.*; struct foo { x: data; }", "OK")
+        chkCompile("import lib.*; import c.{data}; struct foo { x: data; }", "OK")
+    }
+
+    private fun chkImport(imp: String, code: String, exp: String) {
+        chkFull("$imp function __f() = $code; query q() = __f();", exp)
+    }
 }
