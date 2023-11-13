@@ -242,4 +242,55 @@ class CreateTest: BaseRellTest() {
         chkOp("create data(x = 987.0);")
         chk("data @* {} ( _=.x )", "list<decimal>[dec[123],dec[456],dec[789],dec[987]]")
     }
+
+    @Test fun testListOfStruct() {
+        chkListOfStruct("struct<data>")
+    }
+
+    @Test fun testListOfStructMutable() {
+        chkListOfStruct("struct<mutable data>")
+    }
+
+    private fun chkListOfStruct(type: String) {
+        def("entity data { x: integer; }")
+
+        chkFn("= _type_of(create data(list<$type>()));", "text[list<data>]")
+        chkFn("= _type_of(create data([$type(10)]));", "text[list<data>]")
+        chkFn("= _type_of(create data([$type(10), $type(20), $type(30)]));", "text[list<data>]")
+
+        chkDataNew()
+
+        chkOp("val c = create data(list<$type>()); print(_strict_str(c));", "OK")
+        chkOut("list<data>[]")
+        chkDataNew()
+
+        chkOp("val c = create data([$type(10)]); print(_strict_str(c));", "OK")
+        chkOut("list<data>[data[1]]")
+        chkDataNew("data(1,10)")
+
+        chkOp("val c = create data([$type(20), $type(30)]); print(_strict_str(c));", "OK")
+        chkOut("list<data>[data[2],data[3]]")
+        chkDataNew("data(2,20)", "data(3,30)")
+
+        chkOp("val c = create data( range(40,90,10) @* {} ($type($)) ); print(_strict_str(c));", "OK")
+        chkOut("list<data>[data[4],data[5],data[6],data[7],data[8]]")
+        chkDataNew("data(4,40)", "data(5,50)", "data(6,60)", "data(7,70)", "data(8,80)")
+    }
+
+    @Test fun testListOfStructOther() {
+        def("entity data { x: integer = 123; }")
+        chkOp("create data(set<struct<data>>());", "ct_err:attr_implic_unknown:0:set<struct<data>>")
+    }
+
+    @Test fun testListOfStructSqlParamsLimit() {
+        def("entity data { x: integer; }")
+
+        chkSqlCtr(0)
+        chkOp("val c = create data( range(2500) @* {} (struct<data>($)) ); print(c.size());", "OK")
+        chkSqlCtr(3)
+
+        val expSum = 3123750
+        chk("2499*2500/2", "int[$expSum]")
+        chk("data @{} ( @sum 1, @sum .x )", "(int[2500],int[$expSum])")
+    }
 }

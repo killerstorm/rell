@@ -243,9 +243,10 @@ class S_CreateExpr(pos: S_Pos, val entityName: S_QualifiedName, val args: List<S
         val cArgs = C_CallArgument.compileAttributes(ctx, args, entity.attributes)
 
         var vExpr = compileStruct(ctx, entity, cArgs, entity.mirrorStructs.immutable)
-        if (vExpr == null) {
-            vExpr = compileStruct(ctx, entity, cArgs, entity.mirrorStructs.mutable)
-        }
+        if (vExpr == null) vExpr = compileStruct(ctx, entity, cArgs, entity.mirrorStructs.mutable)
+        if (vExpr == null) vExpr = compileStructList(ctx, entity, cArgs, entity.mirrorStructs.immutable)
+        if (vExpr == null) vExpr = compileStructList(ctx, entity, cArgs, entity.mirrorStructs.mutable)
+
         if (vExpr == null) {
             vExpr = compileRegular(ctx, entity, cArgs)
         }
@@ -275,24 +276,41 @@ class S_CreateExpr(pos: S_Pos, val entityName: S_QualifiedName, val args: List<S
     }
 
     private fun compileStruct(
-            ctx: C_ExprContext,
-            entity: R_EntityDefinition,
-            args: List<C_CallArgument>,
-            struct: R_Struct
+        ctx: C_ExprContext,
+        entity: R_EntityDefinition,
+        args: List<C_CallArgument>,
+        struct: R_Struct,
     ): V_Expr? {
+        val vExpr = getSingleArgExprOrNull(args)
+        vExpr ?: return null
+
+        val structType = struct.type
+        return if (!structType.isAssignableFrom(vExpr.type)) null else {
+            V_StructCreateExpr(ctx, startPos, entity, structType, vExpr)
+        }
+    }
+
+    private fun compileStructList(
+        ctx: C_ExprContext,
+        entity: R_EntityDefinition,
+        args: List<C_CallArgument>,
+        struct: R_Struct,
+    ): V_Expr? {
+        val vExpr = getSingleArgExprOrNull(args)
+        vExpr ?: return null
+
+        val listType = R_ListType(struct.type)
+        return if (!listType.isAssignableFrom(vExpr.type)) null else {
+            V_StructListCreateExpr(ctx, startPos, entity, struct.type, vExpr)
+        }
+    }
+
+    private fun getSingleArgExprOrNull(args: List<C_CallArgument>): V_Expr? {
         if (args.size != 1 || args[0].name != null) return null
-
         val arg = args[0]
-
         return when (arg.value) {
             is C_CallArgumentValue_Wildcard -> null
-            is C_CallArgumentValue_Expr -> {
-                val vExpr = arg.value.vExpr
-                val structType = struct.type
-                if (!structType.isAssignableFrom(vExpr.type)) null else {
-                    V_StructCreateExpr(ctx, startPos, entity, structType, vExpr)
-                }
-            }
+            is C_CallArgumentValue_Expr -> arg.value.vExpr
         }
     }
 }

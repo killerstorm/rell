@@ -208,3 +208,15 @@ The '\os' (strict) format removed, as it's internal and can be unstable (may cha
 If a module_args attribute has a default value, it's not necessary to specify that attribute in the configuration.
 If all attributes of module_args have default values, no need to specify args for the corresponding module at all.
 Rell will use default values instead of throwing an error.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+11. Language: Insert multiple database records with one statement
+
+New variant of the "create" expression, which accepts a list of structs:
+
+    create MyEntity(list<struct<MyEntity>>): list<MyEntity>
+
+Useful when there is a need to insert many records of the same type at once - inserts all records with a single SQL
+statement. If the list is empty, no SQL is executed.
+
+Returns the list of inserted entities, same size and same order as the input list.

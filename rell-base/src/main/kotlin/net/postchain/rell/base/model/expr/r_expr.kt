@@ -12,9 +12,14 @@ import net.postchain.rell.base.model.stmt.R_Statement
 import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.runtime.utils.RellInterpreterCrashException
 import net.postchain.rell.base.runtime.utils.Rt_Utils
+import net.postchain.rell.base.sql.SqlConstants
 import net.postchain.rell.base.sql.SqlGen
 import net.postchain.rell.base.utils.checkEquals
+import net.postchain.rell.base.utils.immListOf
+import org.apache.commons.collections4.CollectionUtils
+import org.apache.commons.collections4.ListUtils
 import java.math.BigDecimal
+import kotlin.math.max
 
 abstract class R_Expr(val type: R_Type) {
     protected abstract fun evaluate0(frame: Rt_CallFrame): Rt_Value
@@ -325,31 +330,50 @@ class R_CreateExprAttr(val attr: R_Attribute, private val expr: R_Expr) {
     fun evaluate(frame: Rt_CallFrame) = expr.evaluate(frame)
 }
 
-sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type) {
-    protected abstract fun evaluateValues(frame: Rt_CallFrame): List<Pair<R_Attribute, Rt_Value>>
+sealed class R_CreateExpr(type: R_Type, private val rEntity: R_EntityDefinition): R_Expr(type) {
+    protected abstract fun evaluateValues(frame: Rt_CallFrame): CreateValues
+    protected abstract fun evaluateResult(entities: List<Rt_Value>): Rt_Value
 
     final override fun evaluate0(frame: Rt_CallFrame): Rt_Value {
         frame.checkDbUpdateAllowed()
 
-        val values = evaluateValues(frame)
+        val allValues = evaluateValues(frame)
+        val allRows = mutableListOf<List<Rt_Value>>()
 
-        val sqlCtx = frame.defCtx.sqlCtx
-        val rowidFunc = sqlCtx.mainChainMapping().rowidFunction
-        val rtSql = buildSql(sqlCtx, rEntity, values, "\"$rowidFunc\"()")
-        val rtSel = SqlSelect(rtSql, listOf(type))
-        val res = rtSel.execute(frame.sqlExec)
+        val valuesPages = splitValues(frame.appCtx.globalCtx, allValues)
 
-        checkEquals(res.size, 1)
-        checkEquals(res[0].size, 1)
-        return res[0][0]
+        for (page in valuesPages) {
+            val sqlCtx = frame.defCtx.sqlCtx
+            val rowidFunc = sqlCtx.mainChainMapping().rowidFunction
+            val rtSql = buildSql(sqlCtx, rEntity, page, "\"$rowidFunc\"()")
+            val rtSel = SqlSelect(rtSql, immListOf(rEntity.type))
+            val rows = rtSel.execute(frame.sqlExec)
+            allRows.addAll(rows)
+        }
+
+        val entities = allRows.map { it.single() }
+        val res = evaluateResult(entities)
+        return res
+    }
+
+    private fun splitValues(globalCtx: Rt_GlobalContext, values: CreateValues): List<CreateValues> {
+        if (values.records.isEmpty()) {
+            return immListOf()
+        } else if (values.attrs.isEmpty()) {
+            return immListOf(values)
+        }
+
+        val recordsPerPage = max(globalCtx.sqlUpdatePortionSize / values.attrs.size, 1)
+        val pages = ListUtils.partition(values.records, recordsPerPage)
+        return pages.map { CreateValues(values.attrs, it) }
     }
 
     companion object {
         fun buildSql(
-                sqlCtx: Rt_SqlContext,
-                rEntity: R_EntityDefinition,
-                values: List<Pair<R_Attribute, Rt_Value>>,
-                rowidExpr: String
+            sqlCtx: Rt_SqlContext,
+            rEntity: R_EntityDefinition,
+            values: CreateValues,
+            rowidExpr: String,
         ): ParameterizedSql {
             val b = SqlBuilder()
 
@@ -361,19 +385,23 @@ sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type)
 
             b.append("(")
             b.appendName(rowid)
-            b.append(values, "") { pair ->
+            b.append(values.attrs, "") { attr ->
                 b.append(", ")
-                b.appendName(pair.first.sqlMapping)
+                b.appendName(attr.sqlMapping)
             }
             b.append(")")
 
-            b.append(" VALUES (")
-            b.append(rowidExpr)
-            b.append(values, "") { pair ->
-                b.append(", ")
-                b.append(pair.second)
+            b.append(" VALUES ")
+
+            b.append(values.records, ", ") { record ->
+                b.append("(")
+                b.append(rowidExpr)
+                b.append(record, "") { value ->
+                    b.append(", ")
+                    b.append(value)
+                }
+                b.append(")")
             }
-            b.append(")")
 
             b.append(" RETURNING ")
             b.appendName(rowid)
@@ -382,10 +410,10 @@ sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type)
         }
 
         fun buildAddColumnsSql(
-                frame: Rt_CallFrame,
-                rEntity: R_EntityDefinition,
-                attrs: List<R_CreateExprAttr>,
-                existingRecs: Boolean
+            frame: Rt_CallFrame,
+            rEntity: R_EntityDefinition,
+            attrs: List<R_CreateExprAttr>,
+            existingRecs: Boolean,
         ): ParameterizedSql {
             val sqlCtx = frame.defCtx.sqlCtx
             val table = rEntity.sqlMapping.table(sqlCtx)
@@ -428,25 +456,68 @@ sealed class R_CreateExpr(val rEntity: R_EntityDefinition): R_Expr(rEntity.type)
             return b.build()
         }
     }
-}
 
-class R_RegularCreateExpr(rEntity: R_EntityDefinition, val attrs: List<R_CreateExprAttr>): R_CreateExpr(rEntity) {
-    override fun evaluateValues(frame: Rt_CallFrame): List<Pair<R_Attribute, Rt_Value>> {
-        return attrs.map {
-            val value = it.evaluate(frame)
-            it.attr to value
+    class CreateValues(val attrs: List<R_Attribute>, val records: List<List<Rt_Value>>) {
+        init {
+            for (rec in records) {
+                checkEquals(rec.size, attrs.size)
+            }
         }
     }
 }
 
+class R_RegularCreateExpr(
+    rEntity: R_EntityDefinition,
+    val attrs: List<R_CreateExprAttr>,
+): R_CreateExpr(rEntity.type, rEntity) {
+    override fun evaluateValues(frame: Rt_CallFrame): CreateValues {
+        val resAttrs = attrs.map { it.attr }
+        val record = attrs.map { it.evaluate(frame) }
+        return CreateValues(resAttrs, immListOf(record))
+    }
+
+    override fun evaluateResult(entities: List<Rt_Value>): Rt_Value {
+        checkEquals(entities.size, 1)
+        return entities[0]
+    }
+}
+
 class R_StructCreateExpr(
-        rEntity: R_EntityDefinition,
-        val structType: R_StructType,
-        val structExpr: R_Expr
-): R_CreateExpr(rEntity) {
-    override fun evaluateValues(frame: Rt_CallFrame): List<Pair<R_Attribute, Rt_Value>> {
+    rEntity: R_EntityDefinition,
+    private val structType: R_StructType,
+    private val structExpr: R_Expr,
+): R_CreateExpr(rEntity.type, rEntity) {
+    override fun evaluateValues(frame: Rt_CallFrame): CreateValues {
         val structValue = structExpr.evaluate(frame).asStruct()
-        return structType.struct.attributesList.mapIndexed { i, attr -> attr to structValue.get(i) }
+        val attrs = structType.struct.attributesList
+        val record = attrs.indices.map { structValue.get(it) }
+        return CreateValues(attrs, immListOf(record))
+    }
+
+    override fun evaluateResult(entities: List<Rt_Value>): Rt_Value {
+        checkEquals(entities.size, 1)
+        return entities[0]
+    }
+}
+
+class R_StructListCreateExpr(
+    rEntity: R_EntityDefinition,
+    private val structType: R_StructType,
+    private val resultListType: R_ListType,
+    private val listExpr: R_Expr,
+): R_CreateExpr(resultListType, rEntity) {
+    override fun evaluateValues(frame: Rt_CallFrame): CreateValues {
+        val listValue = listExpr.evaluate(frame).asList()
+        val attrs = structType.struct.attributesList
+        val records = listValue.map {
+            val structValue = it.asStruct()
+            attrs.indices.map { i -> structValue.get(i) }
+        }
+        return CreateValues(attrs, records)
+    }
+
+    override fun evaluateResult(entities: List<Rt_Value>): Rt_Value {
+        return Rt_ListValue(resultListType, entities.toMutableList())
     }
 }
 

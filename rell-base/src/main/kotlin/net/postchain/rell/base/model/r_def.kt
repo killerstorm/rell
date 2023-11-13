@@ -122,11 +122,15 @@ class R_ObjectDefinition(base: R_DefinitionBase, val rEntity: R_EntityDefinition
     val type = R_ObjectType(this)
 
     fun insert(frame: Rt_CallFrame) {
-        val createAttrs = rEntity.attributes.values.map {
+        val createExprAttrs = rEntity.attributes.values.map {
             val expr = R_AttributeDefaultValueExpr(it, null, initFrameGetter)
             R_CreateExprAttr(it, expr)
         }
-        val createValues = createAttrs.map { it.attr to it.evaluate(frame) }
+
+        val createAttrs = createExprAttrs.map { it.attr }
+        val createRecord = createExprAttrs.map { it.evaluate(frame) }
+        val createValues = R_CreateExpr.CreateValues(createAttrs, immListOf(createRecord))
+
         val sql = R_CreateExpr.buildSql(frame.defCtx.sqlCtx, rEntity, createValues, "0")
         sql.execute(frame.sqlExec)
     }

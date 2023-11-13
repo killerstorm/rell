@@ -11,6 +11,7 @@ import net.postchain.rell.base.runtime.Rt_IntValue
 import net.postchain.rell.base.runtime.Rt_SqlContext
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.runtime.utils.Rt_Utils
+import net.postchain.rell.base.sql.SqlConstants
 import net.postchain.rell.base.sql.SqlExecutor
 import net.postchain.rell.base.utils.chainToIterable
 import net.postchain.rell.base.utils.toImmList
@@ -212,7 +213,9 @@ class ParameterizedSql(val sql: String, params: List<Rt_Value>) {
         // connection becomes invalid afterwards. Not allowing this to happen.
         val maxParams = 32767
         Rt_Utils.check(params.size <= maxParams) {
-            "sql:too_many_params:${params.size}" toCodeMsg "SQL query is too big (${params.size} parameters)" }
+            "sql:too_many_params:${params.size}" toCodeMsg
+                    "SQL query is too big (${params.size} parameters, max $maxParams)"
+        }
         return SqlArgs(params)
     }
 
