@@ -183,14 +183,14 @@ class GtvRtConversionTest: BaseRellTest(useSql = false, gtv = true) {
         chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello"}}""", "foo[x=int[123],b=bar[p=boolean[true],q=text[Hello]]]")
         chkQueryArg("foo", """{"x":123,"b":{"p":2,"q":"Hello"}}""", "gtv_err:type:[boolean]:bad_value:2:attr:[bar]:p")
         chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":456}}""", "gtv_err:type:[text]:STRING:INTEGER:attr:[bar]:q")
-        chkQueryArg("foo", """{"b":{"p":1,"q":"Hello"}}""", "gtv_err:struct_size:foo:2:1")
+        chkQueryArg("foo", """{"b":{"p":1,"q":"Hello"}}""", "gtv_err:struct_nokey:foo:x")
         chkQueryArg("foo", """{"x":123,"b":null}""", "gtv_err:type:[bar]:ARRAY:NULL:attr:[foo]:b")
-        chkQueryArg("foo", """{"x":123}""", "gtv_err:struct_size:foo:2:1")
-        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3:attr:[foo]:b")
+        chkQueryArg("foo", """{"x":123}""", "gtv_err:struct_nokey:foo:b")
+        chkQueryArg("foo", """{"x":123,"b":{"p":1,"q":"Hello","r":456}}""", "gtv_err:struct_badkey:bar:r:attr:[foo]:b")
 
-        chkQueryArg("qaz", """{"b":{"p":2,"q":"Hello","r":456}}""", "gtv_err:struct_size:bar:2:3:attr:[qaz]:b")
+        chkQueryArg("qaz", """{"b":{"p":2,"q":"Hello","r":456}}""", "gtv_err:type:[boolean]:bad_value:2:attr:[bar]:p")
         chkQueryArg("qaz", """{"b":null}""", "qaz[b=null]")
-        chkQueryArg("qaz", """{}""", "gtv_err:struct_size:qaz:1:0")
+        chkQueryArg("qaz", """{}""", "gtv_err:struct_nokey:qaz:b")
     }
 
     @Test fun testArgStructQueryCyclic() {

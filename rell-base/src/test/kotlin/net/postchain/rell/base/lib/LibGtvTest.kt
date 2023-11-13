@@ -427,9 +427,9 @@ class LibGtvTest: BaseRellTest(false) {
 
         chkFromGtv("{'x':123,'y':'Hello'}", "rec.from_gtv_pretty(g)", "rec[x=int[123],y=text[Hello]]")
         chkFromGtv("{'y':'Hello','x':123}", "rec.from_gtv_pretty(g)", "rec[x=int[123],y=text[Hello]]")
-        chkFromGtv("{}", "rec.from_gtv_pretty(g)", "gtv_err:struct_size:rec:2:0")
-        chkFromGtv("{'x':123}", "rec.from_gtv_pretty(g)", "gtv_err:struct_size:rec:2:1")
-        chkFromGtv("{'y':'Hello'}", "rec.from_gtv_pretty(g)", "gtv_err:struct_size:rec:2:1")
+        chkFromGtv("{}", "rec.from_gtv_pretty(g)", "gtv_err:struct_nokey:rec:x")
+        chkFromGtv("{'x':123}", "rec.from_gtv_pretty(g)", "gtv_err:struct_nokey:rec:y")
+        chkFromGtv("{'y':'Hello'}", "rec.from_gtv_pretty(g)", "gtv_err:struct_nokey:rec:x")
         chkFromGtv("{'y':123,'x':'Hello'}", "rec.from_gtv_pretty(g)", "gtv_err:type:[integer]:INTEGER:STRING:attr:[rec]:x")
         chkFromGtv("[]", "rec.from_gtv(g)", "gtv_err:struct_size:rec:2:0")
         chkFromGtv("[123,'Hello']", "rec.from_gtv_pretty(g)", "rec[x=int[123],y=text[Hello]]")

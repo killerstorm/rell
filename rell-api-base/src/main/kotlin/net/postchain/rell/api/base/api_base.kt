@@ -16,7 +16,9 @@ import net.postchain.rell.base.compiler.base.utils.C_SourcePath
 import net.postchain.rell.base.model.R_App
 import net.postchain.rell.base.model.R_LangVersion
 import net.postchain.rell.base.model.R_ModuleName
-import net.postchain.rell.base.runtime.Rt_Value
+import net.postchain.rell.base.model.R_StructDefinition
+import net.postchain.rell.base.runtime.GtvToRtDefaultValueEvaluator
+import net.postchain.rell.base.runtime.Rt_Exception
 import net.postchain.rell.base.utils.*
 import java.io.File
 
@@ -163,7 +165,6 @@ object RellApiCompile {
 
 class RellApiCompilationResult(
     val cRes: C_CompilationResult,
-    val moduleArgs: Map<R_ModuleName, Rt_Value>,
 )
 
 object RellApiBaseInternal {
@@ -190,13 +191,11 @@ object RellApiBaseInternal {
         val cRes = C_Compiler.compile(sourceDir, modSel, options)
 
         val rApp = cRes.app
-        val moduleArgs = if (rApp != null && cRes.errors.isEmpty()) {
-            processModuleArgs(rApp, config.moduleArgs, config.moduleArgsMissingError)
-        } else {
-            immMapOf()
+        if (rApp != null && cRes.errors.isEmpty()) {
+            validateAllModuleArgs(rApp, config.moduleArgs, config.moduleArgsMissingError)
         }
 
-        return RellApiCompilationResult(cRes, moduleArgs)
+        return RellApiCompilationResult(cRes)
     }
 
     fun compileGtv(
@@ -264,38 +263,60 @@ object RellApiBaseInternal {
         return C_CompilerModuleSelection(appModules, testModules, testSubModules = config.includeTestSubModules)
     }
 
-    private fun processModuleArgs(
+    private fun validateAllModuleArgs(
         app: R_App,
         actualArgs: Map<R_ModuleName, Gtv>,
         missingError: Boolean,
-    ): Map<R_ModuleName, Rt_Value> {
+    ) {
         val expectedArgs = app.moduleMap
             .filterValues { it.moduleArgs != null }
             .mapValues { it.value.moduleArgs!! }
             .toImmMap()
 
-        val missingModules = expectedArgs.keys.filter { it !in actualArgs }.sorted().toImmList()
+        val missingModules = expectedArgs
+            .filter { it.key !in actualArgs && !it.value.hasDefaultConstructor }
+            .map { it.key }
+            .sorted().toImmList()
         if (missingModules.isNotEmpty() && missingError) {
             val modulesCode = missingModules.joinToString(",") { it.str() }
             val modulesMsg = missingModules.joinToString(", ") { it.displayStr() }
             throw C_CommonError("module_args_missing:$modulesCode", "Missing module_args for module(s): $modulesMsg")
         }
 
-        return expectedArgs.keys.sorted()
-            .mapNotNull { module ->
-                val expected = expectedArgs.getValue(module)
-                val actual = actualArgs[module]
-                if (actual == null) null else {
-                    val value = try {
-                        PostchainGtvUtils.moduleArgsGtvToRt(expected, actual)
-                    } catch (e: Throwable) {
-                        throw C_CommonError("module_args_bad:$module", "Bad module_args for module '${module.str()}': ${e.message}")
-                    }
-                    module to value
-                }
+        for (module in expectedArgs.keys.sorted()) {
+            val expectedStruct = expectedArgs.getValue(module)
+            val actualGtv = actualArgs[module]
+            if (actualGtv != null) {
+                validateOneModuleArgs(module, expectedStruct, actualGtv)
             }
-            .toImmMap()
+        }
     }
+
+    private fun validateOneModuleArgs(
+        module: R_ModuleName,
+        expectedStruct: R_StructDefinition,
+        actualGtv: Gtv,
+    ) {
+        val defaultValueEvaluator = GtvToRtDefaultValueEvaluator {
+            throw UnsupportedOperationException("Default values evaluation not supported during module args validation")
+        }
+
+        try {
+            PostchainGtvUtils.moduleArgsGtvToRt(
+                expectedStruct,
+                actualGtv,
+                validateOnly = true,
+                defaultValueEvaluator = defaultValueEvaluator,
+            )
+        } catch (e: Rt_Exception) {
+            val msg = "Bad module_args for module '${module.str()}': ${e.err.message()}"
+            throw C_CommonError("module_args_bad:$module:${e.err.code()}", msg)
+        } catch (e: Throwable) {
+            val msg = "Bad module_args for module '${module.str()}': ${e.message}"
+            throw C_CommonError("module_args_bad:$module", msg)
+        }
+    }
+
 
     fun wrapCompilation(
         config: RellApiCompile.Config,

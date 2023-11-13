@@ -11,10 +11,11 @@ import net.postchain.common.exception.UserMistake
 import net.postchain.gtv.Gtv
 import net.postchain.rell.base.model.R_App
 import net.postchain.rell.base.model.R_ModuleName
-import net.postchain.rell.base.runtime.Rt_ChainContext
-import net.postchain.rell.base.runtime.Rt_Value
+import net.postchain.rell.base.runtime.Rt_GtvModuleArgsSource
+import net.postchain.rell.base.runtime.Rt_ModuleArgsSource
 import net.postchain.rell.base.utils.Bytes32
 import net.postchain.rell.base.utils.PostchainGtvUtils
+import net.postchain.rell.base.utils.toImmMap
 
 object PostchainBaseUtils {
     val DATABASE_VERSION: Int = StorageBuilder.getCurrentDbVersion()
@@ -24,32 +25,27 @@ object PostchainBaseUtils {
         return Bytes32(hash)
     }
 
-    fun createChainContext(rawConfig: Gtv, rApp: R_App, blockchainRid: Bytes32): Rt_ChainContext {
-        val gtxNode = rawConfig.asDict().getValue("gtx")
-        val rellNode = gtxNode.asDict().getValue("rell")
-        val gtvArgsDict = rellNode.asDict()["moduleArgs"]?.asDict() ?: mapOf()
+    fun createDatabaseAccess(): DatabaseAccess {
+        return DatabaseAccessFactory.createDatabaseAccess(DatabaseAccessFactory.POSTGRES_DRIVER_CLASS)
+    }
 
-        val moduleArgs = mutableMapOf<R_ModuleName, Rt_Value>()
+    fun createModuleArgsSource(app: R_App, configGtv: Gtv): Rt_ModuleArgsSource {
+        val gtxNode = configGtv.asDict().getValue("gtx").asDict()
+        val rellNode = gtxNode.getValue("rell").asDict()
 
-        for (rModule in rApp.modules) {
-            val argsStruct = rModule.moduleArgs
+        val gtvs = (rellNode["moduleArgs"]?.asDict() ?: mapOf())
+            .mapKeys { R_ModuleName.of(it.key) }
+            .toImmMap()
 
-            if (argsStruct != null) {
-                val gtvArgs = gtvArgsDict[rModule.name.str()]
-                if (gtvArgs == null) {
-                    throw UserMistake("No moduleArgs in blockchain configuration for module '${rModule.name}', " +
+        for ((moduleName, argsStruct) in app.moduleArgs) {
+            if (moduleName !in gtvs) {
+                if (!argsStruct.hasDefaultConstructor) {
+                    throw UserMistake("No moduleArgs for module '$moduleName' in blockchain configuration, " +
                             "but type ${argsStruct.moduleLevelName} defined in the code")
                 }
-
-                val rtArgs = PostchainGtvUtils.moduleArgsGtvToRt(argsStruct, gtvArgs)
-                moduleArgs[rModule.name] = rtArgs
             }
         }
 
-        return Rt_ChainContext(rawConfig, moduleArgs, blockchainRid)
-    }
-
-    fun createDatabaseAccess(): DatabaseAccess {
-        return DatabaseAccessFactory.createDatabaseAccess(DatabaseAccessFactory.POSTGRES_DRIVER_CLASS)
+        return Rt_GtvModuleArgsSource(gtvs)
     }
 }

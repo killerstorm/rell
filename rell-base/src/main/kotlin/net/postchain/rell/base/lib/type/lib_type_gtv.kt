@@ -174,7 +174,7 @@ object Lib_Type_Gtv {
             bodyContext { ctx, a ->
                 val gtv = a.asGtv()
                 Rt_Utils.wrapErr({ "fn:[${resType.strCode()}]:from_gtv:$pretty" }) {
-                    val convCtx = GtvToRtContext.make(pretty)
+                    val convCtx = GtvToRtContext.make(pretty = pretty)
                     val res = resType.gtvToRt(convCtx, gtv)
                     convCtx.finish(ctx.exeCtx)
                     res

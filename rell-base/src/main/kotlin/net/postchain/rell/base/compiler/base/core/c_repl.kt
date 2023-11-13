@@ -186,29 +186,32 @@ object C_ReplCompiler {
 }
 
 class C_ReplAppState(
-        val nsAsmState: C_NsAsm_ReplState,
-        moduleHeaders: Map<R_ModuleName, C_ModuleHeader>,
-        modules: Map<C_ModuleKey, C_PrecompiledModule>,
-        val sysDefs: C_SystemDefs?,
-        val sqlDefs: R_AppSqlDefs,
-        val mntTables: C_MountTables,
-        constants: List<R_GlobalConstantDefinition>,
-        val functionExtensions: C_FunctionExtensionsTable
+    val nsAsmState: C_NsAsm_ReplState,
+    moduleHeaders: Map<R_ModuleName, C_ModuleHeader>,
+    modules: Map<C_ModuleKey, C_PrecompiledModule>,
+    val sysDefs: C_SystemDefs?,
+    val sqlDefs: R_AppSqlDefs,
+    val mntTables: C_MountTables,
+    constants: List<R_GlobalConstantDefinition>,
+    moduleArgs: Map<R_ModuleName, R_StructDefinition>,
+    val functionExtensions: C_FunctionExtensionsTable,
 ) {
     val moduleHeaders = moduleHeaders.toImmMap()
     val modules = modules.toImmMap()
     val constants = constants.toImmList()
+    val moduleArgs = moduleArgs.toImmMap()
 
     companion object {
         val EMPTY = C_ReplAppState(
-                C_NsAsm_ReplState.EMPTY,
-                immMapOf(),
-                immMapOf(),
-                null,
-                R_AppSqlDefs.EMPTY,
-                C_MountTables.EMPTY,
-                listOf(),
-                C_FunctionExtensionsTable(immListOf())
+            C_NsAsm_ReplState.EMPTY,
+            immMapOf(),
+            immMapOf(),
+            null,
+            R_AppSqlDefs.EMPTY,
+            C_MountTables.EMPTY,
+            immListOf(),
+            immMapOf(),
+            C_FunctionExtensionsTable(immListOf()),
         )
     }
 }

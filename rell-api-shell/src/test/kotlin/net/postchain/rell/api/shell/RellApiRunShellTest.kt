@@ -4,7 +4,9 @@
 
 package net.postchain.rell.api.shell
 
+import net.postchain.gtv.GtvFactory
 import net.postchain.rell.api.base.BaseRellApiTest
+import net.postchain.rell.api.base.RellApiCompile
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.testutils.RellReplTester
@@ -17,39 +19,83 @@ class RellApiRunShellTest: BaseRellApiTest() {
             "lib.rell" to "module; function g() = 456;",
         )
 
-        val inChannelFactory = RellReplTester.TestReplInputChannelFactory(
+        val input = listOf(
             "2+2",
             "f()",
             "g()",
             "import lib;",
             "lib.g()",
-            "\\q",
         )
 
-        val outChannelFactory = RellReplTester.TestReplOutputChannelFactory()
-
-        val runConfig = RellApiRunShell.Config.Builder()
-            .compileConfig(defaultConfig)
-            .inputChannelFactory(inChannelFactory)
-            .outputChannelFactory(outChannelFactory)
-            .build()
-
-        RellApiShellInternal.runShell(runConfig, sourceDir, R_ModuleName.of("start"))
-        outChannelFactory.chk("RES:int[4]", "RES:int[123]", "CTE:<console>:unknown_name:g", "RES:int[456]")
+        chkShell(sourceDir, input,
+            "RES:int[4]", "RES:int[123]", "CTE:<console>:unknown_name:g", "RES:int[456]",
+            module = "start",
+        )
     }
 
     @Test fun testRunShellBugEnum() {
         val sourceDir = C_SourceDir.mapDirOf("lib.rell" to "module; enum color { red }")
-        val inChannelFactory = RellReplTester.TestReplInputChannelFactory("color.red", "\\q")
+        chkShell(sourceDir, listOf("color.red"), "RES:lib:color[red]", module = "lib")
+    }
+
+    @Test fun testModuleArgs() {
+        val sourceDir = C_SourceDir.mapDirOf(
+            "lib.rell" to "module; struct module_args { x: integer; } function f() = chain_context.args;",
+        )
+
+        val input = listOf("import lib;", "lib.f()")
+        chkShell(sourceDir, input, "rt_err:chain_context.args:no_module_args:lib")
+
+        val compileConfig = configBuilder().moduleArgs("lib" to mapOf("x" to GtvFactory.gtv(123))).build()
+        chkShell(sourceDir, input, "RES:lib:module_args[x=int[123]]", compileConfig = compileConfig)
+    }
+
+    @Test fun testModuleArgsDefaultValue() {
+        val sourceDir = C_SourceDir.mapDirOf(
+            "foo.rell" to "module; struct module_args { x: text; y: integer = 123; } function f() = chain_context.args;",
+            "bar.rell" to "module; struct module_args { p: text = 'Hello'; q: integer = 456; } function g() = chain_context.args;",
+        )
+
+        chkShell(sourceDir, listOf("import foo; foo.f()"), "rt_err:chain_context.args:no_module_args:foo")
+        chkShell(sourceDir, listOf("import bar; bar.g()"), "RES:bar:module_args[p=text[Hello],q=int[456]]")
+
+        var compileConfig = configBuilder().moduleArgs("foo" to mapOf("x" to GtvFactory.gtv("ABC"))).build()
+        chkShell(sourceDir, listOf("import foo; foo.f()"),
+            "RES:foo:module_args[x=text[ABC],y=int[123]]",
+            compileConfig = compileConfig,
+        )
+
+        compileConfig = configBuilder().moduleArgs("bar" to mapOf()).build()
+        chkShell(sourceDir, listOf("import bar; bar.g()"),
+            "RES:bar:module_args[p=text[Hello],q=int[456]]",
+            compileConfig = compileConfig,
+        )
+
+        compileConfig = configBuilder().moduleArgs("bar" to mapOf("q" to GtvFactory.gtv(789))).build()
+        chkShell(sourceDir, listOf("import bar; bar.g()"),
+            "RES:bar:module_args[p=text[Hello],q=int[789]]",
+            compileConfig = compileConfig,
+        )
+    }
+
+    private fun chkShell(
+        sourceDir: C_SourceDir,
+        input: List<String>,
+        vararg expected: String,
+        module: String? = null,
+        compileConfig: RellApiCompile.Config = defaultConfig,
+    ) {
+        val inChannelFactory = RellReplTester.TestReplInputChannelFactory(input + listOf("\\q"))
         val outChannelFactory = RellReplTester.TestReplOutputChannelFactory()
 
         val runConfig = RellApiRunShell.Config.Builder()
-            .compileConfig(defaultConfig)
+            .compileConfig(compileConfig)
             .inputChannelFactory(inChannelFactory)
             .outputChannelFactory(outChannelFactory)
             .build()
 
-        RellApiShellInternal.runShell(runConfig, sourceDir, R_ModuleName.of("lib"))
-        outChannelFactory.chk("RES:lib:color[red]")
+        val moduleName = if (module == null) null else R_ModuleName.of(module)
+        RellApiShellInternal.runShell(runConfig, sourceDir, moduleName)
+        outChannelFactory.chk(*expected)
     }
 }

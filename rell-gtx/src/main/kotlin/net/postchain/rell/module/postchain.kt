@@ -189,7 +189,7 @@ private class RellGTXOperation(
             )
         }
 
-        val gtvCtx = GtvToRtContext.make(GTV_OPERATION_PRETTY)
+        val gtvCtx = GtvToRtContext.make(pretty = GTV_OPERATION_PRETTY)
         val rtArgs = convertArgs(gtvCtx, params, gtvArgs)
 
         opArgs = Rt_OperationArgs(gtvCtx, rtArgs)
@@ -224,32 +224,33 @@ private class RellModuleConfig(
 )
 
 private class RellPostchainModule(
-        val env: RellPostchainModuleEnvironment,
-        private val rApp: R_App,
-        chainCtx: Rt_ChainContext,
-        private val chainDeps: Map<String, ByteArray>,
-        outPrinter: Rt_Printer,
-        logPrinter: Rt_Printer,
-        private val errorHandler: ErrorHandler,
-        val config: RellModuleConfig,
+    val env: RellPostchainModuleEnvironment,
+    private val rApp: R_App,
+    chainCtx: Rt_ChainContext,
+    private val chainDeps: Map<String, ByteArray>,
+    outPrinter: Rt_Printer,
+    logPrinter: Rt_Printer,
+    private val errorHandler: ErrorHandler,
+    moduleArgsSource: Rt_ModuleArgsSource,
+    val config: RellModuleConfig,
 ): GTXModule {
     private val operationNames = rApp.operations.keys.map { it.str() }.toImmSet()
     private val queryNames = rApp.queries.keys.map { it.str() }.toImmSet()
 
     private val globalCtx = Rt_GlobalContext(
-            compilerOptions = config.compilerOptions,
-            outPrinter = outPrinter,
-            logPrinter = logPrinter,
-            typeCheck = config.typeCheck,
+        compilerOptions = config.compilerOptions,
+        outPrinter = outPrinter,
+        logPrinter = logPrinter,
+        typeCheck = config.typeCheck,
     )
 
     private val appCtx = Rt_AppContext(
-            globalCtx,
-            chainCtx,
-            rApp,
-            repl = false,
-            test = false,
-            replOut = null,
+        globalCtx,
+        chainCtx,
+        rApp,
+        repl = false,
+        test = false,
+        moduleArgsSource = moduleArgsSource,
     )
 
     override fun getOperations(): Set<String> {
@@ -339,7 +340,7 @@ private class RellPostchainModule(
             throw Rt_Exception.common(code, "Wrong arguments: $actArgNames instead of $expArgNames")
         }
 
-        val gtvToRtCtx = GtvToRtContext.make(GTV_QUERY_PRETTY)
+        val gtvToRtCtx = GtvToRtContext.make(pretty = GTV_QUERY_PRETTY)
         val args = params.map { argMap.getValue(it.name.str) }
         val rtArgs = convertArgs(gtvToRtCtx, params, args)
         gtvToRtCtx.finish(exeCtx)
@@ -399,8 +400,9 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
         return errorHandler.handleError({ "Module initialization failed" }) {
             val modApp = getApp(rellNode, errorHandler, copyOutput)
             val bcRid = Bytes32(blockchainRID.data)
-            val chainCtx = PostchainBaseUtils.createChainContext(config, modApp.app, bcRid)
+            val chainCtx = Rt_ChainContext(config, bcRid)
             val chainDeps = getGtxChainDependencies(config)
+            val moduleArgsSource = PostchainBaseUtils.createModuleArgsSource(modApp.app, config)
 
             val modLogPrinter = getModulePrinter(env.logPrinter, Rt_TimestampPrinter(combinedPrinter), copyOutput)
             val modOutPrinter = getModulePrinter(env.outPrinter, combinedPrinter, copyOutput)
@@ -409,21 +411,22 @@ class RellPostchainModuleFactory(env: RellPostchainModuleEnvironment? = null): G
             val dbInitLogLevel = rellNode["dbInitLogLevel"]?.asInteger()?.toInt() ?: env.dbInitLogLevel
 
             val moduleConfig = RellModuleConfig(
-                    sqlLogging = env.sqlLog,
-                    typeCheck = typeCheck,
-                    dbInitLogLevel = dbInitLogLevel,
-                    compilerOptions = modApp.compilerOptions,
+                sqlLogging = env.sqlLog,
+                typeCheck = typeCheck,
+                dbInitLogLevel = dbInitLogLevel,
+                compilerOptions = modApp.compilerOptions,
             )
 
             RellPostchainModule(
-                    env,
-                    modApp.app,
-                    chainCtx,
-                    chainDeps,
-                    logPrinter = modLogPrinter,
-                    outPrinter = modOutPrinter,
-                    errorHandler = errorHandler,
-                    config = moduleConfig
+                env,
+                modApp.app,
+                chainCtx,
+                chainDeps,
+                logPrinter = modLogPrinter,
+                outPrinter = modOutPrinter,
+                errorHandler = errorHandler,
+                moduleArgsSource = moduleArgsSource,
+                config = moduleConfig,
             )
         }
     }

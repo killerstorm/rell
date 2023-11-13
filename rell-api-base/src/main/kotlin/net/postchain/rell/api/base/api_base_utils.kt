@@ -67,8 +67,8 @@ object RellApiBaseUtils {
         )
     }
 
-    fun createChainContext(moduleArgs: Map<R_ModuleName, Rt_Value> = immMapOf()): Rt_ChainContext {
-        return Rt_ChainContext(GtvNull, moduleArgs, Rt_ChainContext.ZERO_BLOCKCHAIN_RID)
+    fun createChainContext(): Rt_ChainContext {
+        return Rt_ChainContext(GtvNull, Rt_ChainContext.ZERO_BLOCKCHAIN_RID)
     }
 
     fun createSqlContext(app: R_App): Rt_SqlContext {

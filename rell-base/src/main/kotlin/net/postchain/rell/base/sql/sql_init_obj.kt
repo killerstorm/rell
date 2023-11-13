@@ -5,10 +5,7 @@
 package net.postchain.rell.base.sql
 
 import net.postchain.rell.base.model.R_ObjectDefinition
-import net.postchain.rell.base.runtime.Rt_CommonError
-import net.postchain.rell.base.runtime.Rt_Error
-import net.postchain.rell.base.runtime.Rt_Exception
-import net.postchain.rell.base.runtime.Rt_ExecutionContext
+import net.postchain.rell.base.runtime.*
 import java.util.*
 
 class SqlObjectsInit(private val exeCtx: Rt_ExecutionContext) {
@@ -68,7 +65,7 @@ class SqlObjectsInit(private val exeCtx: Rt_ExecutionContext) {
 
             started = true
             val modsAllowed = exeCtx.globalCtx.compilerOptions.allowDbModificationsInObjectExprs
-            val frame = SqlInitUtils.createEntityInitFrame(exeCtx, obj.rEntity, modsAllowed)
+            val frame = Rt_CallFrame.createInitFrame(exeCtx, obj.rEntity, modsAllowed)
             obj.insert(frame)
             finished = true
         }

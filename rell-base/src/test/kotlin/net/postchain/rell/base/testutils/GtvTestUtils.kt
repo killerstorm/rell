@@ -43,7 +43,7 @@ object GtvTestUtils {
 
     private fun decodeGtvArgs(params: List<R_FunctionParam>, args: List<Gtv>, pretty: Boolean): List<Rt_Value> {
         checkEquals(args.size, params.size)
-        val ctx = GtvToRtContext.make(pretty)
+        val ctx = GtvToRtContext.make(pretty = pretty)
         return args.mapIndexed { i, arg ->
             params[i].type.gtvToRt(ctx, arg)
         }

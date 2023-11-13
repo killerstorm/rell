@@ -22,7 +22,7 @@ class ChainContextTest: BaseGtxTest() {
 
     @Test fun testModuleArgs() {
         def("struct module_args { s: text; n: integer; }")
-        chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration")
+        chkUserMistake("", "Module initialization failed: No moduleArgs for module '' in blockchain configuration")
 
         tst.moduleArgs("" to "{'s':'Hello','n':123}")
         chk("_type_of(chain_context.args)", "'module_args'")
@@ -31,22 +31,13 @@ class ChainContextTest: BaseGtxTest() {
         chk("chain_context.args.n", "123")
         chk("chain_context.args.x", "ct_err:unknown_member:[module_args]:x")
 
-        tst.moduleArgs()
-        chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration")
-
-        tst.moduleArgs("" to "12345")
-        chkUserMistake("", "Module initialization failed: Decoding type 'module_args': expected ARRAY, actual INTEGER")
-
-        tst.moduleArgs("" to "{'p':'Hello','q':123}")
-        chkUserMistake("", "Module initialization failed: Key missing in Gtv dictionary: ")
-
-        tst.moduleArgs("" to "{'n':'Hello','s':123}")
-        chkUserMistake("", "Module initialization failed: Decoding type 'text': expected STRING, actual INTEGER")
-
         tst.moduleArgs("" to "{'s':'Hello','n':123}")
         chk("chain_context.args", "{'n':123,'s':'Hello'}")
 
         tst.moduleArgs("" to "{'s':'Hello','n':123}", "foo.bar" to "{'x':123}")
+        chk("chain_context.args", "{'n':123,'s':'Hello'}")
+
+        tst.moduleArgs("" to "['Hello',123]")
         chk("chain_context.args", "{'n':123,'s':'Hello'}")
     }
 
@@ -59,6 +50,141 @@ class ChainContextTest: BaseGtxTest() {
         def("struct module_args { x: integer; y: text; }")
         tst.moduleArgs("" to "[123,'Hello']")
         chk("chain_context.args", "{'x':123,'y':'Hello'}")
+    }
+
+    @Test fun testModuleArgsBad() {
+        def("struct module_args { s: text; n: integer; }")
+
+        val err = "Module initialization failed"
+        tst.moduleArgs()
+        chkUserMistake("", "$err: No moduleArgs for module '' in blockchain configuration")
+
+        tst.moduleArgs("" to "12345")
+        chkUserMistake("", "$err: Decoding type 'module_args': expected ARRAY, actual INTEGER")
+
+        tst.moduleArgs("" to "{'p':'Hello','q':123}")
+        chkUserMistake("", "$err: Key missing in Gtv dictionary: ")
+
+        tst.moduleArgs("" to "{'n':'Hello','s':123}")
+        chkUserMistake("", "$err: Decoding type 'text': expected STRING, actual INTEGER")
+
+        tst.moduleArgs("" to "{'s':'Hello','n':123,'p':456}")
+        chkUserMistake("", "$err: Wrong key in Gtv dictionary for type 'module_args': 'p'")
+
+        tst.moduleArgs("" to "{'s':'Hello'}")
+        chkUserMistake("", "$err: Key missing in Gtv dictionary: field 'module_args.n'")
+
+        tst.moduleArgs("" to "{'n':123}")
+        chkUserMistake("", "$err: Key missing in Gtv dictionary: field 'module_args.s'")
+
+        tst.moduleArgs("" to "['Hello']")
+        chkUserMistake("", "$err: Wrong Gtv array size for struct 'module_args': 1 instead of 2")
+    }
+
+    @Test fun testModuleArgsDefaultValue() {
+        def("struct module_args { s: text; n: integer = 123; }")
+
+        tst.moduleArgs("" to "{'s':'Hello'}")
+        chk("chain_context.args", "{'n':123,'s':'Hello'}")
+
+        val err = "Module initialization failed"
+        tst.moduleArgs("" to "{'n':456}")
+        chkUserMistake("", "$err: Key missing in Gtv dictionary: field 'module_args.s'")
+
+        tst.moduleArgs("" to "{'s':'Hello','n':456}")
+        chk("chain_context.args", "{'n':456,'s':'Hello'}")
+
+        tst.moduleArgs("" to "{'p':'Hello','n':456}")
+        chkUserMistake("", "$err: Key missing in Gtv dictionary: field 'module_args.s'")
+
+        tst.moduleArgs("" to "{'s':'Hello','x':456}")
+        chkUserMistake("", "$err: Wrong key in Gtv dictionary for type 'module_args': 'x'")
+
+        tst.moduleArgs("" to "['Hello']")
+        chkUserMistake("", "$err: Wrong Gtv array size for struct 'module_args': 1 instead of 2")
+    }
+
+    @Test fun testModuleArgsDefaultValueAllAttrs() {
+        file("a.rell", "module; val args = chain_context.args; struct module_args { x: integer; y: integer = 123; }")
+        file("b.rell", "module; val args = chain_context.args; struct module_args { p: integer = 456; q: integer = 789; }")
+        def("import a; import b;")
+
+        tst.moduleArgs("a" to "{'x':111,'y':222}", "b" to "{'p':333,'q':444}")
+        chk("a.args", "{'x':111,'y':222}")
+        chk("b.args", "{'p':333,'q':444}")
+
+        val err = "Module initialization failed"
+        tst.moduleArgs("b" to "{'p':333,'q':444}")
+        chkUserMistake("", "$err: No moduleArgs for module 'a' in blockchain configuration, but type module_args defined in the code")
+
+        tst.moduleArgs("b" to "{'p':333,'q':444}")
+        chkUserMistake("", "$err: No moduleArgs for module 'a' in blockchain configuration, but type module_args defined in the code")
+
+        tst.moduleArgs("a" to "{'x':111,'y':222}")
+        chk("a.args", "{'x':111,'y':222}")
+        chk("b.args", "{'p':456,'q':789}")
+
+        tst.moduleArgs("a" to "{'x':111}")
+        chk("a.args", "{'x':111,'y':123}")
+        chk("b.args", "{'p':456,'q':789}")
+    }
+
+    @Test fun testModuleArgsDefaultValueNested() {
+        def("struct data { z: integer = 789; }")
+        def("struct ref { y: integer = 456; d: data = data(987); }")
+        def("struct module_args { x: integer = 123; r: ref = ref(654); }")
+
+        chkModArgs("{'x':111,r:{y:222,d:{z:333}}}", "{'r':{'d':{'z':333},'y':222},'x':111}")
+        chkModArgs("{'x':111,r:{y:222,d:{}}}", "{'r':{'d':{'z':789},'y':222},'x':111}")
+        chkModArgs("{'x':111,r:{y:222}}", "{'r':{'d':{'z':987},'y':222},'x':111}")
+        chkModArgs("{'x':111,r:{}}", "{'r':{'d':{'z':987},'y':456},'x':111}")
+        chkModArgs("{'x':111}", "{'r':{'d':{'z':987},'y':654},'x':111}")
+        chkModArgs("{}", "{'r':{'d':{'z':987},'y':654},'x':123}")
+
+        chkModArgs("{r:{y:222,d:{z:333}}}", "{'r':{'d':{'z':333},'y':222},'x':123}")
+        chkModArgs("{r:{d:{z:333}}}", "{'r':{'d':{'z':333},'y':456},'x':123}")
+        chkModArgs("{r:{d:{}}}", "{'r':{'d':{'z':789},'y':456},'x':123}")
+        chkModArgs("{r:{}}", "{'r':{'d':{'z':987},'y':456},'x':123}")
+    }
+
+    @Test fun testModuleArgsDefaultValueDependencies() {
+        file("a.rell", """
+            module;
+            import b;
+            val p: integer = b.r;
+            val q: integer = chain_context.args.y;
+            struct module_args { y: integer = b.s; }
+        """)
+        file("b.rell", """
+            module;
+            import a;
+            val r: integer = chain_context.args.z;
+            struct module_args { z: integer = a.q; }
+            val s: integer = 123;
+        """)
+        def("import a; struct module_args { x: integer = a.p; }")
+
+        chkModArgs("{x:321}", "{'x':321}")
+        chkModArgs("{}", "{'x':123}")
+    }
+
+    @Test fun testModuleArgsDefaultValueRecursion() {
+        tst.wrapRtErrors = false
+        file("a.rell", "module; struct module_args { x: integer = chain_context.args.x; }")
+        file("b.rell", "module; struct module_args { x: integer = chain_context.args.y; y: integer = 123; }")
+        file("c.rell", "module; import d; val p: integer = chain_context.args.x; struct module_args { x: integer = d.q; }")
+        file("d.rell", "module; import c; val q: integer = chain_context.args.y; struct module_args { y: integer = c.p; }")
+        def("query q() = 0;")
+
+        chkFull("import a;", "", "rt_err:const:recursion:modargs:a")
+        chkFull("import b;", "", "rt_err:const:recursion:modargs:b")
+        chkFull("import c;", "", "rt_err:const:recursion:const:0:c:p")
+        chkFull("import d;", "", "rt_err:const:recursion:const:0:d:q")
+    }
+
+    private fun chkModArgs(args: String, expected: String) {
+        tst.moduleArgs("" to args)
+        chk("chain_context.args", expected)
     }
 
     @Test fun testModuleArgsMultiModule() {
@@ -78,10 +204,10 @@ class ChainContextTest: BaseGtxTest() {
         chkUserMistake("", "Module initialization failed: Key missing in Gtv dictionary")
 
         tst.moduleArgs()
-        chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration for module 'lib.a'")
+        chkUserMistake("", "Module initialization failed: No moduleArgs for module 'lib.a' in blockchain configuration")
 
         tst.moduleArgs("lib.a" to "{x:'Hello'}", "lib.b" to "{'y':123}", "lib.d" to "{'z':'456.789'}")
-        chkUserMistake("", "Module initialization failed: No moduleArgs in blockchain configuration for module 'lib.c'")
+        chkUserMistake("", "Module initialization failed: No moduleArgs for module 'lib.c' in blockchain configuration")
     }
 
     @Test fun testModuleArgsAttrTypes() {

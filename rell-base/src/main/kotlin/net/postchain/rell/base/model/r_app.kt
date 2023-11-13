@@ -257,21 +257,23 @@ class R_AppSqlDefs(
 }
 
 class R_App(
-        val valid: Boolean,
-        val uid: R_AppUid,
-        modules: List<R_Module>,
-        operations: Map<R_MountName, R_OperationDefinition>,
-        queries: Map<R_MountName, R_QueryDefinition>,
-        constants: List<R_GlobalConstantDefinition>,
-        val functionExtensions: R_FunctionExtensionsTable,
-        val externalChainsRoot: R_ExternalChainsRoot,
-        externalChains: List<R_ExternalChainRef>,
-        val sqlDefs: R_AppSqlDefs
+    val valid: Boolean,
+    val uid: R_AppUid,
+    modules: List<R_Module>,
+    operations: Map<R_MountName, R_OperationDefinition>,
+    queries: Map<R_MountName, R_QueryDefinition>,
+    constants: List<R_GlobalConstantDefinition>,
+    moduleArgs: Map<R_ModuleName, R_StructDefinition>,
+    val functionExtensions: R_FunctionExtensionsTable,
+    val externalChainsRoot: R_ExternalChainsRoot,
+    externalChains: List<R_ExternalChainRef>,
+    val sqlDefs: R_AppSqlDefs,
 ) {
     val modules = modules.toImmList()
     val operations = operations.toImmMap()
     val queries = queries.toImmMap()
     val constants = constants.toImmList()
+    val moduleArgs = moduleArgs.toImmMap()
     val externalChains = externalChains.toImmList()
 
     val moduleMap = this.modules.map { it.name to it }.toMap().toImmMap()

@@ -138,7 +138,7 @@ object Lib_Type_Struct {
                         val bytes = a.asByteArray()
                         Rt_Utils.wrapErr("fn:struct:from_bytes") {
                             val gtv = PostchainGtvUtils.bytesToGtv(bytes)
-                            val convCtx = GtvToRtContext.make(false)
+                            val convCtx = GtvToRtContext.make(pretty = false)
                             val res = resType.gtvToRt(convCtx, gtv)
                             convCtx.finish(ctx.exeCtx)
                             res

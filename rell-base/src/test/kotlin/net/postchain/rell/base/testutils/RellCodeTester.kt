@@ -292,7 +292,8 @@ class RellCodeTester(
         val globalCtx = createGlobalCtx()
 
         val sqlMgr = tstCtx.sqlMgr()
-        return RellReplTester(tstCtx.projExt, globalCtx, sourceDir, sqlMgr, module)
+        val modArgsSource = createModuleArgsSource()
+        return RellReplTester(tstCtx.projExt, globalCtx, sourceDir, sqlMgr, modArgsSource, module)
     }
 
     private fun processWithExeCtx(code: String, processor: (Rt_ExecutionContext) -> String): String {
@@ -365,17 +366,22 @@ class RellCodeTester(
             val blockRunner = tstCtx.projExt.createUnitTestBlockRunner(sourceDir, app, modArgsGtv)
 
             val testRunnerCtx = UnitTestRunnerContext(
-                    sqlCtx = sqlCtx,
-                    printer = Rt_OutPrinter,
-                    sqlMgr = tstCtx.sqlMgr(),
-                    sqlInitProjExt = tstCtx.projExt.getSqlInitProjExt(),
-                    globalCtx = globalCtx,
-                    chainCtx = createChainContext(app),
-                    blockRunner = blockRunner,
-                    app = app,
+                sqlCtx = sqlCtx,
+                printer = Rt_OutPrinter,
+                sqlMgr = tstCtx.sqlMgr(),
+                sqlInitProjExt = tstCtx.projExt.getSqlInitProjExt(),
+                globalCtx = globalCtx,
+                chainCtx = createChainContext(),
+                blockRunner = blockRunner,
+                moduleArgsSource = createModuleArgsSource(),
+                app = app,
             )
 
-            processor(testRunnerCtx)
+            try {
+                processor(testRunnerCtx)
+            } catch (e: Rt_Exception) {
+                "RTE:${e.err.code()}"
+            }
         }
     }
 
@@ -393,41 +399,39 @@ class RellCodeTester(
         )
     }
 
-    private fun createChainContext(app: R_App, gtvConfig: Gtv = GtvNull): Rt_ChainContext {
+    private fun createChainContext(gtvConfig: Gtv = GtvNull): Rt_ChainContext {
         val bcRid = Bytes32(blockchainRid.hexStringToByteArray())
-        val modArgsVals = getModuleArgsValues(app)
-        return Rt_ChainContext(gtvConfig, modArgsVals, bcRid)
+        return Rt_ChainContext(gtvConfig, bcRid)
     }
 
-    private fun getModuleArgsValues(app: R_App): Map<R_ModuleName, Rt_Value> {
+    private fun createModuleArgsSource(): Rt_GtvModuleArgsSource {
         val modArgs = getModuleArgs()
-        return modArgs.map {
-            val modName = R_ModuleName.of(it.key)
-            val module = app.moduleMap.getValue(modName)
-            val struct = module.moduleArgs!!
-            val gtv = GtvTestUtils.strToGtv(it.value)
-            val value = struct.type.gtvToRt(GtvToRtContext.make(pretty = true), gtv)
-            modName to value
-        }.toMap().toImmMap()
+        val gtvMap = modArgs
+            .map {
+                val modName = R_ModuleName.of(it.key)
+                val gtv = GtvTestUtils.strToGtv(it.value)
+                modName to gtv
+            }.toImmMap()
+        return Rt_GtvModuleArgsSource(gtvMap)
     }
 
     fun createAppCtx(
-            globalCtx: Rt_GlobalContext,
-            app: R_App,
-            sourceDir: C_SourceDir,
-            test: Boolean,
+        globalCtx: Rt_GlobalContext,
+        app: R_App,
+        sourceDir: C_SourceDir,
+        test: Boolean,
     ): Rt_AppContext {
-        val chainCtx = createChainContext(app, GtvNull)
+        val chainCtx = createChainContext(GtvNull)
         val blockRunner = createBlockRunner(sourceDir, app)
-
+        val moduleArgsSource = createModuleArgsSource()
         return Rt_AppContext(
-                globalCtx,
-                chainCtx,
-                app,
-                repl = false,
-                test = test,
-                replOut = null,
-                blockRunner = blockRunner,
+            globalCtx,
+            chainCtx,
+            app,
+            repl = false,
+            test = test,
+            blockRunner = blockRunner,
+            moduleArgsSource = moduleArgsSource,
         )
     }
 

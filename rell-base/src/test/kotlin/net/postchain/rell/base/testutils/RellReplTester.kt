@@ -8,10 +8,7 @@ import net.postchain.rell.base.compiler.base.utils.C_Message
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.repl.*
-import net.postchain.rell.base.runtime.Rt_Exception
-import net.postchain.rell.base.runtime.Rt_GlobalContext
-import net.postchain.rell.base.runtime.Rt_Printer
-import net.postchain.rell.base.runtime.Rt_Value
+import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.sql.SqlManager
 import java.io.File
 import java.util.*
@@ -22,6 +19,7 @@ class RellReplTester(
     private val globalCtx: Rt_GlobalContext,
     private val sourceDir: C_SourceDir,
     private val sqlMgr: SqlManager,
+    private val moduleArgsSource: Rt_ModuleArgsSource,
     private val module: R_ModuleName?,
 ) {
     var outPlainValues = false
@@ -49,26 +47,25 @@ class RellReplTester(
 
             val blockRunnerFactory = tstProjExt.getReplInterpreterProjExt()
 
-            val cOpts = RellTestUtils.DEFAULT_COMPILER_OPTIONS
-            repl = ReplInterpreter.create(
-                cOpts,
+            val config = ReplInterpreterConfig(
+                RellTestUtils.DEFAULT_COMPILER_OPTIONS,
                 sourceDir,
                 module,
                 replGlobalCtx,
                 sqlMgr,
                 blockRunnerFactory,
                 outChannel,
+                moduleArgsSource,
             )
+
+            repl = ReplInterpreter.create(config)
         }
 
         repl?.execute(code)
         outChannelFactory.chk(*expected)
     }
 
-    class TestReplInputChannelFactory(input: List<String>): ReplInputChannelFactory {
-        private val queue: Queue<String> = LinkedList(input)
-        private var end = false
-
+    class TestReplInputChannelFactory(private val input: List<String>): ReplInputChannelFactory {
         constructor(vararg input: String): this(input.toList())
 
         override fun createInputChannel(historyFile: File?): ReplInputChannel {
@@ -76,6 +73,9 @@ class RellReplTester(
         }
 
         private inner class TestReplInputChannel: ReplInputChannel {
+            private val queue: Queue<String> = LinkedList(input)
+            private var end = false
+
             override fun readLine(prompt: String): String? {
                 val res = queue.poll()
                 if (res == null) {

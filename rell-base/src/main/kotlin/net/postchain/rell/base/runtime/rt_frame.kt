@@ -136,6 +136,14 @@ class Rt_CallFrame(
     fun checkBlock(block: R_FrameBlockUid) {
         check(block == curBlock.uid) { "wrong block: expected $block was ${curBlock.uid}" }
     }
+
+    companion object {
+        fun createInitFrame(exeCtx: Rt_ExecutionContext, rDef: R_Definition, modsAllowed: Boolean): Rt_CallFrame {
+            val defCtx = Rt_DefinitionContext(exeCtx, modsAllowed, rDef.defId)
+            val rInitFrame = rDef.initFrameGetter.get()
+            return rInitFrame.createRtFrame(defCtx, null, null)
+        }
+    }
 }
 
 class Rt_CallFrameState(values: List<Optional<Rt_Value>>) {

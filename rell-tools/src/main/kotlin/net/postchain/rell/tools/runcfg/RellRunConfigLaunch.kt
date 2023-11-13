@@ -27,10 +27,7 @@ import net.postchain.rell.base.compiler.base.core.C_CompilerModuleSelection
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.base.model.R_App
 import net.postchain.rell.base.model.R_LangVersion
-import net.postchain.rell.base.runtime.Rt_ChainSqlMapping
-import net.postchain.rell.base.runtime.Rt_OutPrinter
-import net.postchain.rell.base.runtime.Rt_Printer
-import net.postchain.rell.base.runtime.Rt_RegularSqlContext
+import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.sql.SqlInitLogging
 import net.postchain.rell.base.utils.*
 import net.postchain.rell.gtx.PostchainBaseUtils
@@ -183,7 +180,8 @@ private fun runTests(args: CommonArgs, matcher: UnitTestMatcher, targetChains: C
         for (tChain in tChains) {
             val globalCtx = RellApiBaseUtils.createGlobalContext(compilerOptions, typeCheck = true)
             val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(tChain.rApp, Rt_ChainSqlMapping(tChain.chain.iid))
-            val chainCtx = PostchainBaseUtils.createChainContext(tChain.gtvConfig, tChain.rApp, tChain.chain.brid)
+            val chainCtx = Rt_ChainContext(tChain.gtvConfig, tChain.chain.brid)
+            val moduleArgsSource = PostchainBaseUtils.createModuleArgsSource(tChain.rApp, tChain.gtvConfig)
 
             val blockRunner = createBlockRunner(args, keyPair, tChain.gtvConfig)
 
@@ -200,6 +198,7 @@ private fun runTests(args: CommonArgs, matcher: UnitTestMatcher, targetChains: C
                 globalCtx,
                 chainCtx,
                 blockRunner,
+                moduleArgsSource = moduleArgsSource,
             )
 
             UnitTestRunner.runTests(testCtx, cases, testRes)

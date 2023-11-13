@@ -4,13 +4,12 @@
 
 package net.postchain.rell.api.shell
 
+import net.postchain.gtv.Gtv
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.repl.*
-import net.postchain.rell.base.runtime.Rt_GlobalContext
-import net.postchain.rell.base.runtime.Rt_RellVersion
-import net.postchain.rell.base.runtime.Rt_RellVersionProperty
+import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.sql.SqlManager
 import org.apache.commons.lang3.StringUtils
 import java.io.File
@@ -21,6 +20,7 @@ class ReplShellOptions(
     val outputChannelFactory: ReplOutputChannelFactory,
     val historyFile: File?,
     val printIntroMessage: Boolean,
+    val moduleArgs: Map<R_ModuleName, Gtv>,
 )
 
 object ReplShell {
@@ -34,7 +34,7 @@ object ReplShell {
     ) {
         val outChannel = options.outputChannelFactory.createOutputChannel()
 
-        val repl = ReplInterpreter.create(
+        val config = ReplInterpreterConfig(
             options.compilerOptions,
             sourceDir,
             module,
@@ -42,8 +42,10 @@ object ReplShell {
             sqlMgr,
             projExt,
             outChannel,
+            Rt_GtvModuleArgsSource(options.moduleArgs),
         )
 
+        val repl = ReplInterpreter.create(config)
         if (repl == null) {
             return
         }

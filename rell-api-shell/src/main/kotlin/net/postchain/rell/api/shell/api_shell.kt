@@ -167,6 +167,7 @@ object RellApiShellInternal {
             outputChannelFactory = config.outputChannelFactory,
             historyFile = config.historyFile,
             printIntroMessage = config.printIntroMessage,
+            moduleArgs = config.compileConfig.moduleArgs,
         )
 
         RellApiGtxUtils.runWithSqlManager(

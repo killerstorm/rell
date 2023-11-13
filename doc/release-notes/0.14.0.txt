@@ -201,3 +201,10 @@ Output example:
 New value output format activated by command '\og': converts a value to Gtv and prints its string representation.
 
 The '\os' (strict) format removed, as it's internal and can be unstable (may change in future updates).
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+10. Runtime: Default values in module args
+
+If a module_args attribute has a default value, it's not necessary to specify that attribute in the configuration.
+If all attributes of module_args have default values, no need to specify args for the corresponding module at all.
+Rell will use default values instead of throwing an error.

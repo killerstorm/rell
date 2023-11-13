@@ -296,6 +296,12 @@ class ReplDefinitionTest: BaseRellTest(false) {
         repl.chk("override function lib.f(): integer = 456;", "CTE:<console>:fn:override:repl")
     }
 
+    @Test fun testModuleArgsSimple() {
+        file("lib.rell", "module; struct module_args { x: integer; } function f() = chain_context.args;")
+        tst.moduleArgs("lib" to "{'x':123}")
+        repl.chk("import lib; lib.f();", "RES:lib:module_args[x=int[123]]")
+    }
+
     @Test fun testModuleArgsImport() {
         file("lib.rell", """module;
             struct module_args { x: integer; }
@@ -313,6 +319,23 @@ class ReplDefinitionTest: BaseRellTest(false) {
         tst.replModule = "lib"
         repl.chk("123", "RES:int[123]")
         repl.chk("f()", "rt_err:chain_context.args:no_module_args:lib")
+    }
+
+    @Test fun testModuleArgsImportComplex() {
+        file("a.rell", "module; struct module_args { x: integer; } function f() = chain_context.args;")
+        file("b.rell", "module; struct module_args { y: integer; } function g() = chain_context.args;")
+        file("c.rell", "module; struct module_args { z: integer; } function h() = chain_context.args;")
+
+        tst.moduleArgs("a" to "{'x':123}", "b" to "{'y':456}")
+        repl.chk("0", "RES:int[0]")
+        repl.chk("import a;", "")
+        repl.chk("a.f()", "RES:a:module_args[x=int[123]]")
+        repl.chk("import b;", "")
+        repl.chk("b.g()", "RES:b:module_args[y=int[456]]")
+        repl.chk("import c;", "")
+        repl.chk("c.h()", "rt_err:chain_context.args:no_module_args:c")
+        repl.chk("a.f()", "RES:a:module_args[x=int[123]]")
+        repl.chk("b.g()", "RES:b:module_args[y=int[456]]")
     }
 
     @Test fun testImportConstants() {

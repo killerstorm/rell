@@ -127,21 +127,21 @@ class RellTestEval {
     fun errorStack() = lastErrorStack
 
     fun <T> wrapCt(code: () -> T): T {
-        if (wrapping) {
+        return if (wrapping) {
             val p = RellTestUtils.catchCtErr0(false, code)
-            return result(p)
+            result(p)
         } else {
-            return code()
+            code()
         }
     }
 
     fun <T> wrapRt(code: () -> T): T {
-        if (wrapping) {
+        return if (wrapping) {
             val p = RellTestUtils.catchRtErr0(code)
             lastErrorStack = p.first?.stack ?: listOf()
-            return result(Pair(p.first?.res, p.second))
+            result(Pair(p.first?.res, p.second))
         } else {
-            return code()
+            code()
         }
     }
 

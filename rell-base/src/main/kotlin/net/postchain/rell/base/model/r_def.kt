@@ -239,6 +239,10 @@ class R_MirrorStructs(
 class R_StructDefinition(base: R_DefinitionBase, val struct: R_Struct): R_Definition(base) {
     val type = struct.type
 
+    val hasDefaultConstructor: Boolean by lazy {
+        struct.attributesList.all { it.expr != null }
+    }
+
     override fun toMetaGtv() = struct.toMetaGtv()
 
     override fun getDocMember(name: String): DocDefinition? {

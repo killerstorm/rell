@@ -116,7 +116,7 @@ class RellGtxTester(
 
             val queryGtv = GtvFactory.gtv(args)
 
-            val module = eval.wrapCt { createGtxModule(moduleCode) }
+            val module = eval.wrapAll { createGtxModule(moduleCode) }
 
             withEContext(false) { ctx ->
                 val res = eval.wrapRt {

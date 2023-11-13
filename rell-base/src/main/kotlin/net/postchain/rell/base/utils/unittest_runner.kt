@@ -50,6 +50,7 @@ class UnitTestRunnerContext(
     private val globalCtx: Rt_GlobalContext,
     private val chainCtx: Rt_ChainContext,
     private val blockRunner: Rt_UnitTestBlockRunner,
+    private val moduleArgsSource: Rt_ModuleArgsSource,
     val printTestCases: Boolean = true,
     val stopOnError: Boolean = false,
     val onTestCaseStart: (UnitTestCase) -> Unit = {},
@@ -64,8 +65,8 @@ class UnitTestRunnerContext(
             app,
             repl = false,
             test = true,
-            replOut = null,
             blockRunner = blockRunner,
+            moduleArgsSource = moduleArgsSource,
         )
     }
 }

@@ -14,6 +14,7 @@ import net.postchain.gtv.merkle.GtvMerkleHashCalculator
 import net.postchain.gtv.merkle.MerkleHashCalculator
 import net.postchain.rell.base.model.R_StructDefinition
 import net.postchain.rell.base.runtime.GtvToRtContext
+import net.postchain.rell.base.runtime.GtvToRtDefaultValueEvaluator
 import net.postchain.rell.base.runtime.Rt_Value
 
 object PostchainGtvUtils {
@@ -41,8 +42,19 @@ object PostchainGtvUtils {
 
     fun merkleHash(v: Gtv): ByteArray = v.merkleHash(merkleCalculator)
 
-    fun moduleArgsGtvToRt(struct: R_StructDefinition, gtv: Gtv): Rt_Value {
-        val convCtx = GtvToRtContext.make(true)
+    fun moduleArgsGtvToRt(
+        struct: R_StructDefinition,
+        gtv: Gtv,
+        validateOnly: Boolean = false,
+        defaultValueEvaluator: GtvToRtDefaultValueEvaluator,
+    ): Rt_Value {
+        // GtvToRtContext.finish() is not called, because there is no execution context.
+        // It's not really needed, because module_args can't use entities, and .finish() is needed only for them.
+        val convCtx = GtvToRtContext.make(
+            pretty = true,
+            validateOnly = validateOnly,
+            defaultValueEvaluator = defaultValueEvaluator,
+        )
         return struct.type.gtvToRt(convCtx, gtv)
     }
 }

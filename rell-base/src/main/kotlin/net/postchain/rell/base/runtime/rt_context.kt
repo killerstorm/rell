@@ -10,12 +10,10 @@ import net.postchain.common.types.WrappedByteArray
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvNull
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
-import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.lib.test.Rt_TestBlockClock
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.repl.ReplOutputChannel
 import net.postchain.rell.base.runtime.utils.Rt_Messages
-import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.sql.*
 import net.postchain.rell.base.utils.*
 
@@ -168,7 +166,7 @@ class Rt_RegularSqlContext private constructor(
                 if (rtChain == null) {
                     throw errInit("external_chain_unknown:$name", "External chain not found: '$name'")
                 }
-                rtChain!!
+                rtChain
             }
         }
 
@@ -277,14 +275,15 @@ class Rt_AppContext(
     val app: R_App,
     val repl: Boolean,
     val test: Boolean,
-    val replOut: ReplOutputChannel?,
+    val replOut: ReplOutputChannel? = null,
     val blockRunner: Rt_UnitTestBlockRunner = Rt_NullUnitTestBlockRunner,
-    globalConstantStates: List<Rt_GlobalConstantState> = immListOf(),
+    moduleArgsSource: Rt_ModuleArgsSource = Rt_ModuleArgsSource.NULL,
+    globalConstantsState: Rt_GlobalConstants.State = Rt_GlobalConstants.State(),
 ) {
     private var objsInit: SqlObjectsInit? = null
     private var objsInited = false
 
-    private val globalConstants = Rt_GlobalConstants(this, globalConstantStates)
+    private val globalConstants = Rt_GlobalConstants(this, moduleArgsSource, globalConstantsState)
 
     init {
         globalConstants.initialize()
@@ -311,97 +310,15 @@ class Rt_AppContext(
     }
 
     fun getGlobalConstant(constId: R_GlobalConstantId): Rt_Value {
-        return globalConstants.getValue(constId)
+        return globalConstants.getConstantValue(constId)
     }
 
-    fun dumpGlobalConstants(): List<Rt_GlobalConstantState> {
+    fun getModuleArgs(moduleName: R_ModuleName): Rt_Value? {
+        return globalConstants.getModuleArgsValue(moduleName)
+    }
+
+    fun dumpGlobalConstants(): Rt_GlobalConstants.State {
         return globalConstants.dump()
-    }
-}
-
-class Rt_GlobalConstantState(val constId: R_GlobalConstantId, val value: Rt_Value)
-
-private class Rt_GlobalConstants(private val appCtx: Rt_AppContext, oldStates: List<Rt_GlobalConstantState>) {
-    private val slots = appCtx.app.constants.map { ConstantSlot(it.constId) }.toImmList()
-
-    private var inited = false
-    private var initExeCtx: Rt_ExecutionContext? = null
-
-    init {
-        check(oldStates.size <= slots.size)
-        for (i in oldStates.indices) {
-            slots[i].restore(oldStates[i])
-        }
-    }
-
-    fun initialize() {
-        check(!inited)
-        check(initExeCtx == null)
-        inited = true
-
-        val sqlCtx = Rt_NullSqlContext.create(appCtx.app)
-        initExeCtx = Rt_ExecutionContext(appCtx, Rt_NullOpContext, sqlCtx, NoConnSqlExecutor)
-
-        try {
-            for (c in appCtx.app.constants) {
-                val slot = getSlot(c.constId)
-                slot.getValue()
-            }
-        } finally {
-            initExeCtx = null
-        }
-    }
-
-    fun getValue(constId: R_GlobalConstantId): Rt_Value {
-        val slot = getSlot(constId)
-        return slot.getValue()
-    }
-
-    fun dump(): List<Rt_GlobalConstantState> {
-        return slots.map { it.dump() }.toImmList()
-    }
-
-    private fun getSlot(constId: R_GlobalConstantId): ConstantSlot {
-        val slot = slots[constId.index]
-        checkEquals(slot.constId, constId)
-        return slot
-    }
-
-    private inner class ConstantSlot(val constId: R_GlobalConstantId) {
-        private var value: Rt_Value? = null
-        private var initing = false
-
-        fun restore(state: Rt_GlobalConstantState) {
-            check(value == null)
-            check(!initing)
-            checkEquals(state.constId, constId)
-            value = state.value
-        }
-
-        fun dump() = Rt_GlobalConstantState(constId, value!!)
-
-        fun getValue(): Rt_Value {
-            val v = value
-            if (v != null) {
-                return v
-            }
-
-            Rt_Utils.check(!initing) {
-                "const:recursion:${constId.strCode()}" toCodeMsg "Constant has recursive expression: ${constId.appLevelName}"
-            }
-            initing = true
-
-            val exeCtx = checkNotNull(initExeCtx) { constId }
-
-            val c = appCtx.app.constants[constId.index]
-            checkEquals(c.constId, constId)
-
-            val v2 = c.evaluate(exeCtx)
-            value = v2
-            initing = false
-
-            return v2
-        }
     }
 }
 
@@ -494,13 +411,10 @@ object Rt_NullOpContext: Rt_OpContext() {
 
 class Rt_ChainContext(
     val rawConfig: Gtv,
-    moduleArgs: Map<R_ModuleName, Rt_Value>,
     val blockchainRid: Bytes32,
 ) {
-    val moduleArgs = moduleArgs.toImmMap()
-
     companion object {
         val ZERO_BLOCKCHAIN_RID = Bytes32(ByteArray(32))
-        val NULL = Rt_ChainContext(GtvNull, immMapOf(), ZERO_BLOCKCHAIN_RID)
+        val NULL = Rt_ChainContext(GtvNull, ZERO_BLOCKCHAIN_RID)
     }
 }

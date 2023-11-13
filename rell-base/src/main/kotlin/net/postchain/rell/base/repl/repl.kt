@@ -23,12 +23,10 @@ class C_ReplCodeState(
 }
 
 class Rt_ReplCodeState(
-        val frameState: Rt_CallFrameState,
-        globalConstants: List<Rt_GlobalConstantState>
+    val frameState: Rt_CallFrameState,
+    val globalConstants: Rt_GlobalConstants.State,
 ) {
-    val globalConstants = globalConstants.toImmList()
-
-    companion object { val EMPTY = Rt_ReplCodeState(Rt_CallFrameState.EMPTY, listOf()) }
+    companion object { val EMPTY = Rt_ReplCodeState(Rt_CallFrameState.EMPTY, Rt_GlobalConstants.State()) }
 }
 
 class ReplCodeState(val cState: C_ReplCodeState, val rtState: Rt_ReplCodeState) {
@@ -77,9 +75,9 @@ class R_ReplCode(private val frame: R_CallFrame, stmts: List<R_Statement>) {
         R_BlockStatement.executeStatements(rtFrame, stmts)
 
         val newFrameState = rtFrame.dumpState()
-        val newConstantStates = exeCtx.appCtx.dumpGlobalConstants()
+        val newConstantsState = exeCtx.appCtx.dumpGlobalConstants()
 
-        return Rt_ReplCodeState(newFrameState, newConstantStates)
+        return Rt_ReplCodeState(newFrameState, newConstantsState)
     }
 }
 
@@ -96,17 +94,25 @@ object NullReplInterpreterProjExt: ReplInterpreterProjExt() {
     }
 }
 
+class ReplInterpreterConfig(
+    val compilerOptions: C_CompilerOptions,
+    val sourceDir: C_SourceDir,
+    val module: R_ModuleName?,
+    val rtGlobalCtx: Rt_GlobalContext,
+    val sqlMgr: SqlManager,
+    val projExt: ReplInterpreterProjExt,
+    val outChannel: ReplOutputChannel,
+    val moduleArgsSource: Rt_ModuleArgsSource,
+)
+
 class ReplInterpreter private constructor(
-    compilerOptions: C_CompilerOptions,
-    private val sourceDir: C_SourceDir,
-    private val module: R_ModuleName?,
-    private val rtGlobalCtx: Rt_GlobalContext,
-    private val sqlMgr: SqlManager,
-    private val projExt: ReplInterpreterProjExt,
-    private val outChannel: ReplOutputChannel,
+    private val config: ReplInterpreterConfig,
 ) {
+    private val sqlMgr = config.sqlMgr
+    private val outChannel = config.outChannel
+
     private val commands = ControlCommands()
-    private val cGlobalCtx = C_GlobalContext(compilerOptions, sourceDir)
+    private val cGlobalCtx = C_GlobalContext(config.compilerOptions, config.sourceDir)
 
     private var defsState = C_ReplDefsState.EMPTY
     private var codeState = ReplCodeState.EMPTY
@@ -143,7 +149,7 @@ class ReplInterpreter private constructor(
 
         return executeCatch {
             val sqlCtx = Rt_RegularSqlContext.createNoExternalChains(success.app, Rt_ChainSqlMapping(0))
-            val rtAppCtx = createRtAppContext(rtGlobalCtx, success.app)
+            val rtAppCtx = createRtAppContext(config.rtGlobalCtx, success.app)
             sqlUpdate(rtAppCtx, sqlCtx, forceSqlUpdate)
 
             sqlMgr.access { sqlExec ->
@@ -157,7 +163,7 @@ class ReplInterpreter private constructor(
 
     private fun compile(code: String): C_ReplSuccess? {
         val cRes = try {
-            C_ReplCompiler.compile(sourceDir, module, code, cGlobalCtx, defsState, codeState)
+            C_ReplCompiler.compile(config.sourceDir, config.module, code, cGlobalCtx, defsState, codeState)
         } catch (e: C_CommonError) {
             outChannel.printCompilerError(e.code, e.msg)
             return null
@@ -183,18 +189,19 @@ class ReplInterpreter private constructor(
     }
 
     private fun createRtAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
-        val modules = (listOfNotNull(module).toSet() + defsState.appState.modules.keys.map { it.name }).toList()
-        val blockRunner = projExt.createBlockRunner(sourceDir, modules)
+        val modules = (listOfNotNull(config.module).toSet() + defsState.appState.modules.keys.map { it.name }).toList()
+        val blockRunner = config.projExt.createBlockRunner(config.sourceDir, modules)
 
         return Rt_AppContext(
-                globalCtx,
-                Rt_ChainContext.NULL,
-                app,
-                repl = true,
-                test = false,
-                replOut = outChannel,
-                blockRunner = blockRunner,
-                globalConstantStates = codeState.rtState.globalConstants,
+            globalCtx,
+            Rt_ChainContext.NULL,
+            app,
+            repl = true,
+            test = false,
+            replOut = outChannel,
+            blockRunner = blockRunner,
+            moduleArgsSource = config.moduleArgsSource,
+            globalConstantsState = codeState.rtState.globalConstants,
         )
     }
 
@@ -210,7 +217,7 @@ class ReplInterpreter private constructor(
             val logging = if (force) SQL_INIT_LOGGING_FORCE else SQL_INIT_LOGGING_AUTO
             sqlMgr.transaction { sqlExec ->
                 val exeCtx = Rt_ExecutionContext(appCtx, Rt_NullOpContext, sqlCtx, sqlExec)
-                val initProjExt = projExt.getSqlInitProjExt()
+                val initProjExt = config.projExt.getSqlInitProjExt()
                 SqlInit.init(exeCtx, initProjExt, logging)
             }
             lastUpdateSqlDefs = appDefs
@@ -246,7 +253,7 @@ class ReplInterpreter private constructor(
 
             val tableList = CommonUtils.tableToStrings(table)
             val str = "List of all control commands:\n" + tableList.joinToString("\n")
-            rtGlobalCtx.outPrinter.print(str)
+            config.rtGlobalCtx.outPrinter.print(str)
         }
 
         private fun exit() {
@@ -298,24 +305,8 @@ class ReplInterpreter private constructor(
                 metaNoCode = true
         )
 
-        fun create(
-            compilerOptions: C_CompilerOptions,
-            sourceDir: C_SourceDir,
-            module: R_ModuleName?,
-            rtGlobalCtx: Rt_GlobalContext,
-            sqlMgr: SqlManager,
-            projExt: ReplInterpreterProjExt,
-            outChannel: ReplOutputChannel,
-        ): ReplInterpreter? {
-            val interpreter = ReplInterpreter(
-                compilerOptions,
-                sourceDir,
-                module,
-                rtGlobalCtx,
-                sqlMgr,
-                projExt,
-                outChannel,
-            )
+        fun create(config: ReplInterpreterConfig): ReplInterpreter? {
+            val interpreter = ReplInterpreter(config)
             val init = interpreter.executeCode("", true) // Make sure the module can be found and has no errors.
             return if (init) interpreter else null
         }

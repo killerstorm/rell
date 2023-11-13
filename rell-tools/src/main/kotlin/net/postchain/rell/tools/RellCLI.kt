@@ -90,10 +90,10 @@ private fun main0(args: RellInterpreterCliArgs) {
         if (module != null && module.test) {
             runSingleModuleTests(argsEx, app, module, entryRoutine)
         } else {
-            runRepl(argsEx, entryModule, dbSpecified)
+            runRepl(argsEx, entryModule)
         }
     } else {
-        runRepl(argsEx, entryModule, dbSpecified)
+        runRepl(argsEx, entryModule)
     }
 }
 
@@ -166,6 +166,7 @@ private fun runTests(args: RellCliArgsEx, app: R_App, fns: List<R_FunctionDefini
             globalCtx,
             chainCtx,
             blockRunner,
+            moduleArgsSource = Rt_ModuleArgsSource.NULL,
         )
 
         val cases = fns.map { UnitTestCase(null, it) }
@@ -195,7 +196,7 @@ private fun createBlockRunner(args: RellCliArgsEx, sourceDir: C_SourceDir, app: 
     return Rt_PostchainUnitTestBlockRunner(keyPair, blockRunnerConfig, blockRunnerStrategy)
 }
 
-private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Boolean) {
+private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?) {
     runWithSqlManager(args.raw, false) { sqlMgr ->
         if (args.raw.resetdb) {
             sqlMgr.transaction { sqlExec ->
@@ -216,6 +217,7 @@ private fun runRepl(args: RellCliArgsEx, moduleName: R_ModuleName?, useSql: Bool
             outputChannelFactory = ReplIo.DEFAULT_OUTPUT_FACTORY,
             historyFile = historyFile,
             printIntroMessage = true,
+            moduleArgs = immMapOf(),
         )
 
         ReplShell.start(
@@ -325,14 +327,7 @@ private fun findEntryPoint(app: R_App, moduleName: R_ModuleName, routineName: R_
 
 private fun createRegularAppContext(globalCtx: Rt_GlobalContext, app: R_App): Rt_AppContext {
     val chainCtx = RellApiBaseUtils.createChainContext()
-    return Rt_AppContext(
-            globalCtx,
-            chainCtx,
-            app,
-            repl = false,
-            test = false,
-            replOut = null,
-    )
+    return Rt_AppContext(globalCtx, chainCtx, app, repl = false, test = false)
 }
 
 private fun createGlobalCtx(args: RellCliArgsEx): Rt_GlobalContext {
@@ -439,7 +434,7 @@ private class RellAppLauncher(
         val rtRes = sqlMgr.execute(entryPoint.transaction) { sqlExec ->
             val exeCtx = Rt_ExecutionContext(appCtx, opCtx, sqlCtx, sqlExec)
 
-            val gtvCtx = GtvToRtContext.make(true)
+            val gtvCtx = GtvToRtContext.make(pretty = true)
             val rtArgs = parseArgs(entryPoint, gtvCtx, args.args ?: listOf(), args.json || args.jsonArgs)
             gtvCtx.finish(exeCtx)
 

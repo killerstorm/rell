@@ -110,6 +110,27 @@ class TestModuleTxTest: BaseRellTest(false) {
         chkOut("f:app:module_args{x=123}", "q:app:module_args{x=123}", "o:app:module_args{x=123}")
     }
 
+    @Test fun testModuleArgsDefaultValues() {
+        file("app.rell", """
+            module;
+            struct module_args { x: text; y: integer = 123; }
+            function f() = chain_context.args;
+        """)
+        file("test.rell", "@test module; import app; function test() { print(app.f()); }")
+
+        tst.moduleArgs("app" to "{}")
+        chkTests("test", "RTE:gtv_err:struct_nokey:app:module_args:x")
+        chkOut()
+
+        tst.moduleArgs("app" to "{'x':'Hello'}")
+        chkTests("test", "test=OK")
+        chkOut("app:module_args{x=Hello,y=123}")
+
+        tst.moduleArgs("app" to "{'x':'Hello',y:456}")
+        chkTests("test", "test=OK")
+        chkOut("app:module_args{x=Hello,y=456}")
+    }
+
     @Test fun testCreateExternalEntity() {
         tstCtx.useSql = true
 

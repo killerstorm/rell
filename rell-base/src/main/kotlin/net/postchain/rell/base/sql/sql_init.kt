@@ -126,14 +126,6 @@ class SqlInit private constructor(
     }
 }
 
-object SqlInitUtils {
-    fun createEntityInitFrame(exeCtx: Rt_ExecutionContext, rEntity: R_EntityDefinition, modsAllowed: Boolean): Rt_CallFrame {
-        val defCtx = Rt_DefinitionContext(exeCtx, modsAllowed, rEntity.defId)
-        val rInitFrame = rEntity.initFrameGetter.get()
-        return rInitFrame.createRtFrame(defCtx, null, null)
-    }
-}
-
 private class SqlInitPlanner private constructor(private val exeCtx: Rt_ExecutionContext, private val initCtx: SqlInitCtx) {
     private val sqlCtx = exeCtx.sqlCtx
     private val mapping = sqlCtx.mainChainMapping()
@@ -467,7 +459,7 @@ private class SqlStepAction_AddColumns_AlterTable(
         private val existingRecs: Boolean
 ): SqlStepAction() {
     override fun run(ctx: SqlStepCtx) {
-        val frame = SqlInitUtils.createEntityInitFrame(ctx.exeCtx, entity, true)
+        val frame = Rt_CallFrame.createInitFrame(ctx.exeCtx, entity, true)
         val sql = R_CreateExpr.buildAddColumnsSql(frame, entity, attrs, existingRecs)
         sql.execute(frame.sqlExec)
     }

@@ -383,7 +383,7 @@ class RunConfigGenTest {
         e = assertFailsWith {
             generate(sourceFiles, mapOf(), tpl.format("""<app module="app"><args module="app"></args></app>"""))
         }
-        assertEquals("Bad module_args for module 'app': Wrong Gtv array size for struct 'app:module_args': 0 instead of 2", e.message)
+        assertEquals("Bad module_args for module 'app': Key missing in Gtv dictionary: field 'app:module_args.x'", e.message)
 
         e = assertFailsWith {
             generate(sourceFiles, mapOf(), tpl.format("""

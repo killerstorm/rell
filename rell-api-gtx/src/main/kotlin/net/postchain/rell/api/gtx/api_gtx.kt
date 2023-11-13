@@ -13,10 +13,7 @@ import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.lib.test.Lib_RellTest
 import net.postchain.rell.base.model.R_App
 import net.postchain.rell.base.model.R_ModuleName
-import net.postchain.rell.base.runtime.Rt_LogPrinter
-import net.postchain.rell.base.runtime.Rt_OutPrinter
-import net.postchain.rell.base.runtime.Rt_Printer
-import net.postchain.rell.base.runtime.Rt_Value
+import net.postchain.rell.base.runtime.*
 import net.postchain.rell.base.sql.SqlInitLogging
 import net.postchain.rell.base.utils.*
 import java.io.File
@@ -51,8 +48,8 @@ object RellApiRunTests {
 
         val compileConfig = config.compileConfig
         val options = RellApiBaseInternal.makeCompilerOptions(compileConfig)
-        val (cRes, app) = RellApiBaseInternal.compileApp(compileConfig, options, cSourceDir, rAppModules, rTestModules)
-        return RellApiGtxInternal.runTests(config, options, cSourceDir, app, rAppModules, cRes.moduleArgs)
+        val (_, app) = RellApiBaseInternal.compileApp(compileConfig, options, cSourceDir, rAppModules, rTestModules)
+        return RellApiGtxInternal.runTests(config, options, cSourceDir, app, rAppModules)
     }
 
     class Config(
@@ -185,7 +182,6 @@ object RellApiGtxInternal {
         sourceDir: C_SourceDir,
         app: R_App,
         appModules: List<R_ModuleName>?,
-        moduleArgsRt: Map<R_ModuleName, Rt_Value>,
     ): UnitTestRunnerResults {
         val globalCtx = RellApiBaseUtils.createGlobalContext(
             options,
@@ -197,7 +193,7 @@ object RellApiGtxInternal {
         val blockRunner = createBlockRunner(config, sourceDir, app, appModules)
 
         val sqlCtx = RellApiBaseUtils.createSqlContext(app)
-        val chainCtx = RellApiBaseUtils.createChainContext(moduleArgs = moduleArgsRt)
+        val chainCtx = RellApiBaseUtils.createChainContext()
 
         val testMatcher = if (config.testPatterns == null) UnitTestMatcher.ANY else UnitTestMatcher.make(config.testPatterns)
         val testFns = UnitTestRunner.getTestFunctions(app, testMatcher)
@@ -218,6 +214,7 @@ object RellApiGtxInternal {
                 globalCtx = globalCtx,
                 chainCtx = chainCtx,
                 blockRunner = blockRunner,
+                moduleArgsSource = Rt_GtvModuleArgsSource(config.compileConfig.moduleArgs),
                 printTestCases = config.printTestCases,
                 stopOnError = config.stopOnError,
                 onTestCaseStart = config.onTestCaseStart,

@@ -737,6 +737,24 @@ class C_ListBuilder<T>(proto: List<T> = immListOf()) {
     }
 }
 
+class C_MapBuilder<K, V>(proto: Map<K, V> = immMapOf()) {
+    private val map = proto.toMutableMap()
+    private var commit: Map<K, V>? = null
+
+    fun put(key: K, value: V) {
+        check(commit == null)
+        check(key !in map)
+        map[key] = value
+    }
+
+    fun commit(): Map<K, V> {
+        if (commit == null) {
+            commit = map.toImmMap()
+        }
+        return commit!!
+    }
+}
+
 class C_UidGen<T>(private val factory: (Long, String) -> T) {
     private var nextUid = 0L
 

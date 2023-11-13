@@ -61,7 +61,7 @@ private object C_NsProperty_ChainContext_Args: C_NamespaceProperty() {
     private class FnArgs(private val moduleName: R_ModuleName): R_SysFunctionEx_N() {
         override fun call(ctx: Rt_CallContext, args: List<Rt_Value>): Rt_Value {
             checkEquals(args.size, 0)
-            val res = ctx.chainCtx.moduleArgs[moduleName]
+            val res = ctx.appCtx.getModuleArgs(moduleName)
             return res ?: throw Rt_Exception.common(
                 "chain_context.args:no_module_args:$moduleName",
                 "No module args for module '$moduleName'",

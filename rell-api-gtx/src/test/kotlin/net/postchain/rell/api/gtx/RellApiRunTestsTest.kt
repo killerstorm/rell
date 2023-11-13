@@ -120,9 +120,11 @@ class RellApiRunTestsTest: BaseRellApiTest() {
         runConfig = runTestsConfig(configBuilder().moduleArgs("bar" to barArgs))
         chkRunTests(runConfig, sourceDir, listOf(), listOf(""), "CME:module_args_missing:foo")
         runConfig = runTestsConfig(configBuilder().moduleArgs("foo" to barArgs, "bar" to barArgs))
-        chkRunTests(runConfig, sourceDir, listOf(), listOf(""), "CME:module_args_bad:foo")
+        chkRunTests(runConfig, sourceDir, listOf(), listOf(""),
+            "CME:module_args_bad:foo:gtv_err:struct_nokey:foo:module_args:x")
         runConfig = runTestsConfig(configBuilder().moduleArgs("foo" to fooArgs, "bar" to fooArgs))
-        chkRunTests(runConfig, sourceDir, listOf(), listOf(""), "CME:module_args_bad:bar")
+        chkRunTests(runConfig, sourceDir, listOf(), listOf(""),
+            "CME:module_args_bad:bar:gtv_err:struct_nokey:bar:module_args:y")
         runConfig = runTestsConfig(configBuilder().moduleArgs("foo" to fooArgs, "bar" to barArgs))
         chkRunTests(runConfig, sourceDir, listOf(), listOf(""), "bar:test_2:OK", "foo:test_1:OK")
 
@@ -262,7 +264,7 @@ class RellApiRunTestsTest: BaseRellApiTest() {
             .onTestCaseFinished { actualList.add("${it.case.name}:${it.res}") }
             .build()
 
-        val res = RellApiGtxInternal.runTests(config2, options, sourceDir, rApp, appMods, apiRes.moduleArgs)
+        val res = RellApiGtxInternal.runTests(config2, options, sourceDir, rApp, appMods)
         val resList = res.getResults().map { "${it.case.name}:${it.res}" }
 
         assertEquals(actualList, resList)

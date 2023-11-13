@@ -83,7 +83,7 @@ class C_AppContext(
         }
 
         executor.onPass(C_CompilerPass.ABSTRACT) {
-            val mods = modulesBuilder.commit().map { it.module }
+            val mods = modulesBuilder.commit().map { it.descriptor }
             C_AbstractCompiler.compile(msgCtx, mods)
         }
 
@@ -183,6 +183,12 @@ class C_AppContext(
         val modules = modulesBuilder.commit()
         val rModules = modules.map { it.rModule }.toImmList()
 
+        val newModuleArgs = rModules
+            .mapNotNull {
+                if (it.moduleArgs == null || it.externalChain != null) null else (it.name to it.moduleArgs)
+            }
+            .toImmMap()
+
         val oldSqlDefs = oldReplState.sqlDefs
         val sqlDefs = R_AppSqlDefs(
                 entities = oldSqlDefs.entities + appDefs.entities.map { it.entity },
@@ -193,16 +199,17 @@ class C_AppContext(
         val rFnExtTable = functionExtTableLazy.toR()
 
         val rApp = R_App(
-                valid = valid,
-                uid = appUid,
-                modules = rModules,
-                operations = appOperationsMap,
-                queries = appQueriesMap,
-                constants = allConstants.commit(),
-                functionExtensions = rFnExtTable,
-                externalChainsRoot = externalChainsRoot,
-                externalChains = externalChains.values.map { it.ref },
-                sqlDefs = sqlDefs
+            valid = valid,
+            uid = appUid,
+            modules = rModules,
+            operations = appOperationsMap,
+            queries = appQueriesMap,
+            constants = allConstants.commit(),
+            moduleArgs = oldReplState.moduleArgs + newModuleArgs,
+            functionExtensions = rFnExtTable,
+            externalChainsRoot = externalChainsRoot,
+            externalChains = externalChains.values.map { it.ref },
+            sqlDefs = sqlDefs,
         )
         appLate.set(Optional.of(rApp))
 
@@ -221,10 +228,10 @@ class C_AppContext(
 
         val newPrecompiledModules = modules
                 .mapNotNull { module ->
-                    val ns = asmApp.modules[module.module.key]
+                    val ns = asmApp.modules[module.descriptor.key]
                     if (ns == null) null else {
-                        val preModule = C_PrecompiledModule(module.module, ns)
-                        module.module.key to preModule
+                        val preModule = C_PrecompiledModule(module.descriptor, ns)
+                        module.descriptor.key to preModule
                     }
                 }
                 .toMap()
@@ -234,14 +241,15 @@ class C_AppContext(
         resModules.putAllAbsent(newPrecompiledModules)
 
         val newReplState = C_ReplAppState(
-                asmApp.newReplState,
-                resModuleHeaders,
-                resModules,
-                sysDefs,
-                app.sqlDefs,
-                mntTables,
-                allConstants.commit(),
-                functionExtTableLazy
+            asmApp.newReplState,
+            resModuleHeaders,
+            resModules,
+            sysDefs,
+            app.sqlDefs,
+            mntTables,
+            allConstants.commit(),
+            app.moduleArgs,
+            functionExtTableLazy,
         )
 
         newReplStateLate.set(newReplState)
@@ -308,7 +316,7 @@ class C_AppContext(
     }
 
     private class C_AppModule(
-        val module: C_ModuleDescriptor,
+        val descriptor: C_ModuleDescriptor,
         val rModule: R_Module,
         val mntTables: C_MountTables,
     )
