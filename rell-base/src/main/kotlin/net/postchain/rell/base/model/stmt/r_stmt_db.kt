@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.model.stmt
@@ -133,6 +133,8 @@ class R_UpdateTarget_Object(private val entity: R_DbAtEntity): R_UpdateTarget() 
 class R_UpdateStatementWhat(val attr: R_Attribute, val expr: Db_Expr)
 
 sealed class R_BaseUpdateStatement(val target: R_UpdateTarget, val fromBlock: R_FrameBlock): R_Statement() {
+    // "returning" is always false, but it may be needed in the future (when update expression returning updated
+    // entities is supported), so keeping it.
     protected abstract fun buildSql(frame: Rt_CallFrame, ctx: SqlGenContext, returning: Boolean): ParameterizedSql
 
     fun executeSql(frame: Rt_CallFrame, entities: List<R_DbAtEntity>) {
@@ -144,13 +146,10 @@ sealed class R_BaseUpdateStatement(val target: R_UpdateTarget, val fromBlock: R_
     }
 
     fun executeSqlCount(frame: Rt_CallFrame, entities: List<R_DbAtEntity>): Int {
-        var count = 0
-        frame.block(fromBlock) {
+        val count: Int = frame.block(fromBlock) {
             val ctx = SqlGenContext.createTop(frame, entities)
-            val pSql = buildSql(frame, ctx, true)
-            pSql.executeQuery(frame.sqlExec) {
-                ++count
-            }
+            val pSql = buildSql(frame, ctx, false)
+            pSql.executeUpdate(frame.sqlExec)
         }
         return count
     }

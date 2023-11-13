@@ -776,6 +776,35 @@ class UpdateDeleteTest: BaseRellTest() {
         insert("c0.A", "id,b", "11,2,21")
     }
 
+    @Test fun testUpdateSql() {
+        def("entity user { name; mutable value: integer; }")
+        insert("c0.user", "name,value", "1,'Bob',123")
+
+        val sql = """UPDATE "c0.user" A00 SET "value" = ?"""
+        chkOpSql("update user @? {} ( .value = 500 );", sql)
+        chkOpSql("update user @  {} ( .value = 501 );", sql)
+        chkOpSql("update user @+ {} ( .value = 502 );", sql)
+        chkOpSql("update user @* {} ( .value = 503 );", sql)
+    }
+
+    @Test fun testDeleteSql() {
+        def("entity user { name; mutable value: integer; }")
+        insert("c0.user", "name,value", "1,'Bob',123")
+        insert("c0.user", "name,value", "2,'Alice',456")
+
+        val sql = """DELETE FROM "c0.user" A00 WHERE A00."name" = ?"""
+        chkOpSql("delete user @? { 'Trudy' };", sql)
+        chkOpSql("delete user @  { 'Bob'   };", sql)
+        chkOpSql("delete user @+ { 'Alice' };", sql)
+        chkOpSql("delete user @* { 'Trudy' };", sql)
+    }
+
+    private fun chkOpSql(code: String, sql: String) {
+        chkSql()
+        chkOp(code, "OK")
+        chkSql(sql)
+    }
+
     private fun resetChkOp(code: String, expected: String = "OK") {
         resetData()
         chkOp(code, expected)

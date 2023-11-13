@@ -196,6 +196,12 @@ class ParameterizedSql(val sql: String, params: List<Rt_Value>) {
         sqlExec.execute(sql, args::bind)
     }
 
+    fun executeUpdate(sqlExec: SqlExecutor): Int {
+        val args = calcArgs()
+        val res = sqlExec.executeUpdate(sql, args::bind)
+        return res
+    }
+
     fun executeQuery(sqlExec: SqlExecutor, consumer: (ResultSet) -> Unit) {
         val args = calcArgs()
         sqlExec.executeQuery(sql, args::bind, consumer)

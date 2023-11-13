@@ -118,6 +118,11 @@ abstract class SqlManager {
             sqlExec.execute(sql, preparator)
         }
 
+        override fun executeUpdate(sql: String, preparator: (PreparedStatement) -> Unit): Int {
+            check(valid)
+            return sqlExec.executeUpdate(sql, preparator)
+        }
+
         override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
             check(valid)
             sqlExec.executeQuery(sql, preparator, consumer)
@@ -134,6 +139,7 @@ abstract class SqlExecutor {
     abstract fun <T> connection(code: (Connection) -> T): T
     abstract fun execute(sql: String)
     abstract fun execute(sql: String, preparator: (PreparedStatement) -> Unit)
+    abstract fun executeUpdate(sql: String, preparator: (PreparedStatement) -> Unit): Int
     abstract fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit)
 }
 
@@ -155,6 +161,7 @@ object NoConnSqlExecutor: SqlExecutor() {
 
     override fun execute(sql: String) = throw err()
     override fun execute(sql: String, preparator: (PreparedStatement) -> Unit) = throw err()
+    override fun executeUpdate(sql: String, preparator: (PreparedStatement) -> Unit) = throw err()
     override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) = throw err()
 
     private fun err() = Rt_Exception.common("no_sql", "No database connection")
@@ -236,6 +243,16 @@ class ConnectionSqlExecutor(private val con: Connection, private val conLogger: 
                 stmt.execute()
             }
         }
+    }
+
+    override fun executeUpdate(sql: String, preparator: (PreparedStatement) -> Unit): Int {
+        val res = execute0(sql) { con ->
+            con.prepareStatement(sql).use { stmt ->
+                preparator(stmt)
+                stmt.executeUpdate()
+            }
+        }
+        return res
     }
 
     override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {

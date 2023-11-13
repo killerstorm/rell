@@ -9,6 +9,7 @@ import net.postchain.rell.base.utils.CfResult
 import org.junit.Test
 import kotlin.test.assertEquals
 
+//TODO test cyclic job dependency
 class CalcFlowTest {
     @Test fun test() {
         chkFibonacci(0, 0)

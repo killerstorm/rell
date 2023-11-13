@@ -117,6 +117,12 @@ class Rt_SqlExecutor(private val sqlExec: SqlExecutor, private val logErrors: Bo
         }
     }
 
+    override fun executeUpdate(sql: String, preparator: (PreparedStatement) -> Unit): Int {
+        return wrapErr(sql) {
+            sqlExec.executeUpdate(sql, preparator)
+        }
+    }
+
     override fun executeQuery(sql: String, preparator: (PreparedStatement) -> Unit, consumer: (ResultSet) -> Unit) {
         wrapErr(sql) {
             sqlExec.executeQuery(sql, preparator, consumer)
