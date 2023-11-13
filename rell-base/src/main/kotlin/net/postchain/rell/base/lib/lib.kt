@@ -82,10 +82,11 @@ object C_SystemLibrary {
 
     fun getScope(testLib: Boolean, hiddenLib: Boolean, extraMod: C_LibModule?): C_SysLibScope {
         val cfg = C_SysLibConfig(testLib = testLib, hiddenLib = hiddenLib, extraMod = extraMod)
-        val res = CACHE.computeIfAbsent(cfg) {
-            createScope(cfg)
+        return synchronized(this) {
+            CACHE.computeIfAbsent(cfg) {
+                createScope(cfg)
+            }
         }
-        return res
     }
 
     private fun createScope(cfg: C_SysLibConfig): C_SysLibScope {

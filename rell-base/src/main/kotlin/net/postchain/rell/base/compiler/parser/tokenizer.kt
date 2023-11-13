@@ -60,8 +60,6 @@ class RellTokenizer(tokensEx: List<RellToken>) : Tokenizer {
 
     override val tokens = tokensEx.map { it.token }
 
-    private val buffer = StringBuilder()
-
     init {
         require(tokens.isNotEmpty()) { "The tokens list should not be empty" }
 
@@ -287,7 +285,7 @@ class RellTokenizer(tokensEx: List<RellToken>) : Tokenizer {
         val q = seq.cur()
         seq.next()
 
-        val buf = buffer
+        val buf = seq.buffer
         buf.setLength(0)
 
         while (true) {
@@ -355,7 +353,7 @@ class RellTokenizer(tokensEx: List<RellToken>) : Tokenizer {
         val q = seq.cur()
         seq.next()
 
-        val buf = buffer
+        val buf = seq.buffer
         buf.setLength(0)
 
         while (true) {
@@ -561,6 +559,8 @@ private class CharSeq(private val str: String) {
     private var startPos = 0
     private var startRow = 1
     private var startCol = 1
+
+    val buffer = StringBuilder()
 
     init {
         update()
