@@ -180,24 +180,24 @@ class Db_UnaryExpr(type: R_Type, val op: Db_UnaryOp, val expr: Db_Expr): Db_Expr
 
 sealed class Db_TableExpr(val rEntity: R_EntityDefinition): Db_Expr(rEntity.type) {
     abstract fun alias(ctx: SqlGenContext): SqlTableAlias
-
-    final override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
-        return RedDb_TableExpr(this)
-    }
-
-    private class RedDb_TableExpr(val tableExpr: Db_TableExpr): RedDb_Expr() {
-        override fun needsEnclosing() = false
-
-        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
-            val alias = tableExpr.alias(ctx)
-            val rowidCol = tableExpr.rEntity.sqlMapping.rowidColumn()
-            bld.appendColumn(alias, rowidCol)
-        }
-    }
 }
 
 class Db_EntityExpr(val entity: R_DbAtEntity): Db_TableExpr(entity.rEntity) {
     override fun alias(ctx: SqlGenContext) = ctx.getEntityAlias(entity)
+
+    override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
+        return RedDb_EntityExpr(this)
+    }
+
+    private class RedDb_EntityExpr(val entityExpr: Db_EntityExpr): RedDb_Expr() {
+        override fun needsEnclosing() = false
+
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
+            val alias = entityExpr.alias(ctx)
+            val rowidCol = entityExpr.rEntity.sqlMapping.rowidColumn()
+            bld.appendColumn(alias, rowidCol)
+        }
+    }
 }
 
 class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attribute, targetEntity: R_EntityDefinition)
@@ -206,6 +206,19 @@ class Db_RelExpr(val base: Db_TableExpr, val attr: R_Attribute, targetEntity: R_
     override fun alias(ctx: SqlGenContext): SqlTableAlias {
         val baseAlias = base.alias(ctx)
         return ctx.getRelAlias(baseAlias, attr, rEntity)
+    }
+
+    override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
+        return RedDb_RelExpr(base, attr)
+    }
+
+    private class RedDb_RelExpr(val base: Db_TableExpr, val attr: R_Attribute): RedDb_Expr() {
+        override fun needsEnclosing() = false
+
+        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
+            val alias = base.alias(ctx)
+            bld.appendColumn(alias, attr.sqlMapping)
+        }
     }
 }
 
@@ -227,17 +240,7 @@ class Db_AttrExpr(val base: Db_TableExpr, val attr: R_Attribute): Db_Expr(attr.t
 
 class Db_RowidExpr(val base: Db_TableExpr): Db_Expr(C_EntityAttrRef.ROWID_TYPE) {
     override fun toRedExpr(frame: Rt_CallFrame): RedDb_Expr {
-        return RedDb_RowidExpr(base)
-    }
-
-    private class RedDb_RowidExpr(val base: Db_TableExpr): RedDb_Expr() {
-        override fun needsEnclosing() = false
-
-        override fun toSql0(ctx: SqlGenContext, bld: SqlBuilder) {
-            val alias = base.alias(ctx)
-            val col = alias.entity.sqlMapping.rowidColumn()
-            bld.appendColumn(alias, col)
-        }
+        return base.toRedExpr(frame)
     }
 }
 
