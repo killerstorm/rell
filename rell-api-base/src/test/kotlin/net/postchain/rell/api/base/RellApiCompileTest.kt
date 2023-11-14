@@ -292,7 +292,7 @@ class RellApiCompileTest: BaseRellApiTest() {
 
         val fooEntry = file(sourceDir, "foo.rell")
         val barEntry = file(sourceDir, "bar.rell")
-        val verEntry = """"version":"0.14.0""""
+        val verEntry = """"version":"${RellTestUtils.RELL_VER}""""
 
         var config = defaultConfig
         chkCompileGtv(config, sourceDir, "foo", "CME:module_args_missing:foo")
