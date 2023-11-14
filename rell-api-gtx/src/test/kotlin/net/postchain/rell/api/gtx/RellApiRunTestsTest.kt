@@ -6,7 +6,6 @@ package net.postchain.rell.api.gtx
 
 import net.postchain.gtv.GtvFactory
 import net.postchain.rell.api.base.BaseRellApiTest
-import net.postchain.rell.api.base.RellApiBaseInternal
 import net.postchain.rell.api.base.RellApiCompile
 import net.postchain.rell.base.compiler.base.utils.C_CommonError
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
@@ -144,7 +143,7 @@ class RellApiRunTestsTest: BaseRellApiTest() {
 
         var runConfig = runTestsDbConfig()
         chkRunTests(runConfig, sourceDir, listOf(), listOf("test"), "test:test:OK")
-        runConfig = runConfig.toBuilder().addTestDependenciesToBlockRunModules(false).build()
+        runConfig = runConfig.toBuilder().activateTestDependencies(false).build()
         chkRunTests(runConfig, sourceDir, listOf(), listOf("test"), "test:test:FAILED")
         chkRunTests(runConfig, sourceDir, listOf("lib"), listOf("test"), "test:test:OK")
     }
@@ -177,24 +176,91 @@ class RellApiRunTestsTest: BaseRellApiTest() {
         chkRunTests(runConfig, sourceDir, listOf("lib"), listOf("test"), "test:test:FAILED")
     }
 
-    @Test fun testRunTestsFunctionExtend() {
-        val sourceDir = C_SourceDir.mapDirOf(
-            "f.rell" to "module; @extendable function f(): list<text> = ['f'];",
-            "g.rell" to "module; import f.*; @extend(f) function g() = ['g'];",
-            "h.rell" to "module; import f.*; @extend(f) function h() = ['h'];",
-            "test.rell" to "@test module; import f; import g; import h; function test() { print(f.f()); }",
+    @Test fun testFunctionExtendCallFromTest() {
+        val sourceDir = initFnExtendSourceDir(
+            "app.rell" to "module;",
+            "test.rell" to """
+                @test module;
+                import f; import g; import h;
+                function test() { print(f.f()); }
+            """,
         )
 
-        val config = configBuilder().appModuleInTestsError(false).build()
+        chkFnExtendDepsYes(sourceDir, null)
+        chkFnExtendDepsYes(sourceDir, true)
+        chkFnExtendDepsNo(sourceDir)
+    }
 
-        chkRunTestsFnExtend(config, sourceDir, listOf(), listOf("test"), "[f]")
-        chkRunTestsFnExtend(config, sourceDir, listOf("g"), listOf("test"), "[g, f]")
-        chkRunTestsFnExtend(config, sourceDir, listOf("h"), listOf("test"), "[h, f]")
-        chkRunTestsFnExtend(config, sourceDir, listOf("g", "h"), listOf("test"), "[g, h, f]")
-        chkRunTestsFnExtend(config, sourceDir, listOf(), listOf("g", "h", "test"), "[f]")
-        chkRunTestsFnExtend(config, sourceDir, listOf("g"), listOf("g", "h", "test"), "[g, f]")
-        chkRunTestsFnExtend(config, sourceDir, listOf("h"), listOf("g", "h", "test"), "[h, f]")
-        chkRunTestsFnExtend(config, sourceDir, listOf("g", "h"), listOf("g", "h", "test"), "[g, h, f]")
+    @Test fun testFunctionExtendCallFromOperation() {
+        val sourceDir = initFnExtendSourceDir(
+            "app.rell" to "module; import f; operation op() { print(f.f()); }",
+            "test.rell" to """
+                @test module;
+                import app; import g; import h;
+                function test() { app.op().run(); }
+            """,
+        )
+
+        chkFnExtendDepsYes(sourceDir, null)
+        chkFnExtendDepsYes(sourceDir, true)
+
+        chkFnExtend(false, sourceDir, listOf(), listOf("test"), err = true)
+        chkFnExtendDepsNo(sourceDir)
+    }
+
+    private fun initFnExtendSourceDir(vararg extra: Pair<String, String>): C_SourceDir {
+        return C_SourceDir.mapDirOf(
+            "f/a.rell" to "@extendable function f(): list<text> = ['f'];",
+            "f/b.rell" to "@extend(f) function e() = ['e'];",
+            "g.rell" to "module; import f.*; @extend(f) function g() = ['g'];",
+            "h.rell" to "module; import f.*; @extend(f) function h() = ['h'];",
+            *extra,
+        )
+    }
+
+    private fun chkFnExtendDepsYes(sourceDir: C_SourceDir, useTestDeps: Boolean?) {
+        chkFnExtend(useTestDeps, sourceDir, listOf(), listOf("test"), "[e, g, h, f]")
+        chkFnExtend(useTestDeps, sourceDir, listOf("g"), listOf("test"), "[g, e, h, f]")
+        chkFnExtend(useTestDeps, sourceDir, listOf("h"), listOf("test"), "[h, e, g, f]")
+        chkFnExtend(useTestDeps, sourceDir, listOf("g", "h"), listOf("test"), "[g, e, h, f]")
+        chkFnExtend(useTestDeps, sourceDir, listOf(), listOf("g", "h", "test"), "[e, g, h, f]")
+        chkFnExtend(useTestDeps, sourceDir, listOf("g"), listOf("g", "h", "test"), "[g, e, h, f]")
+        chkFnExtend(useTestDeps, sourceDir, listOf("h"), listOf("g", "h", "test"), "[h, e, g, f]")
+        chkFnExtend(useTestDeps, sourceDir, listOf("g", "h"), listOf("g", "h", "test"), "[g, e, h, f]")
+    }
+
+    private fun chkFnExtendDepsNo(sourceDir: C_SourceDir) {
+        chkFnExtend(false, sourceDir, listOf("app"), listOf("test"), "[e, f]")
+        chkFnExtend(false, sourceDir, listOf("g", "app"), listOf("test"), "[g, e, f]")
+        chkFnExtend(false, sourceDir, listOf("h", "app"), listOf("test"), "[h, e, f]")
+        chkFnExtend(false, sourceDir, listOf("g", "h", "app"), listOf("test"), "[g, e, h, f]")
+        chkFnExtend(false, sourceDir, listOf("app"), listOf("g", "h", "test"), "[e, f]")
+        chkFnExtend(false, sourceDir, listOf("g", "app"), listOf("g", "h", "test"), "[g, e, f]")
+        chkFnExtend(false, sourceDir, listOf("h", "app"), listOf("g", "h", "test"), "[h, e, f]")
+        chkFnExtend(false, sourceDir, listOf("g", "h", "app"), listOf("g", "h", "test"), "[g, e, h, f]")
+    }
+
+    private fun chkFnExtend(
+        useTestDeps: Boolean?,
+        sourceDir: C_SourceDir,
+        appModules: List<String>?,
+        testModules: List<String>,
+        vararg expectedOut: String,
+        err: Boolean = false,
+    ) {
+        val compileConfig = configBuilder().appModuleInTestsError(false).build()
+
+        val printer = Rt_TestPrinter()
+
+        val runConfig = runTestsDbConfig().toBuilder()
+            .compileConfig(compileConfig)
+            .outPrinter(printer)
+            .also { if (useTestDeps != null) it.activateTestDependencies(useTestDeps) }
+            .build()
+
+        val expRes = if (err) "test:test:FAILED" else "test:test:OK"
+        chkRunTests(runConfig, sourceDir, appModules, testModules, expRes)
+        printer.chk(*expectedOut)
     }
 
     private fun runTestsConfig(
@@ -208,22 +274,6 @@ class RellApiRunTestsTest: BaseRellApiTest() {
         return RellApiRunTests.Config.Builder()
             .databaseUrl(SqlTestUtils.getDbUrl())
             .build()
-    }
-
-    private fun chkRunTestsFnExtend(
-        compileConfig: RellApiCompile.Config,
-        sourceDir: C_SourceDir,
-        appModules: List<String>?,
-        testModules: List<String>,
-        expectedOut: String,
-    ) {
-        val printer = Rt_TestPrinter()
-        val runConfig = RellApiRunTests.Config.Builder()
-            .compileConfig(compileConfig)
-            .outPrinter(printer)
-            .build()
-        chkRunTests(runConfig, sourceDir, appModules, testModules, "test:test:OK")
-        printer.chk(expectedOut)
     }
 
     private fun chkRunTests(
@@ -246,7 +296,7 @@ class RellApiRunTestsTest: BaseRellApiTest() {
         val appMods = appModules?.map { R_ModuleName.of(it) }
         val testMods = testModules.map { R_ModuleName.of(it) }
 
-        val options = RellApiBaseInternal.makeCompilerOptions(config.compileConfig)
+        val options = RellApiGtxInternal.makeRunTestsCompilerOptions(config)
 
         val apiRes = try {
             compileApp0(config.compileConfig, options, sourceDir, appMods, testMods)

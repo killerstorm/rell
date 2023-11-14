@@ -182,6 +182,7 @@ class C_CompilerOptions(
     val ideDefIdConflictError: Boolean,
     val mountConflictError: Boolean,
     val appModuleInTestsError: Boolean,
+    val useTestDependencyExtensions: Boolean,
 ) {
     fun toBuilder() = Builder(this)
 
@@ -197,6 +198,7 @@ class C_CompilerOptions(
                 "complexWhatEnabled" to complexWhatEnabled,
                 "mountConflictError" to mountConflictError,
                 "appModuleInTestsError" to appModuleInTestsError,
+                "useTestDependencyExtensions" to useTestDependencyExtensions,
         )
         if (symbolInfoFile != null) map["symbolInfoFile"] = symbolInfoFile.str()
         if (ideDefIdConflictError != DEFAULT.ideDefIdConflictError) map["ideDefIdConflictError"] = ideDefIdConflictError
@@ -220,6 +222,7 @@ class C_CompilerOptions(
                 ideDefIdConflictError = false,
                 mountConflictError = true,
                 appModuleInTestsError = false,
+                useTestDependencyExtensions = false,
         )
 
         @JvmStatic fun builder() = Builder()
@@ -244,6 +247,8 @@ class C_CompilerOptions(
                     ideDefIdConflictError = getBoolOpt(map, "ideDefIdConflictError", DEFAULT.ideDefIdConflictError),
                     mountConflictError = getBoolOpt(map, "mountConflictError", DEFAULT.mountConflictError),
                     appModuleInTestsError = getBoolOpt(map, "appModuleInTestsError", DEFAULT.appModuleInTestsError),
+                    useTestDependencyExtensions =
+                            getBoolOpt(map, "useTestDependencyExtensions", DEFAULT.useTestDependencyExtensions),
             )
         }
 
@@ -269,6 +274,7 @@ class C_CompilerOptions(
         private var ideDefIdConflictError = proto.ideDefIdConflictError
         private var mountConflictError = proto.mountConflictError
         private var appModuleInTestsError = proto.appModuleInTestsError
+        private var useTestDependencyExtensions = proto.useTestDependencyExtensions
 
         @Suppress("UNUSED") fun compatibility(v: R_LangVersion) = apply { compatibility = v }
         @Suppress("UNUSED") fun gtv(v: Boolean) = apply { gtv = v }
@@ -284,6 +290,7 @@ class C_CompilerOptions(
         @Suppress("UNUSED") fun ideDefIdConflictError(v: Boolean) = apply { ideDefIdConflictError = v }
         @Suppress("UNUSED") fun mountConflictError(v: Boolean) = apply { mountConflictError = v }
         @Suppress("UNUSED") fun appModuleInTestsError(v: Boolean) = apply { appModuleInTestsError = v }
+        @Suppress("UNUSED") fun useTestDependencyExtensions(v: Boolean) = apply { useTestDependencyExtensions = v }
 
         fun build() = C_CompilerOptions(
                 compatibility = compatibility,
@@ -300,6 +307,7 @@ class C_CompilerOptions(
                 ideDefIdConflictError = ideDefIdConflictError,
                 mountConflictError = mountConflictError,
                 appModuleInTestsError = appModuleInTestsError,
+                useTestDependencyExtensions = useTestDependencyExtensions,
         )
     }
 }

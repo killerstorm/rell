@@ -404,10 +404,11 @@ private class C_FunctionCompiler_Extendable(
 
         val simpleName = compileSimpleName(defCtx)
         val fullName = if (simpleName != null) defCtx.nsCtx.getFullName(simpleName.rName) else null
+        val moduleName = defCtx.modCtx.moduleName
 
         val baseExt = if (sFn.body == null) null else R_FunctionExtension(rFnBase)
         val extFnUid = defCtx.appCtx.extendableFunctionCompiler.addExtendableFunction(cDefBase.appLevelName, baseExt)
-        val cFn = C_ExtendableUserGlobalFunction(defCtx.appCtx, rFn, extFnUid, fullName, typePos)
+        val cFn = C_ExtendableUserGlobalFunction(defCtx.appCtx, rFn, extFnUid, moduleName, fullName, typePos)
 
         registerFunction(defCtx, simpleName, cFn)
 
@@ -468,9 +469,14 @@ private class C_FunctionCompiler_Extend(
                 val nameCode = nameErrCode()
                 "fn_extend:$nameCode" toCodeMsg "extend function"
             }
-            if (ok && !defCtx.modCtx.isTestDependency) {
-                val ext = R_FunctionExtension(rFnBase)
-                defCtx.appCtx.extendableFunctionCompiler.addExtension(cExtDescriptor.uid, ext)
+            if (ok) {
+                val sameModule = defCtx.modCtx.moduleName == cExtDescriptor.moduleName
+                val isTestDep = defCtx.modCtx.isTestDependency
+                val useTestDep = defCtx.globalCtx.compilerOptions.useTestDependencyExtensions
+                if (sameModule || !isTestDep || useTestDep) {
+                    val ext = R_FunctionExtension(rFnBase)
+                    defCtx.appCtx.extendableFunctionCompiler.addExtension(cExtDescriptor.uid, ext)
+                }
             }
         }
 

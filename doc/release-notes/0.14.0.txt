@@ -220,3 +220,13 @@ Useful when there is a need to insert many records of the same type at once - in
 statement. If the list is empty, no SQL is executed.
 
 Returns the list of inserted entities, same size and same order as the input list.
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+12. Runtime: Better function extensions activation rules in unit tests
+
+What changed:
+
+1. In unit tests, active function extensions for test functions and for block operations are now the same.
+2. New Rell API option "activateTestDependencies" controls if extensions imported only from tests are active
+   (by default yes).
+3. Extensions defined in the same module as the corresponding extendable function are always active.

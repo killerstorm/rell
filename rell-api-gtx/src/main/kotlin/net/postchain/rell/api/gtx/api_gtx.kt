@@ -13,7 +13,10 @@ import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.lib.test.Lib_RellTest
 import net.postchain.rell.base.model.R_App
 import net.postchain.rell.base.model.R_ModuleName
-import net.postchain.rell.base.runtime.*
+import net.postchain.rell.base.runtime.Rt_GtvModuleArgsSource
+import net.postchain.rell.base.runtime.Rt_LogPrinter
+import net.postchain.rell.base.runtime.Rt_OutPrinter
+import net.postchain.rell.base.runtime.Rt_Printer
 import net.postchain.rell.base.sql.SqlInitLogging
 import net.postchain.rell.base.utils.*
 import java.io.File
@@ -47,8 +50,9 @@ object RellApiRunTests {
         val rTestModules = testModules.map { R_ModuleName.of(it) }.toImmList()
 
         val compileConfig = config.compileConfig
-        val options = RellApiBaseInternal.makeCompilerOptions(compileConfig)
+        val options = RellApiGtxInternal.makeRunTestsCompilerOptions(config)
         val (_, app) = RellApiBaseInternal.compileApp(compileConfig, options, cSourceDir, rAppModules, rTestModules)
+
         return RellApiGtxInternal.runTests(config, options, cSourceDir, app, rAppModules)
     }
 
@@ -73,8 +77,9 @@ object RellApiRunTests {
         val logPrinter: Rt_Printer,
         /** Print test case names and results during the execution. */
         val printTestCases: Boolean,
-        /** Add dependencies of test modules to the active modules available during block execution (default: `true`). */
-        val addTestDependenciesToBlockRunModules: Boolean,
+        /** Add dependencies of test modules to the set of active modules of the app (default: `true`).
+         * Affects available operations and function extensions. */
+        val activateTestDependencies: Boolean,
         /** Test case start callback. */
         val onTestCaseStart: (UnitTestCase) -> Unit,
         /** Test case finished callback. */
@@ -94,7 +99,7 @@ object RellApiRunTests {
                 outPrinter = Rt_OutPrinter,
                 logPrinter = Rt_LogPrinter(),
                 printTestCases = true,
-                addTestDependenciesToBlockRunModules = true,
+                activateTestDependencies = true,
                 onTestCaseStart = {},
                 onTestCaseFinished = {},
             )
@@ -111,7 +116,7 @@ object RellApiRunTests {
             private var outPrinter = proto.outPrinter
             private var logPrinter = proto.logPrinter
             private var printTestCases = proto.printTestCases
-            private var addTestDependenciesToBlockRunModules = proto.addTestDependenciesToBlockRunModules
+            private var activateTestDependencies = proto.activateTestDependencies
             private var onTestCaseStart = proto.onTestCaseStart
             private var onTestCaseFinished = proto.onTestCaseFinished
 
@@ -145,8 +150,8 @@ object RellApiRunTests {
             /** @see [Config.printTestCases] */
             fun printTestCases(v: Boolean) = apply { printTestCases = v }
 
-            /** @see [Config.addTestDependenciesToBlockRunModules]  */
-            fun addTestDependenciesToBlockRunModules(v: Boolean) = apply { addTestDependenciesToBlockRunModules = v }
+            /** @see [Config.activateTestDependencies]  */
+            fun activateTestDependencies(v: Boolean) = apply { activateTestDependencies = v }
 
             /** @see [Config.onTestCaseStart] */
             fun onTestCaseStart(v: (UnitTestCase) -> Unit) = apply { onTestCaseStart = v }
@@ -166,7 +171,7 @@ object RellApiRunTests {
                     outPrinter = outPrinter,
                     logPrinter = logPrinter,
                     printTestCases = printTestCases,
-                    addTestDependenciesToBlockRunModules = addTestDependenciesToBlockRunModules,
+                    activateTestDependencies = activateTestDependencies,
                     onTestCaseStart = onTestCaseStart,
                     onTestCaseFinished = onTestCaseFinished,
                 )
@@ -243,7 +248,7 @@ object RellApiGtxInternal {
 
         val mainModules = when {
             appModules == null -> null
-            config.addTestDependenciesToBlockRunModules -> (appModules + RellApiBaseUtils.getMainModules(app)).toSet().toImmList()
+            config.activateTestDependencies -> (appModules + RellApiBaseUtils.getMainModules(app)).toSet().toImmList()
             else -> appModules
         }
 
@@ -257,5 +262,12 @@ object RellApiGtxInternal {
 
         val blockRunnerStrategy = Rt_DynamicBlockRunnerStrategy(sourceDir, keyPair, mainModules, gtvCompileConfig)
         return Rt_PostchainUnitTestBlockRunner(keyPair, blockRunnerCfg, blockRunnerStrategy)
+    }
+
+    fun makeRunTestsCompilerOptions(config: RellApiRunTests.Config): C_CompilerOptions {
+        return RellApiBaseInternal.makeCompilerOptions(config.compileConfig)
+            .toBuilder()
+            .useTestDependencyExtensions(config.activateTestDependencies)
+            .build()
     }
 }

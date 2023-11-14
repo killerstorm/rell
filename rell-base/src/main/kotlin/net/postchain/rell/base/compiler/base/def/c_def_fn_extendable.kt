@@ -22,6 +22,7 @@ import net.postchain.rell.base.utils.toImmList
 
 class C_ExtendableFunctionDescriptor(
     val uid: R_ExtendableFunctionUid,
+    val moduleName: R_ModuleName,
     val fullName: R_FullName?,
     private val headerGetter: C_LateGetter<C_UserFunctionHeader>,
 ) {
@@ -60,12 +61,13 @@ class C_ExtendableUserGlobalFunction(
     appCtx: C_AppContext,
     rFunction: R_FunctionDefinition,
     private val extFnUid: R_ExtendableFunctionUid,
+    moduleName: R_ModuleName,
     fullName: R_FullName?,
     private val typePos: S_Pos,
 ): C_UserGlobalFunction(rFunction) {
     private val msgCtx = appCtx.msgCtx
 
-    private val descriptor = C_ExtendableFunctionDescriptor(extFnUid, fullName, headerGetter)
+    private val descriptor = C_ExtendableFunctionDescriptor(extFnUid, moduleName, fullName, headerGetter)
 
     private val rDescriptorLazy: R_ExtendableFunctionDescriptor by lazy {
         val combiner = compileCombiner()

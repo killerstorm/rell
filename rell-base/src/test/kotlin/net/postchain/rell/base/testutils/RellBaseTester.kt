@@ -134,6 +134,7 @@ abstract class RellBaseTester(
             ideDefIdConflictError = ideDefIdConflictError,
             mountConflictError = true,
             appModuleInTestsError = false,
+            useTestDependencyExtensions = false,
     )
 
     fun def(defs: List<String>) {
