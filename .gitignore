@@ -10,3 +10,4 @@ META-INF
 */.attach_pid*
 /out
 /postchain.pid
+/.test

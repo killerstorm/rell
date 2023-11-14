@@ -131,6 +131,11 @@ abstract class C_SourceDir {
         fun diskDir(dir: File): C_SourceDir {
             return C_CachedSourceDir(C_DiskSourceDir(dir))
         }
+
+        @JvmStatic
+        fun uncachedDiskDir(dir: File): C_SourceDir {
+            return C_DiskSourceDir(dir)
+        }
     }
 }
 
@@ -192,7 +197,7 @@ private class C_MapSourceDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDi
     companion object {
         private fun buildTree(map: Map<C_SourcePath, C_SourceFile>): DirNode {
             for (path in map.keys) {
-                check(!path.parts.isEmpty())
+                check(path.parts.isNotEmpty())
             }
             return buildTree(map, 0)
         }
@@ -221,12 +226,12 @@ private class C_MapSourceDir(files: Map<C_SourcePath, C_SourceFile>): C_SourceDi
 private class C_DiskSourceDir(private val dir: File): C_SourceDir() {
     override fun dir(path: C_SourcePath): Boolean {
         val file = toFile(path)
-        return file.isDirectory
+        return file != null && file.isDirectory
     }
 
     override fun file(path: C_SourcePath): C_SourceFile? {
         val file = toFile(path)
-        return if (file.isFile) C_DiskSourceFile(file, path) else null
+        return if (file != null && file.isFile) C_DiskSourceFile(file, path) else null
     }
 
     override fun dirs(path: C_SourcePath): List<String> {
@@ -239,13 +244,18 @@ private class C_DiskSourceDir(private val dir: File): C_SourceDir() {
 
     private fun members(path: C_SourcePath, filter: (File) -> Boolean): List<String> {
         val file = toFile(path)
-        val files = file.listFiles() ?: arrayOf<File>()
+        val files = file?.listFiles() ?: arrayOf<File>()
         return files.filter(filter).map { it.name }.sorted()
     }
 
-    private fun toFile(path: C_SourcePath): File {
-        val pathStr = path.str()
-        return File(dir, pathStr)
+    private fun toFile(path: C_SourcePath): File? {
+        var curFile = dir
+        for (part in path.parts) {
+            val files = curFile.list()
+            if (files == null || part !in files) return null
+            curFile = File(curFile, part)
+        }
+        return curFile
     }
 
     private class C_DiskSourceFile(private val file: File, private val sourcePath: C_SourcePath): C_SourceFile() {
