@@ -69,7 +69,7 @@ class RellCodeTester(
                 compilerOptions,
                 Rt_FailingPrinter,
                 Rt_FailingPrinter,
-                logSqlErrors = true,
+                logSqlErrors = false,
                 typeCheck = true,
         )
     }

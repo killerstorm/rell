@@ -1,0 +1,34 @@
+module;
+
+function pow_slow(base: big_integer, exp: integer): big_integer {
+    require(base >= 0);
+    require(exp >= 0);
+    if (exp == 0) return 1;
+    if (exp == 1) return base;
+    if (base == 0 or base == 1) return base;
+
+    var res = 1L;
+    for (i in range(exp)) res *= base;
+    return res;
+}
+
+function pow(base: big_integer, exp: integer): big_integer {
+    require(base >= 0);
+    require(exp >= 0);
+    if (exp == 0) return 1;
+    if (exp == 1) return base;
+    if (base == 0 or base == 1) return base;
+
+    var res = 1L;
+    var k = base;
+    var e = exp;
+
+    while (true) {
+        if ((e % 2) != 0) res *= k;
+        e /= 2;
+        if (e == 0) break;
+        k *= k;
+    }
+
+    return res;
+}

@@ -175,11 +175,13 @@ object Rt_UnitValue: Rt_Value() {
 class Rt_BooleanValue private constructor(val value: Boolean): Rt_Value() {
     override val valueType = Rt_CoreValueTypes.BOOLEAN.type()
 
+    private val strCode = "boolean[$value]"
+
     override fun type() = R_BooleanType
     override fun asBoolean() = value
     override fun toFormatArg() = value
-    override fun strCode(showTupleFieldNames: Boolean) = "boolean[$value]"
-    override fun str() = "" + value
+    override fun strCode(showTupleFieldNames: Boolean) = strCode
+    override fun str() = if (value) "true" else "false"
     override fun equals(other: Any?) = other is Rt_BooleanValue && value == other.value
     override fun hashCode() = java.lang.Boolean.hashCode(value)
 

@@ -10,6 +10,7 @@ import net.postchain.rell.base.lmodel.L_ParamArity
 import net.postchain.rell.base.lmodel.dsl.Ld_NamespaceDsl
 import net.postchain.rell.base.model.R_IntegerType
 import net.postchain.rell.base.runtime.*
+import net.postchain.rell.base.sql.SqlConstants
 import java.math.BigDecimal
 import java.math.BigInteger
 
@@ -116,6 +117,27 @@ object Lib_Type_Integer {
                 }
             }
 
+            function("pow", result = "integer", pure = true) {
+                param(name = "exponent", type = "integer")
+                dbFunctionSimple(fnSimpleName, SqlConstants.FN_INTEGER_POWER)
+                body { a, b ->
+                    val base = a.asInteger()
+                    val exp = b.asInteger()
+                    val res = Lib_BigIntegerMath.genericPower(fnSimpleName, base, exp, Lib_BigIntegerMath.NumericType_Long)
+                    Rt_IntValue.get(res)
+                }
+            }
+
+            function("sign", "integer", pure = true) {
+                alias("signum", C_MessageType.ERROR)
+                dbFunctionSimple("sign", "SIGN")
+                body { a ->
+                    val v = a.asInteger()
+                    val r = java.lang.Long.signum(v).toLong()
+                    Rt_IntValue.get(r)
+                }
+            }
+
             function("to_big_integer", "big_integer") {
                 bodyRaw(Lib_Type_BigInteger.FromInteger)
             }
@@ -152,16 +174,6 @@ object Lib_Type_Integer {
                 body { a ->
                     val v = a.asInteger()
                     Rt_TextValue.get(java.lang.Long.toHexString(v))
-                }
-            }
-
-            function("sign", "integer", pure = true) {
-                alias("signum", C_MessageType.ERROR)
-                dbFunctionSimple("sign", "SIGN")
-                body { a ->
-                    val v = a.asInteger()
-                    val r = java.lang.Long.signum(v).toLong()
-                    Rt_IntValue.get(r)
                 }
             }
         }

@@ -11,8 +11,7 @@ import java.io.Closeable
 import java.sql.Connection
 import java.sql.PreparedStatement
 import java.sql.ResultSet
-import java.util.ArrayDeque
-import java.util.Queue
+import java.util.*
 import kotlin.test.assertEquals
 
 class RellTestContext(
@@ -98,7 +97,7 @@ class RellTestContext(
 
     private fun createSqlManager(conn: Connection): SqlMgrHolder {
         val innerMgr = ConnectionSqlManager(conn, sqlLogging)
-        val outerMgr = Rt_SqlManager(TestSqlManager(innerMgr, sqlStats), true)
+        val outerMgr = Rt_SqlManager(TestSqlManager(innerMgr, sqlStats), logErrors = false)
         return SqlMgrHolder(innerMgr, outerMgr)
     }
 

@@ -4,6 +4,7 @@
 
 package net.postchain.rell.base.lib.type
 
+import com.google.common.math.LongMath
 import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.lib.Lib_Math
@@ -38,6 +39,8 @@ object Lib_Type_BigInteger {
 
     private val BIGINT_MIN_LONG = BigInteger.valueOf(Long.MIN_VALUE)
     private val BIGINT_MAX_LONG = BigInteger.valueOf(Long.MAX_VALUE)
+
+    private val BIGINT_MINUS_ONE = BigInteger.ONE.negate()
 
     val NAMESPACE = Ld_NamespaceDsl.make {
         type("big_integer", rType = R_BigIntegerType) {
@@ -132,6 +135,24 @@ object Lib_Type_BigInteger {
                     val v2 = b.asDecimal()
                     val r = v1.toBigDecimal().max(v2)
                     Rt_DecimalValue.get(r)
+                }
+            }
+
+            function("pow", result = "big_integer", pure = true) {
+                param(name = "exponent", type = "integer")
+                dbFunctionSimple(fnSimpleName, SqlConstants.FN_BIGINTEGER_POWER)
+                body { a, b ->
+                    val base = a.asBigInteger()
+                    val exp = b.asInteger()
+
+                    val res = Lib_BigIntegerMath.genericPower(
+                        fnSimpleName,
+                        base,
+                        exp,
+                        Lib_BigIntegerMath.NumericType_BigInteger
+                    )
+
+                    Rt_BigIntegerValue.get(res)
                 }
             }
 
@@ -261,5 +282,81 @@ object Lib_BigIntegerMath {
 
     fun remainder(a: BigInteger, b: BigInteger): BigInteger {
         return a.remainder(b)
+    }
+
+    fun <T> genericPower(fnName: String, base: T, exp: Long, type: NumericType<T>): T {
+        Rt_Utils.check(exp >= 0) {
+            "$fnName:exp_negative:$exp" toCodeMsg "Negative exponent: $exp"
+        }
+
+        val res = when {
+            exp == 0L -> type.one
+            exp == 1L -> base
+            base == type.zero -> type.zero
+            base == type.one -> type.one
+            base == type.minusOne -> if ((exp and 1L) == 0L) type.one else type.minusOne
+            else -> {
+                try {
+                    val exp0 = Math.toIntExact(exp)
+                    type.pow(base, exp0)
+                } catch (e: ArithmeticException) {
+                    val baseStr = type.errStr(base)
+                    val msg = "Power overflow: $baseStr ^ $exp"
+                    throw Rt_Exception.common("$fnName:overflow:$baseStr:$exp", msg)
+                }
+            }
+        }
+
+        return res
+    }
+
+    abstract class NumericType<T>(val zero: T, val one: T, val minusOne: T) {
+        abstract fun pow(base: T, exp: Int): T
+        abstract fun errStr(value: T): String
+    }
+
+    object NumericType_Long: NumericType<Long>(zero = 0, one = 1, minusOne = -1) {
+        override fun pow(base: Long, exp: Int): Long {
+            return LongMath.checkedPow(base, exp)
+        }
+
+        override fun errStr(value: Long): String {
+            return value.toString()
+        }
+    }
+
+    object NumericType_BigInteger: NumericType<BigInteger>(
+        zero = BigInteger.ZERO,
+        one = BigInteger.ONE,
+        minusOne = BigInteger.ONE.negate(),
+    ) {
+        override fun pow(base: BigInteger, exp: Int): BigInteger {
+            // Check overflow by examining the bit length. Without this check, some combinations of base and exp
+            // will produce a very big number by performing heavy and slow computations - checking the overflow after
+            // the computation is too inefficient in such cases (example: 1E+1000 ^ 250000 = 1E+250000000).
+            val baseExp = (base.abs().bitLength() - 1).coerceAtLeast(0)
+            val resExp = LongMath.checkedMultiply(baseExp.toLong(), exp.toLong())
+            if (resExp + 1 > MAX_VALUE.bitLength()) {
+                throw ArithmeticException("Big integer power result out of range")
+            }
+
+            val res = base.pow(exp)
+            if (res < MIN_VALUE || res > MAX_VALUE) {
+                throw ArithmeticException("Big integer power result out of range")
+            }
+
+            return res
+        }
+
+        override fun errStr(value: BigInteger): String {
+            val s = value.abs().toString()
+            val s0 = if (s.length <= 100) s else {
+                val head = s.substring(0, 1)
+                val tail = s.substring(1, 16)
+                val exp = s.length - 1
+                "$head.$tail(...)E+$exp"
+            }
+            return if (value.signum() >= 0) s0 else "-$s0"
+        }
     }
 }

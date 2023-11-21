@@ -11,7 +11,6 @@ import net.postchain.rell.base.runtime.Rt_IntValue
 import net.postchain.rell.base.runtime.Rt_SqlContext
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.runtime.utils.Rt_Utils
-import net.postchain.rell.base.sql.SqlConstants
 import net.postchain.rell.base.sql.SqlExecutor
 import net.postchain.rell.base.utils.chainToIterable
 import net.postchain.rell.base.utils.toImmList

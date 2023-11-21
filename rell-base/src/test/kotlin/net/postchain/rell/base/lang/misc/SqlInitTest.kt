@@ -624,49 +624,31 @@ class SqlInitTest: BaseContextTest(useSql = true) {
     }
 
     @Test fun testSysFunctions() {
-        chkFunctions()
+        chkFunctions(listOf())
         chkInit("")
 
-        chkFunctions(
+        val expectedFuns = listOf(
             "c0.make_rowid",
             "rell_biginteger_from_text",
+            "rell_biginteger_power",
             "rell_bytea_substr1",
             "rell_bytea_substr2",
             "rell_decimal_from_text",
             "rell_decimal_to_text",
+            "rell_integer_power",
             "rell_text_getchar",
             "rell_text_repeat",
             "rell_text_substr1",
             "rell_text_substr2"
         )
+
+        chkFunctions(expectedFuns)
 
         execSql("DROP FUNCTION rell_bytea_substr2; DROP FUNCTION rell_text_substr1;")
-
-        chkFunctions(
-            "c0.make_rowid",
-            "rell_biginteger_from_text",
-            "rell_bytea_substr1",
-            "rell_decimal_from_text",
-            "rell_decimal_to_text",
-            "rell_text_getchar",
-            "rell_text_repeat",
-            "rell_text_substr2"
-        )
+        chkFunctions(expectedFuns.filter { it !in listOf("rell_text_substr1", "rell_bytea_substr2") })
 
         chkInit("")
-
-        chkFunctions(
-            "c0.make_rowid",
-            "rell_biginteger_from_text",
-            "rell_bytea_substr1",
-            "rell_bytea_substr2",
-            "rell_decimal_from_text",
-            "rell_decimal_to_text",
-            "rell_text_getchar",
-            "rell_text_repeat",
-            "rell_text_substr1",
-            "rell_text_substr2"
-        )
+        chkFunctions(expectedFuns)
     }
 
     private fun chkInit(code: String, expected: String = "OK", expectedWarnings: String = "") {
@@ -767,11 +749,11 @@ class SqlInitTest: BaseContextTest(useSql = true) {
         return map
     }
 
-    private fun chkFunctions(vararg expected: String) {
+    private fun chkFunctions(expected: List<String>) {
         val actual = tstCtx.sqlMgr().access { sqlExec ->
             SqlUtils.getExistingFunctions(sqlExec).sorted()
         }
-        assertEquals(expected.toList(), actual)
+        assertEquals(expected, actual)
     }
 
     private fun insert(table: String, columns: String, values: String) {

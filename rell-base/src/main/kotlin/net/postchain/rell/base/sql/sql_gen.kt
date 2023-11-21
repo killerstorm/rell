@@ -28,16 +28,43 @@ object SqlGen {
     // (!) When changing a function, change its name e.g. to fn_v2. Functions in the database are not upgraded - a function is created
     // only once, if there is no function with the same name in the database.
     val RELL_SYS_FUNCTIONS = mapOf(
-            genFunctionBigNumberFromText(SqlConstants.FN_BIGINTEGER_FROM_TEXT, "big_integer", "^[-+]?[0-9]+$"),
-            genFunctionBigNumberFromText(SqlConstants.FN_DECIMAL_FROM_TEXT, "decimal", "^[-+]?([0-9]+([.][0-9]+)?|[.][0-9]+)([Ee][-+]?[0-9]+)?$"),
-            genFunctionDecimalToText(SqlConstants.FN_DECIMAL_TO_TEXT),
-            genFunctionSubstr1(SqlConstants.FN_BYTEA_SUBSTR1, "BYTEA"),
-            genFunctionSubstr2(SqlConstants.FN_BYTEA_SUBSTR2, "BYTEA"),
-            genFunctionRepeat(SqlConstants.FN_TEXT_REPEAT, "TEXT"),
-            genFunctionSubstr1(SqlConstants.FN_TEXT_SUBSTR1, "TEXT"),
-            genFunctionSubstr2(SqlConstants.FN_TEXT_SUBSTR2, "TEXT"),
-            genFunctionTextGetChar(SqlConstants.FN_TEXT_GETCHAR),
+        genFunctionIntegerPower(),
+        genFunctionBigNumberFromText(SqlConstants.FN_BIGINTEGER_FROM_TEXT, "big_integer", "^[-+]?[0-9]+$"),
+        genFunctionBigIntegerPower(),
+        genFunctionBigNumberFromText(SqlConstants.FN_DECIMAL_FROM_TEXT, "decimal", "^[-+]?([0-9]+([.][0-9]+)?|[.][0-9]+)([Ee][-+]?[0-9]+)?$"),
+        genFunctionDecimalToText(SqlConstants.FN_DECIMAL_TO_TEXT),
+        genFunctionSubstr1(SqlConstants.FN_BYTEA_SUBSTR1, "BYTEA"),
+        genFunctionSubstr2(SqlConstants.FN_BYTEA_SUBSTR2, "BYTEA"),
+        genFunctionRepeat(SqlConstants.FN_TEXT_REPEAT, "TEXT"),
+        genFunctionSubstr1(SqlConstants.FN_TEXT_SUBSTR1, "TEXT"),
+        genFunctionSubstr2(SqlConstants.FN_TEXT_SUBSTR2, "TEXT"),
+        genFunctionTextGetChar(SqlConstants.FN_TEXT_GETCHAR),
     ).toImmMap()
+
+    private fun genFunctionIntegerPower(): Pair<String, String> {
+        val name = SqlConstants.FN_INTEGER_POWER
+        return name to """
+                CREATE FUNCTION "$name"(base BIGINT, exp BIGINT) RETURNS BIGINT AS $$
+                BEGIN
+                    IF exp < 0 THEN RAISE EXCEPTION 'negative exponent: %', exp; END IF;
+                    RETURN POWER(base :: NUMERIC, exp) :: BIGINT;
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
+
+    private fun genFunctionBigIntegerPower(): Pair<String, String> {
+        // ROUND() is needed, because by default POWER() returns a non-integer value ending with ".0000000000000000".
+        val name = SqlConstants.FN_BIGINTEGER_POWER
+        return name to """
+                CREATE FUNCTION "$name"(base NUMERIC, exp BIGINT) RETURNS NUMERIC AS $$
+                BEGIN
+                    IF exp < 0 THEN RAISE EXCEPTION 'negative exponent: %', exp; END IF;
+                    RETURN ROUND(POWER(base, exp));
+                END;
+                $$ LANGUAGE PLPGSQL IMMUTABLE;
+            """.trimIndent()
+    }
 
     private fun genFunctionBigNumberFromText(name: String, type: String, regex: String): Pair<String, String> {
         return name to """
