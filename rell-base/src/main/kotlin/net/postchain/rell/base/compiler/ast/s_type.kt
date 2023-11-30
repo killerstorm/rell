@@ -9,9 +9,10 @@ import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceMemberTag
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.doc.DocDeclaration_TupleAttribute
-import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.doc.DocSymbolFactory
 import net.postchain.rell.base.utils.doc.DocSymbolKind
 import net.postchain.rell.base.utils.doc.DocSymbolName
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
@@ -161,7 +162,7 @@ class S_TupleType(pos: S_Pos, private val fields: List<S_NameOptValue<S_Type>>):
                     throw C_Error.stop(cName.pos, "type_tuple_dupname:$cName", "Duplicate field: '$cName'")
                 }
 
-                val ideDef = makeFieldIdeDef(typeIdeId, nameHand.name, rType)
+                val ideDef = makeFieldIdeDef(ctx.globalCtx.docFactory, typeIdeId, nameHand.name, rType)
                 nameHand.setIdeInfo(ideDef.defInfo)
 
                 R_IdeName(nameHand.rName, ideDef.refInfo)
@@ -174,15 +175,19 @@ class S_TupleType(pos: S_Pos, private val fields: List<S_NameOptValue<S_Type>>):
     }
 
     companion object {
-        fun makeFieldIdeDef(tupleIdeId: IdeSymbolId, cName: C_Name, rType: R_Type): C_IdeSymbolDef {
+        fun makeFieldIdeDef(
+            docFactory: DocSymbolFactory,
+            tupleIdeId: IdeSymbolId,
+            cName: C_Name,
+            rType: R_Type,
+        ): C_IdeSymbolDef {
             val attrIdeId = tupleIdeId.appendMember(IdeSymbolCategory.ATTRIBUTE, cName.rName)
 
-            val docSymbol = DocSymbol(
+            val docType = L_TypeUtils.docType(rType.mType)
+            val docSymbol = docFactory.makeDocSymbol(
                 DocSymbolKind.TUPLE_ATTR,
                 DocSymbolName.local(cName.str),
-                null,
-                DocDeclaration_TupleAttribute(cName.rName, rType.mType),
-                null,
+                DocDeclaration_TupleAttribute(cName.rName, docType),
             )
 
             return C_IdeSymbolDef.make(

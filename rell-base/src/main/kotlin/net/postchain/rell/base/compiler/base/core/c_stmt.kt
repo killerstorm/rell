@@ -204,12 +204,11 @@ class C_SimpleVarDeclarator(
     }
 
     private fun makeDocSymbol(rType: R_Type): DocSymbol {
-        return DocSymbol(
+        val docType = L_TypeUtils.docType(rType.mType)
+        return ctx.globalCtx.docFactory.makeDocSymbol(
             DocSymbolKind.VAR,
             DocSymbolName.local(name.str),
-            null,
-            DocDeclaration_Variable(name.rName, rType.mType, mutable),
-            null,
+            DocDeclaration_Variable(name.rName, docType, mutable),
         )
     }
 }

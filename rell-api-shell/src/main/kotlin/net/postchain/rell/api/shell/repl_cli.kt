@@ -9,7 +9,10 @@ import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.repl.*
-import net.postchain.rell.base.runtime.*
+import net.postchain.rell.base.runtime.Rt_GlobalContext
+import net.postchain.rell.base.runtime.Rt_GtvModuleArgsSource
+import net.postchain.rell.base.runtime.Rt_RellVersion
+import net.postchain.rell.base.runtime.Rt_RellVersionProperty
 import net.postchain.rell.base.sql.SqlManager
 import org.apache.commons.lang3.StringUtils
 import java.io.File

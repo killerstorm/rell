@@ -31,6 +31,8 @@ class C_ExprContext private constructor(
     val typeMgr = modCtx.typeMgr
     val executor = defCtx.executor
 
+    val docFactory = globalCtx.docFactory
+
     fun makeAtEntity(rEntity: R_EntityDefinition, atExprId: R_AtExprId) = R_DbAtEntity(rEntity, appCtx.nextAtEntityId(atExprId))
 
     fun update(
@@ -100,6 +102,7 @@ class C_StmtContext private constructor(
     val nsCtx = defCtx.nsCtx
     val symCtx = defCtx.symCtx
     val msgCtx = nsCtx.msgCtx
+    val globalCtx = defCtx.globalCtx
     val executor = defCtx.executor
 
     fun update(

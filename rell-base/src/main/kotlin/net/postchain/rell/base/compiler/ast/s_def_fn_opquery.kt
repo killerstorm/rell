@@ -17,6 +17,7 @@ import net.postchain.rell.base.compiler.base.modifier.C_ModifierValues
 import net.postchain.rell.base.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.base.compiler.base.utils.C_ReservedMountNames
 import net.postchain.rell.base.compiler.base.utils.C_Utils
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.MutableTypedKeyMap
 import net.postchain.rell.base.utils.TypedKeyMap
@@ -71,7 +72,7 @@ class S_OperationDefinition(
                 compileBody(defCtx, rOperation, header)
             }
             ctx.executor.onPass(C_CompilerPass.DOCS) {
-                val doc = DocDeclaration_Operation(docModifiers, cName.rName, header.params.docParams)
+                val doc = DocDeclaration_Operation(docModifiers, cName.rName, header.params.docParamDeclarations)
                 cDefBase.setDocDeclaration(doc)
             }
         }
@@ -209,8 +210,11 @@ class S_QueryDefinition(
             }
         }
 
-        val doc = DocDeclaration_Query(docModifiers, cName.rName, rBody.retType.mType, header.params.docParams)
-        defBase.setDocDeclaration(doc)
+        ctx.executor.onPass(C_CompilerPass.DOCS) {
+            val docType = L_TypeUtils.docType(rBody.retType.mType)
+            val doc = DocDeclaration_Query(docModifiers, cName.rName, docType, header.params.docParamDeclarations)
+            defBase.setDocDeclaration(doc)
+        }
 
         rQuery.setBody(rBody)
     }

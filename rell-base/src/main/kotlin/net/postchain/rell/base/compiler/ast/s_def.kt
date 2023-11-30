@@ -15,6 +15,7 @@ import net.postchain.rell.base.compiler.base.namespace.C_NamespacePropertyContex
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.compiler.vexpr.V_ConstantValueEvalContext
 import net.postchain.rell.base.lib.Lib_OpContext
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.runtime.utils.toGtv
 import net.postchain.rell.base.utils.*
@@ -384,7 +385,7 @@ class S_EntityDefinition(
             clauses: List<S_RelClause>
     ) {
         val sysAttrs = mutableListOf<C_SysAttribute>()
-        val attrMaker = C_SysAttribute.Maker(rEntity.defName)
+        val attrMaker = C_SysAttribute.Maker(rEntity.defName, defCtx.globalCtx.docFactory)
 
         if (rEntity.flags.log) {
             val sysDefs = extChain?.sysDefs?.common ?: defCtx.modCtx.sysDefsCommon
@@ -616,7 +617,14 @@ class S_EnumDefinition(
 
         val modKey = R_ModuleKey(ctx.moduleName, null)
         val fullName = C_StringQualifiedName.ofRNames(ctx.namespacePath.parts + cName.rName)
-        val cDefBase = C_Utils.createDefBase(C_DefinitionType.ENUM, IdeSymbolKind.DEF_ENUM, modKey, fullName, null)
+        val cDefBase = C_Utils.createDefBase(
+            C_DefinitionType.ENUM,
+            IdeSymbolKind.DEF_ENUM,
+            modKey,
+            fullName,
+            null,
+            ctx.docFactory,
+        )
 
         val docDec = DocDeclaration_Enum(docModifiers, cName.rName)
         val docGetter = cDefBase.docGetter(C_LateGetter.const(docDec))
@@ -782,7 +790,9 @@ class S_GlobalConstantDefinition(
                 bodyLate.set(R_GlobalConstantBody(rType, rExpr, rtValue))
                 exprLate.set(vExpr ?: errorExpr)
 
-                val doc = DocDeclaration_Constant(docModifiers, cName.rName, rType.mType, rtValue)
+                val docType = L_TypeUtils.docType(rType.mType)
+                val docValue = if (rtValue == null) null else C_DocUtils.docValue(rtValue)
+                val doc = DocDeclaration_Constant(docModifiers, cName.rName, docType, docValue)
                 cDefBase.setDocDeclaration(doc)
             }
         }

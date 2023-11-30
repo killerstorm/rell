@@ -51,11 +51,12 @@ class Ld_StructAttribute(val name: R_Name, val type: Ld_Type, val mutable: Boole
 
     private fun finishDoc(outerFullName: L_FullName, mType: M_Type): DocSymbol {
         val fullName = outerFullName.append(name)
+        val docType = L_TypeUtils.docType(mType)
         return DocSymbol(
             kind = DocSymbolKind.STRUCT_ATTR,
             symbolName = DocSymbolName.global(fullName.moduleName.str(), fullName.qName.str()),
             mountName = null,
-            declaration = DocDeclaration_StructAttribute(fullName.last, mType, mutable),
+            declaration = DocDeclaration_StructAttribute(fullName.last, docType, mutable),
             comment = null,
         )
     }

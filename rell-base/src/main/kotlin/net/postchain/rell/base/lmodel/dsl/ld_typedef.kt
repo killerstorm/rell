@@ -43,11 +43,18 @@ private class Ld_TypeDefMember_Constructor(private val constructor: Ld_Construct
     }
 
     private fun makeDoc(typeName: L_FullName, lConstructor: L_Constructor): DocSymbol {
+        val docDeclaration = DocDeclaration_TypeConstructor(
+            L_TypeUtils.docTypeParams(lConstructor.header.typeParams),
+            lConstructor.header.params.map { it.docSymbol.declaration }.toImmList(),
+            deprecated = lConstructor.deprecated,
+            pure = lConstructor.pure,
+        )
+
         return DocSymbol(
             kind = DocSymbolKind.CONSTRUCTOR,
             symbolName = DocSymbolName.global(typeName.moduleName.str(), typeName.qName.str()), //TODO proper name
             mountName = null,
-            declaration = DocDeclaration_TypeConstructor(lConstructor),
+            declaration = docDeclaration,
             comment = null,
         )
     }
@@ -248,11 +255,12 @@ class Ld_TypeDef(
             mTypeParams: List<M_TypeParam>,
             lParent: L_TypeDefParent?,
         ): DocSymbol {
+            val docTypeParams = L_TypeUtils.docTypeParams(mTypeParams)
             return DocSymbol(
                 kind = DocSymbolKind.TYPE,
                 symbolName = DocSymbolName.global(fullName.moduleName.str(), fullName.qName.str()),
                 mountName = null,
-                declaration = DocDeclaration_Type(fullName.last, mTypeParams, lParent, flags),
+                declaration = DocDeclaration_Type(fullName.last, docTypeParams, lParent, flags),
                 comment = null,
             )
         }

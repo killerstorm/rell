@@ -24,6 +24,7 @@ import net.postchain.rell.base.compiler.base.namespace.C_UserNsProtoBuilder
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.*
+import net.postchain.rell.base.utils.doc.DocSymbolFactory
 import net.postchain.rell.base.utils.doc.DocSymbolKind
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
 import net.postchain.rell.base.utils.ide.IdeSymbolId
@@ -33,7 +34,12 @@ import org.apache.commons.lang3.mutable.MutableLong
 data class C_VarUid(val id: Long, val name: String, val fn: R_FnUid)
 data class C_LoopUid(val id: Long, val fn: R_FnUid)
 
-class C_GlobalContext(val compilerOptions: C_CompilerOptions, val sourceDir: C_SourceDir) {
+class C_GlobalContext(
+    val compilerOptions: C_CompilerOptions,
+    val sourceDir: C_SourceDir,
+) {
+    val docFactory: DocSymbolFactory = C_DocUtils.getDocFactory(compilerOptions)
+
     companion object {
         private val appUidGen = C_UidGen { id, _ -> R_AppUid(id) }
         fun nextAppUid(): R_AppUid = synchronized(appUidGen) { appUidGen.next("") }
@@ -348,7 +354,7 @@ class C_MountContext(
     ): C_CommonDefinitionBase {
         val moduleKey = modCtx.rModuleKey.copy(externalChain = extChain?.name)
         val fullName = C_StringQualifiedName.of(stringNamespacePath + qualifiedName.parts)
-        return C_Utils.createDefBase(defType, ideKind, moduleKey, fullName, mountName)
+        return C_Utils.createDefBase(defType, ideKind, moduleKey, fullName, mountName, globalCtx.docFactory)
     }
 
     fun defBase(

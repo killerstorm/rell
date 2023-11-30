@@ -5,13 +5,12 @@
 package net.postchain.rell.base.utils.doc
 
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
-import net.postchain.rell.base.compiler.base.utils.C_DocUtils
-import net.postchain.rell.base.compiler.vexpr.V_Expr
-import net.postchain.rell.base.lmodel.*
-import net.postchain.rell.base.lmodel.dsl.Ld_DocSymbols
+import net.postchain.rell.base.lmodel.L_ParamImplication
+import net.postchain.rell.base.lmodel.L_TypeDefFlags
+import net.postchain.rell.base.lmodel.L_TypeDefParent
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
-import net.postchain.rell.base.mtype.*
-import net.postchain.rell.base.runtime.Rt_Value
+import net.postchain.rell.base.mtype.M_ParamArity
 import net.postchain.rell.base.utils.checkEquals
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
@@ -32,7 +31,9 @@ private object DocDeclaration_None: DocDeclaration() {
     override fun genCode() = DocCode.EMPTY
 }
 
-abstract class DocDeclaration_Annotated(private val modifiers: DocModifiers): DocDeclaration() {
+abstract class DocDeclaration_Annotated(
+    private val modifiers: DocModifiers,
+): DocDeclaration() {
     protected abstract fun genCode0(b: DocCode.Builder)
 
     final override fun genCode(): DocCode {
@@ -144,27 +145,26 @@ class DocDeclaration_Namespace(
 class DocDeclaration_Constant(
     modifiers: DocModifiers,
     private val simpleName: R_Name,
-    private val mType: M_Type,
-    private val rValue: Rt_Value?,
+    private val type: DocType,
+    private val value: DocValue?,
 ) : DocDeclaration_Annotated(modifiers) {
     override fun genCode0(b: DocCode.Builder) {
         b.keyword("val")
         b.raw(" ")
         b.raw(simpleName.str)
         b.sep(": ")
-        L_TypeUtils.docCode(b, mType)
+        type.genCode(b)
 
-        val valueCode = if (rValue == null) null else C_DocUtils.valueToDoc(rValue)
-        if (valueCode != null) {
+        if (value != null) {
             b.sep(" = ")
-            b.append(valueCode)
+            value.genCode(b)
         }
     }
 }
 
 class DocDeclaration_Property(
     private val simpleName: R_Name,
-    private val mType: M_Type,
+    private val type: DocType,
     private val pure: Boolean,
 ): DocDeclaration() {
     override fun genCode(): DocCode {
@@ -177,13 +177,15 @@ class DocDeclaration_Property(
 
         b.raw(simpleName.str)
         b.sep(": ")
-        L_TypeUtils.docCode(b, mType)
+        type.genCode(b)
 
         return b.build()
     }
 }
 
-class DocDeclaration_SpecialProperty(private val simpleName: R_Name): DocDeclaration() {
+class DocDeclaration_SpecialProperty(
+    private val simpleName: R_Name,
+): DocDeclaration() {
     override fun genCode(): DocCode {
         val b = DocCode.builder()
         b.raw(simpleName.str)
@@ -202,7 +204,9 @@ class DocDeclaration_Enum(
     }
 }
 
-class DocDeclaration_EnumValue(private val simpleName: R_Name): DocDeclaration() {
+class DocDeclaration_EnumValue(
+    private val simpleName: R_Name,
+): DocDeclaration() {
     override fun genCode(): DocCode {
         return DocCode.raw(simpleName.str)
     }
@@ -221,10 +225,10 @@ class DocDeclaration_Entity(
 
 class DocDeclaration_EntityAttribute(
     private val simpleName: R_Name,
-    private val mType: M_Type,
+    private val type: DocType,
     private val isMutable: Boolean,
     private val keyIndexKind: R_KeyIndexKind?,
-    private val vExpr: V_Expr? = null,
+    private val expr: DocExpr? = null,
     private val keys: Collection<R_Key> = immListOf(),
     private val indices: Collection<R_Index> = immListOf(),
 ): DocDeclaration() {
@@ -244,11 +248,11 @@ class DocDeclaration_EntityAttribute(
         b.raw(simpleName.str)
 
         b.sep(": ")
-        L_TypeUtils.docCode(b, mType)
+        type.genCode(b)
 
-        if (vExpr != null) {
+        if (expr != null) {
             b.sep(" = ")
-            C_DocUtils.exprToDoc(b, vExpr)
+            expr.genCode(b)
         }
 
         if (keys.isNotEmpty() || indices.isNotEmpty()) {
@@ -297,7 +301,7 @@ class DocDeclaration_Struct(
 
 class DocDeclaration_StructAttribute(
     private val simpleName: R_Name,
-    private val mType: M_Type,
+    private val type: DocType,
     private val isMutable: Boolean,
 ): DocDeclaration() {
     override fun genCode(): DocCode {
@@ -310,17 +314,17 @@ class DocDeclaration_StructAttribute(
 
         b.raw(simpleName.str)
         b.sep(": ")
-        L_TypeUtils.docCode(b, mType)
+        type.genCode(b)
 
         return b.build()
     }
 }
 
 class DocDeclaration_Parameter(
-    private val mParam: M_FunctionParam,
+    private val param: DocFunctionParam,
     private val isLazy: Boolean,
     private val implies: L_ParamImplication?,
-    private val expr: V_Expr?,
+    private val expr: DocExpr?,
 ): DocDeclaration() {
     override fun genCode(): DocCode {
         val b = DocCode.builder()
@@ -331,11 +335,11 @@ class DocDeclaration_Parameter(
             b.raw(") ")
         }
 
-        if (mParam.exact) b.keyword("exact").raw(" ")
-        if (mParam.nullable) b.keyword("nullable").raw(" ")
+        if (param.exact) b.keyword("exact").raw(" ")
+        if (param.nullable) b.keyword("nullable").raw(" ")
         if (isLazy) b.keyword("lazy").raw(" ")
 
-        val arity = when (mParam.arity) {
+        val arity = when (param.arity) {
             M_ParamArity.ONE -> null
             M_ParamArity.ZERO_ONE -> "zero_one"
             M_ParamArity.ZERO_MANY -> "zero_many"
@@ -343,16 +347,16 @@ class DocDeclaration_Parameter(
         }
         if (arity != null) b.keyword(arity).raw(" ")
 
-        if (mParam.name != null) {
-            b.raw(mParam.name)
+        if (param.name != null) {
+            b.raw(param.name)
             b.sep(": ")
         }
 
-        L_TypeUtils.docCode(b, mParam.type)
+        param.type.genCode(b)
 
         if (expr != null) {
             b.sep(" = ")
-            C_DocUtils.exprToDoc(b, expr)
+            expr.genCode(b)
         }
 
         return b.build()
@@ -362,20 +366,20 @@ class DocDeclaration_Parameter(
 class DocDeclaration_Function(
     docModifiers: DocModifiers,
     private val simpleName: R_Name,
-    private val mHeader: M_FunctionHeader,
-    private val params: List<Lazy<DocDeclaration>>,
+    private val header: DocFunctionHeader,
+    private val params: List<DocDeclaration>,
     private val hasBody: Boolean? = null,
 ): DocDeclaration_Annotated(docModifiers) {
     init {
-        checkEquals(params.size, mHeader.params.size) { simpleName.str }
+        checkEquals(params.size, header.params.size) { simpleName.str }
     }
 
     override fun genCode0(b: DocCode.Builder) {
         b.keyword("function")
         b.raw(" ")
 
-        if (mHeader.typeParams.isNotEmpty()) {
-            DocDecUtils.appendTypeParams(b, mHeader.typeParams)
+        if (header.typeParams.isNotEmpty()) {
+            DocDecUtils.appendTypeParams(b, header.typeParams)
             b.raw(" ")
         }
 
@@ -384,7 +388,7 @@ class DocDeclaration_Function(
         DocDecUtils.appendFunctionParams(b, params)
 
         b.sep(": ")
-        L_TypeUtils.docCode(b, mHeader.resultType)
+        header.resultType.genCode(b)
 
         if (hasBody != null) {
             if (hasBody) {
@@ -415,7 +419,7 @@ class DocDeclaration_SpecialFunction(
 class DocDeclaration_Operation(
     modifiers: DocModifiers,
     private val simpleName: R_Name,
-    private val params: List<Lazy<DocDeclaration>>,
+    private val params: List<DocDeclaration>,
 ): DocDeclaration_Annotated(modifiers) {
     override fun genCode0(b: DocCode.Builder) {
         b.keyword("operation")
@@ -428,8 +432,8 @@ class DocDeclaration_Operation(
 class DocDeclaration_Query(
     modifiers: DocModifiers,
     private val simpleName: R_Name,
-    private val resultType: M_Type,
-    private val params: List<Lazy<DocDeclaration>>,
+    private val resultType: DocType,
+    private val params: List<DocDeclaration>,
 ): DocDeclaration_Annotated(modifiers) {
     override fun genCode0(b: DocCode.Builder) {
         b.keyword("query")
@@ -437,13 +441,13 @@ class DocDeclaration_Query(
         b.raw(simpleName.str)
         DocDecUtils.appendFunctionParams(b, params)
         b.sep(": ")
-        L_TypeUtils.docCode(b, resultType)
+        resultType.genCode(b)
     }
 }
 
 class DocDeclaration_Type(
     private val simpleName: R_Name,
-    private val mTypeParams: List<M_TypeParam>,
+    private val typeParams: List<DocTypeParam>,
     private val lParent: L_TypeDefParent?,
     private val flags: L_TypeDefFlags,
 ): DocDeclaration() {
@@ -458,7 +462,7 @@ class DocDeclaration_Type(
         b.raw(" ")
         b.raw(simpleName.str)
 
-        DocDecUtils.appendTypeParams(b, mTypeParams)
+        DocDecUtils.appendTypeParams(b, typeParams)
 
         if (lParent != null) {
             b.sep(": ")
@@ -473,29 +477,35 @@ class DocDeclaration_Type(
 
         if (lParent.args.isNotEmpty()) {
             b.raw("<")
-            for ((i, arg) in lParent.args.withIndex()) {
+            for ((i, mArgType) in lParent.args.withIndex()) {
                 if (i > 0) b.sep(", ")
-                L_TypeUtils.docCode(b, arg)
+                val docArgType = L_TypeUtils.docType(mArgType)
+                docArgType.genCode(b)
             }
             b.raw(">")
         }
     }
 }
 
-class DocDeclaration_TypeConstructor(private val lConstructor: L_Constructor): DocDeclaration() {
+class DocDeclaration_TypeConstructor(
+    val typeParams: List<DocTypeParam>,
+    val params: List<DocDeclaration>,
+    val deprecated: C_Deprecated?,
+    val pure: Boolean,
+): DocDeclaration() {
     override fun genCode(): DocCode {
         val b = DocCode.builder()
 
-        DocDecUtils.appendDeprecated(b, lConstructor.deprecated)
+        DocDecUtils.appendDeprecated(b, deprecated)
 
-        if (lConstructor.pure) {
+        if (pure) {
             b.keyword("pure")
             b.raw(" ")
         }
 
         b.keyword("constructor")
-        DocDecUtils.appendTypeParams(b, lConstructor.header.typeParams)
-        Ld_DocSymbols.docCodeParams(b, lConstructor.header.params)
+        DocDecUtils.appendTypeParams(b, typeParams)
+        DocDecUtils.appendFunctionParams(b, params)
 
         return b.build()
     }
@@ -512,33 +522,33 @@ class DocDeclaration_TypeSpecialConstructor: DocDeclaration() {
 
 class DocDeclaration_TupleAttribute(
     private val simpleName: R_Name,
-    private val mType: M_Type,
+    private val type: DocType,
 ): DocDeclaration() {
     override fun genCode(): DocCode {
         val b = DocCode.builder()
         b.raw(simpleName.str)
         b.sep(": ")
-        L_TypeUtils.docCode(b, mType)
+        type.genCode(b)
         return b.build()
     }
 }
 
 class DocDeclaration_AtVariable(
     private val simpleName: String,
-    private val mType: M_Type,
+    private val type: DocType,
 ): DocDeclaration() {
     override fun genCode(): DocCode {
         val b = DocCode.builder()
         b.raw(simpleName)
         b.sep(": ")
-        L_TypeUtils.docCode(b, mType)
+        type.genCode(b)
         return b.build()
     }
 }
 
 class DocDeclaration_Variable(
     private val simpleName: R_Name,
-    private val mType: M_Type,
+    private val type: DocType,
     private val isMutable: Boolean,
 ): DocDeclaration() {
     override fun genCode(): DocCode {
@@ -547,7 +557,7 @@ class DocDeclaration_Variable(
         b.raw(" ")
         b.raw(simpleName.str)
         b.sep(": ")
-        L_TypeUtils.docCode(b, mType)
+        type.genCode(b)
         return b.build()
     }
 }
@@ -583,7 +593,7 @@ sealed class DocAnnotationArg {
     companion object {
         fun makeRaw(s: String): DocAnnotationArg = DocAnnotationArg_Raw(s)
         fun makeName(qualifiedName: R_QualifiedName): DocAnnotationArg = DocAnnotationArg_Name(qualifiedName)
-        fun makeValue(value: Rt_Value): DocAnnotationArg = DocAnnotationArg_Value(value)
+        fun makeValue(value: DocValue?): DocAnnotationArg = DocAnnotationArg_Value(value)
     }
 }
 
@@ -599,9 +609,13 @@ private class DocAnnotationArg_Name(private val qualifiedName: R_QualifiedName):
     }
 }
 
-private class DocAnnotationArg_Value(private val value: Rt_Value): DocAnnotationArg() {
+private class DocAnnotationArg_Value(private val value: DocValue?): DocAnnotationArg() {
     override fun genCode(b: DocCode.Builder) {
-        C_DocUtils.valueToDoc(b, value)
+        if (value == null) {
+            DocExpr.UNKNOWN.genCode(b)
+        } else {
+            value.genCode(b)
+        }
     }
 }
 
@@ -648,7 +662,7 @@ private object DocDecUtils {
         b.link(moduleStr)
     }
 
-    fun appendTypeParams(b: DocCode.Builder, typeParams: List<M_TypeParam>) {
+    fun appendTypeParams(b: DocCode.Builder, typeParams: List<DocTypeParam>) {
         if (typeParams.isEmpty()) {
             return
         }
@@ -658,9 +672,9 @@ private object DocDecUtils {
         for ((i, param) in typeParams.withIndex()) {
             if (i > 0) b.sep(", ")
             b.raw(param.name)
-            if (param.bounds != M_TypeSets.ALL) {
+            if (param.bounds != DocTypeSet.ALL) {
                 b.sep(": ")
-                L_TypeUtils.docCodeTypeSet(b, param.bounds)
+                param.bounds.genCode(b)
             }
         }
 
@@ -677,7 +691,7 @@ private object DocDecUtils {
         }
     }
 
-    fun appendFunctionParams(b: DocCode.Builder, params: List<Lazy<DocDeclaration>>) {
+    fun appendFunctionParams(b: DocCode.Builder, params: List<DocDeclaration>) {
         b.raw("(")
 
         var sep = ""
@@ -685,7 +699,7 @@ private object DocDecUtils {
             b.sep(sep)
             b.newline()
             b.tab()
-            b.append(param.value.code)
+            b.append(param.code)
             sep = ","
         }
 

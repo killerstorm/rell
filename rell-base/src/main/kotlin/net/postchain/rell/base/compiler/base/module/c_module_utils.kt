@@ -463,6 +463,8 @@ class S_DefinitionContext private constructor(val fileCtx: S_FileContext, val na
     val msgCtx = modCtx.msgCtx
     val symCtx = fileCtx.symCtx
 
+    val docFactory = msgCtx.globalCtx.docFactory
+
     val moduleName = modCtx.moduleName
 
     fun namespace(path: C_RNamePath): S_DefinitionContext {

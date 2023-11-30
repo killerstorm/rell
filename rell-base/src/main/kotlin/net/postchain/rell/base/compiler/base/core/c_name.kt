@@ -348,7 +348,9 @@ object C_NopSymbolContext: C_SymbolContext() {
     }
 }
 
-private class C_DefaultSymbolContext(private val checkDefIdConflicts: Boolean): C_SymbolContext() {
+private class C_DefaultSymbolContext(
+    private val checkDefIdConflicts: Boolean,
+): C_SymbolContext() {
     private val nameMap = mutableMapOf<S_Pos, C_NameHandleImpl>()
     private val symbolMap = mutableMapOf<S_Pos, C_IdeSymbolInfo>()
     private val extraMap = mutableMapOf<S_Pos, ExtraInfo>()
@@ -512,7 +514,7 @@ interface C_SymbolContextProvider {
     fun getSymbolContext(path: C_SourcePath): C_SymbolContext
 }
 
-class C_SymbolContextManager(private val opts: C_CompilerOptions) {
+class C_SymbolContextManager(opts: C_CompilerOptions) {
     private val mainFile = opts.symbolInfoFile
 
     val provider: C_SymbolContextProvider = C_SymbolContextProviderImpl()

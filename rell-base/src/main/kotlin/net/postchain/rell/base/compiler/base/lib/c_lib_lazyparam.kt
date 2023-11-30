@@ -69,7 +69,7 @@ private class R_LazyType(private val valueType: R_Type): R_Type("lazy<${valueTyp
         val b = DocCode.builder()
         b.keyword("lazy")
         b.raw("<")
-        L_TypeUtils.docCode(b, valueType.mType)
+        L_TypeUtils.docType(valueType.mType).genCode(b)
         b.raw(">")
         val doc = b.build()
         return C_LibType.make(this, doc)

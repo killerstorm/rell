@@ -18,6 +18,7 @@ import net.postchain.rell.base.model.stmt.R_IterableAdapter
 import net.postchain.rell.base.model.stmt.R_IterableAdapter_Direct
 import net.postchain.rell.base.mtype.M_TypeUtils
 import net.postchain.rell.base.runtime.*
+import net.postchain.rell.base.utils.doc.DocSymbolFactory
 import net.postchain.rell.base.utils.ide.IdeSymbolId
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmSet
@@ -48,7 +49,7 @@ abstract class S_Expr(val startPos: S_Pos) {
         return when (item) {
             is C_AtFromItem_Entity -> {
                 val atEntityId = ctx.appCtx.nextAtEntityId(fromCtx.atExprId)
-                val cAtEntity = S_AtExpr.makeDbAtEntity(item.entity, item.alias, null, atEntityId)
+                val cAtEntity = S_AtExpr.makeDbAtEntity(item.entity, item.alias, null, atEntityId, ctx.docFactory)
                 C_AtFrom_Entities(ctx, fromCtx, immListOf(cAtEntity))
             }
             is C_AtFromItem_Iterable -> {
@@ -82,7 +83,7 @@ abstract class S_Expr(val startPos: S_Pos) {
             rAdapter = cIterableAdapter.rAdapter
         }
 
-        val ideInfo = S_AtExpr.makeColAtIdeInfo(explicitAlias, rItemType)
+        val ideInfo = S_AtExpr.makeColAtIdeInfo(ctx.docFactory, explicitAlias, rItemType)
         return C_AtFromItem_Iterable(startPos, vExpr, rItemType, ideInfo, rAdapter)
     }
 
@@ -396,7 +397,7 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
         val rFields = vExprs.mapIndexed { i, vExpr ->
             val nameHand = fields[i].nameHand
             val rType = vExpr.type
-            val fieldName = compileFieldName(tupleIdeId, nameHand, rType)
+            val fieldName = compileFieldName(tupleIdeId, nameHand, rType, ctx.docFactory)
             R_TupleField(fieldName, rType)
         }
 
@@ -404,9 +405,14 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
         return V_TupleExpr(ctx, startPos, type, vExprs)
     }
 
-    private fun compileFieldName(tupleIdeId: IdeSymbolId, nameHand: C_NameHandle?, rType: R_Type): R_IdeName? {
+    private fun compileFieldName(
+        tupleIdeId: IdeSymbolId,
+        nameHand: C_NameHandle?,
+        rType: R_Type,
+        docFactory: DocSymbolFactory,
+    ): R_IdeName? {
         nameHand ?: return null
-        val ideDef = S_TupleType.makeFieldIdeDef(tupleIdeId, nameHand.name, rType)
+        val ideDef = S_TupleType.makeFieldIdeDef(docFactory, tupleIdeId, nameHand.name, rType)
         nameHand.setIdeInfo(ideDef.defInfo)
         return R_IdeName(nameHand.rName, ideDef.refInfo)
     }
@@ -446,7 +452,7 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
             val cEntities = entities.map { (item, explicitAliasHand) ->
                 val alias = explicitAliasHand?.name ?: item.alias
                 val atEntityId = ctx.appCtx.nextAtEntityId(fromCtx.atExprId)
-                S_AtExpr.makeDbAtEntity(item.entity, alias, explicitAliasHand, atEntityId)
+                S_AtExpr.makeDbAtEntity(item.entity, alias, explicitAliasHand, atEntityId, ctx.docFactory)
             }
             return C_AtFrom_Entities(ctx, fromCtx, cEntities)
         }
@@ -460,7 +466,7 @@ class S_TupleExpr(startPos: S_Pos, val fields: List<S_TupleExprField>): S_Expr(s
 
         for (pair in iterables) {
             val nameHand = pair.second
-            val ideInfo = S_AtExpr.makeColAtIdeInfo(pair.second?.rName, pair.first.elemType)
+            val ideInfo = S_AtExpr.makeColAtIdeInfo(ctx.docFactory, pair.second?.rName, pair.first.elemType)
             nameHand?.setIdeInfo(ideInfo)
         }
 

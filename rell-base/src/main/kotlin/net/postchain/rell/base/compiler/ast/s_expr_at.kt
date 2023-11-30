@@ -15,6 +15,7 @@ import net.postchain.rell.base.compiler.vexpr.V_AtWhatFieldFlags
 import net.postchain.rell.base.compiler.vexpr.V_DbAtWhat
 import net.postchain.rell.base.compiler.vexpr.V_DbAtWhatField
 import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.runtime.Rt_BigIntegerValue
@@ -22,7 +23,7 @@ import net.postchain.rell.base.runtime.Rt_DecimalValue
 import net.postchain.rell.base.runtime.Rt_IntValue
 import net.postchain.rell.base.utils.CommonUtils
 import net.postchain.rell.base.utils.doc.DocDeclaration_AtVariable
-import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.doc.DocSymbolFactory
 import net.postchain.rell.base.utils.doc.DocSymbolKind
 import net.postchain.rell.base.utils.doc.DocSymbolName
 import net.postchain.rell.base.utils.ide.IdeLocalSymbolLink
@@ -168,7 +169,7 @@ class S_AtExprWhat_Complex(val fields: List<S_AtExprWhatComplexField>): S_AtExpr
     ): R_IdeName? {
         field.effectiveName ?: return null
 
-        val ideDef = S_TupleType.makeFieldIdeDef(lazyTupleIdeId.value, field.effectiveName, resultType)
+        val ideDef = S_TupleType.makeFieldIdeDef(ctx.docFactory, lazyTupleIdeId.value, field.effectiveName, resultType)
         val ideDefId = ideDef.defInfo.defId
 
         if (field.explicitNameHand != null) {
@@ -510,9 +511,10 @@ class S_AtExpr(
             alias: C_Name,
             explicitAliasHand: C_NameHandle?,
             atEntityId: R_AtEntityId,
+            docFactory: DocSymbolFactory,
         ): C_AtEntity {
-            val ideDef = makeDbAtIdeDef(alias.str, alias.pos, entity)
-            val ideDefPh = makeDbAtIdeDef(C_Constants.AT_PLACEHOLDER, alias.pos, entity)
+            val ideDef = makeDbAtIdeDef(docFactory, alias.str, alias.pos, entity)
+            val ideDefPh = makeDbAtIdeDef(docFactory, C_Constants.AT_PLACEHOLDER, alias.pos, entity)
             explicitAliasHand?.setIdeInfo(ideDef.defInfo)
             return C_AtEntity(
                 alias.pos,
@@ -525,25 +527,28 @@ class S_AtExpr(
             )
         }
 
-        private fun makeDbAtIdeDef(name: String, pos: S_Pos, rEntity: R_EntityDefinition): C_IdeSymbolDef {
-            val docSymbol = DocSymbol(
+        private fun makeDbAtIdeDef(
+            docFactory: DocSymbolFactory,
+            name: String,
+            pos: S_Pos,
+            rEntity: R_EntityDefinition,
+        ): C_IdeSymbolDef {
+            val docType = L_TypeUtils.docType(rEntity.type.mType)
+            val docSymbol = docFactory.makeDocSymbol(
                 DocSymbolKind.AT_VAR_DB,
                 DocSymbolName.local(name),
-                null,
-                DocDeclaration_AtVariable(name, rEntity.type.mType),
-                null
+                DocDeclaration_AtVariable(name, docType),
             )
             return C_IdeSymbolDef.make(IdeSymbolKind.LOC_AT_ALIAS, link = IdeLocalSymbolLink(pos), doc = docSymbol)
         }
 
-        fun makeColAtIdeInfo(explicitAlias: R_Name?, itemType: R_Type): C_IdeSymbolInfo {
+        fun makeColAtIdeInfo(docFactory: DocSymbolFactory, explicitAlias: R_Name?, itemType: R_Type): C_IdeSymbolInfo {
             val docName = explicitAlias?.str ?: C_Constants.AT_PLACEHOLDER
-            val docSymbol = DocSymbol(
+            val docType = L_TypeUtils.docType(itemType.mType)
+            val docSymbol = docFactory.makeDocSymbol(
                 DocSymbolKind.AT_VAR_COL,
                 DocSymbolName.local(docName),
-                null,
-                DocDeclaration_AtVariable(docName, itemType.mType),
-                null
+                DocDeclaration_AtVariable(docName, docType),
             )
             return C_IdeSymbolInfo.direct(IdeSymbolKind.LOC_AT_ALIAS, doc = docSymbol)
         }

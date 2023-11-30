@@ -52,7 +52,7 @@ class CLibDocTest: BaseCLibTest() {
             val struct = tApp.rApp.moduleMap.getValue(R_ModuleName.EMPTY).structs.getValue("__s")
             val attr = struct.struct.attributes.getValue(R_Name.of("x"))
             val mType = attr.type.mType
-            val docCode = DocCode.builder().also { L_TypeUtils.docCode(it, mType) }.build()
+            val docCode = DocCode.builder().also { L_TypeUtils.docType(mType).genCode(it) }.build()
             docCode.strCode()
         }
 
@@ -72,6 +72,8 @@ class CLibDocTest: BaseCLibTest() {
         chkValue("decimal", Rt_DecimalValue.get("123"), "TYPE = 123.0")
         chkValue("decimal", Rt_DecimalValue.get("123.456"), "TYPE = 123.456")
         chkValue("decimal", Rt_DecimalValue.get("123.456e6"), "TYPE = 123456000.0")
+        chkValue("decimal", Rt_DecimalValue.get("123.456e90"), "TYPE = 123456${"0".repeat(87)}.0")
+        chkValue("decimal", Rt_DecimalValue.get("123.456e100"), "TYPE")
         chkValue("decimal", Rt_DecimalValue.get("123.456e2000"), "TYPE")
 
         chkValue("byte_array", Rt_ByteArrayValue.EMPTY, "TYPE = x\"\"")

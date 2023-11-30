@@ -12,10 +12,10 @@ import net.postchain.rell.base.compiler.base.expr.C_StmtContext
 import net.postchain.rell.base.compiler.base.fn.C_FormalParameter
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.stmt.R_ExprStatement
 import net.postchain.rell.base.model.stmt.R_ReturnStatement
-import net.postchain.rell.base.mtype.M_FunctionParam
 import net.postchain.rell.base.mtype.M_ParamArity
 import net.postchain.rell.base.utils.MutableTypedKeyMap
 import net.postchain.rell.base.utils.Nullable
@@ -39,14 +39,15 @@ class S_FormalParameter(private val attr: S_AttrHeader, private val expr: S_Expr
         val name = attrHeader.name
         val type = attrHeader.type ?: R_CtErrorType
 
-        val mParam = M_FunctionParam(name.str, type.mType, arity = M_ParamArity.ONE, exact = false, nullable = false)
+        val docType = L_TypeUtils.docType(type.mType)
+        val docParam = DocFunctionParam(name.str, docType, arity = M_ParamArity.ONE, exact = false, nullable = false)
 
         val docDecGetter: C_LateGetter<DocDeclaration>
         val defaultValue: C_ParameterDefaultValue?
 
         if (expr == null) {
-            val docDec = makeDocDeclaration(mParam, null)
-            val docSym = makeDocSymbol(name, docDec)
+            val docDec = makeDocDeclaration(docParam, null)
+            val docSym = makeDocSymbol(defCtx, name, docDec)
             docSymLate.set(Nullable.of(docSym), allowEarly = true)
             docDecGetter = C_LateGetter.const(docDec)
             defaultValue = null
@@ -56,15 +57,15 @@ class S_FormalParameter(private val attr: S_AttrHeader, private val expr: S_Expr
             val rValueLate = C_LateInit(C_CompilerPass.EXPRESSIONS, R_DefaultValue(rErrorExpr, false))
 
             //TODO don't create fallback doc every time
-            val fallbackDoc = makeDocDeclaration(mParam, C_ExprUtils.errorVExpr(defCtx.initExprCtx, expr.startPos))
+            val fallbackDoc = makeDocDeclaration(docParam, C_ExprUtils.errorVExpr(defCtx.initExprCtx, expr.startPos))
             val docDecLate = C_LateInit(C_CompilerPass.EXPRESSIONS, fallbackDoc)
             docDecGetter = docDecLate.getter
 
             defCtx.executor.onPass(C_CompilerPass.EXPRESSIONS) {
                 val vExpr = compileExpr(defCtx, name.rName, type)
                 val rExpr = vExpr.toRExpr()
-                val docDec = makeDocDeclaration(mParam, vExpr)
-                val docSym = makeDocSymbol(name, docDec)
+                val docDec = makeDocDeclaration(docParam, vExpr)
+                val docSym = makeDocSymbol(defCtx, name, docDec)
                 rExprLate.set(rExpr)
                 rValueLate.set(R_DefaultValue(rExpr, vExpr.info.hasDbModifications))
                 docDecLate.set(docDec)
@@ -84,7 +85,7 @@ class S_FormalParameter(private val attr: S_AttrHeader, private val expr: S_Expr
             name,
             type,
             attrHeader.ideInfo,
-            mParam,
+            docParam,
             index,
             defaultValue,
             docSymLate.getter,
@@ -111,17 +112,16 @@ class S_FormalParameter(private val attr: S_AttrHeader, private val expr: S_Expr
         }
     }
 
-    private fun makeDocDeclaration(mParam: M_FunctionParam, expr: V_Expr?): DocDeclaration {
-        return DocDeclaration_Parameter(mParam, isLazy = false, implies = null, expr = expr)
+    private fun makeDocDeclaration(docParam: DocFunctionParam, expr: V_Expr?): DocDeclaration {
+        val docExpr = if (expr == null) null else C_DocUtils.docExpr(expr)
+        return DocDeclaration_Parameter(docParam, isLazy = false, implies = null, expr = docExpr)
     }
 
-    private fun makeDocSymbol(name: C_Name, declaration: DocDeclaration): DocSymbol {
-        return DocSymbol(
+    private fun makeDocSymbol(defCtx: C_DefinitionContext, name: C_Name, declaration: DocDeclaration): DocSymbol {
+        return defCtx.globalCtx.docFactory.makeDocSymbol(
             kind = DocSymbolKind.PARAMETER,
             symbolName = DocSymbolName.local(name.str),
-            mountName = null,
             declaration = declaration,
-            comment = null,
         )
     }
 }

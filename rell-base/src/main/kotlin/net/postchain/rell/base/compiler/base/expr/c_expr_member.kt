@@ -22,6 +22,7 @@ import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.compiler.vexpr.V_MemberFunctionCall
 import net.postchain.rell.base.compiler.vexpr.V_TypeValueMember
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.runtime.Rt_CallFrame
@@ -318,7 +319,7 @@ sealed class C_EntityAttrRef(
 
             val docDec = DocDeclaration_EntityAttribute(
                 simpleName = ROWID_RNAME,
-                mType = R_RowidType.mType,
+                type = L_TypeUtils.docType(R_RowidType.mType),
                 isMutable = false,
                 keyIndexKind = R_KeyIndexKind.KEY,
             )

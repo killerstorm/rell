@@ -7,10 +7,8 @@ package net.postchain.rell.base.lmodel
 import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.mtype.*
-import net.postchain.rell.base.utils.checkEquals
-import net.postchain.rell.base.utils.doc.DocCode
-import net.postchain.rell.base.utils.immListOf
-import net.postchain.rell.base.utils.mapNotNullAllOrNull
+import net.postchain.rell.base.utils.*
+import net.postchain.rell.base.utils.doc.*
 
 object L_TypeUtils {
     fun makeMType(
@@ -158,82 +156,71 @@ object L_TypeUtils {
         }
     }
 
-    fun docCode(b: DocCode.Builder, mType: M_Type) {
-        docCode0(b, mType)
-    }
-
-    private fun docCode0(b: DocCode.Builder, mType: M_Type, nullable: Boolean = false) {
-        when (mType) {
-            M_Types.ANYTHING -> b.link("anything")
-            M_Types.NOTHING -> b.link("nothing")
-            M_Types.ANY -> b.link("any")
-            M_Types.NULL -> b.keyword("null")
-            is M_Type_Param -> b.link(mType.param.name)
+    fun docType(mType: M_Type): DocType {
+        return when (mType) {
+            M_Types.ANYTHING -> DocType.ANYTHING
+            M_Types.NOTHING -> DocType.NOTHING
+            M_Types.ANY -> DocType.ANY
+            M_Types.NULL -> DocType.NULL
+            is M_Type_Param -> DocType.name(mType.param.name)
             is M_Type_Nullable -> {
-                docCode0(b, mType.valueType, true)
-                b.raw("?")
+                val docValueType = docType(mType.valueType)
+                DocType.nullable(docValueType)
             }
-            is M_Type_Function -> docCodeFunction(b, mType, nullable)
-            is M_Type_Tuple -> docCodeTuple(b, mType)
+            is M_Type_Function -> docTypeFunction(mType)
+            is M_Type_Tuple -> docTypeTuple(mType)
             is M_Type_Generic -> {
                 val addon = getTypeAddon(mType)
-                addon.docCode(b, mType.typeArgs)
+                addon.docType(mType.typeArgs)
             }
             else -> {
+                // Shall not happen, detect this case in unit tests and investigate (using strCode() is inefficient).
+                CommonUtils.failIfUnitTest()
                 val s = mType.strCode()
-                b.raw(s)
+                DocType.raw(s)
             }
         }
     }
 
-    private fun docCodeFunction(b: DocCode.Builder, mType: M_Type_Function, nullable: Boolean) {
-        if (nullable) {
-            b.raw("(")
-        }
+    private fun docTypeFunction(mType: M_Type_Function): DocType {
+        val resultType = docType(mType.resultType)
+        val paramTypes = mType.paramTypes.map { docType(it) }
+        return DocType.function(resultType, paramTypes)
+    }
 
-        b.raw("(")
-        for ((i, mParam) in mType.paramTypes.withIndex()) {
-            if (i > 0) b.sep(", ")
-            docCode0(b, mParam)
-        }
-        b.raw(") -> ")
+    private fun docTypeTuple(mType: M_Type_Tuple): DocType {
+        val fieldTypes = mType.fieldTypes.map { docType(it) }
+        return DocType.tuple(fieldTypes, mType.fieldNames)
+    }
 
-        docCode0(b, mType.resultType)
-
-        if (nullable) {
-            b.raw(")")
+    fun docTypeSet(mTypeSet: M_TypeSet): DocTypeSet {
+        return when (mTypeSet) {
+            M_TypeSet_All -> DocTypeSet.ALL
+            is M_TypeSet_One -> DocTypeSet.one(docType(mTypeSet.type))
+            is M_TypeSet_SubOf -> DocTypeSet.subOf(docType(mTypeSet.boundType))
+            is M_TypeSet_SuperOf -> DocTypeSet.superOf(docType(mTypeSet.boundType))
         }
     }
 
-    private fun docCodeTuple(b: DocCode.Builder, mType: M_Type_Tuple) {
-        b.raw("(")
-
-        for ((i, mField) in mType.fieldTypes.withIndex()) {
-            if (i > 0) b.sep(", ")
-            val name = mType.fieldNames[i]
-            if (name.value != null) {
-                b.raw(name.value)
-                b.sep(": ")
-            }
-            docCode0(b, mField)
-        }
-
-        b.raw(")")
+    fun docFunctionHeader(mHeader: M_FunctionHeader): DocFunctionHeader {
+        val docTypeParams = docTypeParams(mHeader.typeParams)
+        val docResultType = docType(mHeader.resultType)
+        val docParams = mHeader.params.map { docFunctionParam(it) }.toImmList()
+        return DocFunctionHeader(docTypeParams, docResultType, docParams)
     }
 
-    fun docCodeTypeSet(b: DocCode.Builder, it: M_TypeSet) {
-        when (it) {
-            M_TypeSet_All -> b.raw("*")
-            is M_TypeSet_One -> docCode(b, it.type)
-            is M_TypeSet_SubOf -> {
-                b.raw("-")
-                docCode(b, it.boundType)
+    fun docTypeParams(mTypeParams: List<M_TypeParam>): List<DocTypeParam> {
+        return mTypeParams
+            .map {
+                val docBounds = docTypeSet(it.bounds)
+                DocTypeParam(it.name, it.variance, docBounds)
             }
-            is M_TypeSet_SuperOf -> {
-                b.raw("+")
-                docCode(b, it.boundType)
-            }
-        }
+            .toImmList()
+    }
+
+    fun docFunctionParam(mParam: M_FunctionParam): DocFunctionParam {
+        val docType = docType(mParam.type)
+        return DocFunctionParam(mParam.name, docType, mParam.arity, mParam.exact, mParam.nullable)
     }
 
     private fun getTypeAddon(mType: M_Type_Generic): C_MGenericTypeAddon {
@@ -251,22 +238,18 @@ private sealed class C_MGenericTypeAddon(
     abstract fun getRType(args: List<M_Type>): R_Type?
 
     final override fun strCode(typeName: String, args: List<M_TypeSet>): String {
-        val docCode = docCode0(args)
+        val docArgs = args.map { mTypeSet ->
+            DocCode.builder()
+                .also { L_TypeUtils.docTypeSet(mTypeSet).genCode(it) }
+                .build()
+        }
+        val docCode = docCodeStrategy.docCode(docArgs)
         return docCode.strRaw()
     }
 
-    fun docCode(b: DocCode.Builder, args: List<M_TypeSet>) {
-        val docCode = docCode0(args)
-        b.append(docCode)
-    }
-
-    private fun docCode0(args: List<M_TypeSet>): DocCode {
-        val docArgs = args.map {
-            val b = DocCode.builder()
-            L_TypeUtils.docCodeTypeSet(b, it)
-            b.build()
-        }
-        return docCodeStrategy.docCode(docArgs)
+    fun docType(args: List<M_TypeSet>): DocType {
+        val docArgs = args.map { L_TypeUtils.docTypeSet(it) }
+        return DocType.generic(docCodeStrategy, docArgs)
     }
 }
 

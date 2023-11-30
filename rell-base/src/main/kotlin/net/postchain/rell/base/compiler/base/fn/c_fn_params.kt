@@ -14,10 +14,10 @@ import net.postchain.rell.base.compiler.base.utils.C_LateGetter
 import net.postchain.rell.base.compiler.base.utils.C_ParameterDefaultValue
 import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.model.*
-import net.postchain.rell.base.mtype.M_FunctionParam
 import net.postchain.rell.base.utils.Nullable
 import net.postchain.rell.base.utils.checkEquals
 import net.postchain.rell.base.utils.doc.DocDeclaration
+import net.postchain.rell.base.utils.doc.DocFunctionParam
 import net.postchain.rell.base.utils.doc.DocSymbol
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
@@ -26,7 +26,7 @@ class C_FormalParameter(
     val name: C_Name,
     val type: R_Type,
     val ideInfo: C_IdeSymbolInfo,
-    val mParam: M_FunctionParam,
+    val docParam: DocFunctionParam,
     private val index: Int,
     private val defaultValue: C_ParameterDefaultValue?,
     docSymbolGetter: C_LateGetter<Nullable<DocSymbol>>,
@@ -65,16 +65,12 @@ class C_FormalParameters(list: List<C_FormalParameter>) {
         C_FunctionCallParameters(params)
     }
 
-    val mParams: List<M_FunctionParam> by lazy {
-        this.list.map { it.mParam }.toImmList()
+    val docParams: List<DocFunctionParam> by lazy {
+        this.list.map { it.docParam }.toImmList()
     }
 
-    val docParams: List<Lazy<DocDeclaration>> by lazy {
-        this.list
-            .map {
-                lazy { it.docDeclaration }
-            }
-            .toImmList()
+    val docParamDeclarations: List<DocDeclaration> by lazy {
+        this.list.map { it.docDeclaration }.toImmList()
     }
 
     fun compile(frameCtx: C_FrameContext): C_ActualParameters {

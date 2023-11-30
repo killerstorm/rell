@@ -16,10 +16,7 @@ import net.postchain.rell.base.compiler.base.namespace.*
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.Nullable
-import net.postchain.rell.base.utils.doc.DocDeclaration
-import net.postchain.rell.base.utils.doc.DocSymbol
-import net.postchain.rell.base.utils.doc.DocSymbolKind
-import net.postchain.rell.base.utils.doc.DocSymbolName
+import net.postchain.rell.base.utils.doc.*
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
 import net.postchain.rell.base.utils.ide.IdeSymbolId
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
@@ -119,6 +116,7 @@ class C_CommonDefinitionBase(
     val cDefName: C_DefinitionName,
     val defName: R_DefinitionName,
     private val mountName: R_MountName?,
+    private val docFactory: DocSymbolFactory,
 ) {
     val simpleName = defName.simpleName
     val appLevelName = defName.appLevelName
@@ -167,12 +165,11 @@ class C_CommonDefinitionBase(
         val chain = cDefName.module.chain
         val mountNameStr = if (chain == null || mountName == null) mountName?.str() else "$chain:${mountName.str()}"
 
-        return DocSymbol(
+        return docFactory.makeDocSymbol(
             kind = kind,
             symbolName = docName,
             mountName = mountNameStr,
             declaration = declaration,
-            comment = null,
         )
     }
 

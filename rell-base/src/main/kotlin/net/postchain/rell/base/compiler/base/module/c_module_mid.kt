@@ -24,16 +24,18 @@ import net.postchain.rell.base.utils.*
 import net.postchain.rell.base.utils.doc.*
 
 class C_MidModuleContext(
-        val msgCtx: C_MessageContext,
-        val modImporter: C_MidModuleImporter,
-        val moduleName: R_ModuleName,
-        val extChain: C_ExtChainName?
-)
+    val msgCtx: C_MessageContext,
+    val modImporter: C_MidModuleImporter,
+    val moduleName: R_ModuleName,
+    val extChain: C_ExtChainName?,
+) {
+    val globalCtx = msgCtx.globalCtx
+}
 
 class C_MidMemberContext(
-        val modCtx: C_MidModuleContext,
-        val modifierCtx: C_ModifierContext,
-        val extChain: C_ExtChainName?
+    val modCtx: C_MidModuleContext,
+    val modifierCtx: C_ModifierContext,
+    val extChain: C_ExtChainName?,
 ) {
     fun externalChain(modExtChain: C_ExtChainName?): C_ExtChainName? {
         return modExtChain ?: extChain
@@ -169,12 +171,10 @@ class C_MidModuleMember_Namespace(
         qName: R_QualifiedName,
         docModifiers: DocModifiers,
     ): DocSymbol {
-        return DocSymbol(
+        return ctx.modCtx.globalCtx.docFactory.makeDocSymbol(
             kind = DocSymbolKind.NAMESPACE,
             symbolName = DocSymbolName.global(ctx.modCtx.moduleName.str(), qName.str()),
-            mountName = null,
             declaration = DocDeclaration_Namespace(docModifiers, qName.last),
-            comment = null,
         )
     }
 
@@ -187,7 +187,7 @@ class C_MidModuleMember_Namespace(
 
 class C_MidModuleCompiler(
         private val msgCtx: C_MessageContext,
-        midModules: List<C_MidModule>
+        midModules: List<C_MidModule>,
 ) {
     private val midModulesMap = midModules.associateBy { it.moduleName }.toImmMap()
 

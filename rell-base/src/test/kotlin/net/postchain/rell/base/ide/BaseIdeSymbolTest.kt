@@ -106,7 +106,13 @@ abstract class BaseIdeSymbolTest: BaseRellTest(false) {
     private fun compileCode(sourceDir: C_SourceDir, file: C_SourcePath, ide: Boolean): C_CompilationResult {
         val moduleName = getModuleName(sourceDir, file)
         val modSel = C_CompilerModuleSelection(immListOf(moduleName))
-        val cOpts = C_CompilerOptions.builder(tst.compilerOptions()).symbolInfoFile(file).ide(ide).build()
+
+        val cOpts = C_CompilerOptions.builder(tst.compilerOptions())
+            .symbolInfoFile(file)
+            .ide(ide)
+            .ideDocSymbolsEnabled(true)
+            .build()
+
         val cRes = RellTestUtils.compileApp(sourceDir, modSel, cOpts, tst.extraMod)
         return cRes
     }

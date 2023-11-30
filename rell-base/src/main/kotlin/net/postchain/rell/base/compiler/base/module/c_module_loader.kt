@@ -280,60 +280,61 @@ class C_ModuleLoader(
                 midFiles,
                 isDirectory = source.isDirectory(),
                 isTestDependency = loadingTestDependencies,
+                docFactory = readerCtx.msgCtx.globalCtx.docFactory,
                 docSymbolLate = docSymbolLate,
             )
         }
     }
+}
 
-    private class C_LoaderModule(
-        val moduleName: R_ModuleName,
-        val mountName: R_MountName,
-        val parentName: R_ModuleName?,
-        val header: C_SourceModuleHeader?,
-        val files: List<C_MidModuleFile>,
-        val isDirectory: Boolean,
-        val isTestDependency: Boolean,
-        val docSymbolLate: C_LateInit<Nullable<DocSymbol>>,
-    ) {
-        fun toMidModule(isSelected: Boolean): C_MidModule {
-            val docSymbol = makeDocSymbol(moduleName, mountName, header?.docModifiers ?: DocModifiers.NONE)
-            docSymbolLate.set(Nullable.of(docSymbol), allowEarly = true)
+private class C_LoaderModule(
+    val moduleName: R_ModuleName,
+    val mountName: R_MountName,
+    private val parentName: R_ModuleName?,
+    private val header: C_SourceModuleHeader?,
+    private val files: List<C_MidModuleFile>,
+    private val isDirectory: Boolean,
+    private val isTestDependency: Boolean,
+    private val docFactory: DocSymbolFactory,
+    private val docSymbolLate: C_LateInit<Nullable<DocSymbol>>,
+) {
+    fun toMidModule(isSelected: Boolean): C_MidModule {
+        val docSymbol = makeDocSymbol(moduleName, mountName, header?.docModifiers ?: DocModifiers.NONE)
+        docSymbolLate.set(Nullable.of(docSymbol), allowEarly = true)
 
-            val midHeader = if (header == null) null else {
-                C_MidModuleHeader(header.pos, header.abstract, header.external, header.test)
-            }
-
-            val compiledHeader = C_ModuleHeader(
-                mountName = mountName,
-                abstract = header?.abstract != null,
-                external = header?.external ?: false,
-                test = header?.test ?: false,
-                docSymbol,
-            )
-
-            return C_MidModule(
-                moduleName = moduleName,
-                parentName = parentName,
-                mountName = mountName,
-                header = midHeader,
-                compiledHeader = compiledHeader,
-                files = files,
-                isDirectory = isDirectory,
-                isTestDependency = isTestDependency,
-                isSelected = isSelected,
-            )
+        val midHeader = if (header == null) null else {
+            C_MidModuleHeader(header.pos, header.abstract, header.external, header.test)
         }
 
-        private fun makeDocSymbol(moduleName: R_ModuleName, mountName: R_MountName, mods: DocModifiers): DocSymbol {
-            val docMountName = if (mountName.isEmpty()) null else mountName.str()
-            val docDec = DocDeclaration_Module(mods)
-            return DocSymbol(
-                DocSymbolKind.MODULE,
-                DocSymbolName.module(moduleName.str()),
-                docMountName,
-                docDec,
-                null,
-            )
-        }
+        val compiledHeader = C_ModuleHeader(
+            mountName = mountName,
+            abstract = header?.abstract != null,
+            external = header?.external ?: false,
+            test = header?.test ?: false,
+            docSymbol,
+        )
+
+        return C_MidModule(
+            moduleName = moduleName,
+            parentName = parentName,
+            mountName = mountName,
+            header = midHeader,
+            compiledHeader = compiledHeader,
+            files = files,
+            isDirectory = isDirectory,
+            isTestDependency = isTestDependency,
+            isSelected = isSelected,
+        )
+    }
+
+    private fun makeDocSymbol(moduleName: R_ModuleName, mountName: R_MountName, mods: DocModifiers): DocSymbol {
+        val docMountName = if (mountName.isEmpty()) null else mountName.str()
+        val docDec = DocDeclaration_Module(mods)
+        return docFactory.makeDocSymbol(
+            DocSymbolKind.MODULE,
+            DocSymbolName.module(moduleName.str()),
+            mountName = docMountName,
+            declaration = docDec,
+        )
     }
 }

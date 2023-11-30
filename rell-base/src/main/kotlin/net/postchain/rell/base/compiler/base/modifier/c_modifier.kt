@@ -11,6 +11,7 @@ import net.postchain.rell.base.compiler.ast.S_PosValue
 import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
+import net.postchain.rell.base.compiler.base.utils.C_DocUtils
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.runtime.Rt_Value
@@ -69,7 +70,10 @@ class C_AnnotationArg_Value(pos: S_Pos, private val value: Rt_Value): C_Annotati
         return null
     }
 
-    override fun docArg() = DocAnnotationArg.makeValue(value)
+    override fun docArg(): DocAnnotationArg {
+        val docValue = C_DocUtils.docValue(value)
+        return DocAnnotationArg.makeValue(docValue)
+    }
 }
 
 class C_AnnotationArg_Name(private val nameHand: C_QualifiedNameHandle): C_AnnotationArg(nameHand.pos) {

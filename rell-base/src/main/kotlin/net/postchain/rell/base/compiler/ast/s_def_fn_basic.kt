@@ -18,10 +18,11 @@ import net.postchain.rell.base.compiler.base.namespace.C_NamespaceMemberBase
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_StringQualifiedName
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.R_FunctionExtension
-import net.postchain.rell.base.mtype.M_FunctionHeader
 import net.postchain.rell.base.utils.doc.DocDeclaration_Function
+import net.postchain.rell.base.utils.doc.DocFunctionHeader
 import net.postchain.rell.base.utils.doc.DocModifiers
 import net.postchain.rell.base.utils.ide.IdeOutlineNodeType
 import net.postchain.rell.base.utils.ide.IdeOutlineTreeBuilder
@@ -94,6 +95,8 @@ private class C_FunctionCompilerBase(
 ) {
     val qualifiedName = qualifiedNameHand?.cName
 
+    val executor = mntCtx.executor
+
     fun definitionBase(ideKind: IdeSymbolKind): C_UserDefinitionBase {
         val cName = if (qualifiedName != null) {
             C_StringQualifiedName.of(qualifiedName)
@@ -155,15 +158,18 @@ private abstract class C_FunctionCompiler(
         hasBody: Boolean? = null,
     ) {
         if (simpleName != null) {
-            val mHeader = M_FunctionHeader(immListOf(), header.returnType().mType, header.params.mParams)
-            val doc = DocDeclaration_Function(
-                base.docModifiers,
-                simpleName,
-                mHeader,
-                header.params.docParams,
-                hasBody = hasBody,
-            )
-            cDefBase.setDocDeclaration(doc)
+            base.executor.onPass(C_CompilerPass.DOCS) {
+                val docType = L_TypeUtils.docType(header.returnType().mType)
+                val docHeader = DocFunctionHeader(immListOf(), docType, header.params.docParams)
+                val doc = DocDeclaration_Function(
+                    base.docModifiers,
+                    simpleName,
+                    docHeader,
+                    header.params.docParamDeclarations,
+                    hasBody = hasBody,
+                )
+                cDefBase.setDocDeclaration(doc)
+            }
         }
 
         if (header.fnBody != null) {

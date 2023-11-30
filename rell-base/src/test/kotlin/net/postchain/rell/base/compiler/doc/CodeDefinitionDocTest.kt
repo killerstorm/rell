@@ -482,7 +482,7 @@ class CodeDefinitionDocTest: BaseRellTest(useSql = false) {
     private fun chkDoc(code: String, name: String, expectedHeader: String, expectedCode: String) {
         val sourceDir = tst.createSourceDir(code)
         val modSel = C_CompilerModuleSelection(null, immListOf(R_ModuleName.EMPTY))
-        val options = C_CompilerOptions.builder().ide(true).hiddenLib(true).build()
+        val options = C_CompilerOptions.builder().ide(true).ideDocSymbolsEnabled(true).hiddenLib(true).build()
         val cRes = RellTestUtils.compileApp(sourceDir, modSel, options)
         checkEquals(cRes.errors, listOf())
 

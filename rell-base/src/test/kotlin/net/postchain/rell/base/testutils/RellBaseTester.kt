@@ -120,21 +120,22 @@ abstract class RellBaseTester(
     private val expectedData = mutableListOf<String>()
 
     fun compilerOptions() = C_CompilerOptions(
-            compatibility = compatibilityVer,
-            gtv = gtv,
-            deprecatedError = deprecatedError,
-            ide = false,
-            blockCheck = true,
-            atAttrShadowing = atAttrShadowing,
-            testLib = testLib,
-            hiddenLib = hiddenLib,
-            allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
-            symbolInfoFile = RellTestUtils.MAIN_FILE_PATH,
-            complexWhatEnabled = complexWhatEnabled,
-            ideDefIdConflictError = ideDefIdConflictError,
-            mountConflictError = true,
-            appModuleInTestsError = false,
-            useTestDependencyExtensions = false,
+        compatibility = compatibilityVer,
+        gtv = gtv,
+        deprecatedError = deprecatedError,
+        blockCheck = true,
+        atAttrShadowing = atAttrShadowing,
+        testLib = testLib,
+        hiddenLib = hiddenLib,
+        allowDbModificationsInObjectExprs = allowDbModificationsInObjectExprs,
+        symbolInfoFile = RellTestUtils.MAIN_FILE_PATH,
+        complexWhatEnabled = complexWhatEnabled,
+        mountConflictError = true,
+        appModuleInTestsError = false,
+        useTestDependencyExtensions = false,
+        ide = false,
+        ideDocSymbolsEnabled = false,
+        ideDefIdConflictError = ideDefIdConflictError,
     )
 
     fun def(defs: List<String>) {

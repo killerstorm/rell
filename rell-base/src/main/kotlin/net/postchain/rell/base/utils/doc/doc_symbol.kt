@@ -100,6 +100,48 @@ interface DocDefinition {
     fun getDocMember(name: String): DocDefinition? = null
 }
 
+sealed class DocSymbolFactory {
+    abstract fun makeDocSymbol(
+        kind: DocSymbolKind,
+        symbolName: DocSymbolName,
+        declaration: DocDeclaration,
+        mountName: String? = null,
+    ): DocSymbol
+
+    companion object {
+        val NONE: DocSymbolFactory = DocSymbolFactory_None
+        val NORMAL: DocSymbolFactory = DocSymbolFactory_Normal
+    }
+}
+
+private object DocSymbolFactory_None: DocSymbolFactory() {
+    override fun makeDocSymbol(
+        kind: DocSymbolKind,
+        symbolName: DocSymbolName,
+        declaration: DocDeclaration,
+        mountName: String?
+    ): DocSymbol {
+        return DocSymbol.NONE
+    }
+}
+
+private object DocSymbolFactory_Normal: DocSymbolFactory() {
+    override fun makeDocSymbol(
+        kind: DocSymbolKind,
+        symbolName: DocSymbolName,
+        declaration: DocDeclaration,
+        mountName: String?
+    ): DocSymbol {
+        return DocSymbol(
+            kind = kind,
+            symbolName = symbolName,
+            declaration = declaration,
+            mountName = mountName,
+            comment = null,
+        )
+    }
+}
+
 object DocUtils {
     fun getDocSymbolByPath(def: DocDefinition, path: List<String>): DocSymbol? {
         var curDef = def

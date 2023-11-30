@@ -8,6 +8,7 @@ import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.lmodel.L_FunctionParam
 import net.postchain.rell.base.lmodel.L_ParamArity
 import net.postchain.rell.base.lmodel.L_ParamImplication
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.mtype.M_FunctionParam
 import net.postchain.rell.base.mtype.M_ParamArity
@@ -196,12 +197,13 @@ class Ld_FunctionParam(
         )
 
         val docName = if (name != null) name.str else "#$index"
+        val docParam = L_TypeUtils.docFunctionParam(mParam)
 
         val doc = DocSymbol(
             kind = DocSymbolKind.PARAMETER,
             symbolName = DocSymbolName.local(docName),
             mountName = null,
-            declaration = DocDeclaration_Parameter(mParam, lazy, implies, null),
+            declaration = DocDeclaration_Parameter(docParam, lazy, implies, null),
             comment = null,
         )
 

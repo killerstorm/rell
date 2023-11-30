@@ -9,13 +9,11 @@ import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.R_Expr
 import net.postchain.rell.base.utils.Nullable
-import net.postchain.rell.base.utils.doc.DocDeclaration_EntityAttribute
-import net.postchain.rell.base.utils.doc.DocSymbol
-import net.postchain.rell.base.utils.doc.DocSymbolKind
-import net.postchain.rell.base.utils.doc.DocSymbolName
+import net.postchain.rell.base.utils.doc.*
 import net.postchain.rell.base.utils.ide.IdeLocalSymbolLink
 import net.postchain.rell.base.utils.ide.IdeSymbolCategory
 import net.postchain.rell.base.utils.ide.IdeSymbolId
@@ -188,7 +186,10 @@ class C_SysAttribute(
         )
     }
 
-    class Maker(private val rEntityDefName: R_DefinitionName) {
+    class Maker(
+        private val rEntityDefName: R_DefinitionName,
+        private val docFactory: DocSymbolFactory,
+    ) {
         fun make(
             name: String,
             type: R_Type,
@@ -202,17 +203,15 @@ class C_SysAttribute(
 
             val docDec = DocDeclaration_EntityAttribute(
                 rName,
-                mType = type.mType,
+                type = L_TypeUtils.docType(type.mType),
                 isMutable = mutable,
                 keyIndexKind = if (isKey) R_KeyIndexKind.KEY else null,
             )
 
-            val doc = DocSymbol(
+            val doc = docFactory.makeDocSymbol(
                 DocSymbolKind.ENTITY_ATTR,
                 DocSymbolName.global(rEntityDefName.module, "${rEntityDefName.qualifiedName}.$rName"),
-                null,
                 docDec,
-                null,
             )
 
             return C_SysAttribute(

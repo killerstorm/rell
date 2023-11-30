@@ -171,12 +171,10 @@ sealed class S_ImportTarget {
             aliasIdeId = IdeSymbolGlobalId(ctx.fileCtx.idePath, id)
 
             val docDec = docDecMaker(explicitAlias)
-            doc = DocSymbol(
+            doc = ctx.docFactory.makeDocSymbol(
                 DocSymbolKind.IMPORT,
                 DocSymbolName.global(ctx.moduleName.str(), fullName.str()),
-                null,
                 docDec,
-                null,
             )
         }
 
@@ -200,7 +198,13 @@ object S_DefaultImportTarget: S_ImportTarget() {
         }
         val docDeclaration = DocDeclaration_ImportModule(docModifiers, moduleName, explicitAlias?.rName)
 
-        return C_DefaultImportTarget(explicitAliasIdeDefId, implicitAliasIdeDefId, aliasFullName, docDeclaration)
+        return C_DefaultImportTarget(
+            ctx.docFactory,
+            explicitAliasIdeDefId,
+            implicitAliasIdeDefId,
+            aliasFullName,
+            docDeclaration,
+        )
     }
 
     private fun aliasIdeDefId(ctx: S_DefinitionContext, alias: C_Name?): IdeSymbolId? {
@@ -212,6 +216,7 @@ object S_DefaultImportTarget: S_ImportTarget() {
     }
 
     private class C_DefaultImportTarget(
+        val docFactory: DocSymbolFactory,
         val explicitAliasIdeDefId: IdeSymbolId?,
         val implicitAliasIdeDefId: IdeSymbolId?,
         val aliasFullName: R_FullName?,
@@ -220,12 +225,10 @@ object S_DefaultImportTarget: S_ImportTarget() {
         override fun moduleIdeDefId() = implicitAliasIdeDefId
 
         override fun aliasIdeInfo(): C_IdeSymbolInfo {
-            val docSymbol = if (aliasFullName == null) DocSymbol.NONE else DocSymbol(
+            val docSymbol = if (aliasFullName == null) DocSymbol.NONE else docFactory.makeDocSymbol(
                 kind = C_DefinitionType.IMPORT.docKind,
                 symbolName = DocSymbolName.global(aliasFullName.moduleName.str(), aliasFullName.qualifiedName.str()),
-                mountName = null,
                 declaration = docDeclaration,
-                comment = null,
             )
             return C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_IMPORT_ALIAS, defId = explicitAliasIdeDefId, doc = docSymbol)
         }
@@ -252,21 +255,22 @@ class S_ExactImportTargetItem(
     private val wildcard: Boolean,
 ) {
     fun addToNamespace(
-        symCtx: C_SymbolContext,
+        ctx: C_MountContext,
         docModifiers: DocModifiers,
         importAlias: C_Name?,
         currentModuleName: R_ModuleName,
         nsBuilder: C_UserNsProtoBuilder,
         targetModule: C_ModuleKey,
     ) {
-        val aliasHand = alias?.compile(symCtx)
-        val nameHand = name.compile(symCtx)
+        val aliasHand = alias?.compile(ctx.symCtx)
+        val nameHand = name.compile(ctx.symCtx)
 
         if (wildcard) {
             val nsBuilder2 = if (aliasHand == null) nsBuilder else {
                 val qualifiedName = nsBuilder.namespacePath().qualifiedName(aliasHand.rName)
 
                 val doc = makeDocSymbol(
+                    ctx.globalCtx.docFactory,
                     docModifiers,
                     importAlias,
                     currentModuleName,
@@ -286,6 +290,7 @@ class S_ExactImportTargetItem(
             val aliasDocSymbol = if (aliasHand == null) null else {
                 val qualifiedName = nsBuilder.namespacePath().qualifiedName(aliasHand.rName)
                 makeDocSymbol(
+                    ctx.globalCtx.docFactory,
                     docModifiers,
                     importAlias,
                     currentModuleName,
@@ -301,6 +306,7 @@ class S_ExactImportTargetItem(
     }
 
     private fun makeDocSymbol(
+        docFactory: DocSymbolFactory,
         docModifiers: DocModifiers,
         importAlias: C_Name?,
         currentModuleName: R_ModuleName,
@@ -317,12 +323,10 @@ class S_ExactImportTargetItem(
             wildcard = wildcard,
         )
 
-        return DocSymbol(
+        return docFactory.makeDocSymbol(
             DocSymbolKind.IMPORT,
             DocSymbolName.global(currentModuleName.str(), qualifiedName.str()),
-            null,
             docDec,
-            null,
         )
     }
 
@@ -359,7 +363,7 @@ class S_ExactImportTarget(private val items: List<S_ExactImportTargetItem>): S_I
             checkEquals(def.alias, explicitAlias)
             val nsBuilder = getNsBuilder(ctx, def.alias, aliasIdeDef.refInfo)
             for (item in items) {
-                item.addToNamespace(ctx.symCtx, docModifiers, def.alias, ctx.modCtx.moduleName, nsBuilder, module)
+                item.addToNamespace(ctx, docModifiers, def.alias, ctx.modCtx.moduleName, nsBuilder, module)
             }
         }
     }

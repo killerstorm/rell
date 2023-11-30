@@ -15,6 +15,7 @@ import net.postchain.rell.base.compiler.base.expr.C_ExprHint
 import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.base.compiler.base.utils.*
 import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.lmodel.L_TypeUtils
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.utils.Nullable
 import net.postchain.rell.base.utils.doc.*
@@ -99,7 +100,7 @@ private class C_EntityAttributeClause(
         name: C_Name,
         type: R_Type,
         mutable: Boolean,
-        docExpr: V_Expr?,
+        vDocExpr: V_Expr?,
         keys: Collection<R_Key>,
         indices: Collection<R_Index>,
     ): DocDeclaration {
@@ -118,7 +119,10 @@ private class C_EntityAttributeClause(
             }
         }
 
-        return DocDeclaration_EntityAttribute(name.rName, type.mType, mutable, keyIndexKind, docExpr, docKeys, docIndices)
+        val docType = L_TypeUtils.docType(type.mType)
+        val docExpr = if (vDocExpr == null) null else C_DocUtils.docExpr(vDocExpr)
+
+        return DocDeclaration_EntityAttribute(name.rName, docType, mutable, keyIndexKind, docExpr, docKeys, docIndices)
     }
 
     private fun makeDocSymbol(name: C_Name, docDec: DocDeclaration): DocSymbol {
@@ -130,12 +134,10 @@ private class C_EntityAttributeClause(
 
         val defName = defCtx.cDefName.toPath().subName(name.rName)
 
-        return DocSymbol(
+        return defCtx.globalCtx.docFactory.makeDocSymbol(
             kind = docKind,
             symbolName = DocSymbolName.global(defName.module.module, defName.qualifiedName.str()),
-            mountName = null,
             declaration = docDec,
-            comment = null,
         )
     }
 
