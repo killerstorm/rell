@@ -21,7 +21,7 @@ import net.postchain.rell.base.sql.SqlManager
 import net.postchain.rell.base.utils.CommonUtils
 
 object RellTestUtils {
-    const val RELL_VER = "0.14.0"
+    const val RELL_VER = "0.13.6"
 
     const val MAIN_FILE = "main.rell"
     val MAIN_FILE_PATH = C_SourcePath.parse(MAIN_FILE)
