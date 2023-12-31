@@ -193,7 +193,7 @@ class ObjectTest: BaseRellTest() {
         chkData("foo(0,579,HelloWorld,999)")
         chk("(foo.x,foo.s,foo.c)", "(int[579],text[HelloWorld],int[999])")
 
-        chkOp("update foo (c = 111);", "ct_err:update_attr_not_mutable:c")
+        chkOp("update foo (c = 111);", "ct_err:attr_not_mutable:foo.c")
         chkData("foo(0,579,HelloWorld,999)")
         chk("(foo.x,foo.s,foo.c)", "(int[579],text[HelloWorld],int[999])")
 
@@ -325,10 +325,10 @@ class ObjectTest: BaseRellTest() {
         chkOp("foo.x *= 55;")
         chkData("foo(0,4565,250)")
 
-        chkOp("foo.y = 10;", "ct_err:attr_not_mutable:y")
+        chkOp("foo.y = 10;", "ct_err:attr_not_mutable:foo.y")
         chkData("foo(0,4565,250)")
 
-        chkOp("foo.y += 10;", "ct_err:attr_not_mutable:y")
+        chkOp("foo.y += 10;", "ct_err:attr_not_mutable:foo.y")
         chkData("foo(0,4565,250)")
 
         chkEx("{ foo.x = 50; return 0; }", "ct_err:no_db_update:query")

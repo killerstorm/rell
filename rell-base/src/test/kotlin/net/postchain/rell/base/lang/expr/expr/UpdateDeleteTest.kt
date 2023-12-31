@@ -76,9 +76,10 @@ class UpdateDeleteTest: BaseRellTest() {
                 "person(5,Bob,2,3,200,500)"
         )
 
-        chkOp("update person @ { .name == 'Mike' } ( name = 'Bob' );", "ct_err:update_attr_not_mutable:name")
-        chkOp("update person @ { .name == 'Bob' } ( home = city @ { .name == 'Boston' } );", "ct_err:update_attr_not_mutable:home")
-        chkOp("update person @ { .name == 'Mike' } ( base = 999 );", "ct_err:update_attr_not_mutable:base")
+        chkOp("update person @ { .name == 'Mike' } ( name = 'Bob' );", "ct_err:attr_not_mutable:person.name")
+        chkOp("update person @ { .name == 'Bob' } ( home = city @ { .name == 'Boston' } );", "ct_err:attr_not_mutable:person.home")
+        chkOp("update person @ { .name == 'Mike' } ( base = 999 );", "ct_err:attr_not_mutable:person.base")
+        chkOp("val name = 'Bob'; update person @ { .name == 'Mike' } ( name );", "ct_err:attr_not_mutable:person.name")
 
         chkData(
                 "city(1,Boston)",
@@ -462,10 +463,10 @@ class UpdateDeleteTest: BaseRellTest() {
                 "ct_err:binop_operand_type:+=:[integer]:[integer?]")
         chkDataCommon(james(100), mike(250))
 
-        resetChkOp("val p = ${person("Mike")}; p.name = 'Bond';", "ct_err:attr_not_mutable:name")
+        resetChkOp("val p = ${person("Mike")}; p.name = 'Bond';", "ct_err:attr_not_mutable:person.name")
         chkDataCommon(james(100), mike(250))
 
-        resetChkOp("val p = ${person("Mike")}; p.name += 'Bond';", "ct_err:attr_not_mutable:name")
+        resetChkOp("val p = ${person("Mike")}; p.name += 'Bond';", "ct_err:attr_not_mutable:person.name")
         chkDataCommon(james(100), mike(250))
 
         resetData()

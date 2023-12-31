@@ -5,66 +5,79 @@
 package net.postchain.rell.base.compiler.base.lib
 
 import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
-import net.postchain.rell.base.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
-import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty
+import net.postchain.rell.base.compiler.base.namespace.C_NamespaceItem
+import net.postchain.rell.base.compiler.base.namespace.C_NsMemberFactory
 import net.postchain.rell.base.compiler.base.namespace.C_SysNsProto
 import net.postchain.rell.base.compiler.base.namespace.C_SysNsProtoBuilder
-import net.postchain.rell.base.compiler.base.utils.C_RNamePath
+import net.postchain.rell.base.compiler.base.utils.C_RFullNamePath
+import net.postchain.rell.base.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.base.model.R_Name
-import net.postchain.rell.base.model.R_Struct
-import net.postchain.rell.base.utils.doc.DocSymbol
-import net.postchain.rell.base.utils.ide.IdeSymbolKind
-import net.postchain.rell.base.utils.immMapOf
+import net.postchain.rell.base.utils.mutableMultimapOf
 import net.postchain.rell.base.utils.toImmMap
+import net.postchain.rell.base.utils.toImmSet
 
 class C_LibNamespace private constructor(
-    private val namePath: C_RNamePath,
-    private val members: Map<R_Name, C_LibNamespaceMember>,
+    private val namePath: C_RFullNamePath,
+    private val namespaces: Map<R_Name, C_LibNestedNamespace>,
+    private val members: Map<R_Name, C_NamespaceItem>,
 ) {
     fun toSysNsProto(): C_SysNsProto {
-        val defPath = namePath.toDefPath()
-        val b = C_SysNsProtoBuilder(defPath)
+        val b = C_SysNsProtoBuilder()
+
         for ((name, member) in members) {
-            member.toSysNsProto(b, name)
+            b.addMember(name, member)
         }
+
+        val memberFactory = C_NsMemberFactory(namePath)
+        for ((name, libNs) in namespaces) {
+            libNs.toSysNsProto(b, memberFactory, name)
+        }
+
         return b.build()
     }
 
-    abstract class Maker(val basePath: C_RNamePath) {
-        abstract fun addMember(name: R_Name, member: C_LibNamespaceMember)
-        abstract fun addNamespace(name: R_Name, doc: DocSymbol, block: (Maker) -> Unit)
+    abstract class Maker(val basePath: C_RFullNamePath) {
+        abstract fun addMember(name: R_Name, member: C_NamespaceItem)
+        abstract fun addFunction(name: R_Name, fnCase: C_LibFuncCase<V_GlobalFunctionCall>)
+        abstract fun addNamespace(name: R_Name, ideInfo: C_IdeSymbolInfo, block: (Maker) -> Unit)
     }
 
     class Builder private constructor(
-        basePath: C_RNamePath,
+        basePath: C_RFullNamePath,
         private var active: Boolean,
     ): Maker(basePath) {
-        constructor(basePath: C_RNamePath): this(basePath, active = true)
+        constructor(basePath: C_RFullNamePath): this(basePath, active = true)
 
         private var done = false
 
-        private val members = mutableMapOf<R_Name, BuilderMember>()
-        private val namespaces = mutableMapOf<R_Name, BuilderMember_Namespace>()
+        private val members = mutableMapOf<R_Name, C_NamespaceItem>()
+        private val functions = mutableMultimapOf<R_Name, C_LibFuncCase<V_GlobalFunctionCall>>()
+        private val namespaces = mutableMapOf<R_Name, NestedBuilder>()
 
-        override fun addMember(name: R_Name, member: C_LibNamespaceMember) {
+        override fun addMember(name: R_Name, member: C_NamespaceItem) {
             check(active)
             check(!done)
-            checkNameConflict(name)
-            members[name] = BuilderMember_Simple(member)
+            checkNameConflict(name, members, namespaces, functions.asMap())
+            members[name] = member
         }
 
-        override fun addNamespace(name: R_Name, doc: DocSymbol, block: (Maker) -> Unit) {
+        override fun addFunction(name: R_Name, fnCase: C_LibFuncCase<V_GlobalFunctionCall>) {
+            check(active)
+            check(!done)
+            checkNameConflict(name, members, namespaces)
+            functions.put(name, fnCase)
+        }
+
+        override fun addNamespace(name: R_Name, ideInfo: C_IdeSymbolInfo, block: (Maker) -> Unit) {
             check(active)
             check(!done)
 
             var ns = namespaces[name]
             if (ns == null) {
-                checkNameConflict(name)
+                checkNameConflict(name, members, functions.asMap())
                 val builder = Builder(basePath.append(name), active = false)
-                ns = BuilderMember_Namespace(builder, doc)
+                ns = NestedBuilder(builder, ideInfo)
                 namespaces[name] = ns
-                members[name] = ns
             }
 
             check(!ns.builder.active)
@@ -78,9 +91,11 @@ class C_LibNamespace private constructor(
             active = true
         }
 
-        private fun checkNameConflict(name: R_Name) {
-            check(name !in members) {
-                val fullName = basePath.qualifiedName(name)
+        private fun checkNameConflict(name: R_Name, vararg maps: Map<R_Name, *>) {
+            check(maps.isNotEmpty())
+            val conflict = maps.any { name in it }
+            check(!conflict) {
+                val fullName = basePath.fullName(name)
                 "Name conflict: ${fullName.str()}"
             }
         }
@@ -89,128 +104,97 @@ class C_LibNamespace private constructor(
             check(!done)
             done = true
 
-            val resMembers = members
+            val resNamespaces = namespaces
                 .mapValues { it.value.build() }
                 .toImmMap()
 
-            return if (resMembers.isEmpty()) EMPTY else C_LibNamespace(basePath, resMembers)
+            val memberFactory = C_NsMemberFactory(basePath)
+            val fnMembers = functions.asMap().mapValues { (name, cases) ->
+                createFunctionMember(name, cases.toList(), memberFactory)
+            }
+
+            val simpleMembers = members.mapValues { it.value }
+
+            val resMembers = fnMembers + simpleMembers
+            return C_LibNamespace(basePath, resNamespaces.toImmMap(), resMembers.toImmMap())
         }
 
-        private abstract class BuilderMember {
-            abstract fun build(): C_LibNamespaceMember
+        private fun createFunctionMember(
+            simpleName: R_Name,
+            cases: List<C_LibFuncCase<V_GlobalFunctionCall>>,
+            memberFactory: C_NsMemberFactory,
+        ): C_NamespaceItem {
+            val fullName = basePath.fullName(simpleName)
+            val naming = C_MemberNaming.makeFullName(fullName)
+            val fn = C_LibFunctionUtils.makeGlobalFunction(naming, cases)
+            val ideInfo = cases.first().ideInfo
+            val member = memberFactory.function(fullName.last, fn, ideInfo)
+            return C_NamespaceItem(member)
         }
 
-        private class BuilderMember_Simple(val member: C_LibNamespaceMember): BuilderMember() {
-            override fun build() = member
-        }
-
-        private class BuilderMember_Namespace(val builder: Builder, private val doc: DocSymbol): BuilderMember() {
-            override fun build(): C_LibNamespaceMember {
+        private class NestedBuilder(
+            val builder: Builder,
+            private val ideInfo: C_IdeSymbolInfo,
+        ) {
+            fun build(): C_LibNestedNamespace {
                 val ns = builder.build()
-                return C_LibNamespaceMember_Namespace(ns, doc)
+                return C_LibNestedNamespace(ns, ideInfo)
             }
         }
     }
 
     companion object {
-        val EMPTY: C_LibNamespace = C_LibNamespace(C_RNamePath.EMPTY, immMapOf())
-
         fun merge(namespaces: List<C_LibNamespace>): C_LibNamespace {
-            val b = Builder(C_RNamePath.EMPTY)
-            for (ns in namespaces) {
-                mergeNamespace(b, ns)
+            check(namespaces.isNotEmpty())
+
+            val single = namespaces.singleOrNull()
+            if (single != null) {
+                return single
             }
-            return b.build()
+
+            val resPath = namespaces.first().namePath
+
+            val namespaceNames = namespaces.flatMap { it.namespaces.keys }.toImmSet()
+            val resNamespaces = namespaceNames.associateWith { name ->
+                val mems = namespaces.mapNotNull { it.namespaces[name] }
+                mergeNamespaces(mems)
+            }
+
+            val memberNames = namespaces.flatMap { it.members.keys }.toImmSet()
+            val resMembers = memberNames.associateWith { name ->
+                val mems = namespaces.mapNotNull { it.members[name] }
+                val resMem = mems.singleOrNull()
+                checkNotNull(resMem) { "Namespace member conflict: $resPath $name (${mems.size})" }
+                resMem
+            }
+
+            return C_LibNamespace(resPath, resNamespaces, resMembers)
         }
 
-        private fun mergeNamespace(m: Maker, ns: C_LibNamespace) {
-            for ((name, member) in ns.members) {
-                mergeMember(m, name, member)
-            }
-        }
+        private fun mergeNamespaces(members: List<C_LibNestedNamespace>): C_LibNestedNamespace {
+            check(members.isNotEmpty())
 
-        private fun mergeMember(m: Maker, name: R_Name, member: C_LibNamespaceMember) {
-            when (member) {
-                is C_LibNamespaceMember_Namespace -> {
-                    m.addNamespace(name, member.doc) { subB ->
-                        mergeNamespace(subB, member.namespace)
-                    }
-                }
-                else -> {
-                    m.addMember(name, member)
-                }
+            val single = members.singleOrNull()
+            if (single != null) {
+                return single
             }
+
+            val namespaces = members.map { it.namespace }
+            val resNamespace = merge(namespaces)
+
+            val resIdeInfo = members.first().ideInfo
+            return C_LibNestedNamespace(resNamespace, resIdeInfo)
         }
     }
 }
 
-sealed class C_LibNamespaceMember {
-    abstract fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name)
-
-    companion object {
-        fun makeType(typeDef: C_LibTypeDef, ideInfo: C_IdeSymbolInfo, deprecated: C_Deprecated?): C_LibNamespaceMember {
-            return C_LibNamespaceMember_Type(typeDef, ideInfo, deprecated)
-        }
-
-        fun makeStruct(rStruct: R_Struct, doc: DocSymbol): C_LibNamespaceMember {
-            return C_LibNamespaceMember_Struct(rStruct, doc)
-        }
-
-        fun makeProperty(property: C_NamespaceProperty, ideInfo: C_IdeSymbolInfo): C_LibNamespaceMember {
-            return C_LibNamespaceMember_Property(property, ideInfo)
-        }
-
-        fun makeFunction(function: C_GlobalFunction, defaultIdeInfo: C_IdeSymbolInfo): C_LibNamespaceMember {
-            return C_LibNamespaceMember_Function(function, defaultIdeInfo)
-        }
-    }
-}
-
-private class C_LibNamespaceMember_Namespace(
+private class C_LibNestedNamespace(
     val namespace: C_LibNamespace,
-    val doc: DocSymbol,
-): C_LibNamespaceMember() {
-    override fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name) {
+    val ideInfo: C_IdeSymbolInfo,
+) {
+    fun toSysNsProto(b: C_SysNsProtoBuilder, memberFactory: C_NsMemberFactory, name: R_Name) {
         val ns = namespace.toSysNsProto().toNamespace()
-        val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_NAMESPACE, doc = doc)
-        b.addNamespace(name.str, ns, ideInfo)
-    }
-}
-
-private class C_LibNamespaceMember_Type(
-    private val typeDef: C_LibTypeDef,
-    private val ideInfo: C_IdeSymbolInfo,
-    private val deprecated: C_Deprecated?,
-): C_LibNamespaceMember() {
-    override fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name) {
-        b.addType(name, typeDef, ideInfo, deprecated)
-    }
-}
-
-private class C_LibNamespaceMember_Struct(
-    private val rStruct: R_Struct,
-    private val doc: DocSymbol,
-): C_LibNamespaceMember() {
-    override fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name) {
-        val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_STRUCT, doc = doc)
-        b.addStruct(name.str, rStruct, ideInfo)
-    }
-}
-
-private class C_LibNamespaceMember_Property(
-    private val property: C_NamespaceProperty,
-    private val ideInfo: C_IdeSymbolInfo,
-): C_LibNamespaceMember() {
-    override fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name) {
-        b.addProperty(name, property, ideInfo)
-    }
-}
-
-private class C_LibNamespaceMember_Function(
-    private val function: C_GlobalFunction,
-    private val ideInfo: C_IdeSymbolInfo,
-): C_LibNamespaceMember() {
-    override fun toSysNsProto(b: C_SysNsProtoBuilder, name: R_Name) {
-        b.addFunction(name, function, ideInfo)
+        val member = memberFactory.namespace(name, ns, ideInfo)
+        b.addMember(name, member)
     }
 }

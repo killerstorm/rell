@@ -65,11 +65,11 @@ class C_Statement(
 }
 
 class C_BlockCode(
-        rStmts: List<R_Statement>,
-        val returnAlways: Boolean,
-        val guardBlock: Boolean,
-        val deltaVarFacts: C_VarFacts,
-        val factsCtx: C_VarFactsContext
+    rStmts: List<R_Statement>,
+    val returnAlways: Boolean,
+    val guardBlock: Boolean,
+    val deltaVarFacts: C_VarFacts,
+    val factsCtx: C_VarFactsContext,
 ) {
     val rStmts = rStmts.toImmList()
 
@@ -273,13 +273,7 @@ class C_IterableAdapter(val itemType: R_Type, val rAdapter: R_IterableAdapter) {
 
         private fun getItemType(exprType: R_Type): R_Type? {
             val genType = Lib_Rell.ITERABLE_TYPE.mGenericType
-            val resolver = M_TypeParamsResolver(genType.params)
-            val match = resolver.matchTypeParamsIn(genType.commonType, exprType.mType)
-            if (!match) {
-                return null
-            }
-
-            val map = resolver.resolve()
+            val map = M_TypeParamsResolver.resolveTypeParams(genType.params, genType.commonType, exprType.mType)
             map ?: return null
 
             val mItemType = map.values.singleOrNull()

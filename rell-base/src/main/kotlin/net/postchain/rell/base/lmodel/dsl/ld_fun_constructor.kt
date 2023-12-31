@@ -7,7 +7,7 @@ package net.postchain.rell.base.lmodel.dsl
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.lmodel.L_Constructor
 import net.postchain.rell.base.lmodel.L_ConstructorHeader
-import net.postchain.rell.base.lmodel.L_FullName
+import net.postchain.rell.base.model.R_FullName
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.utils.toImmList
 
@@ -29,23 +29,22 @@ class Ld_ConstructorBuilder(
     }
 }
 
-class Ld_ConstructorDsl(
+class Ld_ConstructorDslImpl(
     conMaker: Ld_ConstructorMaker,
     bodyMaker: Ld_FunctionBodyDsl,
-): Ld_CommonFunctionDsl(conMaker, bodyMaker)
+): Ld_CommonFunctionDslImpl(conMaker, bodyMaker), Ld_ConstructorDsl
 
 class Ld_ConstructorHeader(
     private val typeParams: List<Ld_TypeParam>,
     private val params: List<Ld_FunctionParam>,
 ) {
     fun finish(ctx: Ld_TypeFinishContext): L_ConstructorHeader {
-        val (mTypeParams, mTypeParamMap) = Ld_TypeParam.finishList(ctx, typeParams)
-
-        val subCtx = ctx.subCtx(mTypeParamMap)
+        val lTypeParams = Ld_TypeParam.finishList(ctx, typeParams)
+        val subCtx = ctx.subCtx(lTypeParams.map)
         val lParams = params.map { it.finish(subCtx) }.toImmList()
 
         return L_ConstructorHeader(
-            typeParams = mTypeParams,
+            typeParams = lTypeParams.list,
             params = lParams,
         )
     }
@@ -56,9 +55,9 @@ class Ld_Constructor(
     private val deprecated: C_Deprecated?,
     private val body: Ld_FunctionBody,
 ) {
-    fun finish(ctx: Ld_TypeFinishContext, fullName: L_FullName): L_Constructor {
+    fun finish(ctx: Ld_TypeFinishContext, fullName: R_FullName): L_Constructor {
         val lHeader = header.finish(ctx)
-        val lBody = body.finish(fullName.qName)
+        val lBody = body.finish(fullName.qualifiedName)
         return L_Constructor(header = lHeader, deprecated = deprecated, body = lBody, pure = body.pure)
     }
 }

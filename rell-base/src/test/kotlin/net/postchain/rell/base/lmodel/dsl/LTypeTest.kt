@@ -433,113 +433,24 @@ class LTypeTest: BaseLTest() {
 
         chkTypeMems(mod, "data",
             "function f(): anything",
-            "function g(): anything",
-            "@deprecated(WARNING) function h(): anything",
-            "@deprecated(ERROR) function i(): anything",
+            "alias g = f",
+            "@deprecated(WARNING) alias h = f",
+            "@deprecated(ERROR) alias i = f",
         )
-    }
-
-    @Test fun testExtension() {
-        val mod = makeModule("test") {
-            type("data", extension = true) {
-                generic("T")
-                function("get", result = "T") {
-                    body { -> Rt_UnitValue }
-                }
-                function("set", result = "anything") {
-                    param(type = "T")
-                    body { -> Rt_UnitValue }
-                }
-                staticFunction("create", result = "T") {
-                    body { -> Rt_UnitValue }
-                }
-            }
-        }
-
-        chkDefs(mod, "@extension type data<T>")
-        chkTypeMems(mod, "data", "function get(): T", "function set(T): anything", "static function create(): T")
-    }
-
-    @Test fun testExtensionList() {
-        val mod = makeModule("test") {
-            type("data")
-            type("ext", extension = true) {
-                generic("T")
-            }
-            namespace("ns") {
-                type("sub_data")
-                type("sub_ext", extension = true) {
-                    generic("T")
-                }
-            }
-        }
-
-        val exp = "@extension type ext<T>, @extension type ns.sub_ext<T>"
-        assertEquals(exp, mod.namespace.allExtensionTypes().joinToString { it.strCode() })
-    }
-
-    @Test fun testExtensionBadParams() {
-        val mod = makeModule("test") {
-            chkErr("LDE:type:extension_bad_type_params:data0:0") {
-                type("data0", extension = true)
-            }
-            type("data1", extension = true) {
-                generic("A")
-            }
-            chkErr("LDE:type:extension_bad_type_params:data2:2") {
-                type("data2", extension = true) {
-                    generic("A")
-                    generic("B")
-                }
-            }
-            chkErr("LDE:type:extension_bad_type_params:data3:3") {
-                type("data3", extension = true) {
-                    generic("A")
-                    generic("B")
-                    generic("C")
-                }
-            }
-        }
-
-        chkDefs(mod, "@extension type data1<A>")
-    }
-
-    @Test fun testExtensionOfStruct() {
-        val mod = makeModule("test") {
-            struct("data") {}
-            type("data_ext", extension = true) {
-                generic("T", subOf = "data")
-            }
-        }
-        chkDefs(mod, "struct data", "@extension type data_ext<T:-data>")
-    }
-
-    @Test fun testExtensionOfStructImported() {
-        val mod = makeModule("test") {
-            struct("data") {}
-        }
-        val mod2 = makeModule("client") {
-            imports(mod)
-            type("data_ext", extension = true) {
-                generic("T", subOf = "data")
-            }
-        }
-        chkDefs(mod2, "@extension type data_ext<T:-data>")
     }
 
     @Test fun testAliasConflict() {
         val mod = makeModule("test") {
-            type("data") {
-                chkErr("LDE:alias_conflict:data") { alias("data") }
-                alias("data2")
-                chkErr("LDE:alias_conflict:data2") { alias("data2") }
-                alias("data3")
-            }
+            type("data")
+            chkErr("LDE:name_conflict:data") { alias("data", "data") }
+            alias("data2", "data")
+            chkErr("LDE:name_conflict:data2") { alias("data2", "data") }
+            alias("data3", "data")
         }
         chkDefs(mod,
             "type data",
-            "type data2",
-            "type data3",
+            "alias data2 = data",
+            "alias data3 = data",
         )
     }
 

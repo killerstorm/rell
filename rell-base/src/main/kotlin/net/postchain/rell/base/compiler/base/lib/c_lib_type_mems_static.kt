@@ -43,7 +43,7 @@ sealed class C_TypeStaticMember(
         fun makeFunction(
             defName: C_DefinitionName,
             simpleName: R_Name,
-            functionNaming: C_GlobalFunctionNaming,
+            functionNaming: C_MemberNaming,
             fn: C_LibGlobalFunction,
             defaultIdeInfo: C_IdeSymbolInfo,
         ): C_TypeStaticMember {
@@ -84,7 +84,7 @@ private class C_TypeStaticMember_Property(
 private class C_TypeStaticMember_Function(
     defName: C_DefinitionName,
     simpleName: R_Name,
-    private val functionNaming: C_GlobalFunctionNaming,
+    private val functionNaming: C_MemberNaming,
     private val fn: C_LibGlobalFunction,
     private val defaultIdeInfo: C_IdeSymbolInfo,
 ): C_TypeStaticMember(defName, simpleName) {

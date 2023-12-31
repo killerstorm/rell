@@ -205,8 +205,8 @@ private object SampleDocLib {
                 body { -> Rt_UnitValue }
             }
 
-            link("fun_real", "link_fun")
-            link("dep_fun_warn", "link_fun_warn")
+            alias("link_fun", "fun_real")
+            alias("link_fun_warn", "dep_fun_warn")
 
             type("sample_type") {
                 LibModuleTester.setRTypeFactory(this, ::getModule, "sample.sample_type")

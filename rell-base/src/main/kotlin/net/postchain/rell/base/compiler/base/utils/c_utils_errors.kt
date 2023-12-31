@@ -91,12 +91,12 @@ object C_Errors {
         return C_Error.stop(pos, "expr_bad_dst", "Invalid assignment destination")
     }
 
-    fun errAttrNotMutable(pos: S_Pos, name: String): C_Error {
-        return C_Error.stop(pos, msgAttrNotMutable(name))
+    fun errAttrNotMutable(pos: S_Pos, name: String, fullName: String): C_Error {
+        return C_Error.stop(pos, msgAttrNotMutable(name, fullName))
     }
 
-    fun msgAttrNotMutable(name: String): C_CodeMsg {
-        return C_CodeMsg("attr_not_mutable:$name", "Attribute '$name' is not mutable")
+    fun msgAttrNotMutable(name: String, fullName: String): C_CodeMsg {
+        return C_CodeMsg("attr_not_mutable:$fullName", "Attribute '$name' is not mutable")
     }
 
     fun errExprNoDb(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type) {
@@ -190,13 +190,13 @@ object C_Errors {
     fun msgPartialCallNotAllowed(fnName: String?): C_CodeMsg {
         val fnCode = fnName ?: "?"
         val fnMsg = if (fnName == null) "this function" else "function '$fnName'"
-        return C_CodeMsg("expr:call:partial_not_supported:$fnCode", "Partial application not supported for $fnMsg")
+        return C_CodeMsg("expr:call:partial_not_supported:[$fnCode]", "Partial application not supported for $fnMsg")
     }
 
     fun msgPartialCallAmbiguous(fnName: String?): C_CodeMsg {
         val fnCode = fnName ?: "?"
         val fnMsg = if (fnName == null) "the function" else "function '$fnName'"
-        return C_CodeMsg("expr:call:partial_ambiguous:$fnCode", "Cannot determine which variant of $fnMsg to use")
+        return C_CodeMsg("expr:call:partial_ambiguous:[$fnCode]", "Cannot determine which variant of $fnMsg to use")
     }
 
     fun msgModuleNotFound(name: R_ModuleName): C_CodeMsg {

@@ -239,7 +239,7 @@ class ExpressionTest: BaseRellTest(false) {
 
     @Test fun testList() {
         chk("list([1,2,3,4,5])", "list<integer>[int[1],int[2],int[3],int[4],int[5]]")
-        chk("list()", "ct_err:fn:sys:unresolved_type_params:list:T")
+        chk("list()", "ct_err:fn:sys:unresolved_type_params:[list]:T")
         chk("list<integer>()", "list<integer>[]")
         chk("list<integer>([1,2,3])", "list<integer>[int[1],int[2],int[3]]")
         chk("list<integer>(['Hello'])", "ct_err:expr_call_argtypes:[list<integer>]:list<text>")

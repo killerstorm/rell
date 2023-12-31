@@ -31,8 +31,6 @@ import net.postchain.rell.base.utils.toPair
 import kotlin.test.assertEquals
 
 abstract class BaseIdeSymbolTest: BaseRellTest(false) {
-    protected class SymParts(val kind: Boolean = false, val def: Boolean = false, val link: Boolean = false)
-
     protected fun replaceSymInfo(
         info: String,
         name: String? = null,
@@ -40,24 +38,24 @@ abstract class BaseIdeSymbolTest: BaseRellTest(false) {
         defId: String? = null,
         link: String? = null,
     ): String {
-        val m = Regex("^([A-Za-z_][A-Za-z0-9_]*)=([^;]+);([^;]+);([^;]+)$").matchEntire(info)
+        val m = Regex("^([A-Za-z_][A-Za-z0-9_]*)=([^|]+)[|]([^|]+)[|]([^|]+)$").matchEntire(info)
         checkNotNull(m) { info }
         val (oldName, oldKind, oldDefId, oldLink) = m.destructured
-        return "${name?:oldName}=${kind?:oldKind};${defId?:oldDefId};${link?:oldLink}"
+        return "${name?:oldName}=${kind?:oldKind}|${defId?:oldDefId}|${link?:oldLink}"
     }
 
     protected fun chkSymsExpr(expr: String, vararg expected: String, err: String? = null) {
-        chkSyms("function __main() = $expr;", "__main=DEF_FUNCTION;function[__main];-", *expected, err = err)
+        chkSyms("function __main() = $expr;", "__main=DEF_FUNCTION|function[__main]|-", *expected, err = err)
     }
 
     protected fun chkSymsStmt(stmt: String, vararg expected: String, err: String? = null) {
-        chkSyms("function __main() { $stmt }", "__main=DEF_FUNCTION;function[__main];-", *expected, err = err)
+        chkSyms("function __main() { $stmt }", "__main=DEF_FUNCTION|function[__main]|-", *expected, err = err)
     }
 
     protected fun chkSymsType(type: String, vararg expected: String, err: String? = null) {
         chkSyms("struct __s { __x: $type; }",
-            "__s=DEF_STRUCT;struct[__s];-",
-            "__x=MEM_STRUCT_ATTR;struct[__s].attr[__x];-",
+            "__s=DEF_STRUCT|struct[__s]|-",
+            "__x=MEM_STRUCT_ATTR|struct[__s].attr[__x]|-",
             *expected,
             err = err,
         )
@@ -249,7 +247,7 @@ abstract class BaseIdeSymbolTest: BaseRellTest(false) {
             return syms
                     .map {
                         val ideInfo = cRes.ideSymbolInfos.getValue(it.key)
-                        val symStr = ideInfoToStr(ideInfo, SymParts(kind = true, def = true, link = true), syms)
+                        val symStr = ideInfoToStr(ideInfo, syms)
                         ActualEntry(it.value, ideInfo, symStr)
                     }
                     .toImmList()
@@ -277,12 +275,12 @@ abstract class BaseIdeSymbolTest: BaseRellTest(false) {
             return syms.toImmMap()
         }
 
-        private fun ideInfoToStr(ideInfo: IdeSymbolInfo, parts: SymParts, syms: Map<S_Pos, String>): String {
+        private fun ideInfoToStr(ideInfo: IdeSymbolInfo, syms: Map<S_Pos, String>): String {
             val res = mutableListOf<String>()
-            if (parts.kind) res.add(ideInfo.kind.name)
-            if (parts.def) res.add(ideInfo.defId?.encode() ?: "-")
-            if (parts.link) res.add(linkToStr(ideInfo.link, syms))
-            return res.joinToString(";")
+            res.add(ideInfo.kind.name)
+            res.add(ideInfo.defId?.encode() ?: "-")
+            res.add(linkToStr(ideInfo.link, syms))
+            return res.joinToString("|")
         }
 
         private fun linkToStr(link: IdeSymbolLink?, syms: Map<S_Pos, String>): String {

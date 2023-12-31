@@ -47,8 +47,8 @@ class LibRellTestEventsTest: BaseRellTest(false) {
         file("op.rell", "module; operation foo() { rell.test.get_events(); }")
         file("fn.rell", "module; function foo() { rell.test.get_events(); }")
         chkCompile("", "OK")
-        chkCompile("import op;", "ct_err:op.rell:unknown_name:[rell]:test")
-        chkCompile("import fn;", "ct_err:fn.rell:unknown_name:[rell]:test")
+        chkCompile("import op;", "ct_err:op.rell:unknown_name:[rell:rell]:test")
+        chkCompile("import fn;", "ct_err:fn.rell:unknown_name:[rell:rell]:test")
     }
 
     @Test fun testAssertEvents() {

@@ -28,10 +28,22 @@ class C_Deprecated(
     }
 
     companion object {
+        fun make(error: Boolean = false, useInstead: String? = null): C_Deprecated {
+            return C_Deprecated(useInstead = useInstead, error = error)
+        }
+
         fun makeOrNull(messageType: C_MessageType?, useInstead: String?): C_Deprecated? {
             return if (messageType == null) null else {
                 C_Deprecated(useInstead = useInstead, error = messageType == C_MessageType.ERROR)
             }
+        }
+
+        fun warning(useInstead: String? = null): C_Deprecated {
+            return make(error = false, useInstead = useInstead)
+        }
+
+        fun error(useInstead: String? = null): C_Deprecated {
+            return make(error = true, useInstead = useInstead)
         }
     }
 }
@@ -79,10 +91,11 @@ class C_NamespaceElement(
             msgCtx.error(qName.last.pos, "namespace:ambig:$qNameStr:[$listCode]", "Name '$qNameStr' is ambiguous: $listMsg")
         }
 
-        if (member.deprecation != null) {
+        val deprecation = item.deprecation
+        if (deprecation != null) {
             val qName = nameFn()
-            val nameStr = member.deprecation.defName.appLevelName
-            deprecatedMessage(msgCtx, qName.last.pos, nameStr, member.declarationType(), member.deprecation.deprecated)
+            val nameStr = deprecation.defName.qualifiedName.str()
+            deprecatedMessage(msgCtx, qName.last.pos, nameStr, member.declarationType(), deprecation.deprecated)
         }
     }
 
@@ -110,7 +123,7 @@ class C_NamespaceElement(
             val typeStr = declarationType.msg.capitalize()
             val depCode = deprecated.detailsCode()
             val depStr = deprecated.detailsMessage()
-            val code = "deprecated:$declarationType:$nameMsg$depCode"
+            val code = "deprecated:$declarationType:[$nameMsg]$depCode"
             val msg = "$typeStr '$nameMsg' is deprecated$depStr"
 
             val error = deprecated.error || msgCtx.globalCtx.compilerOptions.deprecatedError
@@ -123,10 +136,12 @@ class C_NamespaceElement(
 
 // This class is needed to override IDE info. Exact import alias must have different IDE info than the referenced
 // member (def ID and link).
-class C_NamespaceItem(val member: C_NamespaceMember, val ideInfo: C_IdeSymbolInfo): DocDefinition {
+class C_NamespaceItem(
+    val member: C_NamespaceMember,
+    val ideInfo: C_IdeSymbolInfo = member.ideInfo,
+    val deprecation: C_DefDeprecation? = member.deprecation,
+): DocDefinition {
     override val docSymbol: DocSymbol get() = ideInfo.getIdeInfo().doc ?: DocSymbol.NONE
-
-    constructor(member: C_NamespaceMember): this(member, member.ideInfo)
 
     override fun getDocMember(name: String): DocDefinition? {
         return member.getDocMember(name)
@@ -169,6 +184,7 @@ class C_NamespaceEntry(
 }
 
 sealed class C_Namespace {
+    abstract fun getEntries(): Map<R_Name, C_NamespaceEntry>
     abstract fun getEntry(name: R_Name): C_NamespaceEntry?
 
     fun getElement(name: R_Name, tags: List<C_NamespaceMemberTag> = immListOf()): C_NamespaceElement? {
@@ -188,12 +204,17 @@ sealed class C_Namespace {
 private class C_BasicNamespace(entries: Map<R_Name, C_NamespaceEntry>): C_Namespace() {
     private val entries = entries.toImmMap()
 
+    override fun getEntries(): Map<R_Name, C_NamespaceEntry> {
+        return entries
+    }
+
     override fun getEntry(name: R_Name): C_NamespaceEntry? {
         return entries[name]
     }
 }
 
 private class C_LateNamespace(private val getter: LateGetter<C_Namespace>): C_Namespace() {
+    override fun getEntries() = getter.get().getEntries()
     override fun getEntry(name: R_Name) = getter.get().getEntry(name)
 }
 

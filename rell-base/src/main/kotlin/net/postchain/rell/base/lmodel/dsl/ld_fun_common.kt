@@ -20,34 +20,28 @@ import net.postchain.rell.base.utils.doc.DocSymbolKind
 import net.postchain.rell.base.utils.doc.DocSymbolName
 import net.postchain.rell.base.utils.toImmList
 
-@RellLibDsl
-interface Ld_FunctionContextDsl {
-    val fnSimpleName: String
-}
-
-@RellLibDsl
-abstract class Ld_CommonFunctionDsl(
+abstract class Ld_CommonFunctionDslImpl(
     private val commonMaker: Ld_CommonFunctionMaker,
     private val bodyDsl: Ld_FunctionBodyDsl,
-): Ld_FunctionContextDsl, Ld_FunctionBodyDsl by bodyDsl {
+): Ld_CommonFunctionDsl, Ld_FunctionBodyDsl by bodyDsl {
     override val fnSimpleName: String get() = bodyDsl.fnSimpleName
 
-    fun deprecated(newName: String, error: Boolean = true) {
+    override fun deprecated(newName: String, error: Boolean) {
         commonMaker.deprecated(C_Deprecated(useInstead = newName, error = error))
     }
 
-    fun generic(name: String, subOf: String? = null, superOf: String? = null) {
+    override fun generic(name: String, subOf: String?, superOf: String?) {
         commonMaker.generic(name = name, subOf = subOf, superOf = superOf)
     }
 
-    fun param(
+    override fun param(
         type: String,
-        name: String? = null,
-        arity: L_ParamArity = L_ParamArity.ONE,
-        exact: Boolean = false,
-        nullable: Boolean = false,
-        lazy: Boolean = false,
-        implies: L_ParamImplication? = null,
+        name: String?,
+        arity: L_ParamArity,
+        exact: Boolean,
+        nullable: Boolean,
+        lazy: Boolean,
+        implies: L_ParamImplication?,
     ) {
         commonMaker.param(
             type = type,

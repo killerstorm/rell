@@ -656,6 +656,11 @@ class ImportTest: BaseRellTest(false) {
         chkCompile("import lib.*; import c.{data}; struct foo { x: data; }", "OK")
     }
 
+    /*@Test*/ fun testBugNameIsAmbiguous2() {
+        file("lib.rell", "module; namespace msg { function f() = 123; } namespace topic { function g() = 456; }")
+        chkFull("import lib.{topic.*, msg}; import lib.*; query q() = msg.f();", "...")
+    }
+
     private fun chkImport(imp: String, code: String, exp: String) {
         chkFull("$imp function __f() = $code; query q() = __f();", exp)
     }

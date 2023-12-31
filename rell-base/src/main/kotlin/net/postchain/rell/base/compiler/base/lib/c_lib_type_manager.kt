@@ -14,7 +14,7 @@ import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.utils.toImmList
 
 class C_LibTypeManager(modules: List<C_LibModule>) {
-    private val allExtensionTypes: List<C_LibExtensionType> = modules
+    private val allExtensionTypes: List<C_LibTypeExtension> = modules
         .flatMap { it.extensionTypes }
         .toImmList()
 

@@ -43,9 +43,9 @@ object Lib_Type_ByteArray {
     private val LIST_OF_INTEGER = R_ListType(R_IntegerType)
 
     val NAMESPACE = Ld_NamespaceDsl.make {
-        type("byte_array", rType = R_ByteArrayType) {
-            alias("pubkey")
+        alias("pubkey", "byte_array")
 
+        type("byte_array", rType = R_ByteArrayType) {
             parent(type = "iterable<integer>")
 
             constructor {

@@ -64,22 +64,20 @@ object Lib_OpContext {
             }
         }
 
-        type("struct_of_operation_opcontext_extension", abstract = true, extension = true, hidden = true) {
-            generic("T", subOf = "mirror_struct<-operation>")
-
-            function("to_gtx_operation", "gtx_operation") {
-                body { a ->
-                    val (mountName, gtvArgs) = Lib_Type_Struct.decodeOperation(a)
-                    val nameValue = Rt_TextValue.get(mountName.str())
-                    val rtArgs = gtvArgs.map<Gtv, Rt_Value> { Rt_GtvValue.get(it) }.toMutableList()
-                    val argsValue = Rt_ListValue(Lib_Type_Gtv.LIST_OF_GTV_TYPE, rtArgs)
-                    val attrs = mutableListOf(nameValue, argsValue)
-                    Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, attrs)
+        namespace("op_context") {
+            extension("struct_op_ext", type = "mirror_struct<-operation>") {
+                function("to_gtx_operation", "gtx_operation") {
+                    body { a ->
+                        val (mountName, gtvArgs) = Lib_Type_Struct.decodeOperation(a)
+                        val nameValue = Rt_TextValue.get(mountName.str())
+                        val rtArgs = gtvArgs.map<Gtv, Rt_Value> { Rt_GtvValue.get(it) }.toMutableList()
+                        val argsValue = Rt_ListValue(Lib_Type_Gtv.LIST_OF_GTV_TYPE, rtArgs)
+                        val attrs = mutableListOf(nameValue, argsValue)
+                        Rt_StructValue(Lib_Rell.GTX_OPERATION_STRUCT_TYPE, attrs)
+                    }
                 }
             }
-        }
 
-        namespace("op_context") {
             property("exists", type = "boolean", pure = false) {
                 bodyContext { ctx ->
                     val v = ctx.exeCtx.opCtx.exists()

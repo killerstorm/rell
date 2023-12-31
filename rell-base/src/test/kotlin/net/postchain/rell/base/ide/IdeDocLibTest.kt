@@ -27,7 +27,7 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
                 type("data", rType = R_IntegerType)
             }
         }
-        chkSyms("struct _s { _x: ns.data; }", "ns=DEF_NAMESPACE;-;-", "?head=NAMESPACE|mod:ns")
+        chkSyms("struct _s { _x: ns.data; }", "ns=DEF_NAMESPACE|-|-", "?head=NAMESPACE|mod:ns")
     }
 
     @Test fun testNamespaceTypeSimple() {
@@ -36,7 +36,7 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
                 type("data", rType = R_IntegerType)
             }
         }
-        chkSyms("struct _s { _x: ns.data; }", "data=DEF_TYPE;-;-", "?head=TYPE|mod:ns.data")
+        chkSyms("struct _s { _x: ns.data; }", "data=DEF_TYPE|-|-", "?head=TYPE|mod:ns.data")
     }
 
     @Test fun testNamespaceTypeGeneric() {
@@ -48,22 +48,7 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
                 }
             }
         }
-        chkSyms("struct _s { _x: ns.data<integer>; }", "data=DEF_TYPE;-;-", "?head=TYPE|mod:ns.data")
-    }
-
-    @Test fun testNamespaceTypeAlias() {
-        extraModule {
-            type("data", rType = R_IntegerType) {
-                alias("data_1")
-                alias("data_2", deprecated = C_MessageType.WARNING)
-                alias("data_3", deprecated = C_MessageType.ERROR)
-            }
-        }
-
-        val msg = "deprecated:TYPE"
-        chkSyms("struct _s { _x: data_1; }", "data_1=DEF_TYPE;-;-", "?head=TYPE|mod:data")
-        chkSyms("struct _s { _x: data_2; }", "data_2=DEF_TYPE;-;-", "?head=TYPE|mod:data", warn = "$msg:data_2:data")
-        chkSyms("struct _s { _x: data_3; }", "data_3=DEF_TYPE;-;-", "?head=TYPE|mod:data", err = "$msg:data_3:data")
+        chkSyms("struct _s { _x: ns.data<integer>; }", "data=DEF_TYPE|-|-", "?head=TYPE|mod:ns.data")
     }
 
     @Test fun testNamespaceStruct() {
@@ -72,14 +57,14 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
                 attribute("value", "integer")
             }
         }
-        chkSyms("struct _s { _x: data; }", "data=DEF_STRUCT;-;-", "?head=STRUCT|mod:data")
+        chkSyms("struct _s { _x: data; }", "data=DEF_STRUCT|-|-", "?head=STRUCT|mod:data")
     }
 
     @Test fun testNamespaceConstant() {
         extraModule {
             constant("MAGIC", 123L)
         }
-        chkSyms("query q() = MAGIC;", "MAGIC=DEF_CONSTANT;-;-", "?head=CONSTANT|mod:MAGIC")
+        chkSyms("query q() = MAGIC;", "MAGIC=DEF_CONSTANT|-|-", "?head=CONSTANT|mod:MAGIC")
     }
 
     @Test fun testNamespaceProperty() {
@@ -88,9 +73,9 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
             property("pure_prop", pure = true, type = "integer") { bodyContext { Rt_UnitValue } }
             property("spec_prop", C_NamespaceProperty_RtValue(Rt_IntValue.ZERO))
         }
-        chkSyms("query q() = prop;", "prop=MEM_SYS_PROPERTY;-;-", "?head=PROPERTY|mod:prop")
-        chkSyms("query q() = pure_prop;", "pure_prop=MEM_SYS_PROPERTY_PURE;-;-", "?head=PROPERTY|mod:pure_prop")
-        chkSyms("query q() = spec_prop;", "spec_prop=MEM_SYS_PROPERTY;-;-", "?head=PROPERTY|mod:spec_prop")
+        chkSyms("query q() = prop;", "prop=MEM_SYS_PROPERTY|-|-", "?head=PROPERTY|mod:prop")
+        chkSyms("query q() = pure_prop;", "pure_prop=MEM_SYS_PROPERTY_PURE|-|-", "?head=PROPERTY|mod:pure_prop")
+        chkSyms("query q() = spec_prop;", "spec_prop=MEM_SYS_PROPERTY|-|-", "?head=PROPERTY|mod:spec_prop")
     }
 
     @Test fun testNamespaceFunction() {
@@ -100,14 +85,14 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
                 body { -> Rt_UnitValue }
             }
         }
-        chkSyms("query q() = foo(123);", "foo=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:foo")
+        chkSyms("query q() = foo(123);", "foo=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|mod:foo")
     }
 
     @Test fun testNamespaceFunctionSpecial() {
         extraModule {
             function("foo", BaseLTest.makeGlobalFun())
         }
-        chkSyms("query q() = foo();", "foo=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:foo")
+        chkSyms("query q() = foo();", "foo=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|mod:foo")
     }
 
     @Test fun testNamespaceFunctionDeprecated() {
@@ -122,10 +107,10 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
             }
         }
 
-        chkSyms("query q() = f();", "f=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:f",
-            err = "deprecated:FUNCTION:f:new_f")
-        chkSyms("query q() = g();", "g=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:g",
-            warn = "deprecated:FUNCTION:g:new_g")
+        chkSyms("query q() = f();", "f=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|mod:f",
+            err = "deprecated:FUNCTION:[f]:new_f")
+        chkSyms("query q() = g();", "g=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|mod:g",
+            warn = "deprecated:FUNCTION:[g]:new_g")
     }
 
     @Test fun testNamespaceFunctionAlias() {
@@ -137,41 +122,85 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
                 body { -> Rt_UnitValue }
             }
         }
-        chkSyms("query q() = g();", "g=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:g")
-        chkSyms("query q() = h();", "h=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:h",
-            warn = "deprecated:FUNCTION:h:f")
-        chkSyms("query q() = k();", "k=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:k",
-            err = "deprecated:FUNCTION:k:f")
+
+        chkSyms("query q() = g();",
+            "g=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=ALIAS|mod:g|<alias> g = [f]\n\n<function> f(): [text]",
+        )
+        chkSyms("query q() = h();",
+            "h=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=ALIAS|mod:h|@deprecated\n<alias> h = [f]\n\n<function> f(): [text]",
+            warn = "deprecated:FUNCTION:[h]:f",
+        )
+        chkSyms("query q() = k();",
+            "k=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=ALIAS|mod:k|@deprecated(ERROR)\n<alias> k = [f]\n\n<function> f(): [text]",
+            err = "deprecated:FUNCTION:[k]:f",
+        )
     }
 
-    @Test fun testNamespaceLink() {
+    @Test fun testNamespaceAlias() {
         extraModule {
             constant("VALUE", 123)
             struct("data") {
                 attribute("x", "integer")
             }
             function("foo", result = "text") { body { -> Rt_UnitValue } }
-            link("VALUE", "value_ref")
-            link("data", "data_ref")
-            link("foo", "foo_ref")
+            alias("value_ref", "VALUE")
+            alias("data_ref", "data")
+            alias("foo_ref", "foo")
         }
 
-        chkSyms("query q() = value_ref;", "value_ref=DEF_CONSTANT;-;-", "?head=CONSTANT|mod:VALUE")
-        chkSyms("struct _s { _x: data_ref; }", "data_ref=DEF_STRUCT;-;-", "?head=STRUCT|mod:data")
-        chkSyms("query q() = foo_ref();", "foo_ref=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:foo")
+        chkSyms("query q() = value_ref;",
+            "value_ref=DEF_CONSTANT|-|-",
+            "?doc=ALIAS|mod:value_ref|<alias> value_ref = [VALUE]\n\n<val> VALUE: [integer] = 123",
+        )
+        chkSyms("struct _s { _x: data_ref; }",
+            "data_ref=DEF_STRUCT|-|-",
+            "?doc=ALIAS|mod:data_ref|<alias> data_ref = [data]\n\n<struct> data",
+        )
+        chkSyms("query q() = foo_ref();",
+            "foo_ref=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=ALIAS|mod:foo_ref|<alias> foo_ref = [foo]\n\n<function> foo(): [text]",
+        )
     }
 
-    @Test fun testNamespaceLinkDeprecated() {
+    @Test fun testNamespaceAliasDeprecated() {
         extraModule {
             function("f", result = "text") {
                 deprecated("new_f")
                 body { -> Rt_UnitValue }
             }
-            link("f", "link_f")
+            alias("link_f", "f")
         }
 
-        chkSyms("query q() = link_f();", "link_f=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:f",
-            err = "deprecated:FUNCTION:link_f:new_f",
+        chkSyms("query q() = link_f();",
+            "link_f=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=ALIAS|mod:link_f|<alias> link_f = [f]\n\n@deprecated(ERROR)\n<function> f(): [text]",
+        )
+    }
+
+    @Test fun testNamespaceAliasType() {
+        extraModule {
+            alias("data_1", "data")
+            alias("data_2", "data", deprecated = C_MessageType.WARNING)
+            alias("data_3", "data", deprecated = C_MessageType.ERROR)
+            type("data", rType = R_IntegerType)
+        }
+
+        val msg = "deprecated:TYPE"
+
+        chkSyms("struct _s { _x: data_1; }",
+            "data_1=DEF_TYPE|-|-", "?doc=ALIAS|mod:data_1|<alias> data_1 = [data]\n\n<type> data")
+        chkSyms("struct _s { _x: data_2; }",
+            "data_2=DEF_TYPE|-|-",
+            "?doc=ALIAS|mod:data_2|@deprecated\n<alias> data_2 = [data]\n\n<type> data",
+            warn = "$msg:[data_2]:data",
+        )
+        chkSyms("struct _s { _x: data_3; }",
+            "data_3=DEF_TYPE|-|-",
+            "?doc=ALIAS|mod:data_3|@deprecated(ERROR)\n<alias> data_3 = [data]\n\n<type> data",
+            err = "$msg:[data_3]:data",
         )
     }
 
@@ -182,7 +211,7 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
                 constant("VALUE", 123)
             }
         }
-        chkSyms("query q() = data.VALUE;", "VALUE=DEF_CONSTANT;-;-", "?head=CONSTANT|mod:data.VALUE")
+        chkSyms("query q() = data.VALUE;", "VALUE=DEF_CONSTANT|-|-", "?head=CONSTANT|mod:data.VALUE")
     }
 
     @Test fun testTypeDefProperty() {
@@ -194,10 +223,10 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
                 property("spec_prop", type = "integer", C_SysFunctionBody.simple { _ -> Rt_UnitValue })
             }
         }
-        chkSyms("function f(d: data) = d.prop;", "prop=MEM_SYS_PROPERTY;-;-", "?head=PROPERTY|mod:data.prop")
-        chkSyms("function f(d: data) = d.pure_prop;", "pure_prop=MEM_SYS_PROPERTY_PURE;-;-",
+        chkSyms("function f(d: data) = d.prop;", "prop=MEM_SYS_PROPERTY|-|-", "?head=PROPERTY|mod:data.prop")
+        chkSyms("function f(d: data) = d.pure_prop;", "pure_prop=MEM_SYS_PROPERTY_PURE|-|-",
             "?head=PROPERTY|mod:data.pure_prop")
-        chkSyms("function f(d: data) = d.spec_prop;", "spec_prop=MEM_SYS_PROPERTY;-;-",
+        chkSyms("function f(d: data) = d.spec_prop;", "spec_prop=MEM_SYS_PROPERTY|-|-",
             "?head=PROPERTY|mod:data.spec_prop")
     }
 
@@ -217,9 +246,9 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
             }
         }
 
-        chkSyms("function f() = data(123);", "data=DEF_TYPE;-;-", "?head=CONSTRUCTOR|mod:data")
-        chkSyms("function f() = data(x'1234');", "data=DEF_TYPE;-;-", "?head=CONSTRUCTOR|mod:data",
-            warn = "deprecated:FUNCTION:data:something_else",
+        chkSyms("function f() = data(123);", "data=DEF_TYPE|-|-", "?head=CONSTRUCTOR|mod:data")
+        chkSyms("function f() = data(x'1234');", "data=DEF_TYPE|-|-", "?head=CONSTRUCTOR|mod:data",
+            warn = "deprecated:FUNCTION:[data]:something_else",
         )
     }
 
@@ -230,7 +259,7 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
                 constructor(BaseLTest.makeGlobalFun())
             }
         }
-        chkSyms("function f() = data();", "data=DEF_TYPE;-;-", "?head=CONSTRUCTOR|mod:data")
+        chkSyms("function f() = data();", "data=DEF_TYPE|-|-", "?head=CONSTRUCTOR|mod:data")
     }
 
     @Test fun testTypeDefFunction() {
@@ -248,10 +277,10 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
             }
         }
 
-        chkSyms("function f(d: data) = d.foo();", "foo=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:data.foo")
-        chkSyms("function f(d: data) = d.spec();", "spec=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:data.spec")
-        chkSyms("function f() = data.stat();", "stat=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:data.stat")
-        chkSyms("function f() = data.stat_spec();", "stat_spec=DEF_FUNCTION_SYSTEM;-;-",
+        chkSyms("function f(d: data) = d.foo();", "foo=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|mod:data.foo")
+        chkSyms("function f(d: data) = d.spec();", "spec=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|mod:data.spec")
+        chkSyms("function f() = data.stat();", "stat=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|mod:data.stat")
+        chkSyms("function f() = data.stat_spec();", "stat_spec=DEF_FUNCTION_SYSTEM|-|-",
             "?head=FUNCTION|mod:data.stat_spec")
     }
 
@@ -274,14 +303,14 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
             }
         }
 
-        chkSyms("function _f(d: data) = d.f();", "f=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:data.f",
-            err = "deprecated:FUNCTION:data.f:new_f",
+        chkSyms("function _f(d: data) = d.f();", "f=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|mod:data.f",
+            err = "deprecated:FUNCTION:[data.f]:new_f",
         )
-        chkSyms("function _f(d: data) = d.g();", "g=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:data.g",
-            warn = "deprecated:FUNCTION:data.g:new_g",
+        chkSyms("function _f(d: data) = d.g();", "g=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|mod:data.g",
+            warn = "deprecated:FUNCTION:[data.g]:new_g",
         )
-        chkSyms("function _f() = data.h();", "h=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:data.h",
-            warn = "deprecated:FUNCTION:data.h:new_h",
+        chkSyms("function _f() = data.h();", "h=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|mod:data.h",
+            warn = "deprecated:FUNCTION:[data.h]:new_h",
         )
     }
 
@@ -298,13 +327,68 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
             }
         }
 
-        chkSyms("function _f(d: data) = d.f();", "f=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:data.f")
-        chkSyms("function _f(d: data) = d.g();", "g=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:data.g")
-        chkSyms("function _f(d: data) = d.h();", "h=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:data.h",
-            warn = "deprecated:FUNCTION:data.h:f",
+        chkSyms("function _f(d: data) = d.f();",
+            "f=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=FUNCTION|mod:data.f|<function> f(): [text]",
         )
-        chkSyms("function _f(d: data) = d.k();", "k=DEF_FUNCTION_SYSTEM;-;-", "?head=FUNCTION|mod:data.k",
-            err = "deprecated:FUNCTION:data.k:f",
+        chkSyms("function _f(d: data) = d.g();",
+            "g=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=ALIAS|mod:data.g|<alias> g = [f]\n\n<function> f(): [text]",
+        )
+        chkSyms("function _f(d: data) = d.h();",
+            "h=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=ALIAS|mod:data.h|@deprecated\n<alias> h = [f]\n\n<function> f(): [text]",
+            warn = "deprecated:FUNCTION:[data.h]:f",
+        )
+        chkSyms("function _f(d: data) = d.k();",
+            "k=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=ALIAS|mod:data.k|@deprecated(ERROR)\n<alias> k = [f]\n\n<function> f(): [text]",
+            err = "deprecated:FUNCTION:[data.k]:f",
+        )
+    }
+
+    @Test fun testExtensionProperty() {
+        extraModule {
+            extension("test_ext", type = "T") {
+                generic("T", subOf = "any")
+                property("prop", type = "integer") { _ -> Rt_UnitValue }
+                property("pure_prop", type = "integer", pure = true) { _ -> Rt_UnitValue }
+                property("spec_prop", type = "integer", C_SysFunctionBody.simple { _ -> Rt_UnitValue })
+            }
+        }
+
+        chkSymsExpr("''.prop",
+            "prop=MEM_SYS_PROPERTY|-|-", "?doc=PROPERTY|mod:test_ext.prop|prop: [integer]")
+        chkSymsExpr("''.pure_prop",
+            "pure_prop=MEM_SYS_PROPERTY_PURE|-|-", "?doc=PROPERTY|mod:test_ext.pure_prop|<pure> pure_prop: [integer]")
+        chkSymsExpr("''.spec_prop",
+            "spec_prop=MEM_SYS_PROPERTY|-|-", "?doc=PROPERTY|mod:test_ext.spec_prop|spec_prop: [integer]")
+    }
+
+    @Test fun testExtensionFunction() {
+        extraModule {
+            extension("test_ext", type = "T") {
+                generic("T", subOf = "any")
+                function("foo", result = "T") {
+                    body { -> Rt_UnitValue }
+                }
+                function("spec", BaseLTest.makeMemberFun())
+                staticFunction("stat", result = "T") {
+                    body { -> Rt_UnitValue }
+                }
+                staticFunction("stat_spec", BaseLTest.makeGlobalFun())
+            }
+        }
+
+        chkSymsExpr("''.foo()",
+            "foo=DEF_FUNCTION_SYSTEM|-|-", "?doc=FUNCTION|mod:test_ext.foo|<function> foo(): [T]")
+        chkSymsExpr("''.spec()",
+            "spec=DEF_FUNCTION_SYSTEM|-|-", "?doc=FUNCTION|mod:test_ext.spec|<function> spec(...)")
+        chkSymsExpr("text.stat()",
+            "stat=DEF_FUNCTION_SYSTEM|-|-", "?doc=FUNCTION|mod:test_ext.stat|<static> <function> stat(): [T]")
+        chkSymsExpr("text.stat_spec()",
+            "stat_spec=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=FUNCTION|mod:test_ext.stat_spec|<static> <function> stat_spec(...)",
         )
     }
 
@@ -316,11 +400,11 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
             }
         }
 
-        chkSyms("function _f(d: data) = d.foo;", "foo=MEM_STRUCT_ATTR;-;-", "?head=STRUCT_ATTR|mod:data.foo")
-        chkSyms("function _f(d: data) = d.bar;", "bar=MEM_STRUCT_ATTR_VAR;-;-", "?head=STRUCT_ATTR|mod:data.bar")
+        chkSyms("function _f(d: data) = d.foo;", "foo=MEM_STRUCT_ATTR|-|-", "?head=STRUCT_ATTR|mod:data.foo")
+        chkSyms("function _f(d: data) = d.bar;", "bar=MEM_STRUCT_ATTR_VAR|-|-", "?head=STRUCT_ATTR|mod:data.bar")
         chkSyms("function _f() = data(foo = 123, bar = 'hello');",
-            "foo=MEM_STRUCT_ATTR;-;-", "?head=STRUCT_ATTR|mod:data.foo",
-            "bar=MEM_STRUCT_ATTR_VAR;-;-", "?head=STRUCT_ATTR|mod:data.bar",
+            "foo=MEM_STRUCT_ATTR|-|-", "?head=STRUCT_ATTR|mod:data.foo",
+            "bar=MEM_STRUCT_ATTR_VAR|-|-", "?head=STRUCT_ATTR|mod:data.bar",
         )
     }
 

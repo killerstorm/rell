@@ -53,7 +53,8 @@ class LibRequireTest: BaseRellTest(false) {
     }
 
     @Test fun testRequireNotEmptyNullable() {
-        chkEx("{ val x: integer = 123; return require_not_empty(x); }", "ct_err:expr_call_argtypes:[require_not_empty]:integer")
+        chkEx("{ val x: integer = 123; return require_not_empty(x); }",
+            "ct_err:expr_call_argtypes:[require_not_empty]:integer")
         chkEx("{ val x: integer? = _nullable(123); return require_not_empty(x); }", "int[123]")
         chkEx("{ val x: integer? = null; return require_not_empty(x); }", "req_err:null")
     }
@@ -98,7 +99,7 @@ class LibRequireTest: BaseRellTest(false) {
 
     @Test fun testRequireNotEmptyWrongArgs() {
         chkEx("{ require_not_empty(); return 0; }", "ct_err:expr_call_argtypes:[require_not_empty]:")
-        chkEx("{ require_not_empty(null); return 0; }", "ct_err:fn:sys:unresolved_type_params:require_not_empty:T")
+        chkEx("{ require_not_empty(null); return 0; }", "ct_err:fn:sys:unresolved_type_params:[require_not_empty]:T")
         chkEx("{ require_not_empty(false); return 0; }", "ct_err:expr_call_argtypes:[require_not_empty]:boolean")
         chkEx("{ require_not_empty(true); return 0; }", "ct_err:expr_call_argtypes:[require_not_empty]:boolean")
         chkEx("{ require_not_empty(123); return 0; }", "ct_err:expr_call_argtypes:[require_not_empty]:integer")

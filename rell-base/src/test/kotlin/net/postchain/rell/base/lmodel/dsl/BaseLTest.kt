@@ -13,7 +13,9 @@ import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunctionBody
 import net.postchain.rell.base.compiler.base.lib.V_SpecialMemberFunctionCall
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.lmodel.L_Module
+import net.postchain.rell.base.lmodel.L_TypeDefMembers
 import net.postchain.rell.base.model.R_CtErrorType
+import net.postchain.rell.base.model.R_QualifiedName
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.model.expr.R_MemberCalculator
 import net.postchain.rell.base.model.expr.R_MemberCalculator_Error
@@ -44,8 +46,15 @@ abstract class BaseLTest {
     }
 
     private fun chkTypeMems0(mod: L_Module, typeName: String, all: Boolean, expected: List<String>) {
-        val typeDef = mod.getTypeDef(typeName)
-        val members = if (all) typeDef.allMembers else typeDef.members
+        val rTypeName = R_QualifiedName.of(typeName)
+        val typeDef = mod.getTypeDefOrNull(rTypeName)
+        val typeExt = mod.getTypeExtensionOrNull(rTypeName)
+        val members: L_TypeDefMembers = when {
+            typeDef != null -> if (all) typeDef.allMembers else typeDef.members
+            typeExt != null -> typeExt.members
+            else -> throw IllegalArgumentException(typeName)
+        }
+
         val exp = expected.toImmList()
         val act = members.all.map { it.strCode() }
         assertEquals(exp, act)
@@ -111,10 +120,14 @@ abstract class BaseLTest {
                     selfType: R_Type,
                     args: List<V_Expr>,
                 ): V_SpecialMemberFunctionCall {
-                    return object: V_SpecialMemberFunctionCall(ctx, R_CtErrorType) {
-                        override fun calculator(): R_MemberCalculator = R_MemberCalculator_Error(R_CtErrorType, "Error")
-                    }
+                    return makeMemberFunCall(ctx)
                 }
+            }
+        }
+
+        fun makeMemberFunCall(ctx: C_ExprContext): V_SpecialMemberFunctionCall {
+            return object: V_SpecialMemberFunctionCall(ctx, R_CtErrorType) {
+                override fun calculator(): R_MemberCalculator = R_MemberCalculator_Error(R_CtErrorType, "Error")
             }
         }
     }

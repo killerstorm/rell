@@ -13,9 +13,14 @@ import net.postchain.rell.base.compiler.base.utils.C_LateInit
 import net.postchain.rell.base.compiler.base.utils.C_SourceDir
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.model.R_MountName
-import net.postchain.rell.base.utils.*
+import net.postchain.rell.base.utils.Nullable
 import net.postchain.rell.base.utils.doc.*
+import net.postchain.rell.base.utils.futures.FcFuture
+import net.postchain.rell.base.utils.futures.FcFutures
+import net.postchain.rell.base.utils.futures.FcManager
 import net.postchain.rell.base.utils.ide.IdeFilePath
+import net.postchain.rell.base.utils.toImmList
+import net.postchain.rell.base.utils.toImmMap
 
 class C_ModuleInfo(
     val idePath: IdeFilePath?,
@@ -41,7 +46,7 @@ class C_ModuleLoader(
     val readerCtx = C_ModuleReaderContext(S_AppContext(msgCtx, symCtxProvider, C_ImportModuleLoaderImpl()))
     private val moduleReader = C_ModuleReader(readerCtx, sourceDir)
 
-    private val cfMgr = CfManager()
+    private val fcMgr = FcManager.create(allowRecursiveExecution = true)
     private val moduleStates = mutableMapOf<R_ModuleName, C_ModuleState>()
 
     private val selectedModules = mutableSetOf<R_ModuleName>()
@@ -52,9 +57,9 @@ class C_ModuleLoader(
     fun finish(): List<C_MidModule> {
         check(!done)
         done = true
-        cfMgr.execute()
+        fcMgr.finish()
         val midModules = moduleStates.values
-            .map { it.cfJob.getResult() }
+            .map { it.fcFuture.getResult() }
             .filter { C_ModuleUtils.isAllowedModuleName(it.moduleName) }
             .map { it.toMidModule(it.moduleName in selectedModules) }
         return midModules.toImmList()
@@ -62,7 +67,7 @@ class C_ModuleLoader(
 
     fun loadAllModules() {
         discoverModulesTree(R_ModuleName.EMPTY, false)
-        cfMgr.execute()
+        fcMgr.execute()
     }
 
     fun loadModule(name: R_ModuleName): Boolean {
@@ -85,7 +90,7 @@ class C_ModuleLoader(
         source ?: return false
 
         addModule(name, source)
-        cfMgr.execute()
+        fcMgr.execute()
         return true
     }
 
@@ -100,7 +105,7 @@ class C_ModuleLoader(
 
         if (subModules) {
             discoverModulesTree(moduleName, true)
-            cfMgr.execute()
+            fcMgr.execute()
         } else {
             loadModule0(moduleName, true)
         }
@@ -236,11 +241,11 @@ class C_ModuleLoader(
 
         private var modSource: C_ModuleSource? = source
 
-        val cfJob: CfJob<C_LoaderModule> = cfMgr.job {
+        val fcFuture: FcFuture<C_LoaderModule> = fcMgr.future().delegate {
             load()
         }
 
-        private fun load(): CfResult<C_LoaderModule> {
+        private fun load(): FcFuture<C_LoaderModule> {
             val source = modSource!!
             modSource = null
 
@@ -252,9 +257,9 @@ class C_ModuleLoader(
                 moduleStates[parentName]
             }
 
-            return CfResult.afterOrDirect(parentJob?.cfJob) { parentLdrModule ->
-                val ldrModule = makeLoaderModule(source, header, parentName, parentLdrModule)
-                CfResult.direct(ldrModule)
+            val parentFuture: FcFuture<C_LoaderModule?> = parentJob?.fcFuture ?: FcFutures.value(null)
+            return fcMgr.future().after(parentFuture).compute { parentLdrModule ->
+                makeLoaderModule(source, header, parentName, parentLdrModule)
             }
         }
 

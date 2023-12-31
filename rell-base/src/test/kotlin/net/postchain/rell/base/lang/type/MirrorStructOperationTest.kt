@@ -55,8 +55,8 @@ class MirrorStructOperationTest: BaseRellTest(false) {
     @Test fun testAttributeWrite() {
         def("operation new_user(name, rating: integer) {}")
         val init = "val s = struct<new_user>('Bob',123);"
-        chkEx("{ $init s.name = 'Alice'; return s; }", "ct_err:attr_not_mutable:name")
-        chkEx("{ $init s.rating = 456; return s; }", "ct_err:attr_not_mutable:rating")
+        chkEx("{ $init s.name = 'Alice'; return s; }", "ct_err:attr_not_mutable:struct<new_user>.name")
+        chkEx("{ $init s.rating = 456; return s; }", "ct_err:attr_not_mutable:struct<new_user>.rating")
     }
 
     @Test fun testInstanceMemberFunctions() {

@@ -150,9 +150,9 @@ class EnumTest: BaseRellTest() {
         chk("foo.value('C')", "foo[C]")
         chk("foo.value('D')", "rt_err:enum_badname:foo:D")
 
-        chk("foo.value(true)", "ct_err:expr_call_argtypes:[foo.value]:boolean")
-        chk("foo.value(null)", "ct_err:expr_call_argtypes:[foo.value]:null")
-        chk("foo.value(foo.A)", "ct_err:expr_call_argtypes:[foo.value]:foo")
+        chk("foo.value(true)", "ct_err:expr_call_argtypes:[rell.enum_ext(foo).value]:boolean")
+        chk("foo.value(null)", "ct_err:expr_call_argtypes:[rell.enum_ext(foo).value]:null")
+        chk("foo.value(foo.A)", "ct_err:expr_call_argtypes:[rell.enum_ext(foo).value]:foo")
     }
 
     @Test fun testMemberProperties() {
@@ -166,10 +166,10 @@ class EnumTest: BaseRellTest() {
         chk("foo.B.value", "int[1]")
         chk("foo.C.value", "int[2]")
 
-        chkEx("{ foo.A.name = 'X'; return 0; }", "ct_err:attr_not_mutable:name")
-        chkEx("{ foo.A.value = 123; return 0; }", "ct_err:attr_not_mutable:value")
-        chkEx("{ val v = foo.A; v.name = 'X'; return 0; }", "ct_err:attr_not_mutable:name")
-        chkEx("{ val v = foo.A; v.value = 123; return 0; }", "ct_err:attr_not_mutable:value")
+        chkEx("{ foo.A.name = 'X'; return 0; }", "ct_err:attr_not_mutable:rell.enum_ext(foo).name")
+        chkEx("{ foo.A.value = 123; return 0; }", "ct_err:attr_not_mutable:rell.enum_ext(foo).value")
+        chkEx("{ val v = foo.A; v.name = 'X'; return 0; }", "ct_err:attr_not_mutable:rell.enum_ext(foo).name")
+        chkEx("{ val v = foo.A; v.value = 123; return 0; }", "ct_err:attr_not_mutable:rell.enum_ext(foo).value")
     }
 
     @Test fun testMemberPropertiesAt() {

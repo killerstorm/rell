@@ -10,12 +10,21 @@ import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_Type
 import net.postchain.rell.base.mtype.M_Type
 import net.postchain.rell.base.runtime.Rt_Value
+import net.postchain.rell.base.utils.futures.FcFuture
 
 class Ld_Constant(private val type: Ld_Type, private val value: Ld_ConstantValue) {
     fun finish(ctx: Ld_TypeFinishContext, simpleName: R_Name): L_Constant {
         val mType = type.finish(ctx)
         val rValue = value.getValue(mType)
         return L_Constant(simpleName, mType, rValue)
+    }
+
+    fun process(ctx: Ld_NamespaceContext, simpleName: R_Name): FcFuture<L_Constant> {
+        return ctx.fcExec.future().after(ctx.finishCtxFuture).compute { finishCtx ->
+            val mType = type.finish(finishCtx.typeCtx)
+            val rValue = value.getValue(mType)
+            L_Constant(simpleName, mType, rValue)
+        }
     }
 }
 

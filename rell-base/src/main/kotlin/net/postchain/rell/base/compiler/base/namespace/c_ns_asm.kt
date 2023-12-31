@@ -383,7 +383,7 @@ private class C_NsAsm_InternalReplAssembler(
         private val sysNsProto: C_SysNsProto,
         private val stamp: R_AppUid,
         private val linkedModule: C_ModuleKey?,
-        private val oldState: C_NsAsm_InternalReplState
+        private val oldState: C_NsAsm_InternalReplState,
 ): C_NsAsm_ReplAssembler {
     val comAsm = C_NsAsm_InternalComponentAssembler(executor, nsLinker, nsKey, stamp)
     private var componentAdded = false
@@ -421,7 +421,7 @@ private class C_NsAsm_InternalReplAssembler(
             }
         }
 
-        val newNs = newRawNs.assemble(listOf())
+        val newNs = newRawNs.assemble(immListOf())
         val impModules = modules.mapValues { (_, v) -> v.impNs }.toImmMap()
         val newImpNs = C_NsImp_ImportsProcessor.process(msgCtx, newNs, impModules)
         val combinedImpNs = mergeReplNamespace(oldState.impNs, newImpNs)
@@ -581,7 +581,7 @@ private class C_NsAsm_RawDef_Namespace(
     override fun addToDefs(b: C_ModuleDefsBuilder) = ns.addToDefs(b)
 
     override fun assemble(): C_NsAsm_Def {
-        val ns2 = ns.assemble(listOf())
+        val ns2 = ns.assemble(immListOf())
         return C_NsAsm_Def_Namespace.createDirect(ns2, defName, ideInfo, deprecated)
     }
 }
@@ -618,13 +618,13 @@ private class C_NsAsm_Identity_ExactImport(imp: C_NsAsm_ExactImport): C_NsAsm_Id
 }
 
 private class C_NsAsm_InternalModuleAssembler(
-        private val executor: C_CompilerExecutor,
-        private val msgCtx: C_MessageContext,
-        private val sysNsProto: C_SysNsProto,
-        private val exportSysEntities: Boolean,
-        nsLinker: C_NsAsm_NamespaceLinker,
-        nsKey: C_NsAsm_NamespaceKey,
-        stamp: R_AppUid
+    private val executor: C_CompilerExecutor,
+    private val msgCtx: C_MessageContext,
+    private val sysNsProto: C_SysNsProto,
+    private val exportSysEntities: Boolean,
+    nsLinker: C_NsAsm_NamespaceLinker,
+    nsKey: C_NsAsm_NamespaceKey,
+    stamp: R_AppUid,
 ): C_NsAsm_InternalBasicAssembler(nsLinker, nsKey, stamp), C_NsAsm_ModuleAssembler {
     private val modDefsLate = C_LateInit(C_CompilerPass.NAMESPACES, C_ModuleDefs.EMPTY)
 
@@ -642,7 +642,6 @@ private class C_NsAsm_InternalModuleAssembler(
     fun assemble(): C_NsAsm_RawModule {
         finish()
 
-        val sysEntries = if (exportSysEntities) sysNsProto.entities else listOf()
         val conflictsProcessor = C_NsAsm_ConflictsProcessor(msgCtx, sysNsProto, stamp)
 
         val componentNss = components.map {
@@ -657,7 +656,9 @@ private class C_NsAsm_InternalModuleAssembler(
         modDefsLate.set(modDefs)
 
         modNs = fullModNs.filterByStamp(stamp)
-        val resNs = modNs.assemble(sysEntries)
+
+        val resSysEntries = if (exportSysEntities) sysNsProto.entities else immListOf()
+        val resNs = modNs.assemble(resSysEntries)
 
         return C_NsAsm_RawModule(fullModNs, resNs)
     }
@@ -680,7 +681,11 @@ private class C_NsAsm_InternalAppAssembler(
     private val moduleAsms = mutableMapOf<C_ModuleKey, C_NsAsm_InternalModuleAssembler>()
     private var replAsm: C_NsAsm_InternalReplAssembler? = null
 
-    override fun addModule(moduleKey: C_ModuleKey, sysNsProto: C_SysNsProto, exportSysEntities: Boolean): C_NsAsm_ModuleAssembler {
+    override fun addModule(
+        moduleKey: C_ModuleKey,
+        sysNsProto: C_SysNsProto,
+        exportSysEntities: Boolean,
+    ): C_NsAsm_ModuleAssembler {
         checkCanModify()
         check(moduleKey !in moduleAsms) { moduleKey }
         check(moduleKey !in preModules) { moduleKey }
@@ -703,9 +708,9 @@ private class C_NsAsm_InternalAppAssembler(
     }
 
     override fun addRepl(
-            sysNsProto: C_SysNsProto,
-            linkedModule: C_ModuleKey?,
-            oldState: C_NsAsm_ReplState
+        sysNsProto: C_SysNsProto,
+        linkedModule: C_ModuleKey?,
+        oldState: C_NsAsm_ReplState
     ): C_NsAsm_ReplAssembler {
         checkCanModify()
         check(replAsm == null)
@@ -713,14 +718,14 @@ private class C_NsAsm_InternalAppAssembler(
         val nsKey = C_NsAsm_NamespaceKey(C_ReplContainerKey)
 
         val replAsm = C_NsAsm_InternalReplAssembler(
-                nsLinker,
-                nsKey,
-                executor,
-                msgCtx,
-                sysNsProto,
-                stamp,
-                linkedModule,
-                oldState as C_NsAsm_InternalReplState
+            nsLinker,
+            nsKey,
+            executor,
+            msgCtx,
+            sysNsProto,
+            stamp,
+            linkedModule,
+            oldState as C_NsAsm_InternalReplState,
         )
 
         this.replAsm = replAsm
@@ -773,13 +778,19 @@ private class C_NsAsm_InternalReplState(
 }
 
 private class C_NsAsm_ConflictsProcessor(
-        private val msgCtx: C_MessageContext,
-        sysNsProto: C_SysNsProto,
-        private val stamp: R_AppUid
+    private val msgCtx: C_MessageContext,
+    sysNsProto: C_SysNsProto,
+    private val stamp: R_AppUid,
 ) {
     private val sysDefs: Map<R_Name, C_DeclarationType> = let {
         val mutSysDefs = mutableMapOf<R_Name, C_DeclarationType>()
-        for (entry in sysNsProto.entries) if (entry.name !in mutSysDefs) mutSysDefs[entry.name] = entry.item.member.declarationType()
+
+        for (entry in sysNsProto.entries) {
+            if (entry.name !in mutSysDefs) {
+                mutSysDefs[entry.name] = entry.item.member.declarationType()
+            }
+        }
+
         mutSysDefs.toImmMap()
     }
 

@@ -9,7 +9,7 @@ import org.junit.Test
 
 class LibSetTest: BaseRellTest(false) {
     @Test fun testConstructorRaw() {
-        chk("set()", "ct_err:fn:sys:unresolved_type_params:set:T")
+        chk("set()", "ct_err:fn:sys:unresolved_type_params:[set]:T")
         chk("set([])", "ct_err:expr_list_no_type")
         chk("set([123])", "set<integer>[int[123]]")
         chk("set([123, 456, 789])", "set<integer>[int[123],int[456],int[789]]")
@@ -45,26 +45,26 @@ class LibSetTest: BaseRellTest(false) {
     }
 
     @Test fun testConstructorPartial() {
-        chk("set(*)", "ct_err:expr:call:partial_not_supported:set")
-        chk("set<integer>(*)", "ct_err:expr:call:partial_ambiguous:set<integer>")
+        chk("set(*)", "ct_err:expr:call:partial_not_supported:[set]")
+        chk("set<integer>(*)", "ct_err:expr:call:partial_ambiguous:[set<integer>]")
 
-        chkEx("{ val f: () -> set<integer> = set(*); return f; }", "ct_err:expr:call:partial_not_supported:set")
+        chkEx("{ val f: () -> set<integer> = set(*); return f; }", "ct_err:expr:call:partial_not_supported:[set]")
         chkEx("{ val f: () -> set<integer> = set<integer>(*); return f; }", "fn[set<integer>()]")
         chkEx("{ val f: () -> set<integer> = set<integer>(*); return f(); }", "set<integer>[]")
 
         chkEx("{ val f: (list<integer>) -> set<integer> = set(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:set")
+            "ct_err:expr:call:partial_not_supported:[set]")
         chkEx("{ val f: (list<integer>) -> set<integer> = set<integer>(*); return f; }", "fn[set<integer>(*)]")
 
         chkEx("{ val f: (set<integer>) -> set<integer> = set(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:set")
+            "ct_err:expr:call:partial_not_supported:[set]")
         chkEx("{ val f: (map<text,integer>) -> set<(text,integer)> = set(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:set")
+            "ct_err:expr:call:partial_not_supported:[set]")
 
         chkEx("{ val f: (range) -> set<integer> = set(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:set")
+            "ct_err:expr:call:partial_not_supported:[set]")
         chkEx("{ val f: (byte_array) -> set<integer> = set(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:set")
+            "ct_err:expr:call:partial_not_supported:[set]")
     }
 
     @Test fun testEmpty() {
@@ -78,7 +78,7 @@ class LibSetTest: BaseRellTest(false) {
         chk("set([1]).size()", "int[1]")
         chk("set([1, 2, 3, 4, 5]).size()", "int[5]")
         chk("set([1, 2, 3, 2, 3, 4, 5]).size()", "int[5]")
-        chk("set<integer>().len()", "ct_err:deprecated:FUNCTION:set<integer>.len:size")
+        chk("set<integer>().len()", "ct_err:deprecated:FUNCTION:[set<integer>.len]:size")
     }
 
     @Test fun testEquals() {

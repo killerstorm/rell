@@ -491,9 +491,7 @@ private object Lib_Type_Op {
 
     val NAMESPACE = Ld_NamespaceDsl.make {
         namespace("rell.test") {
-            type("struct_of_operation_test_extension", abstract = true, extension = true, hidden = true) {
-                generic("T", subOf = "mirror_struct<-operation>")
-
+            extension("struct_op_ext", type = "mirror_struct<-operation>") {
                 function("to_test_op", "rell.test.op") {
                     validate { ctx ->
                         if (!ctx.exprCtx.modCtx.isTestLib()) {
@@ -510,9 +508,7 @@ private object Lib_Type_Op {
                 }
             }
 
-            type("gtx_operation_test_extension", abstract = true, extension = true, hidden = true) {
-                generic("T", subOf = "gtx_operation")
-
+            extension("gtx_operation_ext", type = "gtx_operation") {
                 function("to_test_op", "rell.test.op") {
                     validate { ctx ->
                         if (!ctx.exprCtx.modCtx.isTestLib()) {

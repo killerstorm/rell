@@ -16,9 +16,9 @@ import java.math.BigInteger
 
 object Lib_Type_Integer {
     val NAMESPACE = Ld_NamespaceDsl.make {
-        type("integer", rType = R_IntegerType) {
-            alias("timestamp")
+        alias("timestamp", "integer")
 
+        type("integer", rType = R_IntegerType) {
             constant("MIN_VALUE", Long.MIN_VALUE)
             constant("MAX_VALUE", Long.MAX_VALUE)
 

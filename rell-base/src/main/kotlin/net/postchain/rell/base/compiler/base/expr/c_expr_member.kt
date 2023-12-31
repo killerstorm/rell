@@ -17,7 +17,6 @@ import net.postchain.rell.base.compiler.base.fn.C_PartialCallArguments
 import net.postchain.rell.base.compiler.base.lib.*
 import net.postchain.rell.base.compiler.base.utils.C_CodeMsg
 import net.postchain.rell.base.compiler.base.utils.C_Errors
-import net.postchain.rell.base.compiler.base.utils.C_Utils
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.compiler.vexpr.V_MemberFunctionCall
@@ -115,6 +114,7 @@ class C_TypeValueMember_Function(
     private val rName: R_Name,
     private val fn: C_LibMemberFunction,
     private val defaultIdeInfo: C_IdeSymbolInfo,
+    private val naming: C_MemberNaming,
 ): C_TypeValueMember(rName) {
     override fun kindMsg() = "function"
     override fun nameMsg() = rName.str toCodeMsg rName.str
@@ -123,7 +123,7 @@ class C_TypeValueMember_Function(
 
     override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_TypeValueMember {
         val fn2 = fn.replaceTypeParams(rep)
-        return if (fn2 === fn) this else C_TypeValueMember_Function(rName, fn2, defaultIdeInfo)
+        return if (fn2 === fn) this else C_TypeValueMember_Function(rName, fn2, defaultIdeInfo, naming)
     }
 
     override fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember {
@@ -141,17 +141,17 @@ class C_TypeValueMember_Function(
     ): V_TypeValueMember {
         val callTargetInfo = C_FunctionCallTargetInfo_SysMemberFunction(selfType, fn)
         val callArgs = C_FunctionCallArgsUtils.compileCallArgs(ctx, args, callTargetInfo)
-        val fullName = C_Utils.getFullNameLazy(selfType, rName)
+        val fullName = naming.replaceSelfType(selfType.mType).fullNameLazy
+
+        val callCtx = C_LibFuncCaseCtx(linkPos, fullName)
 
         val vCall = when (callArgs) {
             null -> null
             is C_FullCallArguments -> {
                 val vArgs = callArgs.compileSimpleArgs(fullName)
-                val callCtx = C_LibFuncCaseCtx(linkPos, fullName)
                 fn.compileCallFull(ctx, callCtx, selfType, vArgs, resTypeHint)
             }
             is C_PartialCallArguments -> {
-                val callCtx = C_LibFuncCaseCtx(linkPos, fullName)
                 val fnType = resTypeHint.getFunctionType()
                 fn.compileCallPartial(ctx, callCtx, selfType, callArgs, fnType)
             }
@@ -239,6 +239,7 @@ class C_MemberAttr_SysProperty(
     ideName: R_IdeName,
     type: R_Type,
     private val fn: C_SysFunction,
+    private val naming: C_MemberNaming,
 ): C_MemberAttr(ideName, type) {
     private val name = ideName.rName
 
@@ -246,12 +247,13 @@ class C_MemberAttr_SysProperty(
 
     override fun vAttr(exprCtx: C_ExprContext, pos: S_Pos): V_MemberAttr {
         val cBody = fn.compileCall(C_SysFunctionCtx(exprCtx, pos))
-        return V_MemberAttr_SysProperty(type, name, cBody)
+        return V_MemberAttr_SysProperty(type, name, naming, cBody)
     }
 
     private class V_MemberAttr_SysProperty(
         type: R_Type,
         private val name: R_Name,
+        private val naming: C_MemberNaming,
         private val cBody: C_SysFunctionBody,
     ): V_MemberAttr(type) {
         override fun calculator(): R_MemberCalculator {
@@ -259,7 +261,8 @@ class C_MemberAttr_SysProperty(
         }
 
         override fun destination(pos: S_Pos, base: R_Expr): R_DestinationExpr {
-            throw C_Errors.errAttrNotMutable(pos, name.str)
+            val fullName = naming.replaceSelfType(base.type.mType).fullNameLazy.value
+            throw C_Errors.errAttrNotMutable(pos, name.str, fullName)
         }
 
         override fun canBeDbExpr() = cBody.dbFn != null

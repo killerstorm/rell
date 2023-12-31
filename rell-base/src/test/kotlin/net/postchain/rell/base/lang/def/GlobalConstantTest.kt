@@ -57,7 +57,8 @@ class GlobalConstantTest: BaseRellTest(false) {
     }
 
     @Test fun testRecursionImplicitType() {
-        chkCompile("val X = Y * 2; val Y = X * 3;", "ct_err:[fn_type_recursion:CONSTANT:Y][fn_type_recursion:CONSTANT:X]")
+        chkCompile("val X = Y * 2; val Y = X * 3;",
+            "ct_err:[fn_type_recursion:CONSTANT:[Y]][fn_type_recursion:CONSTANT:[X]]")
     }
 
     @Test fun testRecursionInterModuleImplicitType() {
@@ -67,11 +68,11 @@ class GlobalConstantTest: BaseRellTest(false) {
 
         chkCompile("import a;", """ct_err:
             [a.rell:def:const:cycle:0:a:X:1:b:Y]
-            [a.rell:fn_type_recursion:CONSTANT:Y]
+            [a.rell:fn_type_recursion:CONSTANT:[Y]]
             [b.rell:def:const:cycle:1:b:Y:2:c:Z]
-            [b.rell:fn_type_recursion:CONSTANT:Z]
+            [b.rell:fn_type_recursion:CONSTANT:[Z]]
             [c.rell:def:const:cycle:2:c:Z:0:a:X]
-            [c.rell:fn_type_recursion:CONSTANT:X]
+            [c.rell:fn_type_recursion:CONSTANT:[X]]
         """)
     }
 
@@ -92,10 +93,10 @@ class GlobalConstantTest: BaseRellTest(false) {
         def("function y() = Z;")
         def("val Z = X;")
         chkCompile("", """ct_err:
-            [def:const:bad_expr:0::X:fn:y]
-            [fn_type_recursion:FUNCTION:y]
-            [fn_type_recursion:CONSTANT:Z]
-            [fn_type_recursion:CONSTANT:X]
+            [def:const:bad_expr:[0::X]:fn:y]
+            [fn_type_recursion:FUNCTION:[y]]
+            [fn_type_recursion:CONSTANT:[Z]]
+            [fn_type_recursion:CONSTANT:[X]]
         """)
     }
 
@@ -103,7 +104,7 @@ class GlobalConstantTest: BaseRellTest(false) {
         def("val X: integer = y();")
         def("function y(): integer = Z;")
         def("val Z: integer = X;")
-        chkCompile("", "ct_err:def:const:bad_expr:0::X:fn:y")
+        chkCompile("", "ct_err:def:const:bad_expr:[0::X]:fn:y")
     }
 
     @Test fun testRuntimeError() {
@@ -114,7 +115,7 @@ class GlobalConstantTest: BaseRellTest(false) {
 
     @Test fun testCollectionTypeInference() {
         chkCompile("val X = [];", "ct_err:expr_list_no_type")
-        chkCompile("val X: list<integer> = [];", "ct_err:def:const:bad_type:mutable:0::X:list<integer>")
+        chkCompile("val X: list<integer> = [];", "ct_err:def:const:bad_type:mutable:[0::X]:[list<integer>]")
     }
 
     @Test fun testNameConflictLocalVar() {
@@ -243,18 +244,18 @@ class GlobalConstantTest: BaseRellTest(false) {
         def("function f(x: integer, y: integer) = x + y;")
         def("function g(x: integer = 123, y: text = 'Hello') = x + y;")
 
-        chkCompile("val X = f(123, 456);", "ct_err:def:const:bad_expr:0::X:fn:f")
+        chkCompile("val X = f(123, 456);", "ct_err:def:const:bad_expr:[0::X]:fn:f")
 
-        chkCompile("val X = g(123, 'Hello');", "ct_err:def:const:bad_expr:0::X:fn:g")
+        chkCompile("val X = g(123, 'Hello');", "ct_err:def:const:bad_expr:[0::X]:fn:g")
 
         chkCompile("val X = g();", """ct_err:
-            [def:const:bad_expr:0::X:param_default_value]
-            [def:const:bad_expr:0::X:param_default_value]
-            [def:const:bad_expr:0::X:fn:g]
+            [def:const:bad_expr:[0::X]:param_default_value]
+            [def:const:bad_expr:[0::X]:param_default_value]
+            [def:const:bad_expr:[0::X]:fn:g]
         """)
 
         chkCompile("val X = f(123, *);",
-                "ct_err:[def:const:bad_type:not_pure:0::X:(integer)->integer][def:const:bad_expr:0::X:partial_call]")
+                "ct_err:[def:const:bad_type:not_pure:[0::X]:[(integer)->integer]][def:const:bad_expr:[0::X]:partial_call]")
     }
 
     @Test fun testExprModuleArgs() {
@@ -266,8 +267,10 @@ class GlobalConstantTest: BaseRellTest(false) {
         chk("A", "module_args[x=int[123]]")
         chk("B", "int[123]")
 
-        chkCompile("val X = chain_context.raw_config;", "ct_err:def:const:bad_expr:2::X:fn:prop:chain_context.raw_config")
-        chkCompile("val X = chain_context.blockchain_rid;", "ct_err:def:const:bad_expr:2::X:fn:prop:chain_context.blockchain_rid")
+        chkCompile("val X = chain_context.raw_config;",
+            "ct_err:def:const:bad_expr:[2::X]:fn:prop:[chain_context.raw_config]")
+        chkCompile("val X = chain_context.blockchain_rid;",
+            "ct_err:def:const:bad_expr:[2::X]:fn:prop:[chain_context.blockchain_rid]")
     }
 
     @Test fun testExprEntity() {
@@ -278,103 +281,131 @@ class GlobalConstantTest: BaseRellTest(false) {
         def("function f() = user @ {};")
 
         chkCompile("val X = create user('bob');",
-                "ct_err:[def:const:bad_type:not_pure:0::X:user][def:const:bad_expr:0::X:create]")
+            "ct_err:[def:const:bad_type:not_pure:[0::X]:[user]][def:const:bad_expr:[0::X]:create]")
 
-        chkCompile("val X = user.from_gtv(gtv.from_json(''));",
-                "ct_err:[def:const:bad_type:not_pure:0::X:user][def:const:bad_expr:0::X:fn:sys:user.from_gtv]")
+        chkCompile("val X = user.from_gtv(gtv.from_json(''));", """ct_err:
+            [def:const:bad_type:not_pure:[0::X]:[user]]
+            [def:const:bad_expr:[0::X]:fn:sys:[rell.gtv_ext(user).from_gtv]]
+        """)
 
         chkCompile("val X = s.from_gtv(gtv.from_json(''));",
-                "ct_err:[def:const:bad_type:not_pure:0::X:s][def:const:bad_expr:0::X:fn:sys:s.from_gtv]")
+            "ct_err:[def:const:bad_type:not_pure:[0::X]:[s]][def:const:bad_expr:[0::X]:fn:sys:[rell.gtv_ext(s).from_gtv]]")
 
-        chkCompile("val X = s.from_gtv_pretty(gtv.from_json(''));",
-                "ct_err:[def:const:bad_type:not_pure:0::X:s][def:const:bad_expr:0::X:fn:sys:s.from_gtv_pretty]")
+        chkCompile("val X = s.from_gtv_pretty(gtv.from_json(''));", """ct_err:
+            [def:const:bad_type:not_pure:[0::X]:[s]]
+            [def:const:bad_expr:[0::X]:fn:sys:[rell.gtv_ext(s).from_gtv_pretty]]
+        """)
 
-        chkCompile("val X = p.from_gtv_pretty(gtv.from_json(''));",
-                "ct_err:[def:const:bad_type:not_pure:0::X:p][def:const:bad_expr:0::X:fn:sys:p.from_gtv_pretty]")
+        chkCompile("val X = p.from_gtv_pretty(gtv.from_json(''));", """ct_err:
+            [def:const:bad_type:not_pure:[0::X]:[p]]
+            [def:const:bad_expr:[0::X]:fn:sys:[rell.gtv_ext(p).from_gtv_pretty]]
+        """)
 
         chkCompile("val X = struct<user>.from_gtv(gtv.from_json(''));", "OK")
         chkCompile("val X = struct<mutable user>.from_gtv(gtv.from_json('')).name;", "OK")
 
-        chkCompile("val X = struct<role>.from_gtv(gtv.from_json(''));",
-                "ct_err:[def:const:bad_type:not_pure:0::X:struct<role>][def:const:bad_expr:0::X:fn:sys:struct<role>.from_gtv]")
+        chkCompile("val X = struct<role>.from_gtv(gtv.from_json(''));", """ct_err:
+            [def:const:bad_type:not_pure:[0::X]:[struct<role>]]
+            [def:const:bad_expr:[0::X]:fn:sys:[rell.gtv_ext(struct<role>).from_gtv]]
+        """)
 
-        chkCompile("val X = struct<mutable role>.from_gtv(gtv.from_json(''));",
-                "ct_err:[def:const:bad_type:mutable:0::X:struct<mutable role>][def:const:bad_expr:0::X:fn:sys:struct<mutable role>.from_gtv]")
+        chkCompile("val X = struct<mutable role>.from_gtv(gtv.from_json(''));", """ct_err:
+            [def:const:bad_type:mutable:[0::X]:[struct<mutable role>]]
+            [def:const:bad_expr:[0::X]:fn:sys:[rell.gtv_ext(struct<mutable role>).from_gtv]]
+        """)
 
-        chkConstErr("struct<user>('Bob').to_mutable()", "ct_err:def:const:bad_type:mutable:0::X:struct<mutable user>")
+        chkConstErr("struct<user>('Bob').to_mutable()",
+            "ct_err:def:const:bad_type:mutable:[0::X]:[struct<mutable user>]")
+
         chkConst("struct<mutable user>('Bob').to_immutable()", "struct<user>[name=text[Bob]]")
 
-        chkConstErr("struct<role>(user@{}).to_mutable()",
-                "ct_err:[def:const:bad_type:mutable:0::X:struct<mutable role>][def:const:bad_expr:0::X:fn:sys:struct<role>.to_mutable][def:const:bad_expr:0::X:at_expr]")
+        chkConstErr("struct<role>(user@{}).to_mutable()", """ct_err:
+            [def:const:bad_type:mutable:[0::X]:[struct<mutable role>]]
+            [def:const:bad_expr:[0::X]:fn:sys:[struct<role>.to_mutable]]
+            [def:const:bad_expr:[0::X]:at_expr]
+        """)
 
-        chkConstErr("struct<mutable role>(user@{}).to_immutable()",
-                "ct_err:[def:const:bad_type:not_pure:0::X:struct<role>][def:const:bad_expr:0::X:fn:sys:struct<mutable role>.to_immutable][def:const:bad_expr:0::X:at_expr]")
+        chkConstErr("struct<mutable role>(user@{}).to_immutable()", """ct_err:
+            [def:const:bad_type:not_pure:[0::X]:[struct<role>]]
+            [def:const:bad_expr:[0::X]:fn:sys:[struct<mutable role>.to_immutable]]
+            [def:const:bad_expr:[0::X]:at_expr]
+        """)
 
-        chkConstErr("f().name", "ct_err:[def:const:bad_expr:0::X:entity_attr][def:const:bad_expr:0::X:fn:f]")
-        chkConstErr("f().to_struct()", "ct_err:[def:const:bad_expr:0::X:entity_to_struct][def:const:bad_expr:0::X:fn:f]")
+        chkConstErr("f().name", "ct_err:[def:const:bad_expr:[0::X]:entity_attr][def:const:bad_expr:[0::X]:fn:f]")
+        chkConstErr("f().to_struct()", "ct_err:[def:const:bad_expr:[0::X]:entity_to_struct][def:const:bad_expr:[0::X]:fn:f]")
     }
 
     @Test fun testExprObject() {
         def("object state { v: integer = 123; }")
-        chkCompile("val X = state;", "ct_err:[def:const:bad_type:not_pure:0::X:state][def:const:bad_expr:0::X:object]")
-        chkCompile("val X = state.v;", "ct_err:[def:const:bad_expr:0::X:object][def:const:bad_expr:0::X:object_attr]") //TODO shall be one error
-        chkCompile("val X = state.to_struct();", "ct_err:[def:const:bad_expr:0::X:object][def:const:bad_expr:0::X:object_to_struct]") //TODO shall be one error
-        chkCompile("val X = state.to_mutable_struct();",
-                "ct_err:[def:const:bad_type:mutable:0::X:struct<mutable state>][def:const:bad_expr:0::X:object][def:const:bad_expr:0::X:object_to_struct]")
+
+        chkCompile("val X = state;", "ct_err:[def:const:bad_type:not_pure:[0::X]:[state]][def:const:bad_expr:[0::X]:object]")
+
+        //TODO shall be one error
+        chkCompile("val X = state.v;", "ct_err:[def:const:bad_expr:[0::X]:object][def:const:bad_expr:[0::X]:object_attr]")
+
+        //TODO shall be one error
+        chkCompile("val X = state.to_struct();",
+            "ct_err:[def:const:bad_expr:[0::X]:object][def:const:bad_expr:[0::X]:object_to_struct]")
+
+        chkCompile("val X = state.to_mutable_struct();", """ct_err:
+            [def:const:bad_type:mutable:[0::X]:[struct<mutable state>]]
+            [def:const:bad_expr:[0::X]:object]
+            [def:const:bad_expr:[0::X]:object_to_struct]
+        """)
     }
 
     @Test fun testExprAt() {
         def("entity user { name; }")
 
-        chkConstErr("user @ {}", "ct_err:[def:const:bad_type:not_pure:0::X:user][def:const:bad_expr:0::X:at_expr]")
-        chkConstErr("user @ {} (.name)", "ct_err:[def:const:bad_expr:0::X:at_expr][def:const:bad_expr:0::X:entity_attr]")
+        chkConstErr("user @ {}", "ct_err:[def:const:bad_type:not_pure:[0::X]:[user]][def:const:bad_expr:[0::X]:at_expr]")
+        chkConstErr("user @ {} (.name)", "ct_err:[def:const:bad_expr:[0::X]:at_expr][def:const:bad_expr:[0::X]:entity_attr]")
 
         chkConstErr("user @ { exists ( (u2:user) @* {} ) } ( .name )",
-                "ct_err:[def:const:bad_expr:0::X:at_expr][def:const:bad_expr:0::X:at_expr][def:const:bad_expr:0::X:entity_attr]")
+            "ct_err:[def:const:bad_expr:[0::X]:at_expr][def:const:bad_expr:[0::X]:at_expr][def:const:bad_expr:[0::X]:entity_attr]")
 
         chkConst("[1,2,3,4,5] @ {} ( @sum $ )", "int[15]")
     }
 
     @Test fun testExprOpContext() {
-        val err = "def:const:bad_expr:0::X:fn"
+        val err = "def:const:bad_expr:[0::X]:fn"
 
-        chkConstErr("op_context.last_block_time", "ct_err:[$err:prop:op_context.last_block_time][op_ctx:noop]")
-        chkConstErr("op_context.block_height", "ct_err:[$err:prop:op_context.block_height][op_ctx:noop]")
-        chkConstErr("op_context.op_index", "ct_err:[$err:prop:op_context.op_index][op_ctx:noop]")
+        chkConstErr("op_context.last_block_time", "ct_err:[$err:prop:[op_context.last_block_time]][op_ctx:noop]")
+        chkConstErr("op_context.block_height", "ct_err:[$err:prop:[op_context.block_height]][op_ctx:noop]")
+        chkConstErr("op_context.op_index", "ct_err:[$err:prop:[op_context.op_index]][op_ctx:noop]")
 
         chkConstErr("op_context.transaction",
-                "ct_err:[def:const:bad_type:not_pure:0::X:transaction][$err:prop:op_context.transaction][op_ctx:noop]")
+            "ct_err:[def:const:bad_type:not_pure:[0::X]:[transaction]][$err:prop:[op_context.transaction]][op_ctx:noop]")
 
-        chkConstErr("op_context.is_signer(x'1234')", "ct_err:[$err:sys:op_context.is_signer][op_ctx:noop]")
-        chkConstErr("is_signer(x'1234')", "ct_err:[$err:sys:is_signer][op_ctx:noop]")
+        chkConstErr("op_context.is_signer(x'1234')", "ct_err:[$err:sys:[op_context.is_signer]][op_ctx:noop]")
+        chkConstErr("is_signer(x'1234')", "ct_err:[$err:sys:[is_signer]][op_ctx:noop]")
 
         chkConstErr("op_context.get_signers()",
-                "ct_err:[def:const:bad_type:mutable:0::X:list<byte_array>][$err:sys:op_context.get_signers][op_ctx:noop]")
+            "ct_err:[def:const:bad_type:mutable:[0::X]:[list<byte_array>]][$err:sys:[op_context.get_signers]][op_ctx:noop]")
 
         chkConstErr("op_context.get_all_operations()",
-                "ct_err:[def:const:bad_type:mutable:0::X:list<gtx_operation>][$err:sys:op_context.get_all_operations][op_ctx:noop]")
+            "ct_err:[def:const:bad_type:mutable:[0::X]:[list<gtx_operation>]][$err:sys:[op_context.get_all_operations]][op_ctx:noop]")
 
         chkConstErr("op_context.emit_event('', gtv.from_json('{}'))",
-                "ct_err:[type:def:const:unit:X][$err:sys:op_context.emit_event][op_ctx:noop]")
+            "ct_err:[type:def:const:unit:X][$err:sys:[op_context.emit_event]][op_ctx:noop]")
     }
 
     @Test fun testExprStruct() {
         def("struct s { x: integer = 123; }")
         def("struct p { mutable x: integer = 123; }")
 
-        chkConstErr("s()", "ct_err:def:const:bad_expr:0::X:attr_default_value:x")
+        chkConstErr("s()", "ct_err:def:const:bad_expr:[0::X]:attr_default_value:x")
         chkConst("s(456)", "s[x=int[456]]")
-        chkConstErr("p()", "ct_err:[def:const:bad_type:mutable:0::X:p][def:const:bad_expr:0::X:attr_default_value:x]")
-        chkConstErr("p(456)", "ct_err:def:const:bad_type:mutable:0::X:p")
-        chkConstErr("p(x = 456)", "ct_err:def:const:bad_type:mutable:0::X:p")
+        chkConstErr("p()", "ct_err:[def:const:bad_type:mutable:[0::X]:[p]][def:const:bad_expr:[0::X]:attr_default_value:x]")
+        chkConstErr("p(456)", "ct_err:def:const:bad_type:mutable:[0::X]:[p]")
+        chkConstErr("p(x = 456)", "ct_err:def:const:bad_type:mutable:[0::X]:[p]")
 
         chkConst("s(123).to_bytes()", "byte_array[a5073005a30302017b]")
         chkConst("s(123).to_gtv()", "gtv[[123]]")
     }
 
     @Test fun testExprSysFnSpecial() {
-        chkCompile("val X = print();", "ct_err:[def:const:bad_expr:0::X:fn:sys:print][type:def:const:unit:X]")
-        chkCompile("val X = log();", "ct_err:[def:const:bad_expr:0::X:fn:sys:log][type:def:const:unit:X]")
+        chkCompile("val X = print();", "ct_err:[def:const:bad_expr:[0::X]:fn:sys:[print]][type:def:const:unit:X]")
+        chkCompile("val X = log();", "ct_err:[def:const:bad_expr:[0::X]:fn:sys:[log]][type:def:const:unit:X]")
 
         chkCompile("val X = _type_of(0);", "OK")
         chkCompile("val X = _nullable(0);", "OK")
@@ -479,12 +510,12 @@ class GlobalConstantTest: BaseRellTest(false) {
         chkConstErr("assert_lt(123, 456)", "ct_err:type:def:const:unit:X")
         chkConstErr("assert_gt_lt(123, 456, 789)", "ct_err:type:def:const:unit:X")
 
-        val errBadType = "def:const:bad_type:not_pure:0::X:rell.test.failure"
-        val errAssertFails = "def:const:bad_expr:0::X:fn:sys:rell.test.assert_fails"
+        val errBadType = "def:const:bad_type:not_pure:[0::X]:[rell.test.failure]"
+        val errAssertFails = "def:const:bad_expr:[0::X]:fn:sys:[rell.test.assert_fails]"
         chkConstErr("assert_fails(integer.from_hex('1234', *))",
-            "ct_err:[$errBadType][$errAssertFails][def:const:bad_expr:0::X:partial_call]")
+            "ct_err:[$errBadType][$errAssertFails][def:const:bad_expr:[0::X]:partial_call]")
         chkConstErr("assert_fails('hello', integer.from_hex('1234', *))",
-            "ct_err:[$errBadType][$errAssertFails][def:const:bad_expr:0::X:partial_call]")
+            "ct_err:[$errBadType][$errAssertFails][def:const:bad_expr:[0::X]:partial_call]")
     }
 
     @Test fun testExprEnum() {
@@ -537,13 +568,13 @@ class GlobalConstantTest: BaseRellTest(false) {
     }
 
     @Test fun testTypeCollection() {
-        chkCompile("val X = [1,2,3];", "ct_err:def:const:bad_type:mutable:0::X:list<integer>")
-        chkCompile("val X = set([1,2,3]);", "ct_err:def:const:bad_type:mutable:0::X:set<integer>")
-        chkCompile("val X = [1:'A',2:'B'];", "ct_err:def:const:bad_type:mutable:0::X:map<integer,text>")
+        chkCompile("val X = [1,2,3];", "ct_err:def:const:bad_type:mutable:[0::X]:[list<integer>]")
+        chkCompile("val X = set([1,2,3]);", "ct_err:def:const:bad_type:mutable:[0::X]:[set<integer>]")
+        chkCompile("val X = [1:'A',2:'B'];", "ct_err:def:const:bad_type:mutable:[0::X]:[map<integer,text>]")
 
-        chkCompile("val X = list<integer>();", "ct_err:def:const:bad_type:mutable:0::X:list<integer>")
-        chkCompile("val X = set<integer>();", "ct_err:def:const:bad_type:mutable:0::X:set<integer>")
-        chkCompile("val X = map<integer,text>();", "ct_err:def:const:bad_type:mutable:0::X:map<integer,text>")
+        chkCompile("val X = list<integer>();", "ct_err:def:const:bad_type:mutable:[0::X]:[list<integer>]")
+        chkCompile("val X = set<integer>();", "ct_err:def:const:bad_type:mutable:[0::X]:[set<integer>]")
+        chkCompile("val X = map<integer,text>();", "ct_err:def:const:bad_type:mutable:[0::X]:[map<integer,text>]")
     }
 
     @Test fun testTypeOther() {
@@ -572,24 +603,25 @@ class GlobalConstantTest: BaseRellTest(false) {
 
     @Test fun testTypeStruct() {
         chkTypeStruct("struct s { x: integer; }", "s(123)", "s[x=int[123]]")
-        chkTypeStruct("struct s { mutable x: integer; }", "s(123)", "ct_err:def:const:bad_type:mutable:0::X:s")
+        chkTypeStruct("struct s { mutable x: integer; }", "s(123)", "ct_err:def:const:bad_type:mutable:[0::X]:[s]")
 
-        chkTypeStruct("struct s { x: list<integer>; }", "s([])", "ct_err:def:const:bad_type:mutable:0::X:s")
-        chkTypeStruct("struct s { x: set<integer>; }", "s(set())", "ct_err:def:const:bad_type:mutable:0::X:s")
-        chkTypeStruct("struct s { x: map<integer,text>; }", "s([:])", "ct_err:def:const:bad_type:mutable:0::X:s")
+        chkTypeStruct("struct s { x: list<integer>; }", "s([])", "ct_err:def:const:bad_type:mutable:[0::X]:[s]")
+        chkTypeStruct("struct s { x: set<integer>; }", "s(set())", "ct_err:def:const:bad_type:mutable:[0::X]:[s]")
+        chkTypeStruct("struct s { x: map<integer,text>; }", "s([:])", "ct_err:def:const:bad_type:mutable:[0::X]:[s]")
 
-        chkTypeStruct("entity user { name; } struct s { u: user?; }", "s(null)", "ct_err:def:const:bad_type:not_pure:0::X:s")
+        chkTypeStruct("entity user { name; } struct s { u: user?; }", "s(null)",
+            "ct_err:def:const:bad_type:not_pure:[0::X]:[s]")
         chkTypeStruct("entity user { name; } struct s { u: struct<user>?; }", "s(null)", "s[u=null]")
         chkTypeStruct("entity user { name; } struct s { u: struct<mutable user>?; }", "s(null)",
-                "ct_err:def:const:bad_type:mutable:0::X:s")
+                "ct_err:def:const:bad_type:mutable:[0::X]:[s]")
 
         chkTypeStruct("struct p { mutable x: integer; } struct s { p: p?; }", "s(null)",
-                "ct_err:def:const:bad_type:mutable:0::X:s")
+                "ct_err:def:const:bad_type:mutable:[0::X]:[s]")
         chkTypeStruct("struct p { x: list<integer>; } struct s { p: p?; }", "s(null)",
-                "ct_err:def:const:bad_type:mutable:0::X:s")
+                "ct_err:def:const:bad_type:mutable:[0::X]:[s]")
 
         chkTypeStruct("struct s { x: integer = 123; }", "s(456)", "s[x=int[456]]")
-        chkTypeStruct("struct s { x: integer = 123; }", "s()", "ct_err:def:const:bad_expr:0::X:attr_default_value:x")
+        chkTypeStruct("struct s { x: integer = 123; }", "s()", "ct_err:def:const:bad_expr:[0::X]:attr_default_value:x")
     }
 
     private fun chkTypeStruct(def: String, expr: String, expected: String) {
@@ -672,7 +704,7 @@ class GlobalConstantTest: BaseRellTest(false) {
 
     private fun chkTypeErr(type: String, typeErr: String, typeCode: String) {
         chkCompile("val X: $type = 0;",
-                "ct_err:[def:const:bad_type:$typeErr:0::X:$typeCode][def:const_expr_type:[$typeCode]:[integer]]")
+                "ct_err:[def:const:bad_type:$typeErr:[0::X]:[$typeCode]][def:const_expr_type:[$typeCode]:[integer]]")
     }
 
     private fun copyTester(): RellCodeTester {

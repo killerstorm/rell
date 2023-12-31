@@ -44,14 +44,14 @@ class C_AttrMatch(val attr: R_Attribute, val vExpr: V_Expr)
 
 object C_AttributeResolver {
     fun resolveCreate(
-            ctx: C_CreateContext,
-            defName: String,
-            attributes: Map<R_Name, R_Attribute>,
-            args: List<C_AttrArgument>,
-            pos: S_Pos
+        ctx: C_CreateContext,
+        defName: String,
+        attributes: Map<R_Name, R_Attribute>,
+        args: List<C_AttrArgument>,
+        pos: S_Pos,
     ): C_CreateAttributes {
         val errWatcher = ctx.msgCtx.errorWatcher()
-        val matchedAttrs = matchCreateAttrs(ctx.exprCtx, attributes, args)
+        val matchedAttrs = matchCreateAttrs(ctx.exprCtx, defName, attributes, args)
 
         val unmatchedArgs = Sets.difference(args.toSet(), matchedAttrs.keys)
         if (unmatchedArgs.isNotEmpty() && !errWatcher.hasNewErrors()) {
@@ -78,13 +78,14 @@ object C_AttributeResolver {
     }
 
     private fun matchCreateAttrs(
-            ctx: C_ExprContext,
-            attributes: Map<R_Name, R_Attribute>,
-            args: List<C_AttrArgument>
+        ctx: C_ExprContext,
+        defName: String,
+        attributes: Map<R_Name, R_Attribute>,
+        args: List<C_AttrArgument>,
     ): Map<C_AttrArgument, C_AttrMatch> {
-        val explicitAttrs = matchExplicitAttrs(ctx.msgCtx, attributes, args, false)
+        val explicitAttrs = matchExplicitAttrs(ctx.msgCtx, defName, attributes, args, false)
         val explicitAttrs2 = checkExplicitExprTypes(ctx, explicitAttrs)
-        return matchImplicitAttrs(ctx, attributes, args, explicitAttrs2, false)
+        return matchImplicitAttrs(ctx, defName, attributes, args, explicitAttrs2, false)
     }
 
     private fun matchDefaultExprs(
@@ -125,13 +126,19 @@ object C_AttributeResolver {
     }
 
     fun resolveUpdate(
-            ctx: C_ExprContext,
-            entity: R_EntityDefinition,
-            args: List<C_AttrArgument>
+        ctx: C_ExprContext,
+        entity: R_EntityDefinition,
+        args: List<C_AttrArgument>,
     ): Map<C_AttrArgument, R_Attribute> {
         val errWatcher = ctx.msgCtx.errorWatcher()
-        val explicitAttrs = matchExplicitAttrs(ctx.msgCtx, entity.attributes, args, entity.flags.canUpdate)
-        val matchedAttrs = matchImplicitAttrs(ctx, entity.attributes, args, explicitAttrs, true)
+        val explicitAttrs = matchExplicitAttrs(
+            ctx.msgCtx,
+            entity.appLevelName,
+            entity.attributes,
+            args,
+            entity.flags.canUpdate,
+        )
+        val matchedAttrs = matchImplicitAttrs(ctx, entity.appLevelName, entity.attributes, args, explicitAttrs, true)
 
         val unmatched = Sets.difference(args.toSet(), matchedAttrs.keys)
         if (unmatched.isNotEmpty() && !errWatcher.hasNewErrors() && !args.any { it.vExpr.type.isError() }) {
@@ -144,6 +151,7 @@ object C_AttributeResolver {
 
     private fun matchExplicitAttrs(
             msgCtx: C_MessageContext,
+            defName: String,
             attrs: Map<R_Name, R_Attribute>,
             args: List<C_AttrArgument>,
             mutableOnly: Boolean
@@ -165,7 +173,7 @@ object C_AttributeResolver {
             }
 
             if (mutableOnly && !attr.mutable) {
-                msgCtx.error(name.pos, "update_attr_not_mutable:$name", "Attribute is not mutable: '$name'")
+                msgCtx.error(name.pos, C_Errors.msgAttrNotMutable(name.str, "$defName.${name.str}"))
             }
 
             explicitExprs[arg] = C_AttrMatch(attr, arg.vExpr)
@@ -197,13 +205,14 @@ object C_AttributeResolver {
     }
 
     private fun matchImplicitAttrs(
-            ctx: C_ExprContext,
-            attrs: Map<R_Name, R_Attribute>,
-            args: List<C_AttrArgument>,
-            explicitExprs: Map<C_AttrArgument, C_AttrMatch>,
-            mutableOnly: Boolean
+        ctx: C_ExprContext,
+        defName: String,
+        attrs: Map<R_Name, R_Attribute>,
+        args: List<C_AttrArgument>,
+        explicitExprs: Map<C_AttrArgument, C_AttrMatch>,
+        mutableOnly: Boolean,
     ) : Map<C_AttrArgument, C_AttrMatch> {
-        val implicitAttrs = matchImplicitAttrs0(ctx, attrs, args, mutableOnly)
+        val implicitAttrs = matchImplicitAttrs0(ctx, defName, attrs, args, mutableOnly)
         val res = combineMatchedExprs(explicitExprs, implicitAttrs)
         return res
     }
@@ -219,16 +228,17 @@ object C_AttributeResolver {
     }
 
     private fun matchImplicitAttrs0(
-            ctx: C_ExprContext,
-            attrs: Map<R_Name, R_Attribute>,
-            args: List<C_AttrArgument>,
-            mutableOnly: Boolean
+        ctx: C_ExprContext,
+        defName: String,
+        attrs: Map<R_Name, R_Attribute>,
+        args: List<C_AttrArgument>,
+        mutableOnly: Boolean,
     ): Map<C_AttrArgument, C_AttrMatch> {
         val res = mutableMapOf<C_AttrArgument, C_AttrMatch>()
 
         for (arg in args) {
             if (arg.name == null) {
-                val attrMatch = implicitMatch(ctx, attrs, arg, mutableOnly)
+                val attrMatch = implicitMatch(ctx, defName, attrs, arg, mutableOnly)
                 if (attrMatch != null) {
                     res[arg] = attrMatch
                 }
@@ -271,10 +281,11 @@ object C_AttributeResolver {
     }
 
     private fun implicitMatch(
-            ctx: C_ExprContext,
-            attributes: Map<R_Name, R_Attribute>,
-            arg: C_AttrArgument,
-            mutableOnly: Boolean
+        ctx: C_ExprContext,
+        defName: String,
+        attributes: Map<R_Name, R_Attribute>,
+        arg: C_AttrArgument,
+        mutableOnly: Boolean,
     ): C_AttrMatch? {
         val argIndex = arg.index
         val exprPos = arg.vExpr.pos
@@ -293,7 +304,7 @@ object C_AttributeResolver {
             }
 
             if (mutableOnly && !byName.mutable) {
-                ctx.msgCtx.error(exprPos, C_Errors.msgAttrNotMutable(byName.name))
+                ctx.msgCtx.error(exprPos, C_Errors.msgAttrNotMutable(byName.name, "$defName.${byName.name}"))
             }
 
             return C_AttrMatch(byName, vExpr)

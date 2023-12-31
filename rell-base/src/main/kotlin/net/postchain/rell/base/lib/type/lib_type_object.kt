@@ -36,11 +36,11 @@ object Lib_Type_Object {
             }
         }
 
-        type("object_extension", abstract = true, extension = true, hidden = true) {
-            generic("T", subOf = "object")
-
-            function("to_struct", C_Fn_ToStruct(false))
-            function("to_mutable_struct", C_Fn_ToStruct(true))
+        namespace("rell") {
+            extension("object_ext", type = "object") {
+                function("to_struct", C_Fn_ToStruct(false))
+                function("to_mutable_struct", C_Fn_ToStruct(true))
+            }
         }
     }
 
@@ -84,7 +84,8 @@ object Lib_Type_Object {
 
         override fun destination(base: V_Expr): C_Destination {
             if (!attr.mutable) {
-                throw C_Errors.errAttrNotMutable(memberPos, attr.name)
+                val fullName = "${rObject.defName.qualifiedName}.${attr.name}"
+                throw C_Errors.errAttrNotMutable(memberPos, attr.name, fullName)
             }
             exprCtx.checkDbUpdateAllowed(memberPos)
             return C_Destination_ObjectAttr(rObject, attr)

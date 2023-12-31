@@ -52,10 +52,12 @@ def test__company_user__no_tables():
 
         app.check_output([
             '<LOG:INFO>SqlInit - Initializing database (chain_iid = 0)',
-            '<LOG:INFO>SqlInit - Database init plan: 11 step(s)',
+            '<LOG:INFO>SqlInit - Database init plan: 13 step(s)',
             '<LOG:INFO>SqlInit - Step: Create ROWID table and function',
             '<LOG:INFO>SqlInit - Step: Create meta tables',
+            '<LOG:INFO>SqlInit - Step: Create function: \'rell_integer_power\'',
             '<LOG:INFO>SqlInit - Step: Create function: \'rell_biginteger_from_text\'',
+            '<LOG:INFO>SqlInit - Step: Create function: \'rell_biginteger_power\'',
             '<LOG:INFO>SqlInit - Step: Create function: \'rell_decimal_from_text\'',
             '<LOG:INFO>SqlInit - Step: Create function: \'rell_decimal_to_text\'',
             '<LOG:INFO>SqlInit - Step: Create function: \'rell_bytea_substr1\'',

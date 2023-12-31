@@ -225,15 +225,17 @@ class CompilerErrorsTest: BaseRellTest(false) {
         def("@external('foo') @log entity ext_data { i: integer; j: integer; }")
         def("entity data { i: integer; j: integer; }")
         val suc = "stmt_update_cant"
-        val uanm = "update_attr_not_mutable"
+        val anm = "attr_not_mutable"
 
-        chkStmt("update data @* { $badExpr1 } ( i = $badExpr2 );", "ct_err:[$badError1][$uanm:i][$badError2]")
-        chkStmt("update data @* {} ( i = $badExpr1, j = $badExpr2 );", "ct_err:[$uanm:i][$badError1][$uanm:j][$badError2]")
-        chkStmt("update data @* { $badExpr1, $badExpr2 } ( i = 1 );", "ct_err:[$badError1][$badError2][$uanm:i]")
+        chkStmt("update data @* { $badExpr1 } ( i = $badExpr2 );", "ct_err:[$badError1][$anm:data.i][$badError2]")
+        chkStmt("update data @* {} ( i = $badExpr1, j = $badExpr2 );",
+            "ct_err:[$anm:data.i][$badError1][$anm:data.j][$badError2]")
+        chkStmt("update data @* { $badExpr1, $badExpr2 } ( i = 1 );", "ct_err:[$badError1][$badError2][$anm:data.i]")
 
         chkStmt("update ext_data @* { $badExpr1 } ( i = $badExpr2 );", "ct_err:[$suc:ext_data][$badError1][$badError2]")
         chkStmt("update ext_data @* { $badExpr1, $badExpr2 } ();", "ct_err:[$suc:ext_data][$badError1][$badError2]")
-        chkStmt("update ext_data @* {} ( i = $badExpr1, j = $badExpr2 );", "ct_err:[$suc:ext_data][$badError1][$badError2]")
+        chkStmt("update ext_data @* {} ( i = $badExpr1, j = $badExpr2 );",
+            "ct_err:[$suc:ext_data][$badError1][$badError2]")
     }
 
     @Test fun testExprUnaryOp() {
@@ -269,11 +271,11 @@ class CompilerErrorsTest: BaseRellTest(false) {
         chk("false + ($badExpr1) + ($badExpr2)", "ct_err:[$badError1][$badError2]")
         chk("($badExpr1) + ($badExpr2)", "ct_err:[$badError1][$badError2]")
 
-        chk("($badExpr1) ?: ($badExpr2)", "ct_err:[expr_call_argtypes:[abs]:byte_array][expr_call_argtypes:[min]:]")
-        chk("($badExpr1) ?: 123", "ct_err:expr_call_argtypes:[abs]:byte_array")
-        chk("123 ?: ($badExpr2)", "ct_err:expr_call_argtypes:[min]:")
+        chk("($badExpr1) ?: ($badExpr2)", "ct_err:[$badError1][$badError2]")
+        chk("($badExpr1) ?: 123", "ct_err:$badError1")
+        chk("123 ?: ($badExpr2)", "ct_err:$badError2")
 
-        chk("($badExpr1)?.foo", "ct_err:expr_call_argtypes:[abs]:byte_array")
+        chk("($badExpr1)?.foo", "ct_err:$badError1")
 
         chkCompile("function f(d: data) = d?.x;", "ct_err:expr_safemem_type:[data]")
         chkCompile("function f(d: data) = d?.q;", "ct_err:[expr_safemem_type:[data]][unknown_member:[data]:q]")
@@ -317,7 +319,7 @@ class CompilerErrorsTest: BaseRellTest(false) {
         chkEx("{ val u = 123; return (u: user) @ { u.address == 'Street' }; }",
                 "ct_err:[block:name_conflict:u][unknown_member:[integer]:address]")
         chkEx("{ val a = 1; val b = 2; return (a: user, b: user) @* { $badExpr1 } ( $badExpr2 ); }",
-                "ct_err:[block:name_conflict:a][block:name_conflict:b][expr_call_argtypes:[abs]:byte_array][expr_call_argtypes:[min]:]")
+                "ct_err:[block:name_conflict:a][block:name_conflict:b][$badError1][$badError2]")
 
         chkCompile("query q() { val a = 123; val b = 456; return (a: user, b: user) @* { X } ( Y ); }",
                 "ct_err:[block:name_conflict:a][block:name_conflict:b][$un:X][$un:Y]")

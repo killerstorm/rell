@@ -36,10 +36,10 @@ object Lib_Crypto {
     private val POINT_TYPE = R_TupleType.create(R_BigIntegerType, R_BigIntegerType)
 
     val NAMESPACE = Ld_NamespaceDsl.make {
-        link(target = "crypto.sha256")
-        link(target = "crypto.keccak256")
-        link(target = "crypto.verify_signature")
-        link(target = "crypto.eth_ecrecover")
+        alias(target = "crypto.sha256")
+        alias(target = "crypto.keccak256")
+        alias(target = "crypto.verify_signature")
+        alias(target = "crypto.eth_ecrecover")
 
         namespace("crypto") {
             function("sha256", "byte_array") {

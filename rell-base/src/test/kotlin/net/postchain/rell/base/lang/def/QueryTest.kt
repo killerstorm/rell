@@ -161,9 +161,9 @@ class QueryTest: BaseRellTest() {
     }
 
     @Test fun testRecursiveTypeInference() {
-        chkCompile("query foo(x: integer) = if (x <= 1) 1 else foo(x - 1);", "ct_err:fn_type_recursion:QUERY:foo")
+        chkCompile("query foo(x: integer) = if (x <= 1) 1 else foo(x - 1);", "ct_err:fn_type_recursion:QUERY:[foo]")
         chkCompile("function foo(x: integer) = bar(x + 1); query bar(x: integer) = if (x <= 1) 1 else foo(x - 1);",
-                "ct_err:[fn_type_recursion:QUERY:bar][fn_type_recursion:FUNCTION:foo]")
+                "ct_err:[fn_type_recursion:QUERY:[bar]][fn_type_recursion:FUNCTION:[foo]]")
     }
 
     @Test fun testDefaultParameters() {

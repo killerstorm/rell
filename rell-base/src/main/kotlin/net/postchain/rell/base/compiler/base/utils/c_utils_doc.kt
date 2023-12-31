@@ -5,12 +5,11 @@
 package net.postchain.rell.base.compiler.base.utils
 
 import net.postchain.rell.base.compiler.base.core.C_CompilerOptions
+import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.compiler.vexpr.V_ConstantValueEvalContext
 import net.postchain.rell.base.compiler.vexpr.V_Expr
 import net.postchain.rell.base.runtime.*
-import net.postchain.rell.base.utils.doc.DocExpr
-import net.postchain.rell.base.utils.doc.DocSymbolFactory
-import net.postchain.rell.base.utils.doc.DocValue
+import net.postchain.rell.base.utils.doc.*
 
 object C_DocUtils {
     fun getDocFactory(opts: C_CompilerOptions): DocSymbolFactory {
@@ -42,5 +41,13 @@ object C_DocUtils {
         }
         val docValue = if (rValue == null) null else docValue(rValue)
         return if (docValue == null) DocExpr.UNKNOWN else DocExpr.value(docValue)
+    }
+
+    fun docModifiers(deprecated: C_Deprecated? = null): DocModifiers {
+        return DocModifiers.make(docModifier(deprecated))
+    }
+
+    fun docModifier(deprecated: C_Deprecated?): DocModifier? {
+        return if (deprecated == null) null else DocModifier.deprecated(deprecated.error)
     }
 }

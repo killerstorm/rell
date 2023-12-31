@@ -68,17 +68,44 @@ class LDocTest: BaseLTest() {
 
     @Test fun testNamespaceTypeAlias() {
         val mod = makeDocModule {
-            type("data") {
-                alias("data_1")
-                alias("data_2", deprecated = C_MessageType.WARNING)
-                alias("data_3", deprecated = C_MessageType.ERROR)
-            }
+            alias("data_1", "data")
+            alias("data_2", "data", deprecated = C_MessageType.WARNING)
+            alias("data_3", "data", deprecated = C_MessageType.ERROR)
+            type("data")
         }
 
         chkDoc(mod, "data", "TYPE|mod:data", "<type> data")
-        chkDoc(mod, "data_1", "TYPE|mod:data", "<type> data")
-        chkDoc(mod, "data_2", "TYPE|mod:data", "<type> data")
-        chkDoc(mod, "data_3", "TYPE|mod:data", "<type> data")
+        chkDoc(mod, "data_1", "ALIAS|mod:data_1", "<alias> data_1 = [data]\n\n<type> data")
+        chkDoc(mod, "data_2", "ALIAS|mod:data_2", "@deprecated\n<alias> data_2 = [data]\n\n<type> data")
+        chkDoc(mod, "data_3", "ALIAS|mod:data_3", "@deprecated(ERROR)\n<alias> data_3 = [data]\n\n<type> data")
+    }
+
+    @Test fun testNamespaceExtensionSimple() {
+        val mod = makeDocModule {
+            extension("test_ext", type = "any") {
+                property("v", type = "integer") { _ -> Rt_UnitValue }
+            }
+        }
+        chkDoc(mod, "test_ext", "TYPE_EXTENSION|mod:test_ext", "<extension> test_ext: [any]")
+    }
+
+    @Test fun testNamespaceExtensionGeneric() {
+        val mod = makeDocModule {
+            type("_comparable")
+            type("_iterable", abstract = true) {
+                generic("T")
+            }
+            extension("test_ext", type = "_iterable<T>") {
+                generic("T", subOf = "_comparable")
+                function("sorted", result = "_iterable<T>") {
+                    body { _ -> Rt_UnitValue }
+                }
+            }
+        }
+        chkDoc(mod, "test_ext",
+            "TYPE_EXTENSION|mod:test_ext",
+            "<extension> test_ext<T: -[_comparable]>: [_iterable]<[T]>",
+        )
     }
 
     @Test fun testNamespaceStruct() {
@@ -183,12 +210,12 @@ class LDocTest: BaseLTest() {
         }
 
         chkDoc(mod, "f", "FUNCTION|mod:f", "<function> f(): [text]")
-        chkDoc(mod, "g", "FUNCTION|mod:g", "<function> g(): [text]")
-        chkDoc(mod, "h", "FUNCTION|mod:h", "@deprecated\n<function> h(): [text]")
-        chkDoc(mod, "k", "FUNCTION|mod:k", "@deprecated(ERROR)\n<function> k(): [text]")
+        chkDoc(mod, "g", "ALIAS|mod:g", "<alias> g = [f]\n\n<function> f(): [text]")
+        chkDoc(mod, "h", "ALIAS|mod:h", "@deprecated\n<alias> h = [f]\n\n<function> f(): [text]")
+        chkDoc(mod, "k", "ALIAS|mod:k", "@deprecated(ERROR)\n<alias> k = [f]\n\n<function> f(): [text]")
     }
 
-    @Test fun testNamespaceLink() {
+    @Test fun testNamespaceAlias() {
         val mod = makeDocModule {
             constant("VALUE", 123)
             struct("data") {
@@ -198,29 +225,30 @@ class LDocTest: BaseLTest() {
             namespace("sub") {
                 constant("SUB_VALUE", 456)
             }
-            link("VALUE", "value_ref")
-            link("data", "data_ref")
-            link("foo", "foo_ref")
-            link("sub.SUB_VALUE", "sub_value_ref")
+            alias("value_ref", "VALUE")
+            alias("data_ref", "data")
+            alias("foo_ref", "foo")
+            alias("sub_value_ref", "sub.SUB_VALUE")
         }
 
-        chkDoc(mod, "value_ref", "CONSTANT|mod:VALUE", "<val> VALUE: [integer] = 123")
-        chkDoc(mod, "data_ref", "STRUCT|mod:data", "<struct> data")
-        chkDoc(mod, "foo_ref", "FUNCTION|mod:foo", "<function> foo(): [unit]")
-        chkDoc(mod, "sub_value_ref", "CONSTANT|mod:sub.SUB_VALUE", "<val> SUB_VALUE: [integer] = 456")
+        chkDoc(mod, "value_ref", "ALIAS|mod:value_ref", "<alias> value_ref = [VALUE]\n\n<val> VALUE: [integer] = 123")
+        chkDoc(mod, "data_ref", "ALIAS|mod:data_ref", "<alias> data_ref = [data]\n\n<struct> data")
+        chkDoc(mod, "foo_ref", "ALIAS|mod:foo_ref", "<alias> foo_ref = [foo]\n\n<function> foo(): [unit]")
+        chkDoc(mod, "sub_value_ref", "ALIAS|mod:sub_value_ref",
+            "<alias> sub_value_ref = [sub.SUB_VALUE]\n\n<val> SUB_VALUE: [integer] = 456")
     }
 
-    @Test fun testNamespaceLinkDeprecated() {
+    @Test fun testNamespaceAliasDeprecated() {
         val mod = makeDocModule {
             function("f", result = "text") {
                 deprecated("new_f")
                 body { -> Rt_UnitValue }
             }
-            link("f", "link_f")
+            alias("link_f", "f")
         }
 
         chkDoc(mod, "f", "FUNCTION|mod:f", "@deprecated(ERROR)\n<function> f(): [text]")
-        chkDoc(mod, "link_f", "FUNCTION|mod:f", "@deprecated(ERROR)\n<function> f(): [text]")
+        chkDoc(mod, "link_f", "ALIAS|mod:link_f", "<alias> link_f = [f]\n\n@deprecated(ERROR)\n<function> f(): [text]")
     }
 
     @Test fun testTypeDefConstant() {
@@ -373,9 +401,9 @@ class LDocTest: BaseLTest() {
         }
 
         chkDoc(mod, "data.f", "FUNCTION|mod:data.f", "<function> f(): [text]")
-        chkDoc(mod, "data.g", "FUNCTION|mod:data.g", "<function> g(): [text]")
-        chkDoc(mod, "data.h", "FUNCTION|mod:data.h", "@deprecated\n<function> h(): [text]")
-        chkDoc(mod, "data.k", "FUNCTION|mod:data.k", "@deprecated(ERROR)\n<function> k(): [text]")
+        chkDoc(mod, "data.g", "ALIAS|mod:data.g", "<alias> g = [f]\n\n<function> f(): [text]")
+        chkDoc(mod, "data.h", "ALIAS|mod:data.h", "@deprecated\n<alias> h = [f]\n\n<function> f(): [text]")
+        chkDoc(mod, "data.k", "ALIAS|mod:data.k", "@deprecated(ERROR)\n<alias> k = [f]\n\n<function> f(): [text]")
     }
 
     @Test fun testStructAttribute() {
@@ -459,6 +487,58 @@ class LDocTest: BaseLTest() {
             }
         }
         chkDoc(mod, "foo", "FUNCTION|mod:foo", "<function> foo(\n\t$expected\n): [unit]")
+    }
+
+    @Test fun testExtensionProperty() {
+        val mod = makeDocModule {
+            extension("ext", type = "T") {
+                generic("T", subOf = "any")
+                property("prop", type = "integer") { _ -> Rt_UnitValue }
+                property("pure_prop", type = "integer", pure = true) { _ -> Rt_UnitValue }
+                property("spec_prop", type = "integer", C_SysFunctionBody.simple { _ -> Rt_UnitValue })
+                property("pure_spec_prop", type = "integer", C_SysFunctionBody.simple(pure = true) { _ -> Rt_UnitValue })
+            }
+        }
+        chkDoc(mod, "ext.prop", "PROPERTY|mod:ext.prop", "prop: [integer]")
+        chkDoc(mod, "ext.pure_prop", "PROPERTY|mod:ext.pure_prop", "<pure> pure_prop: [integer]")
+        chkDoc(mod, "ext.spec_prop", "PROPERTY|mod:ext.spec_prop", "spec_prop: [integer]")
+        chkDoc(mod, "ext.pure_spec_prop", "PROPERTY|mod:ext.pure_spec_prop", "<pure> pure_spec_prop: [integer]")
+    }
+
+    @Test fun testExtensionFunction() {
+        val mod = makeDocModule {
+            extension("ext", type = "T") {
+                generic("T", subOf = "any")
+                function("foo", result = "integer") {
+                    param(type = "text", name = "x")
+                    body { -> Rt_UnitValue }
+                }
+                function("spec", makeMemberFun())
+                staticFunction("stat", result = "integer") {
+                    param(type = "text", name = "x")
+                    body { -> Rt_UnitValue }
+                }
+                staticFunction("stat_spec", makeGlobalFun())
+
+                function("pure_1", result = "text", pure = true) { body { -> Rt_UnitValue } }
+                function("pure_2", result = "text") {
+                    bodyRaw(C_SysFunctionBody(true, { _, _ -> Rt_UnitValue }, null))
+                }
+                staticFunction("stat_pure_1", result = "text", pure = true) { body { -> Rt_UnitValue } }
+                staticFunction("stat_pure_2", result = "text") {
+                    bodyRaw(C_SysFunctionBody(true, { _, _ -> Rt_UnitValue }, null))
+                }
+            }
+        }
+
+        chkDoc(mod, "ext.foo", "FUNCTION|mod:ext.foo", "<function> foo(\n\tx: [text]\n): [integer]")
+        chkDoc(mod, "ext.spec", "FUNCTION|mod:ext.spec", "<function> spec(...)")
+        chkDoc(mod, "ext.stat", "FUNCTION|mod:ext.stat", "<static> <function> stat(\n\tx: [text]\n): [integer]")
+        chkDoc(mod, "ext.stat_spec", "FUNCTION|mod:ext.stat_spec", "<static> <function> stat_spec(...)")
+        chkDoc(mod, "ext.pure_1", "FUNCTION|mod:ext.pure_1", "<pure> <function> pure_1(): [text]")
+        chkDoc(mod, "ext.pure_2", "FUNCTION|mod:ext.pure_2", "<pure> <function> pure_2(): [text]")
+        chkDoc(mod, "ext.stat_pure_1", "FUNCTION|mod:ext.stat_pure_1", "<pure> <static> <function> stat_pure_1(): [text]")
+        chkDoc(mod, "ext.stat_pure_2", "FUNCTION|mod:ext.stat_pure_2", "<pure> <static> <function> stat_pure_2(): [text]")
     }
 
     @Test fun testTypeExprSimple() {

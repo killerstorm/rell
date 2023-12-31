@@ -19,41 +19,7 @@ import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.utils.LazyString
 
-sealed class Ld_FunctionBodyRef
-
-@RellLibDsl
-interface Ld_CommonFunctionBodyDsl: Ld_FunctionContextDsl {
-    fun dbFunction(dbFn: Db_SysFunction)
-    fun dbFunctionSimple(name: String, sql: String)
-    fun dbFunctionTemplate(name: String, arity: Int, template: String)
-    fun dbFunctionCast(name: String, type: String)
-
-    fun bodyN(rCode: (List<Rt_Value>) -> Rt_Value): Ld_FunctionBodyRef
-    fun bodyContextN(rCode: (Rt_CallContext, List<Rt_Value>) -> Rt_Value): Ld_FunctionBodyRef
-
-    fun body(rCode: () -> Rt_Value): Ld_FunctionBodyRef
-    fun body(rCode: (Rt_Value) -> Rt_Value): Ld_FunctionBodyRef
-    fun body(rCode: (Rt_Value, Rt_Value) -> Rt_Value): Ld_FunctionBodyRef
-    fun body(rCode: (Rt_Value, Rt_Value, Rt_Value) -> Rt_Value): Ld_FunctionBodyRef
-    fun body(rCode: (Rt_Value, Rt_Value, Rt_Value, Rt_Value) -> Rt_Value): Ld_FunctionBodyRef
-
-    fun bodyOpt1(rCode: (Rt_Value, Rt_Value?) -> Rt_Value): Ld_FunctionBodyRef
-    fun bodyOpt2(rCode: (Rt_Value, Rt_Value, Rt_Value?) -> Rt_Value): Ld_FunctionBodyRef
-
-    fun bodyContext(rCode: (Rt_CallContext) -> Rt_Value): Ld_FunctionBodyRef
-    fun bodyContext(rCode: (Rt_CallContext, Rt_Value) -> Rt_Value): Ld_FunctionBodyRef
-    fun bodyContext(rCode: (Rt_CallContext, Rt_Value, Rt_Value) -> Rt_Value): Ld_FunctionBodyRef
-    fun bodyContext(rCode: (Rt_CallContext, Rt_Value, Rt_Value, Rt_Value) -> Rt_Value): Ld_FunctionBodyRef
-}
-
-@RellLibDsl
-interface Ld_FunctionBodyDsl: Ld_CommonFunctionBodyDsl {
-    fun validate(validator: (C_SysFunctionCtx) -> Unit)
-    fun bodyRaw(body: C_SysFunctionBody): Ld_FunctionBodyRef
-    fun bodyMeta(block: Ld_FunctionMetaBodyDsl.() -> Ld_FunctionBodyRef): Ld_FunctionBodyRef
-}
-
-abstract class Ld_CommonFunctionBodyDslBuilder(
+abstract class Ld_CommonFunctionBodyDslImpl(
     private val maker: Ld_CommonFunctionBodyMaker,
 ): Ld_CommonFunctionBodyDsl {
     final override val fnSimpleName: String get() = maker.fnSimpleName.str
@@ -162,9 +128,9 @@ abstract class Ld_CommonFunctionBodyDslBuilder(
     }
 }
 
-class Ld_FunctionBodyDslBuilder(
+class Ld_FunctionBodyDslImpl(
     private val maker: Ld_FunctionBodyMaker,
-): Ld_CommonFunctionBodyDslBuilder(maker), Ld_FunctionBodyDsl {
+): Ld_CommonFunctionBodyDslImpl(maker), Ld_FunctionBodyDsl {
     override fun validate(validator: (C_SysFunctionCtx) -> Unit) {
         return maker.validator(validator)
     }
@@ -271,7 +237,7 @@ private class Ld_FunctionBody_Meta(
         val fnQualifiedName = LazyString.of { qualifiedName.str() }
         return L_FunctionBody.delegating { meta ->
             val metaBuilder = Ld_FunctionMetaBodyBuilder(fnSimpleName, fnQualifiedName, internalState)
-            val metaDslBuilder = Ld_FunctionMetaBodyDslBuilder(meta, metaBuilder)
+            val metaDslBuilder = Ld_FunctionMetaBodyDslImpl(meta, metaBuilder)
             val bodyRes = block(metaDslBuilder)
             metaBuilder.build(bodyRes)
         }
@@ -346,14 +312,6 @@ class Ld_FunctionBodyBuilder(
     private class Ld_BodyResImpl(val actualBody: Ld_FunctionBody): Ld_FunctionBodyRef()
 }
 
-@RellLibDsl
-interface Ld_FunctionMetaBodyDsl: Ld_CommonFunctionBodyDsl {
-    val fnQualifiedName: String
-    val fnBodyMeta: L_FunctionBodyMeta
-
-    fun validationError(code: String, msg: String)
-}
-
 interface Ld_FunctionMetaBodyMaker: Ld_CommonFunctionBodyMaker {
     val fnQualifiedName: LazyString
 
@@ -422,10 +380,10 @@ private class Ld_FunctionMetaBodyBuilder(
     private class Ld_BodyResImpl(val fn: C_SysFunction): Ld_FunctionBodyRef()
 }
 
-class Ld_FunctionMetaBodyDslBuilder(
+class Ld_FunctionMetaBodyDslImpl(
     override val fnBodyMeta: L_FunctionBodyMeta,
     private val maker: Ld_FunctionMetaBodyMaker,
-): Ld_CommonFunctionBodyDslBuilder(maker), Ld_FunctionMetaBodyDsl {
+): Ld_CommonFunctionBodyDslImpl(maker), Ld_FunctionMetaBodyDsl {
     override val fnQualifiedName: String get() = maker.fnQualifiedName.value
 
     override fun validationError(code: String, msg: String) {

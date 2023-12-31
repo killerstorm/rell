@@ -22,22 +22,22 @@ object Lib_Test_Assert {
     val NAMESPACE = Ld_NamespaceDsl.make {
         include(Lib_Test_Type_Failure.NAMESPACE)
 
-        link("rell.test.assert_equals")
-        link("rell.test.assert_not_equals")
-        link("rell.test.assert_true")
-        link("rell.test.assert_false")
-        link("rell.test.assert_null")
-        link("rell.test.assert_not_null")
-        link("rell.test.assert_fails")
+        alias(target = "rell.test.assert_equals")
+        alias(target = "rell.test.assert_not_equals")
+        alias(target = "rell.test.assert_true")
+        alias(target = "rell.test.assert_false")
+        alias(target = "rell.test.assert_null")
+        alias(target = "rell.test.assert_not_null")
+        alias(target = "rell.test.assert_fails")
 
-        link("rell.test.assert_lt")
-        link("rell.test.assert_gt")
-        link("rell.test.assert_le")
-        link("rell.test.assert_ge")
-        link("rell.test.assert_gt_lt")
-        link("rell.test.assert_gt_le")
-        link("rell.test.assert_ge_lt")
-        link("rell.test.assert_ge_le")
+        alias(target = "rell.test.assert_lt")
+        alias(target = "rell.test.assert_gt")
+        alias(target = "rell.test.assert_le")
+        alias(target = "rell.test.assert_ge")
+        alias(target = "rell.test.assert_gt_lt")
+        alias(target = "rell.test.assert_gt_le")
+        alias(target = "rell.test.assert_ge_lt")
+        alias(target = "rell.test.assert_ge_le")
 
         namespace("rell.test") {
             function("assert_equals", pure = true) {

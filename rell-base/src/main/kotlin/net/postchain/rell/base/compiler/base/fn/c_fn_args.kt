@@ -202,7 +202,7 @@ private class C_PartialCallArguments_Impl(
     }
 
     override fun errPartialNotSupportedCase(fnCase: C_CodeMsg) {
-        val code = "expr:call:partial_bad_case:${fnCase.code}"
+        val code = "expr:call:partial_bad_case:[${fnCase.code}]"
         val msg = "Partial application not supported for function ${fnCase.msg}"
         ctx.msgCtx.error(args.firstWildcardPos, code, msg)
     }

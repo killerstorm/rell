@@ -6,7 +6,6 @@ package net.postchain.rell.base.lmodel
 
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.model.R_QualifiedName
-import net.postchain.rell.base.mtype.M_Type
 import net.postchain.rell.base.utils.doc.DocDefinition
 import net.postchain.rell.base.utils.doc.DocSymbol
 
@@ -28,7 +27,12 @@ class L_Module(
 
     fun getTypeDefOrNull(qualifiedName: R_QualifiedName): L_TypeDef? {
         val def = namespace.getDefOrNull(qualifiedName)
-        return (def as? L_NamespaceMember_Type)?.typeDef
+        return def?.getTypeDefOrNull()
+    }
+
+    fun getTypeExtensionOrNull(qualifiedName: R_QualifiedName): L_TypeExtension? {
+        val def = namespace.getDefOrNull(qualifiedName)
+        return def?.getTypeExtensionOrNull()
     }
 
     fun getType(name: String): L_Type {
@@ -38,17 +42,14 @@ class L_Module(
 
     fun getStruct(qualifiedName: String): L_Struct {
         val qName = R_QualifiedName.of(qualifiedName)
-        val def = namespace.getDef(qName)
-        return (def as L_NamespaceMember_Struct).struct
+        val def = namespace.getDefOrNull(qName)
+        val struct = def?.getStructOrNull()
+        return checkNotNull(struct) { "Struct not found: $qualifiedName" }
     }
 
-    fun getMTypeOrNull(qualifiedName: R_QualifiedName): M_Type? {
+    fun getAbstractTypeDefOrNull(qualifiedName: R_QualifiedName): L_AbstractTypeDef? {
         val def = namespace.getDefOrNull(qualifiedName)
-        return when (def) {
-            is L_NamespaceMember_Type -> def.typeDef.mGenericType.getTypeSimple()
-            is L_NamespaceMember_Struct -> def.struct.rStruct.type.mType
-            else -> null
-        }
+        return def?.getAbstractTypeDefOrNull()
     }
 
     override fun getDocMember(name: String): DocDefinition? {

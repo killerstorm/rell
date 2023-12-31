@@ -39,11 +39,11 @@ object Lib_Type_Entity {
             }
         }
 
-        type("entity_extension", abstract = true, extension = true, hidden = true) {
-            generic("T", subOf = "entity")
-
-            function("to_struct", C_Fn_ToStruct(false))
-            function("to_mutable_struct", C_Fn_ToStruct(true))
+        namespace("rell") {
+            extension("entity_ext", type = "entity") {
+                function("to_struct", C_Fn_ToStruct(false))
+                function("to_mutable_struct", C_Fn_ToStruct(true))
+            }
         }
     }
 
@@ -99,7 +99,9 @@ object Lib_Type_Entity {
             }
             val attr = attrRef.attribute()
             if (attr == null || !attr.mutable) {
-                throw C_Errors.errAttrNotMutable(memberPos, attrRef.attrName.str)
+                val simpleName = attrRef.attrName.str
+                val fullName = "${attrRef.rEntity.defName.qualifiedName}.$simpleName"
+                throw C_Errors.errAttrNotMutable(memberPos, simpleName, fullName)
             }
             exprCtx.checkDbUpdateAllowed(memberPos)
 

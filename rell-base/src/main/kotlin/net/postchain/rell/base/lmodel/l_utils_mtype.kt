@@ -16,12 +16,13 @@ object L_TypeUtils {
         parent: M_GenericTypeParent? = null,
         docCodeStrategy: L_TypeDefDocCodeStrategy?,
     ): M_Type {
-        val genType = makeMGenericType(rType, parent, docCodeStrategy)
+        val genType = makeMGenericType(rType, rType.name, parent, docCodeStrategy)
         return genType.getType(immListOf())
     }
 
     fun makeMGenericType(
         rType: R_Type,
+        name: String,
         parent: M_GenericTypeParent?,
         docCodeStrategy: L_TypeDefDocCodeStrategy?,
     ): M_GenericType {
@@ -33,26 +34,27 @@ object L_TypeUtils {
         check(rType !is R_TupleType) { rType }
         check(rType !is R_VirtualType) { rType }
 
-        val docCodeStrategy2 = docCodeStrategy ?: makeDocCodeStrategy(rType.name)
+        val docCodeStrategy2 = docCodeStrategy ?: makeDocCodeStrategy(name)
         val addon = C_MGenericTypeAddon_Simple(rType, docCodeStrategy2)
 
-        return M_GenericType.make(rType.name, immListOf(), parent, addon)
+        return M_GenericType.make(name, immListOf(), parent, addon)
     }
 
     fun makeMGenericType(
-        name: String,
+        name: R_FullName,
         params: List<M_TypeParam>,
         parent: M_GenericTypeParent?,
         rTypeFactory: L_TypeDefRTypeFactory?,
         docCodeStrategy: L_TypeDefDocCodeStrategy?,
         supertypeStrategy: L_TypeDefSupertypeStrategy,
     ): M_GenericType {
+        val nameStr = name.qualifiedName.str()
         val addon = C_MGenericTypeAddon_LTypeDef(
             rTypeFactory = rTypeFactory,
-            docCodeStrategy = docCodeStrategy ?: makeDocCodeStrategy(name),
+            docCodeStrategy = docCodeStrategy ?: makeDocCodeStrategy(nameStr),
             supertypeStrategy = supertypeStrategy,
         )
-        return M_GenericType.make(name, params, parent = parent, addon = addon)
+        return M_GenericType.make(nameStr, params, parent = parent, addon = addon)
     }
 
     private fun makeDocCodeStrategy(typeName: String): L_TypeDefDocCodeStrategy {

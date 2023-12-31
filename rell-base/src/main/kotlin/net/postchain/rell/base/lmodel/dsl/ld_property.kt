@@ -36,13 +36,7 @@ class Ld_TypeProperty(
     }
 }
 
-@RellLibDsl
-interface Ld_NamespacePropertyDsl {
-    fun validate(validator: (C_SysFunctionCtx) -> Unit)
-    fun bodyContext(block: (Rt_CallContext) -> Rt_Value): Ld_PropertyBody
-}
-
-class Ld_NamespacePropertyDslBuilder(
+class Ld_NamespacePropertyDslImpl(
     private val type: Ld_Type,
     pure: Boolean,
 ): Ld_NamespacePropertyDsl {

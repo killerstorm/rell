@@ -345,8 +345,10 @@ class LibRellTestAssertTest: BaseRellTest(false) {
         chkAssert("assert_fails(123)", "ct_err:expr_call_argtypes:[FN]:integer")
 
         chkAssert("assert_fails(integer.from_hex('xyz', *))", "int[0]")
-        chkAssert("assert_fails(integer.from_hex('123', *))", "asrt_err:assert_fails:no_fail:fn[integer.from_hex(text[123])]")
-        chkAssert("assert_fails('foo', integer.from_hex('qwer', *))", "asrt_err:assert_fails:mismatch:[foo]:[Invalid hex number: 'qwer']")
+        chkAssert("assert_fails(integer.from_hex('123', *))",
+            "asrt_err:assert_fails:no_fail:fn[integer.from_hex(text[123])]")
+        chkAssert("assert_fails('foo', integer.from_hex('qwer', *))",
+            "asrt_err:assert_fails:mismatch:[foo]:[Invalid hex number: 'qwer']")
         chkAssert("assert_fails(\"Invalid hex number: 'qwer'\", integer.from_hex('qwer', *))", "int[0]")
 
         chkAssert("assert_fails(json('', *))", "int[0]")

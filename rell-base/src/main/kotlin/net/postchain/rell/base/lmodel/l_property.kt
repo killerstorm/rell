@@ -7,8 +7,8 @@ package net.postchain.rell.base.lmodel
 import net.postchain.rell.base.compiler.base.lib.C_SysFunction
 import net.postchain.rell.base.compiler.base.lib.C_SysFunctionBody
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty
+import net.postchain.rell.base.model.R_FullName
 import net.postchain.rell.base.model.R_Name
-import net.postchain.rell.base.model.R_QualifiedName
 import net.postchain.rell.base.mtype.M_Type
 import net.postchain.rell.base.mtype.M_TypeParam
 import net.postchain.rell.base.mtype.M_TypeSet
@@ -21,18 +21,18 @@ class L_NamespaceProperty(
 )
 
 class L_NamespaceMember_Property(
-    qualifiedName: R_QualifiedName,
+    fullName: R_FullName,
     doc: DocSymbol,
     val property: L_NamespaceProperty,
-): L_NamespaceMember(qualifiedName, doc) {
+): L_NamespaceMember(fullName, doc) {
     override fun strCode() = "property $qualifiedName: ${property.type.strCode()}"
 }
 
 class L_NamespaceMember_SpecialProperty(
-    qualifiedName: R_QualifiedName,
+    fullName: R_FullName,
     doc: DocSymbol,
     val property: C_NamespaceProperty,
-): L_NamespaceMember(qualifiedName, doc) {
+): L_NamespaceMember(fullName, doc) {
     override fun strCode() = "property $qualifiedName"
 }
 

@@ -61,14 +61,14 @@ class LibRellTestOtherTest: BaseRellTest(false) {
 
     @Test fun testNoTestLib() {
         tst.testLib = false
-        chk("rell.test.block()", "ct_err:unknown_name:[rell]:test")
-        chk("rell.test.tx()", "ct_err:unknown_name:[rell]:test")
-        chk("rell.test.op()", "ct_err:unknown_name:[rell]:test")
-        chk("rell.test.keypairs.bob", "ct_err:unknown_name:[rell]:test")
-        chk("rell.test.privkeys.bob", "ct_err:unknown_name:[rell]:test")
-        chk("rell.test.pubkeys.bob", "ct_err:unknown_name:[rell]:test")
-        chk("rell.test.keypair()", "ct_err:unknown_name:[rell]:test")
-        chk("rell.test.assert_equals(0,0)", "ct_err:unknown_name:[rell]:test")
+        chk("rell.test.block()", "ct_err:unknown_name:[rell:rell]:test")
+        chk("rell.test.tx()", "ct_err:unknown_name:[rell:rell]:test")
+        chk("rell.test.op()", "ct_err:unknown_name:[rell:rell]:test")
+        chk("rell.test.keypairs.bob", "ct_err:unknown_name:[rell:rell]:test")
+        chk("rell.test.privkeys.bob", "ct_err:unknown_name:[rell:rell]:test")
+        chk("rell.test.pubkeys.bob", "ct_err:unknown_name:[rell:rell]:test")
+        chk("rell.test.keypair()", "ct_err:unknown_name:[rell:rell]:test")
+        chk("rell.test.assert_equals(0,0)", "ct_err:unknown_name:[rell:rell]:test")
         chk("assert_equals(0,0)", "ct_err:unknown_name:assert_equals")
     }
 

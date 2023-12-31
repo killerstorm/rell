@@ -4,8 +4,8 @@
 
 package net.postchain.rell.base.lmodel
 
+import net.postchain.rell.base.model.R_FullName
 import net.postchain.rell.base.model.R_Name
-import net.postchain.rell.base.model.R_QualifiedName
 import net.postchain.rell.base.mtype.M_Type
 import net.postchain.rell.base.runtime.Rt_Value
 import net.postchain.rell.base.utils.doc.DocSymbol
@@ -22,10 +22,10 @@ class L_Constant(
 }
 
 class L_NamespaceMember_Constant(
-    qualifiedName: R_QualifiedName,
+    fullName: R_FullName,
     doc: DocSymbol,
     val constant: L_Constant,
-): L_NamespaceMember(qualifiedName, doc) {
+): L_NamespaceMember(fullName, doc) {
     override fun strCode() = constant.strCode()
 }
 

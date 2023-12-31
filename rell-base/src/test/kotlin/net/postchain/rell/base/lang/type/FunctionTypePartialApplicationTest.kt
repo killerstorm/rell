@@ -206,14 +206,17 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("integer.from_hex(s = 'beef', *)", "ct_err:expr:call:unknown_named_arg:[integer.from_hex]:s")
 
         chkSysGlobalFn("integer.from_hex(*)", "'beef'", "(text)->integer", "fn[integer.from_hex(*)]", "int[48879]")
-        chkSysGlobalFn("integer.from_hex('beef', *)", "", "()->integer", "fn[integer.from_hex(text[beef])]", "int[48879]")
-        chkSysGlobalFn("decimal.from_text(*)", "'12.34'", "(text)->decimal", "fn[decimal.from_text(*)]", "dec[12.34]")
-        chkSysGlobalFn("decimal.from_text('12.34', *)", "", "()->decimal", "fn[decimal.from_text(text[12.34])]", "dec[12.34]")
+        chkSysGlobalFn("integer.from_hex('beef', *)", "", "()->integer",
+            "fn[integer.from_hex(text[beef])]", "int[48879]")
+        chkSysGlobalFn("decimal.from_text(*)", "'12.34'", "(text)->decimal",
+            "fn[decimal.from_text(*)]", "dec[12.34]")
+        chkSysGlobalFn("decimal.from_text('12.34', *)", "", "()->decimal",
+            "fn[decimal.from_text(text[12.34])]", "dec[12.34]")
 
-        chkSysGlobalFn("byte_array.from_list(*)", "[0xbe,0xef]", "(list<integer>)->byte_array", "fn[byte_array.from_list(*)]",
-                "byte_array[beef]")
-        chkSysGlobalFn("byte_array.from_hex(*)", "'beef'", "(text)->byte_array", "fn[byte_array.from_hex(*)]",
-                "byte_array[beef]")
+        chkSysGlobalFn("byte_array.from_list(*)", "[0xbe,0xef]", "(list<integer>)->byte_array",
+            "fn[byte_array.from_list(*)]", "byte_array[beef]")
+        chkSysGlobalFn("byte_array.from_hex(*)", "'beef'", "(text)->byte_array",
+            "fn[byte_array.from_hex(*)]", "byte_array[beef]")
 
         chkSysGlobalFn("json(*)", "'[0,{},1]'", "(text)->json", "fn[json(*)]", "json[[0,{},1]]")
 
@@ -237,13 +240,13 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("gtv.from_bytes(*)", "fn[gtv.from_bytes(*)]")
         chkFn("= op_context.is_signer(*);", "fn[op_context.is_signer(*)]")
 
-        chk("list<integer>.from_gtv(*)", "fn[list<integer>.from_gtv(*)]")
-        chk("set<integer>.from_gtv(*)", "fn[set<integer>.from_gtv(*)]")
-        chk("map<integer,text>.from_gtv(*)", "fn[map<integer,text>.from_gtv(*)]")
+        chk("list<integer>.from_gtv(*)", "fn[rell.gtv_ext(list<integer>).from_gtv(*)]")
+        chk("set<integer>.from_gtv(*)", "fn[rell.gtv_ext(set<integer>).from_gtv(*)]")
+        chk("map<integer,text>.from_gtv(*)", "fn[rell.gtv_ext(map<integer,text>).from_gtv(*)]")
 
-        chk("s.from_gtv(*)", "fn[s.from_gtv(*)]")
-        chk("struct<data>.from_gtv(*)", "fn[struct<data>.from_gtv(*)]")
-        chk("struct<mutable data>.from_gtv(*)", "fn[struct<mutable data>.from_gtv(*)]")
+        chk("s.from_gtv(*)", "fn[rell.gtv_ext(s).from_gtv(*)]")
+        chk("struct<data>.from_gtv(*)", "fn[rell.gtv_ext(struct<data>).from_gtv(*)]")
+        chk("struct<mutable data>.from_gtv(*)", "fn[rell.gtv_ext(struct<mutable data>).from_gtv(*)]")
     }
 
     @Test fun testSysGlobalFunctionNamingTestLib() {
@@ -254,15 +257,15 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("rell.test.assert_true(*)", "fn[rell.test.assert_true(*)]")
         chk("rell.test.assert_false(*)", "fn[rell.test.assert_false(*)]")
 
-        chk("assert_equals(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_equals")
-        chk("assert_not_equals(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_not_equals")
-        chk("assert_null(*)", "ct_err:expr:call:partial_bad_case:rell.test.assert_null(anything):unit")
-        chk("assert_not_null(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_not_null")
+        chk("assert_equals(*)", "ct_err:expr:call:partial_not_supported:[rell.test.assert_equals]")
+        chk("assert_not_equals(*)", "ct_err:expr:call:partial_not_supported:[rell.test.assert_not_equals]")
+        chk("assert_null(*)", "ct_err:expr:call:partial_bad_case:[rell.test.assert_null(anything):unit]")
+        chk("assert_not_null(*)", "ct_err:expr:call:partial_not_supported:[rell.test.assert_not_null]")
 
-        chk("assert_lt(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_lt")
-        chk("assert_gt(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_gt")
-        chk("assert_le(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_le")
-        chk("assert_ge(*)", "ct_err:expr:call:partial_not_supported:rell.test.assert_ge")
+        chk("assert_lt(*)", "ct_err:expr:call:partial_not_supported:[rell.test.assert_lt]")
+        chk("assert_gt(*)", "ct_err:expr:call:partial_not_supported:[rell.test.assert_gt]")
+        chk("assert_le(*)", "ct_err:expr:call:partial_not_supported:[rell.test.assert_le]")
+        chk("assert_ge(*)", "ct_err:expr:call:partial_not_supported:[rell.test.assert_ge]")
     }
 
     @Test fun testSysGlobalFunctionOverload() {
@@ -300,14 +303,14 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
     }
 
     private fun chkSysFnOver(fn: String, type: String, wildArgs: String, args: String, expRes: String) {
-        chk("$fn(*)", "ct_err:expr:call:partial_ambiguous:$fn")
+        chk("$fn(*)", "ct_err:expr:call:partial_ambiguous:[$fn]")
         chkEx("{ val f: $type = $fn(*); return _type_of(f); }", "text[$type]")
         chkEx("{ val f: $type = $fn(*); return f; }", "fn[$fn($wildArgs)]")
         chkEx("{ val f: $type = $fn(*); return f($args); }", expRes)
     }
 
     private fun chkSysFnOverErr(fn: String, type: String) {
-        chkEx("{ val f: $type = $fn(*); return f; }", "ct_err:expr:call:partial_ambiguous:$fn")
+        chkEx("{ val f: $type = $fn(*); return f; }", "ct_err:expr:call:partial_ambiguous:[$fn]")
     }
 
     @Test fun testSysGlobalFunctionOverloadContexts() {
@@ -325,7 +328,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("f(abs(*))(123)", "int[123]")
         chk("g(abs(*))", "fn[abs(*)]")
         chk("g(abs(*))(123)", "dec[123]")
-        chk("h(abs(*))", "ct_err:expr:call:partial_ambiguous:abs")
+        chk("h(abs(*))", "ct_err:expr:call:partial_ambiguous:[abs]")
 
         chk("u()", "fn[abs(*)]")
         chk("u()(123)", "dec[123]")
@@ -377,27 +380,27 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
 
     @Test fun testSysGlobalFunctionDeprecated() {
         chkEx("{ val f: (list<integer>)->byte_array = byte_array(*); return f; }",
-                "ct_err:deprecated:FUNCTION:byte_array:byte_array.from_list")
+                "ct_err:deprecated:FUNCTION:[byte_array]:byte_array.from_list")
     }
 
     @Test fun testSysGlobalFunctionSpecial() {
         def("enum colors { red, green, blue }")
 
-        chkSysGlobalFn("colors.values(*)", "", "()->list<colors>", "fn[colors.values()]",
+        chkSysGlobalFn("colors.values(*)", "", "()->list<colors>", "fn[rell.enum_ext(colors).values()]",
                 "list<colors>[colors[red],colors[green],colors[blue]]")
 
-        chk("'hello'.format(*)", "ct_err:expr:call:partial_not_supported:text.format")
+        chk("'hello'.format(*)", "ct_err:expr:call:partial_not_supported:[text.format]")
         chkEx("{ val f: (integer)->text = 'hello'.format('%d',*); return f; }",
-                "ct_err:expr:call:partial_not_supported:text.format")
+                "ct_err:expr:call:partial_not_supported:[text.format]")
 
-        chk("exists(*)", "ct_err:expr:call:partial_not_supported:exists")
-        chk("empty(*)", "ct_err:expr:call:partial_not_supported:empty")
+        chk("exists(*)", "ct_err:expr:call:partial_not_supported:[exists]")
+        chk("empty(*)", "ct_err:expr:call:partial_not_supported:[empty]")
 
-        chk("print(*)", "ct_err:expr:call:partial_not_supported:print")
-        chk("log(*)", "ct_err:expr:call:partial_not_supported:log")
+        chk("print(*)", "ct_err:expr:call:partial_not_supported:[print]")
+        chk("log(*)", "ct_err:expr:call:partial_not_supported:[log]")
 
-        chk("require(*)", "ct_err:expr:call:partial_not_supported:require")
-        chk("require_not_empty(*)", "ct_err:expr:call:partial_not_supported:require_not_empty")
+        chk("require(*)", "ct_err:expr:call:partial_not_supported:[require]")
+        chk("require_not_empty(*)", "ct_err:expr:call:partial_not_supported:[require_not_empty]")
     }
 
     @Test fun testSysMemberFunctionSimple() {
@@ -414,7 +417,8 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chkSysMemFn("(123.4).sign(*)", "", "()->integer", "fn[decimal.sign()]", "int[1]")
         chkSysMemFn("(123.4).to_integer(*)", "", "()->integer", "fn[decimal.to_integer()]", "int[123]")
 
-        chkSysMemFn("gtv.from_json('{}').to_bytes(*)", "", "()->byte_array", "fn[gtv.to_bytes()]", "byte_array[a4023000]")
+        chkSysMemFn("gtv.from_json('{}').to_bytes(*)", "", "()->byte_array",
+            "fn[gtv.to_bytes()]", "byte_array[a4023000]")
         chkSysMemFn("gtv.from_json('{}').to_json(*)", "", "()->json", "fn[gtv.to_json()]", "json[{}]")
 
         chkSysMemFn("'hello'.empty(*)", "", "()->boolean", "fn[text.empty()]", "boolean[false]")
@@ -471,7 +475,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         args: String,
         expRes: String,
     ) {
-        chk("$baseExpr.$fn(*)", "ct_err:expr:call:partial_ambiguous:$baseType.$fn")
+        chk("$baseExpr.$fn(*)", "ct_err:expr:call:partial_ambiguous:[$baseType.$fn]")
         chkEx("{ val f: $type = $baseExpr.$fn(*); return _type_of(f); }", "text[$type]")
         chkEx("{ val f: $type = $baseExpr.$fn(*); return f; }", "fn[$baseType.$fn($wildArgs)]")
         chkEx("{ val f: $type = $baseExpr.$fn(*); return f($args); }", expRes)
@@ -506,8 +510,9 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
     @Test fun testSysMemberFunctionEntityToStruct() {
         tstCtx.useSql = true
         def("entity data { x: integer; }")
-        chk("(data@{}).to_struct(*)", "ct_err:expr:call:partial_not_supported:data.to_struct")
-        chk("(data@{}).to_mutable_struct(*)", "ct_err:expr:call:partial_not_supported:data.to_mutable_struct")
+        chk("(data@{}).to_struct(*)", "ct_err:expr:call:partial_not_supported:[rell.entity_ext(data).to_struct]")
+        chk("(data@{}).to_mutable_struct(*)",
+            "ct_err:expr:call:partial_not_supported:[rell.entity_ext(data).to_mutable_struct]")
     }
 
     @Test fun testAbstractFunction() {

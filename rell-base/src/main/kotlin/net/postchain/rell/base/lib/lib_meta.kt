@@ -75,7 +75,7 @@ private abstract class C_SysFn_BaseMeta(private val resultType: R_Type): C_Speci
 
         if (value == null) {
             cArg.valueOrError()
-            ctx.msgCtx.error(name.pos, "expr_call:bad_arg:${name.str}", "Bad argument for function '${name.str}'")
+            ctx.msgCtx.error(name.pos, "expr_call:bad_arg:[${name.str}]", "Bad argument for function '${name.str}'")
             return C_ExprUtils.errorVExpr(ctx, name.pos, R_BooleanType)
         }
 

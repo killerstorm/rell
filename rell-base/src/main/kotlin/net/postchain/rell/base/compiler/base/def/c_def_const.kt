@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.def
@@ -63,12 +63,12 @@ class C_GlobalConstantDefinition(
 
                 val flags = type.completeFlags()
                 if (flags.mutable) {
-                    val code = "def:const:bad_type:mutable:${c.rDef.constId.strCode()}:${type.strCode()}"
+                    val code = "def:const:bad_type:mutable:[${c.rDef.constId.strCode()}]:[${type.strCode()}]"
                     var msg = "Global constant cannot have a mutable type"
                     if (header.explicitType == null) msg = "$msg: ${type.str()}"
                     msgCtx.error(c.typePos, code, msg)
                 } else if (!flags.pure) {
-                    val code = "def:const:bad_type:not_pure:${c.rDef.constId.strCode()}:${type.strCode()}"
+                    val code = "def:const:bad_type:not_pure:[${c.rDef.constId.strCode()}]:[${type.strCode()}]"
                     var msg = "Bad type for a global constant"
                     if (header.explicitType == null) msg = "$msg: ${type.str()}"
                     msgCtx.error(c.typePos, code, msg)
@@ -83,7 +83,7 @@ class C_GlobalConstantDefinition(
                     if (r == null) true else {
                         var msg = "Bad expression for a global constant"
                         if (r.msg != null) msg = "$msg: ${r.msg}"
-                        msgCtx.error(it.pos, "def:const:bad_expr:${c.rDef.constId.strCode()}:${r.code}", msg)
+                        msgCtx.error(it.pos, "def:const:bad_expr:[${c.rDef.constId.strCode()}]:${r.code}", msg)
                         true
                     }
                 }

@@ -110,22 +110,22 @@ class LTypeNameConflictTest: BaseLTest() {
 
     @Test fun testAliasFunction() {
         val (defs, block) = initAlias()
-        chkNameConflictOK(defs, block, "function x(): anything", "function c(): anything") {
+        chkNameConflictOK(defs, block, "function x(): anything", "alias c = x") {
             function("x", "anything") { alias("c"); body { -> Rt_UnitValue } }
         }
         chkNameConflictErr(defs, block, "p") {
             function("x", "anything") { alias("p"); body { -> Rt_UnitValue } }
         }
-        chkNameConflictOK(defs, block, "function x(anything): anything", "function f(anything): anything") {
+        chkNameConflictOK(defs, block, "function x(anything): anything", "alias f = x") {
             function("x", "anything") { alias("f"); param("anything"); body { -> Rt_UnitValue } }
         }
         chkNameConflictErr(defs, block, "g") {
             function("x", "anything") { alias("g"); body { -> Rt_UnitValue } }
         }
-        chkNameConflictOK(defs, block, "function x(): anything", "function h(): anything") {
+        chkNameConflictOK(defs, block, "function x(): anything", "alias h = x") {
             function("x", "anything") { alias("h"); body { -> Rt_UnitValue } }
         }
-        chkNameConflictOK(defs, block, "function x(): anything", "function i(): anything") {
+        chkNameConflictOK(defs, block, "function x(): anything", "alias i = x") {
             function("x", "anything") { alias("i"); body { -> Rt_UnitValue } }
         }
     }
@@ -135,16 +135,16 @@ class LTypeNameConflictTest: BaseLTest() {
         chkNameConflictErr(defs, block, "c") {
             staticFunction("x", "anything") { alias("c"); body { -> Rt_UnitValue } }
         }
-        chkNameConflictOK(defs, block, "static function x(): anything", "static function p(): anything") {
+        chkNameConflictOK(defs, block, "static function x(): anything", "alias p = x") {
             staticFunction("x", "anything") { alias("p"); body { -> Rt_UnitValue } }
         }
-        chkNameConflictOK(defs, block, "static function x(): anything", "static function f(): anything") {
+        chkNameConflictOK(defs, block, "static function x(): anything", "alias f = x") {
             staticFunction("x", "anything") { alias("f"); body { -> Rt_UnitValue } }
         }
-        chkNameConflictOK(defs, block, "static function x(): anything", "static function g(): anything") {
+        chkNameConflictOK(defs, block, "static function x(): anything", "alias g = x") {
             staticFunction("x", "anything") { alias("g"); body { -> Rt_UnitValue } }
         }
-        chkNameConflictOK(defs, block, "static function x(anything): anything", "static function h(anything): anything") {
+        chkNameConflictOK(defs, block, "static function x(anything): anything", "alias h = x") {
             staticFunction("x", "anything") { alias("h"); param("anything"); body { -> Rt_UnitValue } }
         }
         chkNameConflictErr(defs, block, "i") {

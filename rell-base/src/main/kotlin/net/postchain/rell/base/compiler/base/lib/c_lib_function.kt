@@ -23,7 +23,7 @@ import net.postchain.rell.base.utils.toImmList
 
 object C_LibFunctionUtils {
     fun makeGlobalFunction(
-        naming: C_GlobalFunctionNaming,
+        naming: C_MemberNaming,
         cases: List<C_LibFuncCase<V_GlobalFunctionCall>>,
     ): C_LibGlobalFunction {
         return C_RegularLibGlobalFunction(naming, cases)
@@ -191,7 +191,7 @@ class C_SpecialLibMemberFunction(
 }
 
 private class C_RegularLibGlobalFunction(
-    private val naming: C_GlobalFunctionNaming,
+    private val naming: C_MemberNaming,
     private val cases: List<C_LibFuncCase<V_GlobalFunctionCall>>,
 ): C_LibGlobalFunction() {
     override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibGlobalFunction {

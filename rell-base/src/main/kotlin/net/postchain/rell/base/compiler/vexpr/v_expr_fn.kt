@@ -262,7 +262,7 @@ abstract class V_FunctionCallTarget_SysFunction(
     final override fun globalConstantRestriction(): V_GlobalConstantRestriction? {
         return if (desc.pure) null else {
             val name = desc.fullName.value
-            val code = if (desc.synth) "fn:prop:$name" else "fn:sys:$name"
+            val code = if (desc.synth) "fn:prop:[$name]" else "fn:sys:[$name]"
             val msg = if (desc.synth) null else "function '$name'"
             V_GlobalConstantRestriction(code, msg)
         }

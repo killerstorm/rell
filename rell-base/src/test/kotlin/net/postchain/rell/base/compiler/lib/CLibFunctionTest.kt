@@ -26,10 +26,10 @@ class CLibFunctionTest: BaseCLibTest() {
 
     @Test fun testTypeHintOverloadPartCall() {
         tst.extraMod = makeTypeHintNs()
-        chk("decimal(*)", "ct_err:expr:call:partial_ambiguous:decimal")
+        chk("decimal(*)", "ct_err:expr:call:partial_ambiguous:[decimal]")
         chk("_type_hint(decimal(*))", "text[D:fn[decimal(*)]]")
-        chk("_type_hint(big_integer(*))", "ct_err:expr:call:partial_ambiguous:big_integer")
-        chk("_type_hint(integer(*))", "ct_err:expr:call:partial_ambiguous:integer")
+        chk("_type_hint(big_integer(*))", "ct_err:expr:call:partial_ambiguous:[big_integer]")
+        chk("_type_hint(integer(*))", "ct_err:expr:call:partial_ambiguous:[integer]")
     }
 
     private fun makeTypeHintNs() = makeModule {
@@ -76,7 +76,7 @@ class CLibFunctionTest: BaseCLibTest() {
         }
 
         chk("f_list([])", "text[list<integer>[]]")
-        chk("f_list(set())", "ct_err:fn:sys:unresolved_type_params:set:T")
+        chk("f_list(set())", "ct_err:fn:sys:unresolved_type_params:[set]:T")
         chk("f_set(set())", "text[set<integer>[]]")
         chk("f_set([])", "ct_err:expr_list_no_type")
         chk("f_collection([])", "text[list<integer>[]]")
@@ -87,12 +87,12 @@ class CLibFunctionTest: BaseCLibTest() {
         chk("f_iterable([:])", "text[map<integer,text>[]]")
         chk("f_map([:])", "text[map<integer,text>[]]")
         chk("f_map([])", "ct_err:expr_list_no_type")
-        chk("f_map(set())", "ct_err:fn:sys:unresolved_type_params:set:T")
+        chk("f_map(set())", "ct_err:fn:sys:unresolved_type_params:[set]:T")
     }
 
     @Test fun testLibAssertNull() {
         tst.testLib = true
-        chk("assert_null(*)", "ct_err:expr:call:partial_bad_case:rell.test.assert_null(anything):unit")
+        chk("assert_null(*)", "ct_err:expr:call:partial_bad_case:[rell.test.assert_null(anything):unit]")
         chkEx("{ val f: (integer?) -> unit = assert_null(*); return _type_of(f); }", "text[(integer?)->unit]")
         chkEx("{ val f: (integer) -> unit = assert_null(*); return _type_of(f); }", "text[(integer)->unit]")
         chkEx("{ val f: (integer) -> unit = assert_null(*); return f; }", "fn[rell.test.assert_null(*)]")
@@ -193,8 +193,7 @@ class CLibFunctionTest: BaseCLibTest() {
                 generic("R")
                 body { -> Rt_UnitValue }
             }
-            type("test_ext", extension = true, hidden = true) {
-                generic("T", subOf = "any")
+            extension("ext", type = "any") {
                 function("g", result = "R") {
                     generic("R")
                     body { -> Rt_UnitValue }
@@ -202,10 +201,10 @@ class CLibFunctionTest: BaseCLibTest() {
             }
         }
 
-        chk("f()", "ct_err:fn:sys:unresolved_type_params:f:R")
-        chk("'Hello'.g()", "ct_err:fn:sys:unresolved_type_params:text.g:R")
-        chk("f(*)", "ct_err:expr:call:partial_not_supported:f")
-        chk("'Hello'.g(*)", "ct_err:expr:call:partial_not_supported:text.g")
+        chk("f()", "ct_err:fn:sys:unresolved_type_params:[f]:R")
+        chk("'Hello'.g()", "ct_err:fn:sys:unresolved_type_params:[ext(text).g]:R")
+        chk("f(*)", "ct_err:expr:call:partial_not_supported:[f]")
+        chk("'Hello'.g(*)", "ct_err:expr:call:partial_not_supported:[ext(text).g]")
     }
 
     @Test fun testFunctionParamImplies() {
@@ -214,8 +213,7 @@ class CLibFunctionTest: BaseCLibTest() {
                 param(type = "integer?", implies = L_ParamImplication.NOT_NULL)
                 body { _ -> Rt_UnitValue }
             }
-            type("test_ext", extension = true, hidden = true) {
-                generic("T", subOf = "any")
+            extension("ext", type = "any") {
                 function("g", result = "unit") {
                     param(type = "integer?", implies = L_ParamImplication.NOT_NULL)
                     body { _, _ -> Rt_UnitValue }

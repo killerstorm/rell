@@ -66,13 +66,13 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkNameConflictErr(defs, block, name) { function(name, makeGlobalFun()) }
     }
 
-    @Test fun testLink() {
+    @Test fun testAlias() {
         val block = makeBlock {
             namespace("ns") { function("f", "anything") { body { -> Rt_UnitValue } } }
-            link(target = "ns.f", name = "l")
+            alias(target = "ns.f", name = "l")
         }
         val defs0 = arrayOf("namespace ns", "function ns.f(): anything")
-        val defs = defs0 + arrayOf("function l(): anything")
+        val defs = defs0 + arrayOf("alias l = ns.f")
 
         chkNameConflictErr(defs, block, "l") { type("l") }
         chkNameConflictErr(defs, block, "l") { struct("l") {} }
@@ -80,10 +80,7 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkNameConflictErr(defs, block, "l") { property("l", "anything") { bodyContext { Rt_UnitValue } } }
         chkNameConflictErr(defs, block, "l") { property("l", makeSpecProp()) }
         chkNameConflictErr(defs, block, "l") { function("l", makeGlobalFun()) }
-
-        chkNameConflictOK(defs0, block, "function l(anything): anything", "function l(): anything") {
-            function("l", "anything") { param("anything"); body { -> Rt_UnitValue } }
-        }
+        chkNameConflictErr(defs, block, "l") { function("l", "anything") { param("anything"); body { -> Rt_UnitValue } } }
     }
 
     @Test fun testAliasType() {
@@ -99,7 +96,9 @@ class LNamespaceNameConflictTest: BaseLTest() {
 
     private fun chkAliasType(alias: String) {
         val (defs, block) = initAlias()
-        chkNameConflictErr(defs, block, alias) { type("x") { alias(alias) } }
+        chkNameConflictErr(defs, block, alias) {
+            alias(alias, "t")
+        }
     }
 
     @Test fun testAliasFunction() {
@@ -112,7 +111,7 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkAliasFunction("f2")
 
         val (defs, block) = initAlias()
-        chkNameConflictOK(defs, block, "function x(anything): anything", "function f1(anything): anything") {
+        chkNameConflictOK(defs, block, "function x(anything): anything", "alias f1 = x") {
             function("x", "anything") {
                 alias("f1")
                 param("anything")

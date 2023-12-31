@@ -20,8 +20,7 @@ class CLibFunctionLazyParamTest: BaseCLibTest() {
                 param(type = "integer", lazy = true)
                 body { _ -> Rt_UnitValue }
             }
-            type("test_ext", extension = true, hidden = true) {
-                generic("T", subOf = "any")
+            extension("ext", type = "any") {
                 function("g", result = "unit") {
                     param(type = "integer", lazy = true)
                     body { _, _ -> Rt_UnitValue }
@@ -87,7 +86,7 @@ class CLibFunctionLazyParamTest: BaseCLibTest() {
         tst.extraMod = IfIntDefs.MODULE
 
         // Make sure that functions with lazy parameters can't be partially called.
-        var err = "ct_err:expr:call:partial_not_supported:if_int"
+        var err = "ct_err:expr:call:partial_not_supported:[if_int]"
         chk("if_int(*)", err)
         chk("if_int(true, *)", err)
         chk("if_int(false, *)", err)
@@ -95,7 +94,7 @@ class CLibFunctionLazyParamTest: BaseCLibTest() {
         chk("if_int(*, 123)", err)
         chk("if_int(*, *, 456)", err)
 
-        err = "ct_err:expr:call:partial_not_supported:boolean.if_int"
+        err = "ct_err:expr:call:partial_not_supported:[boolean_ext(boolean).if_int]"
         chk("(true).if_int(*)", err)
         chk("(false).if_int(*)", err)
         chk("(true).if_int(123, *)", err)
@@ -160,9 +159,7 @@ class CLibFunctionLazyParamTest: BaseCLibTest() {
         private const val TYPE_NAME = "test_type"
 
         val MODULE: C_LibModule = C_LibModule.make("test", Lib_Rell.MODULE) {
-            type("boolean_ext", extension = true, hidden = true) {
-                generic("T", subOf = "boolean")
-
+            extension("boolean_ext", type = "boolean") {
                 function("if_int", result = "integer") {
                     param(type = "integer", lazy = true)
                     param(type = "integer", lazy = true)

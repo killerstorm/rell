@@ -142,8 +142,20 @@ data class R_FullName(
     val moduleName: R_ModuleName,
     val qualifiedName: R_QualifiedName,
 ) {
+    val last: R_Name get() = qualifiedName.last
+
     fun str(): String = "$moduleName:$qualifiedName"
     override fun toString() = str()
+
+    fun append(name: R_Name): R_FullName {
+        val qName2 = qualifiedName.append(name)
+        return R_FullName(moduleName, qName2)
+    }
+
+    fun replaceLast(name: R_Name): R_FullName {
+        val qName2 = qualifiedName.replaceLast(name)
+        return R_FullName(moduleName, qName2)
+    }
 }
 
 class R_Name private constructor(val str: String): Comparable<R_Name> {

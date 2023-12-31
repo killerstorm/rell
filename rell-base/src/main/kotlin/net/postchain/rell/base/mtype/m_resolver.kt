@@ -73,6 +73,23 @@ class M_TypeParamsResolver(private val params: List<M_TypeParam>) {
         val bounds = param.bounds.replaceParams(typeSets, false)
         return bounds.containsType(type)
     }
+
+    companion object {
+        fun resolveTypeParams(
+            typeParams: List<M_TypeParam>,
+            patternType: M_Type,
+            actualType: M_Type,
+        ): Map<M_TypeParam, M_Type>? {
+            val resolver = M_TypeParamsResolver(typeParams)
+            val match = resolver.matchTypeParamsIn(patternType, actualType)
+            if (!match) {
+                return null
+            }
+
+            val res = resolver.resolve()
+            return res
+        }
+    }
 }
 
 private object M_SingleTypeParamResolver {

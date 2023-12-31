@@ -330,7 +330,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
     @Test fun testOpTypeMemberName() {
         def("@mount('a.b.my_op') operation foo(x: integer, y: text){}")
         chk("foo(123,'Hello').name", "text[a.b.my_op]")
-        chkEx("{ val op = foo(123,'Hello'); op.name = 'bar'; return 0; }", "ct_err:attr_not_mutable:name")
+        chkEx("{ val op = foo(123,'Hello'); op.name = 'bar'; return 0; }", "ct_err:attr_not_mutable:rell.test.op.name")
     }
 
     @Test fun testOpTypeMemberArgs() {
@@ -338,7 +338,8 @@ class LibRellTestTxTest: BaseRellTest(false) {
 
         chk("foo(123,'Hello').args", "list<gtv>[gtv[123],gtv[\"Hello\"]]")
         chkEx("{ val op = foo(123,'Hello'); op.args.clear(); return op.args; }", "list<gtv>[gtv[123],gtv[\"Hello\"]]")
-        chkEx("{ val op = foo(123,'Hello'); op.args = list<gtv>(); return 0; }", "ct_err:attr_not_mutable:args")
+        chkEx("{ val op = foo(123,'Hello'); op.args = list<gtv>(); return 0; }",
+            "ct_err:attr_not_mutable:rell.test.op.args")
 
         chkEx("{ val op = foo(123,'Hello'); val args = op.args; args.clear(); return (args, op.args); }",
             "(list<gtv>[],list<gtv>[gtv[123],gtv[\"Hello\"]])")

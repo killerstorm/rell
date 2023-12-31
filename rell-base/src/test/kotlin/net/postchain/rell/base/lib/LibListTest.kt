@@ -25,7 +25,7 @@ class LibListTest: BaseRellTest(false) {
     }
 
     @Test fun testConstructorRaw() {
-        chk("list()", "ct_err:fn:sys:unresolved_type_params:list:T")
+        chk("list()", "ct_err:fn:sys:unresolved_type_params:[list]:T")
         chk("list([])", "ct_err:expr_list_no_type")
         chk("list([123])", "list<integer>[int[123]]")
         chk("list([123, 456, 789])", "list<integer>[int[123],int[456],int[789]]")
@@ -58,23 +58,24 @@ class LibListTest: BaseRellTest(false) {
     }
 
     @Test fun testConstructorPartial() {
-        chk("list(*)", "ct_err:expr:call:partial_not_supported:list")
-        chk("list<integer>(*)", "ct_err:expr:call:partial_ambiguous:list<integer>")
+        chk("list(*)", "ct_err:expr:call:partial_not_supported:[list]")
+        chk("list<integer>(*)", "ct_err:expr:call:partial_ambiguous:[list<integer>]")
 
-        chkEx("{ val f: () -> list<integer> = list(*); return f; }", "ct_err:expr:call:partial_not_supported:list")
+        chkEx("{ val f: () -> list<integer> = list(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:[list]")
         chkEx("{ val f: () -> list<integer> = list<integer>(*); return f; }", "fn[list<integer>()]")
         chkEx("{ val f: () -> list<integer> = list<integer>(*); return f(); }", "list<integer>[]")
 
         chkEx("{ val f: (list<integer>) -> list<integer> = list(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:list")
+            "ct_err:expr:call:partial_not_supported:[list]")
         chkEx("{ val f: (set<integer>) -> list<integer> = list(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:list")
+            "ct_err:expr:call:partial_not_supported:[list]")
         chkEx("{ val f: (map<text,decimal>) -> list<(text,decimal)> = list(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:list")
+            "ct_err:expr:call:partial_not_supported:[list]")
         chkEx("{ val f: (range) -> list<integer> = list(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:list")
+            "ct_err:expr:call:partial_not_supported:[list]")
         chkEx("{ val f: (byte_array) -> list<integer> = list(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:list")
+            "ct_err:expr:call:partial_not_supported:[list]")
 
         chkEx("{ val f: (list<integer>) -> list<integer> = list<integer>(*); return f; }", "fn[list<integer>(*)]")
         chkEx("{ val f: (list<integer>) -> list<integer> = list<integer>(*); return f([123]); }",
@@ -98,7 +99,7 @@ class LibListTest: BaseRellTest(false) {
         chk("list<integer>().size()", "int[0]")
         chk("list([1]).size()", "int[1]")
         chk("list([1, 2, 3, 4, 5]).size()", "int[5]")
-        chk("list<integer>().len()", "ct_err:deprecated:FUNCTION:list<integer>.len:size")
+        chk("list<integer>().len()", "ct_err:deprecated:FUNCTION:[list<integer>.len]:size")
     }
 
     @Test fun testGet() {
@@ -284,9 +285,9 @@ class LibListTest: BaseRellTest(false) {
 
         chkWarn()
         chkEx("{ $init val r = x._set(0, 5); return ''+r+' '+x; }", "1 [5, 2, 3]")
-        chkWarn("deprecated:FUNCTION:list<integer>._set:set")
+        chkWarn("deprecated:FUNCTION:[list<integer>._set]:set")
         chkEx("{ $init val r = x._set(1, 5); return ''+r+' '+x; }", "2 [1, 5, 3]")
-        chkWarn("deprecated:FUNCTION:list<integer>._set:set")
+        chkWarn("deprecated:FUNCTION:[list<integer>._set]:set")
     }
 
     @Test fun testSubscriptSet() {
@@ -327,7 +328,7 @@ class LibListTest: BaseRellTest(false) {
 
         chkWarn()
         chkEx("{ val l = [ 5, 4, 3, 2, 1 ]; l._sort(); return l; }", "[1, 2, 3, 4, 5]")
-        chkWarn("deprecated:FUNCTION:list<integer>._sort:sort")
+        chkWarn("deprecated:FUNCTION:[list<integer>._sort]:sort")
     }
 
     @Test fun testRepeat() {

@@ -6,9 +6,10 @@ package net.postchain.rell.base.lmodel.dsl
 
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.compiler.base.utils.C_MessageType
-import net.postchain.rell.base.lmodel.L_FullName
 import net.postchain.rell.base.lmodel.L_Function
+import net.postchain.rell.base.lmodel.L_FunctionFlags
 import net.postchain.rell.base.lmodel.L_FunctionHeader
+import net.postchain.rell.base.model.R_FullName
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.mtype.M_FunctionHeader
 import net.postchain.rell.base.utils.toImmList
@@ -18,15 +19,15 @@ interface Ld_FunctionMaker: Ld_CommonFunctionMaker {
     fun result(type: String)
 }
 
-class Ld_FunctionDsl(
+class Ld_FunctionDslImpl(
     private val funMaker: Ld_FunctionMaker,
     bodyMaker: Ld_FunctionBodyDsl,
-): Ld_CommonFunctionDsl(funMaker, bodyMaker) {
-    fun result(type: String) {
+): Ld_CommonFunctionDslImpl(funMaker, bodyMaker), Ld_FunctionDsl {
+    override fun result(type: String) {
         funMaker.result(type)
     }
 
-    fun alias(name: String, deprecated: C_MessageType? = null) {
+    override fun alias(name: String, deprecated: C_MessageType?) {
         funMaker.alias(name, deprecated)
     }
 }
@@ -78,8 +79,8 @@ class Ld_FunctionBuilder(
         ): Ld_Function {
             val bodyBuilder = Ld_FunctionBodyBuilder(simpleName, pure)
             val funBuilder = Ld_FunctionBuilder(simpleName, outerTypeParams, bodyBuilder)
-            val bodyDslBuilder = Ld_FunctionBodyDslBuilder(bodyBuilder)
-            val dsl = Ld_FunctionDsl(funBuilder, bodyDslBuilder)
+            val bodyDslBuilder = Ld_FunctionBodyDslImpl(bodyBuilder)
+            val dsl = Ld_FunctionDslImpl(funBuilder, bodyDslBuilder)
 
             if (result != null) {
                 dsl.result(result)
@@ -104,13 +105,13 @@ class Ld_FunctionHeader(
     private val params: List<Ld_FunctionParam>,
 ) {
     fun finish(ctx: Ld_TypeFinishContext): L_FunctionHeader {
-        val (mTypeParams, mTypeParamMap) = Ld_TypeParam.finishList(ctx, typeParams)
-        val subCtx = ctx.subCtx(typeParams = mTypeParamMap)
+        val lTypeParams = Ld_TypeParam.finishList(ctx, typeParams)
+        val subCtx = ctx.subCtx(typeParams = lTypeParams.map)
 
         val mResultType = resultType.finish(subCtx)
         val lParams = params.map { it.finish(subCtx) }.toImmList()
         val mParams = lParams.map { it.mParam }
-        val mHeader = M_FunctionHeader(mTypeParams, mResultType, mParams)
+        val mHeader = M_FunctionHeader(lTypeParams.list, mResultType, mParams)
 
         return L_FunctionHeader(mHeader, lParams)
     }
@@ -122,9 +123,14 @@ class Ld_Function(
     private val header: Ld_FunctionHeader,
     private val body: Ld_FunctionBody,
 ) {
-    fun finish(ctx: Ld_TypeFinishContext, fullName: L_FullName): L_Function {
+    fun finish(ctx: Ld_TypeFinishContext, fullName: R_FullName, isStatic: Boolean): L_Function {
         val lHeader = header.finish(ctx)
-        val lBody = body.finish(fullName.qName)
-        return L_Function(fullName.qName, header = lHeader, body = lBody, pure = body.pure)
+        val lBody = body.finish(fullName.qualifiedName)
+        return L_Function(
+            fullName.qualifiedName,
+            header = lHeader,
+            body = lBody,
+            flags = L_FunctionFlags(isPure = body.pure, isStatic = isStatic),
+        )
     }
 }

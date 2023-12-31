@@ -5,6 +5,8 @@
 package net.postchain.rell.base.lmodel
 
 import com.google.common.collect.Iterables
+import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
+import net.postchain.rell.base.model.R_FullName
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_QualifiedName
 import net.postchain.rell.base.utils.doc.DocDefinition
@@ -14,12 +16,19 @@ import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
 
 sealed class L_NamespaceMember(
-    val qualifiedName: R_QualifiedName,
+    fullName: R_FullName,
     override val docSymbol: DocSymbol,
 ): DocDefinition {
+    val fullName: R_FullName = R_FullName(fullName.moduleName, fullName.qualifiedName)
+    val qualifiedName: R_QualifiedName = fullName.qualifiedName
     val simpleName: R_Name = qualifiedName.last
 
     abstract fun strCode(): String
+
+    open fun getTypeDefOrNull(): L_TypeDef? = null
+    open fun getAbstractTypeDefOrNull(): L_AbstractTypeDef? = null
+    open fun getTypeExtensionOrNull(): L_TypeExtension? = null
+    open fun getStructOrNull(): L_Struct? = null
 }
 
 class L_Namespace(members: List<L_NamespaceMember>) {
@@ -45,10 +54,8 @@ class L_Namespace(members: List<L_NamespaceMember>) {
         map.toImmMap()
     }
 
-    private val extensionTypes = this.members
-        .mapNotNull {
-            if (it is L_NamespaceMember_Type && it.typeDef.extension) it.typeDef else null
-        }
+    private val typeExtensions = this.members
+        .mapNotNull { (it as? L_NamespaceMember_TypeExtension)?.typeExt }
         .toImmList()
 
     fun getDef(qName: R_QualifiedName): L_NamespaceMember {
@@ -82,13 +89,13 @@ class L_Namespace(members: List<L_NamespaceMember>) {
         }
     }
 
-    fun allExtensionTypes(): List<L_TypeDef> {
-        return allExtensionTypes0().toImmList()
+    fun allTypeExtensions(): List<L_TypeExtension> {
+        return allTypeExtensions0().toImmList()
     }
 
-    private fun allExtensionTypes0(): Iterable<L_TypeDef> {
-        val subTypes = Iterables.concat(Iterables.transform(namespaces.values) { it.allExtensionTypes0() })
-        return Iterables.concat(extensionTypes, subTypes)
+    private fun allTypeExtensions0(): Iterable<L_TypeExtension> {
+        val nested = Iterables.concat(Iterables.transform(namespaces.values) { it.allTypeExtensions0() })
+        return Iterables.concat(typeExtensions, nested)
     }
 
     fun getDocMemberOrNull(name: String): DocDefinition? {
@@ -103,13 +110,34 @@ class L_Namespace(members: List<L_NamespaceMember>) {
 }
 
 class L_NamespaceMember_Namespace(
-    qualifiedName: R_QualifiedName,
+    fullName: R_FullName,
     val namespace: L_Namespace,
     doc: DocSymbol,
-): L_NamespaceMember(qualifiedName, doc) {
+): L_NamespaceMember(fullName, doc) {
     override fun strCode() = "namespace $qualifiedName"
 
     override fun getDocMember(name: String): DocDefinition? {
         return namespace.getDocMemberOrNull(name)
     }
+}
+
+class L_NamespaceMember_Alias(
+    fullName: R_FullName,
+    doc: DocSymbol,
+    val targetMember: L_NamespaceMember,
+    val finalTargetMember: L_NamespaceMember,
+    val deprecated: C_Deprecated?,
+): L_NamespaceMember(fullName, doc) {
+    override fun strCode(): String {
+        val parts = listOfNotNull(
+            L_InternalUtils.deprecatedStrCodeOrNull(deprecated),
+            "alias $qualifiedName = ${targetMember.qualifiedName}",
+        )
+        return parts.joinToString(" ")
+    }
+
+    override fun getTypeDefOrNull(): L_TypeDef? = finalTargetMember.getTypeDefOrNull()
+    override fun getAbstractTypeDefOrNull(): L_AbstractTypeDef? = finalTargetMember.getAbstractTypeDefOrNull()
+    override fun getTypeExtensionOrNull(): L_TypeExtension? = finalTargetMember.getTypeExtensionOrNull()
+    override fun getStructOrNull(): L_Struct? = finalTargetMember.getStructOrNull()
 }

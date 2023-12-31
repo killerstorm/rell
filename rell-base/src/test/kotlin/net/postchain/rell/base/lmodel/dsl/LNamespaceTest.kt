@@ -4,10 +4,19 @@
 
 package net.postchain.rell.base.lmodel.dsl
 
+import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.compiler.base.utils.C_MessageType
 import net.postchain.rell.base.runtime.Rt_UnitValue
 import org.junit.Test
 import kotlin.test.assertEquals
+
+// TODO more alias tests:
+// absolute vs. relative target name
+// same namespace/nested namespace/outer namespace
+// same namespace, but different occurrence
+// overloaded functions
+// all kinds of targets, including aliases
+// recursion
 
 class LNamespaceTest: BaseLTest() {
     @Test fun testNamespace() {
@@ -138,18 +147,17 @@ class LNamespaceTest: BaseLTest() {
 
     @Test fun testTypeAlias() {
         val mod = makeModule("test") {
-            type("data") {
-                alias("data1")
-                alias("data2", C_MessageType.WARNING)
-                alias("data3", C_MessageType.ERROR)
-            }
+            alias("data1", "data")
+            alias("data2", "data", C_MessageType.WARNING)
+            alias("data3", "data", C_MessageType.ERROR)
+            type("data")
         }
 
         chkDefs(mod,
+            "alias data1 = data",
+            "@deprecated(WARNING) alias data2 = data",
+            "@deprecated(ERROR) alias data3 = data",
             "type data",
-            "type data1",
-            "@deprecated(WARNING) type data2",
-            "@deprecated(ERROR) type data3",
         )
     }
 
@@ -165,17 +173,62 @@ class LNamespaceTest: BaseLTest() {
 
         chkDefs(mod,
             "function f(): anything",
-            "function g(): anything",
-            "@deprecated(WARNING) function h(): anything",
-            "@deprecated(ERROR) function i(): anything",
+            "alias g = f",
+            "@deprecated(WARNING) alias h = f",
+            "@deprecated(ERROR) alias i = f",
         )
     }
 
-    @Test fun testLinkFunction() {
+    @Test fun testStruct() {
         val mod = makeModule("test") {
-            link(target = "sub.f")
-            link(target = "sub.f", name = "g")
-            link(target = "h", name = "i")
+            struct("value") {}
+            struct("data") {
+                attribute("x", type = "data")
+                attribute("y", type = "data", mutable = true)
+            }
+        }
+        chkDefs(mod, "struct value", "struct data")
+    }
+
+    @Test fun testAliasType() {
+        val mod = makeModule("test") {
+            type("data")
+            alias("data1", "data")
+            alias("data2", "data", C_Deprecated.warning("other_data"))
+            alias("data3", "data", C_Deprecated.error("other_data"))
+        }
+
+        chkDefs(mod,
+            "type data",
+            "alias data1 = data",
+            "@deprecated(WARNING) alias data2 = data",
+            "@deprecated(ERROR) alias data3 = data",
+        )
+    }
+
+    @Test fun testAliasFunction() {
+        val mod = makeModule("test") {
+            alias("g", "f")
+            alias("h", "f", C_Deprecated.warning("foo"))
+            function("f", result = "anything") {
+                body { -> Rt_UnitValue }
+            }
+            alias("i", "f", C_Deprecated.error("foo"))
+        }
+
+        chkDefs(mod,
+            "alias g = f",
+            "@deprecated(WARNING) alias h = f",
+            "function f(): anything",
+            "@deprecated(ERROR) alias i = f",
+        )
+    }
+
+    @Test fun testAliasFunctionSubNamespace() {
+        val mod = makeModule("test") {
+            alias(target = "sub.f")
+            alias(target = "sub.f", name = "g")
+            alias(target = "h", name = "i")
             namespace("sub") {
                 function("f", result = "anything") {
                     body { -> Rt_UnitValue }
@@ -189,34 +242,16 @@ class LNamespaceTest: BaseLTest() {
         chkDefs(mod,
             "namespace sub",
             "function sub.f(): anything",
+            "alias f = sub.f",
+            "alias g = sub.f",
+            "alias i = h",
             "function h(): nothing",
-            "function f(): anything",
-            "function g(): anything",
-            "function i(): nothing",
         )
     }
 
-    @Test fun testLinkType() {
-        val mod = makeModule("test") {
-            type("parent", abstract = true) {}
-            type("data") {
-                parent("parent")
-            }
-            link(target = "data", name = "foo")
-            link(target = "data", name = "bar")
-        }
-
-        chkDefs(mod,
-            "@abstract type parent",
-            "type data: parent",
-            "type foo: parent",
-            "type bar: parent",
-        )
-    }
-
-    @Test fun testLinkNotFound() {
-        chkModuleErr("LDE:namespace:link_not_found:foo:foo") {
-            link(target = "foo")
+    @Test fun testAliasNotFound() {
+        chkModuleErr("LDE:member_not_found:foo") {
+            alias(name = "ref", target = "foo")
         }
     }
 

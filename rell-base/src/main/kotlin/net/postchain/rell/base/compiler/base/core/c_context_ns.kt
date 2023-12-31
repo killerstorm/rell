@@ -67,6 +67,8 @@ class C_NamespaceContext(
 }
 
 class C_DefinitionModuleName(val module: String, val chain: String? = null) {
+    constructor(module: R_ModuleName): this(module.str())
+
     fun str(): String = if (chain == null) module else "$module[$chain]"
     override fun toString() = str()
 }
@@ -74,6 +76,7 @@ class C_DefinitionModuleName(val module: String, val chain: String? = null) {
 class C_DefinitionName(val module: C_DefinitionModuleName, val qualifiedName: C_StringQualifiedName) {
     constructor(module: String, name: String): this(C_DefinitionModuleName(module), C_StringQualifiedName.of(name))
     constructor(module: String, qualifiedName: C_StringQualifiedName): this(C_DefinitionModuleName(module), qualifiedName)
+    constructor(fullName: R_FullName): this(fullName.moduleName.str(), C_StringQualifiedName.of(fullName.qualifiedName))
 
     val appLevelName: String by lazy { R_DefinitionName.appLevelName(module.str(), qualifiedName.str()) }
 
@@ -89,6 +92,9 @@ class C_DefinitionPath(private val module: C_DefinitionModuleName, path: List<St
     val path = path.toImmList()
 
     constructor(module: String, path: List<String>): this(C_DefinitionModuleName(module), path)
+    constructor(module: R_ModuleName, path: List<String>): this(C_DefinitionModuleName(module), path)
+
+    fun isEmpty(): Boolean = module.module.isEmpty() && module.chain == null && path.isEmpty()
 
     fun subName(name: R_Name): C_DefinitionName {
         val qName = C_StringQualifiedName.of(path + name.str)

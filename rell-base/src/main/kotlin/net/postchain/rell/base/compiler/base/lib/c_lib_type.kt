@@ -10,58 +10,34 @@ import net.postchain.rell.base.compiler.ast.S_PosValue
 import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.def.C_GlobalFunction
 import net.postchain.rell.base.compiler.base.expr.*
+import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
 import net.postchain.rell.base.lmodel.*
-import net.postchain.rell.base.lmodel.dsl.Ld_ModuleDsl
 import net.postchain.rell.base.model.R_CtErrorType
 import net.postchain.rell.base.model.R_EntityType
+import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_Type
-import net.postchain.rell.base.mtype.*
+import net.postchain.rell.base.mtype.M_GenericType
+import net.postchain.rell.base.mtype.M_Type
+import net.postchain.rell.base.mtype.M_TypeParamsResolver
+import net.postchain.rell.base.mtype.M_TypeSets
 import net.postchain.rell.base.utils.LazyPosString
 import net.postchain.rell.base.utils.checkEquals
 import net.postchain.rell.base.utils.doc.DocCode
+import net.postchain.rell.base.utils.doc.DocSymbol
 import net.postchain.rell.base.utils.immListOf
-import net.postchain.rell.base.utils.toImmMap
 
-class C_LibModule(
-    val lModule: L_Module,
-    typeDefs: List<C_LibTypeDef>,
-    val namespace: C_LibNamespace,
-    val extensionTypes: List<C_LibExtensionType>,
-) {
-    private val typeDefsByName = typeDefs.associateBy { it.typeName }.toImmMap()
-
-    fun getTypeDef(name: String): C_LibTypeDef {
-        return typeDefsByName.getValue(name)
-    }
-
-    companion object {
-        fun make(name: String, vararg imports: C_LibModule, block: Ld_ModuleDsl.() -> Unit): C_LibModule {
-            val lModule = Ld_ModuleDsl.make(name) {
-                for (imp in imports) {
-                    this.imports(imp.lModule)
-                }
-                block(this)
-            }
-
-            return C_LibAdapter.makeModule(lModule)
-        }
-    }
-}
-
-class C_LibExtensionType(
-    val typeDef: C_LibTypeDef,
-    val target: M_TypeSet,
-    private val staticMembers: C_LibTypeMembers<C_TypeStaticMember>,
-    private val valueMembers: C_LibTypeMembers<C_TypeValueMember>,
+class C_LibTypeExtension(
+    private val lTypeExt: L_TypeExtension,
+    private val body: C_LibTypeBody,
 ) {
     fun getExtStaticMembers(mType: M_Type): C_LibTypeMembers<C_TypeStaticMember>? {
-        return getExtMembers0(mType, staticMembers, C_TypeStaticMember::replaceTypeParams)
+        return getExtMembers0(mType, body.staticMembers, C_TypeStaticMember::replaceTypeParams)
     }
 
     fun getExtValueMembers(mType: M_Type): C_LibTypeMembers<C_TypeValueMember>? {
-        return getExtMembers0(mType, valueMembers, C_TypeValueMember::replaceTypeParams)
+        return getExtMembers0(mType, body.valueMembers, C_TypeValueMember::replaceTypeParams)
     }
 
     private fun <MemberT: C_TypeMember> getExtMembers0(
@@ -69,12 +45,12 @@ class C_LibExtensionType(
         members: C_LibTypeMembers<MemberT>,
         replacer: (MemberT, C_TypeMemberReplacement) -> MemberT,
     ): C_LibTypeMembers<MemberT>? {
-        return if (!target.containsType(mType)) null else {
-            val extType = typeDef.lTypeDef.getType(mType)
-            val typeArgs = M_TypeUtils.getTypeArgs(extType.mType)
-            val rep = C_TypeMemberReplacement(mType, typeArgs)
-            C_LibTypeMembers.replace(members, rep, replacer)
-        }
+        val map = M_TypeParamsResolver.resolveTypeParams(lTypeExt.typeParams, lTypeExt.selfType, mType)
+        map ?: return null
+
+        val typeArgs = map.mapValues { M_TypeSets.one(it.value) }
+        val rep = C_TypeMemberReplacement(mType, typeArgs)
+        return C_LibTypeMembers.replace(members, rep, replacer)
     }
 }
 
@@ -152,7 +128,7 @@ private class C_LibType_TypeDef(
     private val extraValueMembers: Lazy<List<C_TypeValueMember>>,
 ): C_LibType(lType.mType) {
     private val constructorLazy: C_GlobalFunction? by lazy {
-        C_LibAdapter.makeConstructor(lType)
+        C_LibTypeAdapter.makeConstructor(lType, typeDef.constructors)
     }
 
     private val valueMembersLazy: C_LibTypeMembers<C_TypeValueMember> by lazy {
@@ -197,12 +173,29 @@ private class C_RTypeDef(
     }
 }
 
-class C_LibTypeDef(
-    val typeName: String,
-    val lTypeDef: L_TypeDef,
+class C_LibTypeItem<T>(
+    val simpleName: R_Name,
+    val docSymbol: DocSymbol,
+    val deprecated: C_Deprecated?,
+    val member: T,
+)
+
+class C_LibTypeConstructors(
+    val constructors: List<C_LibTypeItem<L_Constructor>>,
+    val specialConstructors: List<C_LibTypeItem<C_SpecialLibGlobalFunctionBody>>,
+)
+
+class C_LibTypeBody(
+    val constructors: C_LibTypeConstructors,
     val rawConstructor: C_GlobalFunction?,
     val staticMembers: C_LibTypeMembers<C_TypeStaticMember>,
     val valueMembers: C_LibTypeMembers<C_TypeValueMember>,
+)
+
+class C_LibTypeDef(
+    val typeName: String,
+    val lTypeDef: L_TypeDef,
+    body: C_LibTypeBody,
 ): C_TypeDef() {
     val mGenericType: M_GenericType = lTypeDef.mGenericType
 
@@ -211,6 +204,11 @@ class C_LibTypeDef(
     val mType: M_Type get() {
         return checkNotNull(mType0) { "Not a simple type: ${mGenericType.strCode()}" }
     }
+
+    val constructors = body.constructors
+    val rawConstructor = body.rawConstructor
+    val staticMembers = body.staticMembers
+    val valueMembers = body.valueMembers
 
     override fun hasConstructor() = rawConstructor != null
 
@@ -258,7 +256,7 @@ class C_LibTypeDef(
     private fun checkTypeArgs(ctx: C_AppContext, args: List<S_PosValue<R_Type>>): List<R_Type> {
         val checkedArgs = args.map { arg ->
             C_Types.checkNotUnit(ctx.msgCtx, arg.pos, arg.value, null) {
-                val typeName = lTypeDef.fullName.qName
+                val typeName = lTypeDef.fullName.qualifiedName
                 "$typeName:component" toCodeMsg "$typeName component"
             }
         }

@@ -18,7 +18,7 @@ object Lib_Test_Events {
     private const val EVENT_TYPE_STR = "(text,gtv)"
 
     val NAMESPACE = Ld_NamespaceDsl.make {
-        link("rell.test.assert_events")
+        alias(target = "rell.test.assert_events")
 
         namespace("rell.test") {
             function("assert_events", "unit") {

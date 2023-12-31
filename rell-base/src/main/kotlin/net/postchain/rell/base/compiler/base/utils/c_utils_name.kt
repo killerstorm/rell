@@ -6,10 +6,13 @@ package net.postchain.rell.base.compiler.base.utils
 
 import net.postchain.rell.base.compiler.base.core.C_DefinitionPath
 import net.postchain.rell.base.compiler.base.core.C_QualifiedName
+import net.postchain.rell.base.model.R_FullName
+import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_QualifiedName
 import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
+import java.util.*
 
 abstract class C_GenericQualifiedName<NameT, FullNameT: C_GenericQualifiedName<NameT, FullNameT>>
 protected constructor(parts: List<NameT>) {
@@ -66,7 +69,9 @@ protected constructor(parts: List<NameT>) {
     }
 }
 
-class C_StringQualifiedName private constructor(parts: List<String>): C_GenericQualifiedName<String, C_StringQualifiedName>(parts) {
+class C_StringQualifiedName private constructor(
+    parts: List<String>,
+): C_GenericQualifiedName<String, C_StringQualifiedName>(parts) {
     override fun create(names: List<String>) = C_StringQualifiedName(names)
 
     override fun checkName(name: String) {
@@ -79,6 +84,7 @@ class C_StringQualifiedName private constructor(parts: List<String>): C_GenericQ
         fun of(cName: C_QualifiedName): C_StringQualifiedName = of(cName.parts.map { it.str })
         fun of(parent: List<R_Name>, name: String): C_StringQualifiedName = of(parent.map { it.str } + listOf(name))
         fun of(parent: R_QualifiedName, name: R_Name): C_StringQualifiedName = of(parent.parts, name.str)
+        fun of(name: R_QualifiedName): C_StringQualifiedName = ofRNames(name.parts)
 
         fun ofRNames(parts: List<R_Name>): C_StringQualifiedName = of(parts.map { it.str })
     }
@@ -91,8 +97,6 @@ class C_RNamePath private constructor(parts: List<R_Name>) {
     fun append(names: List<R_Name>) = of(parts + names)
     fun qualifiedName(name: R_Name): R_QualifiedName = R_QualifiedName(parts + name)
 
-    fun toDefPath(): C_DefinitionPath = C_DefinitionPath("", parts.map { it.str })
-
     override fun equals(other: Any?) = other is C_RNamePath && parts == other.parts
     override fun hashCode() = parts.hashCode()
     override fun toString() = parts.joinToString(".")
@@ -101,5 +105,27 @@ class C_RNamePath private constructor(parts: List<R_Name>) {
         val EMPTY = C_RNamePath(immListOf())
         fun of(qualifiedName: R_QualifiedName): C_RNamePath = of(qualifiedName.parts)
         fun of(parts: List<R_Name>): C_RNamePath = if (parts.isEmpty()) EMPTY else C_RNamePath(parts)
+    }
+}
+
+class C_RFullNamePath private constructor(
+    val moduleName: R_ModuleName,
+    parts: List<R_Name>,
+) {
+    val parts = parts.toImmList()
+
+    fun append(name: R_Name) = C_RFullNamePath(moduleName, parts + name)
+    fun fullName(name: R_Name): R_FullName = R_FullName(moduleName, R_QualifiedName(parts + name))
+
+    fun toDefPath(): C_DefinitionPath = C_DefinitionPath(moduleName.str(), parts.map { it.str })
+
+    override fun equals(other: Any?) = other is C_RFullNamePath && moduleName == other.moduleName && parts == other.parts
+    override fun hashCode() = Objects.hash(moduleName, parts)
+    override fun toString() = "$moduleName:${parts.joinToString(".")}"
+
+    companion object {
+        fun of(moduleName: R_ModuleName, parts: List<R_Name> = immListOf()): C_RFullNamePath {
+            return C_RFullNamePath(moduleName, parts)
+        }
     }
 }

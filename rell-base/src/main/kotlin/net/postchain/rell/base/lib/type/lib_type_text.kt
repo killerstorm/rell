@@ -27,9 +27,10 @@ object Lib_Type_Text {
     private val SPLIT_TYPE = R_ListType(R_TextType)
 
     val NAMESPACE = Ld_NamespaceDsl.make {
+        alias("name", "text")
+        alias("tuid", "text")
+
         type("text", rType = R_TextType) {
-            alias("name")
-            alias("tuid")
 
             staticFunction("from_bytes", result = "text", pure = true) {
                 param(type = "byte_array")

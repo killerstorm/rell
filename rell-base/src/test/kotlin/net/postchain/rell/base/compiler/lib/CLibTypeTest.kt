@@ -9,6 +9,8 @@ import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
 import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunctionBody
 import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.lib.Lib_Rell
+import net.postchain.rell.base.runtime.Rt_TextValue
 import net.postchain.rell.base.testutils.LibModuleTester
 import net.postchain.rell.base.utils.LazyPosString
 import org.junit.Test
@@ -43,5 +45,25 @@ class CLibTypeTest: BaseCLibTest() {
         chkCompile("function f(x: data) {}", "OK")
         chkCompile("function f() = data();", "OK")
         chkCompile("function f() = data(foo);", "ct_err:unknown_name:foo")
+    }
+
+    @Test fun testExtensionReference() {
+        modTst.extraModule {
+            imports(Lib_Rell.MODULE.lModule)
+            struct("data") {}
+            extension("data_ext", type = "data") {
+                function("f", result = "text") {
+                    body { _ -> Rt_TextValue.get("hello from f") }
+                }
+            }
+        }
+
+        val extName = "data_ext"
+        chk("data()", "data[]")
+        chk("data().f()", "text[hello from f]")
+        chk("data().f(*)", "fn[$extName(data).f()]")
+        chk(extName, "ct_err:unknown_name:$extName")
+        chk("$extName()", "ct_err:unknown_name:$extName")
+        chk("$extName.f()", "ct_err:unknown_name:$extName")
     }
 }

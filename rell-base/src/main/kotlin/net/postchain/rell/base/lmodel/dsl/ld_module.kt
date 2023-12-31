@@ -4,32 +4,18 @@
 
 package net.postchain.rell.base.lmodel.dsl
 
-import net.postchain.rell.base.compiler.base.utils.C_RNamePath
+import net.postchain.rell.base.compiler.base.utils.C_RFullNamePath
 import net.postchain.rell.base.lmodel.L_Module
 import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.utils.doc.*
+import net.postchain.rell.base.utils.futures.FcManager
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
 
-@RellLibDsl
-interface Ld_ModuleDsl: Ld_NamespaceDsl {
-    fun imports(module: L_Module)
-
-    companion object {
-        fun make(name: String, block: Ld_ModuleDsl.() -> Unit): L_Module {
-            val rModuleName = R_ModuleName.of(name)
-            val nsBuilder = Ld_NamespaceBuilder()
-            val dslBuilder = Ld_ModuleDslBuilder(rModuleName, nsBuilder)
-            block(dslBuilder)
-            return dslBuilder.build()
-        }
-    }
-}
-
-private class Ld_ModuleDslBuilder(
+class Ld_ModuleDslImpl private constructor(
     private val moduleName: R_ModuleName,
     private val nsBuilder: Ld_NamespaceBuilder,
-): Ld_ModuleDsl, Ld_NamespaceDsl by Ld_NamespaceDslBuilder(nsBuilder) {
+): Ld_ModuleDsl, Ld_NamespaceDsl by Ld_NamespaceDslImpl(nsBuilder) {
     private val imports = mutableMapOf<R_ModuleName, L_Module>()
     private val allImports = mutableMapOf<R_ModuleName, L_Module>()
 
@@ -67,17 +53,30 @@ private class Ld_ModuleDslBuilder(
         }
     }
 
-    fun build(): L_Module {
+    private fun build(): L_Module {
         check(!finished)
         finished = true
 
         val ns = nsBuilder.build()
+        val resImports = imports.toImmMap()
 
-        val declareCtx = Ld_DeclareContext(Ld_DeclareTables(moduleName), C_RNamePath.EMPTY)
-        val nsDeclaration = ns.declare(declareCtx)
+        val fcManager = FcManager.create()
 
-        val finishCtx = declareCtx.finish(imports.toImmMap())
-        val lNs = nsDeclaration.finish(finishCtx)
+        val finCtxP = fcManager.promise<Ld_NamespaceFinishContext>()
+
+        val nsF = fcManager.future().delegate {
+            val modCtx = Ld_ModuleContext(moduleName, fcManager, finCtxP.future())
+            val nsCtx = Ld_NamespaceContext(modCtx, C_RFullNamePath.of(moduleName))
+            val nsF = ns.process(nsCtx)
+
+            val finCtx = modCtx.finish(resImports)
+            finCtxP.setResult(finCtx)
+            nsF
+        }
+
+        fcManager.finish()
+
+        val lNs = nsF.getResult()
 
         val doc = DocSymbol(
             kind = DocSymbolKind.MODULE,
@@ -93,5 +92,15 @@ private class Ld_ModuleDslBuilder(
             allImports = allImports.values.sortedBy { it.moduleName }.toImmList(),
             docSymbol = doc,
         )
+    }
+
+    companion object {
+        fun make(name: String, block: Ld_ModuleDsl.() -> Unit): L_Module {
+            val rModuleName = R_ModuleName.of(name)
+            val nsBuilder = Ld_NamespaceBuilder()
+            val dslBuilder = Ld_ModuleDslImpl(rModuleName, nsBuilder)
+            block(dslBuilder)
+            return dslBuilder.build()
+        }
     }
 }

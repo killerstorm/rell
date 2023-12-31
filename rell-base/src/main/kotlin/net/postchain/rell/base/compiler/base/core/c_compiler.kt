@@ -10,6 +10,7 @@ import net.postchain.rell.base.compiler.base.def.C_MountTablesBuilder
 import net.postchain.rell.base.compiler.base.lib.C_LibModule
 import net.postchain.rell.base.compiler.base.module.*
 import net.postchain.rell.base.compiler.base.namespace.C_Namespace
+import net.postchain.rell.base.compiler.base.namespace.C_NsMemberFactory
 import net.postchain.rell.base.compiler.base.namespace.C_SysNsProto
 import net.postchain.rell.base.compiler.base.namespace.C_SysNsProtoBuilder
 import net.postchain.rell.base.compiler.base.utils.*
@@ -81,8 +82,8 @@ class C_StatementVarsBlock {
 }
 
 class C_SystemDefsScope(
-    val nsProto: C_SysNsProto,
     val ns: C_Namespace,
+    val nsProto: C_SysNsProto,
     val modules: List<C_LibModule>,
 )
 
@@ -140,17 +141,19 @@ class C_SystemDefs private constructor(
         ): C_SystemDefsScope {
             val libScope = C_SystemLibrary.getScope(test, globalCtx.compilerOptions.hiddenLib, extraMod)
 
-            val nsBuilder = C_SysNsProtoBuilder(libScope.nsProto.basePath)
+            val memberFactory = C_NsMemberFactory(C_RFullNamePath.of(R_ModuleName.EMPTY))
+            val nsBuilder = C_SysNsProtoBuilder()
             nsBuilder.addAll(libScope.nsProto)
 
             for (entity in sysEntities) {
                 val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_ENTITY, doc = entity.docSymbol)
-                nsBuilder.addEntity(entity.rName, entity, ideInfo)
+                val member = memberFactory.sysEntity(entity.rName, entity, ideInfo)
+                nsBuilder.addMember(entity.rName, member)
             }
 
             val nsProto = nsBuilder.build()
             val ns = nsProto.toNamespace()
-            return C_SystemDefsScope(nsProto, ns, libScope.modules)
+            return C_SystemDefsScope(ns, nsProto, libScope.modules)
         }
     }
 }

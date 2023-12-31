@@ -455,7 +455,6 @@ class DocDeclaration_Type(
         val b = DocCode.builder()
 
         if (flags.abstract) b.keyword("abstract").raw(" ")
-        if (flags.extension) b.keyword("extension").raw(" ")
         if (flags.hidden) b.keyword("internal").raw(" ")
 
         b.keyword("type")
@@ -517,6 +516,48 @@ class DocDeclaration_TypeSpecialConstructor: DocDeclaration() {
         b.keyword("constructor")
         b.raw("(...)")
         return b.build()
+    }
+}
+
+class DocDeclaration_TypeExtension(
+    private val simpleName: R_Name,
+    private val typeParams: List<DocTypeParam>,
+    private val selfType: DocType,
+): DocDeclaration() {
+    override fun genCode(): DocCode {
+        val b = DocCode.builder()
+
+        b.keyword("extension")
+        b.raw(" ")
+        b.raw(simpleName.str)
+
+        DocDecUtils.appendTypeParams(b, typeParams)
+
+        b.sep(": ")
+        selfType.genCode(b)
+
+        return b.build()
+    }
+}
+
+class DocDeclaration_Alias(
+    modifiers: DocModifiers,
+    private val simpleName: R_Name,
+    private val targetName: R_QualifiedName,
+    private val targetDeclaration: DocDeclaration,
+): DocDeclaration_Annotated(modifiers) {
+    override fun genCode0(b: DocCode.Builder) {
+        b.keyword("alias")
+        b.raw(" ")
+        b.raw(simpleName.str)
+        b.sep(" = ")
+        b.link(targetName.str())
+
+        if (targetDeclaration != NONE) {
+            b.newline()
+            b.newline()
+            b.append(targetDeclaration.code)
+        }
     }
 }
 
@@ -653,6 +694,11 @@ class DocModifiers(
 
     companion object {
         val NONE: DocModifiers = DocModifiers(immListOf())
+
+        fun make(vararg modifiers: DocModifier?): DocModifiers {
+            val list = modifiers.filterNotNull().toImmList()
+            return if (list.isEmpty()) NONE else DocModifiers(list)
+        }
     }
 }
 

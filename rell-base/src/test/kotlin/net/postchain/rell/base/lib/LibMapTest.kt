@@ -29,7 +29,7 @@ class LibMapTest: BaseRellTest(false) {
     }
 
     @Test fun testConstructorRaw() {
-        chk("map()", "ct_err:fn:sys:unresolved_type_params:map:K,V")
+        chk("map()", "ct_err:fn:sys:unresolved_type_params:[map]:K,V")
         chk("map([123])", "ct_err:expr_call_argtypes:[map]:list<integer>")
         chk("map(['Bob':123])", "map<text,integer>[text[Bob]=int[123]]")
 
@@ -105,22 +105,23 @@ class LibMapTest: BaseRellTest(false) {
     }
 
     @Test fun testConstructorPartial() {
-        chk("map(*)", "ct_err:expr:call:partial_not_supported:map")
-        chk("map<integer,text>(*)", "ct_err:expr:call:partial_ambiguous:map<integer,text>")
+        chk("map(*)", "ct_err:expr:call:partial_not_supported:[map]")
+        chk("map<integer,text>(*)", "ct_err:expr:call:partial_ambiguous:[map<integer,text>]")
 
-        chkEx("{ val f: () -> map<integer,text> = map(*); return f; }", "ct_err:expr:call:partial_not_supported:map")
+        chkEx("{ val f: () -> map<integer,text> = map(*); return f; }",
+            "ct_err:expr:call:partial_not_supported:[map]")
         chkEx("{ val f: () -> map<integer,text> = map<integer,text>(*); return f; }", "fn[map<integer,text>()]")
         chkEx("{ val f: () -> map<integer,text> = map<integer,text>(*); return f(); }", "map<integer,text>[]")
 
         chkEx("{ val f: (map<integer,text>) -> map<integer,text> = map(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:map")
+            "ct_err:expr:call:partial_not_supported:[map]")
         chkEx("{ val f: (map<integer,text>) -> map<integer,text> = map<integer,text>(*); return f; }",
             "fn[map<integer,text>(*)]")
         chkEx("{ val f: (map<integer,text>) -> map<integer,text> = map<integer,text>(*); return f([:]); }",
             "map<integer,text>[]")
 
         chkEx("{ val f: (list<(integer,text)>) -> map<integer,text> = map(*); return f; }",
-            "ct_err:expr:call:partial_not_supported:map")
+            "ct_err:expr:call:partial_not_supported:[map]")
 
         chkEx("{ val f: (list<(integer,text)>) -> map<integer,text> = map<integer,text>(*); return f; }",
             "fn[map<integer,text>(*)]")
@@ -138,7 +139,7 @@ class LibMapTest: BaseRellTest(false) {
         chk("map<text,integer>().size()", "int[0]")
         chk("['Bob':123].size()", "int[1]")
         chk("['Bob':123,'Alice':456].size()", "int[2]")
-        chk("map<text,integer>().len()", "ct_err:deprecated:FUNCTION:map<text,integer>.len:size")
+        chk("map<text,integer>().len()", "ct_err:deprecated:FUNCTION:[map<text,integer>.len]:size")
     }
 
     @Test fun testContains() {

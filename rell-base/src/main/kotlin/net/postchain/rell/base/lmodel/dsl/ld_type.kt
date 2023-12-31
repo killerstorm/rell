@@ -4,6 +4,7 @@
 
 package net.postchain.rell.base.lmodel.dsl
 
+import net.postchain.rell.base.lmodel.L_TypeParams
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.mtype.*
 import net.postchain.rell.base.utils.Nullable
@@ -42,7 +43,7 @@ class Ld_TypeParam(
         fun finishList(
             ctx: Ld_TypeFinishContext,
             typeParams: List<Ld_TypeParam>,
-        ): Pair<List<M_TypeParam>, Map<R_Name, M_Type>> {
+        ): L_TypeParams {
             val mTypeParams = mutableListOf<M_TypeParam>()
             val mTypeMap = mutableMapOf<R_Name, M_Type>()
 
@@ -53,7 +54,7 @@ class Ld_TypeParam(
                 mTypeMap[param.name] = M_Types.param(mParam)
             }
 
-            return mTypeParams.toImmList() to mTypeMap.toImmMap()
+            return L_TypeParams(mTypeParams.toImmList(), mTypeMap.toImmMap())
         }
     }
 }

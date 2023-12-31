@@ -96,11 +96,11 @@ object C_FunctionUtils {
 
         if (retTypeRes.recursion) {
             val nameStr = name.lazyStr.value
-            ctx.msgCtx.error(name.pos, "fn_type_recursion:$decType:$nameStr",
+            ctx.msgCtx.error(name.pos, "fn_type_recursion:$decType:[$nameStr]",
                     "${decType.capitalizedMsg} '$nameStr' is recursive, cannot infer the type; specify type explicitly")
         } else if (retTypeRes.stackOverflow) {
             val nameStr = name.lazyStr.value
-            ctx.msgCtx.error(name.pos, "fn_type_stackoverflow:$decType:$nameStr",
+            ctx.msgCtx.error(name.pos, "fn_type_stackoverflow:$decType:[$nameStr]",
                     "Cannot infer type for ${decType.msg} '$nameStr': call chain is too long; specify type explicitly")
         }
 

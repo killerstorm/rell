@@ -13,6 +13,7 @@ import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunctionBody
 import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunctionBody
 import net.postchain.rell.base.compiler.base.lib.C_SysFunction
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
+import net.postchain.rell.base.model.R_FullName
 import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_QualifiedName
 import net.postchain.rell.base.model.R_Type
@@ -174,29 +175,44 @@ class L_FunctionHeaderMatch(
     val typeArgs: Map<R_Name, M_Type>,
 )
 
+class L_FunctionFlags(
+    val isStatic: Boolean,
+    val isPure: Boolean,
+)
+
 class L_Function(
     val qualifiedName: R_QualifiedName,
     val header: L_FunctionHeader,
+    val flags: L_FunctionFlags,
     val body: L_FunctionBody,
-    val pure: Boolean,
 ) {
-    val simpleName = qualifiedName.last
-
     fun strCode(actualName: R_QualifiedName = qualifiedName): String {
-        val parts = mutableListOf<String>()
-        if (pure) parts.add("pure")
-        parts.add("function")
-        parts.add(header.strCode(actualName.str()))
+        val parts = listOfNotNull(
+            if (flags.isStatic) "static" else null,
+            if (flags.isPure) "pure" else null,
+            "function",
+            header.strCode(actualName.str()),
+        )
         return parts.joinToString(" ")
     }
 
     fun replaceTypeParams(map: Map<M_TypeParam, M_TypeSet>): L_Function {
         val header2 = header.replaceTypeParams(map)
-        return if (header2 === header) this else L_Function(qualifiedName, header2, body, pure)
+        return if (header2 === header) this else L_Function(qualifiedName, header2, flags, body)
     }
 
     fun validate() {
         header.validate()
+    }
+
+    fun getDocMember(name: String): DocDefinition? {
+        return if (name.startsWith("#")) {
+            val index = name.substring(1).toInt()
+            header.params[index]
+        } else {
+            val rName = R_Name.of(name)
+            header.getParam(rName)
+        }
     }
 }
 
@@ -242,35 +258,29 @@ sealed class L_FunctionBody {
 }
 
 class L_NamespaceMember_Function(
-    qualifiedName: R_QualifiedName,
-    doc: DocSymbol,
+    fullName: R_FullName,
+    docSymbol: DocSymbol,
     val function: L_Function,
     val deprecated: C_Deprecated?,
-): L_NamespaceMember(qualifiedName, doc) {
+): L_NamespaceMember(fullName, docSymbol) {
     override fun strCode(): String {
         val parts = listOfNotNull(
-            if (deprecated == null) null else L_InternalUtils.deprecatedStrCode(deprecated),
+            L_InternalUtils.deprecatedStrCodeOrNull(deprecated),
             function.strCode(qualifiedName),
         )
         return parts.joinToString(" ")
     }
 
     override fun getDocMember(name: String): DocDefinition? {
-        return if (name.startsWith("#")) {
-            val index = name.substring(1).toInt()
-            function.header.params[index]
-        } else {
-            val rName = R_Name.of(name)
-            function.header.getParam(rName)
-        }
+        return function.getDocMember(name)
     }
 }
 
 class L_NamespaceMember_SpecialFunction(
-    qualifiedName: R_QualifiedName,
+    fullName: R_FullName,
     doc: DocSymbol,
     val fn: C_SpecialLibGlobalFunctionBody,
-): L_NamespaceMember(qualifiedName, doc) {
+): L_NamespaceMember(fullName, doc) {
     override fun strCode() = "special function ${qualifiedName.str()}()"
 }
 
@@ -278,13 +288,11 @@ class L_TypeDefMember_Function(
     val simpleName: R_Name,
     doc: DocSymbol,
     val function: L_Function,
-    val isStatic: Boolean,
     val deprecated: C_Deprecated?,
 ): L_TypeDefMember(simpleName.str, doc) {
     override fun strCode(): String {
         val parts = listOfNotNull(
-            if (deprecated == null) null else L_InternalUtils.deprecatedStrCode(deprecated),
-            if (isStatic) "static" else null,
+            L_InternalUtils.deprecatedStrCodeOrNull(deprecated),
             function.strCode(R_QualifiedName.of(simpleName)),
         )
         return parts.joinToString(" ")
@@ -294,7 +302,7 @@ class L_TypeDefMember_Function(
         val function2 = function.replaceTypeParams(map)
         return if (function2 === function) this else {
             function2.validate()
-            L_TypeDefMember_Function(simpleName, docSymbol, function2, isStatic, deprecated)
+            L_TypeDefMember_Function(simpleName, docSymbol, function2, deprecated)
         }
     }
 }

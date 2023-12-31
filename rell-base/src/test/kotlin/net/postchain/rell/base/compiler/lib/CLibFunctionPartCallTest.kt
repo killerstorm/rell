@@ -79,7 +79,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
         }
 
         val fn = "_foo"
-        chk("$fn(*)", "ct_err:expr:call:partial_ambiguous:$fn")
+        chk("$fn(*)", "ct_err:expr:call:partial_ambiguous:[$fn]")
 
         chkEx("{ val f: (integer)->text = $fn(*); return _type_of(f); }", "text[(integer)->text]")
         chkEx("{ val f: (integer)->text = $fn(*); return f; }", "fn[$fn(*)]")
@@ -93,7 +93,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
         chkEx("{ val f: (decimal,text)->text = $fn(*); return f; }", "fn[$fn(*,*)]")
         chkEx("{ val f: (decimal,text)->text = $fn(*); return f(123,'Bob'); }", "text[$fn:b:dec[123],text[Bob]]")
 
-        chkEx("{ val f: (decimal)->text = $fn(*); return f; }", "ct_err:expr:call:partial_ambiguous:$fn")
+        chkEx("{ val f: (decimal)->text = $fn(*); return f; }", "ct_err:expr:call:partial_ambiguous:[$fn]")
     }
 
     @Test fun testPartCallCasesNoHintMany() {
@@ -105,7 +105,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
                 body { a -> Rt_TextValue.get("_foo(boolean):${a.str()}") }
             }
         }
-        chk("_foo(*)", "ct_err:expr:call:partial_ambiguous:_foo")
+        chk("_foo(*)", "ct_err:expr:call:partial_ambiguous:[_foo]")
     }
 
     @Test fun testPartCallCasesNoHintOneBad() {
@@ -115,7 +115,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
                 body { a -> Rt_TextValue.get("_foo:${a.str()}") }
             }
         }
-        chk("_foo(*)", "ct_err:expr:call:partial_bad_case:_foo(iterable<-any>):text")
+        chk("_foo(*)", "ct_err:expr:call:partial_bad_case:[_foo(iterable<-any>):text]")
     }
 
     @Test fun testPartCallCasesNoHintOneGood() {
@@ -137,8 +137,10 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
                 body { a -> Rt_TextValue.get("_foo(collection):${a.str()}") }
             }
         }
-        chkEx("{ val f: (list<integer>) -> text = _foo(*); return f; }", "ct_err:expr:call:partial_ambiguous:_foo")
-        chkEx("{ val f: (list<boolean>) -> text = _foo(*); return f; }", "ct_err:expr:call:partial_ambiguous:_foo")
+
+        val err = "ct_err:expr:call:partial_ambiguous:[_foo]"
+        chkEx("{ val f: (list<integer>) -> text = _foo(*); return f; }", err)
+        chkEx("{ val f: (list<boolean>) -> text = _foo(*); return f; }", err)
     }
 
     @Test fun testPartCallCasesHintOneBad() {
@@ -148,7 +150,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
                 body { a -> Rt_TextValue.get("_foo:${a.str()}") }
             }
         }
-        chkEx("{ val f = _foo(*); return f; }", "ct_err:expr:call:partial_bad_case:_foo(iterable<-any>):text")
+        chkEx("{ val f = _foo(*); return f; }", "ct_err:expr:call:partial_bad_case:[_foo(iterable<-any>):text]")
         chkEx("{ val f: (list<integer>) -> text = _foo(*); return f; }", "fn[_foo(*)]")
         chkEx("{ val f: (list<integer>) -> text = _foo(*); return f([123]); }", "text[_foo:[123]]")
     }
@@ -181,9 +183,9 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
             }
         }
 
-        chkEx("{ val f = _foo(*); return _type_of(f); }", "ct_err:expr:call:partial_ambiguous:_foo")
+        chkEx("{ val f = _foo(*); return _type_of(f); }", "ct_err:expr:call:partial_ambiguous:[_foo]")
         chkEx("{ val f: ((integer,text)) -> text = _foo(*); return _type_of(f); }",
-            "ct_err:expr:call:partial_ambiguous:_foo")
+            "ct_err:expr:call:partial_ambiguous:[_foo]")
 
         chkEx("{ val f: ((integer?,text)) -> text = _foo(*); return _type_of(f); }", "text[((integer?,text))->text]")
         chkEx("{ val f: ((integer?,text)) -> text = _foo(*); return f((1,'A')); }", "text[_foo_0:(int[1],text[A])]")
@@ -209,9 +211,9 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
             }
         }
 
-        chkEx("{ val f = _foo(*); return _type_of(f); }", "ct_err:expr:call:partial_ambiguous:_foo")
+        chkEx("{ val f = _foo(*); return _type_of(f); }", "ct_err:expr:call:partial_ambiguous:[_foo]")
         chkEx("{ val f: () -> (integer,text) = _foo(*); return _type_of(f); }",
-            "ct_err:expr:call:partial_ambiguous:_foo")
+            "ct_err:expr:call:partial_ambiguous:[_foo]")
 
         chkEx("{ val f: () -> (integer?,text) = _foo(*); return _type_of(f); }", "text[()->(integer?,text)]")
         chkEx("{ val f: () -> (integer?,text) = _foo(*); return f(); }", "(int[1],text[_foo_0])")
@@ -223,6 +225,6 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
         chkEx("{ val f: () -> (integer?,text?) = _foo(*); return f(); }", "(int[1],text[_foo_2])")
 
         chkEx("{ val f: () -> (integer?,text?)? = _foo(*); return _type_of(f); }",
-            "ct_err:expr:call:partial_ambiguous:_foo")
+            "ct_err:expr:call:partial_ambiguous:[_foo]")
     }
 }

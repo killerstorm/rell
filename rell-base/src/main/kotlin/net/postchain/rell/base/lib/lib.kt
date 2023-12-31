@@ -109,10 +109,10 @@ object C_SystemLibrary {
             modules.add(cfg.extraMod)
         }
 
-        val libNamespaces = modules.map { it.namespace }
-        val resNamespace = C_LibNamespace.merge(libNamespaces)
-        val nsProto = resNamespace.toSysNsProto()
+        val namespaces = modules.map { it.namespace }
+        val combinedNamespace = C_LibNamespace.merge(namespaces)
 
+        val nsProto = combinedNamespace.toSysNsProto()
         return C_SysLibScope(nsProto, modules.toImmList())
     }
 }

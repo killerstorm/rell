@@ -59,19 +59,19 @@ class LibMetaTest: BaseRellTest(false) {
         def("val X = 123;")
         def("namespace ns {}")
 
-        chk("rell.meta(lib)", "ct_err:expr_call:bad_arg:rell.meta")
-        chk("rell.meta(rec)", "ct_err:expr_call:bad_arg:rell.meta")
-        chk("rell.meta(color)", "ct_err:expr_call:bad_arg:rell.meta")
-        chk("rell.meta(f)", "ct_err:expr_call:bad_arg:rell.meta")
-        chk("rell.meta(X)", "ct_err:expr_call:bad_arg:rell.meta")
-        chk("rell.meta(ns)", "ct_err:expr_call:bad_arg:rell.meta")
+        chk("rell.meta(lib)", "ct_err:expr_call:bad_arg:[rell.meta]")
+        chk("rell.meta(rec)", "ct_err:expr_call:bad_arg:[rell.meta]")
+        chk("rell.meta(color)", "ct_err:expr_call:bad_arg:[rell.meta]")
+        chk("rell.meta(f)", "ct_err:expr_call:bad_arg:[rell.meta]")
+        chk("rell.meta(X)", "ct_err:expr_call:bad_arg:[rell.meta]")
+        chk("rell.meta(ns)", "ct_err:expr_call:bad_arg:[rell.meta]")
     }
 
     @Test fun testConstructorBadArgument() {
         def("entity data {}")
         chk("rell.meta()", "ct_err:fn:sys:wrong_arg_count:1:1:0")
-        chk("rell.meta(0)", "ct_err:expr_call:bad_arg:rell.meta")
-        chk("rell.meta('data')", "ct_err:expr_call:bad_arg:rell.meta")
+        chk("rell.meta(0)", "ct_err:expr_call:bad_arg:[rell.meta]")
+        chk("rell.meta('data')", "ct_err:expr_call:bad_arg:[rell.meta]")
         chk("rell.meta(data, 0)", "ct_err:fn:sys:wrong_arg_count:1:1:2")
         chk("rell.meta(foo)", "ct_err:unknown_name:foo")
     }

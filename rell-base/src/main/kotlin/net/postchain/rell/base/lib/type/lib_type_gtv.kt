@@ -21,9 +21,9 @@ object Lib_Type_Gtv {
     val LIST_OF_GTV_TYPE = R_ListType(R_GtvType)
 
     val NAMESPACE = Ld_NamespaceDsl.make {
-        type("gtv", rType = R_GtvType) {
-            alias("GTXValue", C_MessageType.ERROR)
+        alias("GTXValue", "gtv", C_MessageType.ERROR)
 
+        type("gtv", rType = R_GtvType) {
             staticFunction("from_bytes", "gtv", pure = true) {
                 alias("fromBytes", C_MessageType.ERROR)
                 param("byte_array")
@@ -93,51 +93,53 @@ object Lib_Type_Gtv {
             }
         }
 
-        // Functions that are implicitly added to all types (subtypes of any): .hash(), .to_gtv(), .from_gtv(), etc.
-        type("gtv_extension", abstract = true, extension = true, hidden = true) {
-            generic("T", subOf = "any")
+        namespace("rell") {
+            // Functions that are implicitly added to all types (subtypes of any): .hash(), .to_gtv(), .from_gtv(), etc.
+            extension("gtv_ext", type = "T") {
+                generic("T", subOf = "any")
 
-            staticFunction("from_gtv", result = "T", pure = true) {
-                param(type = "gtv")
-                makeFromGtvBody(this, pretty = false)
-            }
+                staticFunction("from_gtv", result = "T", pure = true) {
+                    param(type = "gtv")
+                    makeFromGtvBody(this, pretty = false)
+                }
 
-            staticFunction("from_gtv_pretty", result = "T", pure = true) {
-                param(type = "gtv")
-                makeFromGtvBody(this, pretty = true, allowVirtual = false)
-            }
+                staticFunction("from_gtv_pretty", result = "T", pure = true) {
+                    param(type = "gtv")
+                    makeFromGtvBody(this, pretty = true, allowVirtual = false)
+                }
 
-            function("hash", result = "byte_array", pure = true) {
-                bodyMeta {
-                    val selfType = this.fnBodyMeta.rSelfType
-                    if (selfType is R_VirtualType) {
-                        body { a ->
-                            val virtual = a.asVirtual()
-                            val gtv = virtual.gtv
-                            val hash = Rt_Utils.wrapErr("fn:virtual:hash") {
-                                PostchainGtvUtils.merkleHash(gtv)
+                function("hash", result = "byte_array", pure = true) {
+                    bodyMeta {
+                        val selfType = this.fnBodyMeta.rSelfType
+                        if (selfType is R_VirtualType) {
+                            body { a ->
+                                val virtual = a.asVirtual()
+                                val gtv = virtual.gtv
+                                val hash = Rt_Utils.wrapErr("fn:virtual:hash") {
+                                    PostchainGtvUtils.merkleHash(gtv)
+                                }
+                                Rt_ByteArrayValue.get(hash)
                             }
-                            Rt_ByteArrayValue.get(hash)
-                        }
-                    } else {
-                        validateToGtvBody(this, selfType)
-                        body { a ->
-                            val hash = Rt_Utils.wrapErr("fn:any:hash") {
-                                val gtv = selfType.rtToGtv(a, false)
-                                PostchainGtvUtils.merkleHash(gtv)
+                        } else {
+                            validateToGtvBody(this, selfType)
+                            body { a ->
+                                val hash = Rt_Utils.wrapErr("fn:any:hash") {
+                                    val gtv = selfType.rtToGtv(a, false)
+                                    PostchainGtvUtils.merkleHash(gtv)
+                                }
+                                Rt_ByteArrayValue.get(hash)
                             }
-                            Rt_ByteArrayValue.get(hash)
                         }
                     }
                 }
-            }
 
-            function("to_gtv", result = "gtv", pure = true) {
-                makeToGtvBody(this, pretty = false)
-            }
+                function("to_gtv", result = "gtv", pure = true) {
+                    makeToGtvBody(this, pretty = false)
+                }
 
-            function("to_gtv_pretty", result = "gtv", pure = true) {
-                makeToGtvBody(this, pretty = true)
+                function("to_gtv_pretty", result = "gtv", pure = true) {
+                    makeToGtvBody(this, pretty = true)
+                }
             }
         }
     }

@@ -15,9 +15,9 @@ import net.postchain.rell.base.utils.toImmMap
 @DslMarker
 annotation class RellLibDsl
 
-class Ld_FullName(val moduleName: R_ModuleName?, val qName: R_QualifiedName) {
+class Ld_FullName(val moduleName: R_ModuleName?, val qualifiedName: R_QualifiedName) {
     override fun toString(): String {
-        return if (moduleName == null) qName.str() else "${moduleName.str()}${MODULE_SEP}${qName.str()}"
+        return if (moduleName == null) qualifiedName.str() else "${moduleName.str()}${MODULE_SEP}${qualifiedName.str()}"
     }
 
     companion object {
@@ -76,7 +76,7 @@ class Ld_AliasesBuilder(private val primaryName: R_Name) {
 }
 
 enum class Ld_ConflictMemberKind {
-    LINK,
+    ALIAS,
     NAMESPACE,
     FUNCTION,
     OTHER,
@@ -90,23 +90,9 @@ class Ld_MemberConflictChecker(initialNames: Map<R_Name, Ld_ConflictMemberKind>)
         if (oldKind == null) {
             names[name] = kind
         } else {
-            val valid = isAllowed(oldKind, kind)
-            Ld_Exception.check(valid) {
+            Ld_Exception.check(kind == oldKind && kind != Ld_ConflictMemberKind.OTHER) {
                 "name_conflict:$name" to "Name conflict: $name"
             }
-        }
-    }
-
-    private fun isAllowed(oldKind: Ld_ConflictMemberKind, newKind: Ld_ConflictMemberKind): Boolean {
-        val allowedKinds = listOf(
-            Ld_ConflictMemberKind.LINK,
-            Ld_ConflictMemberKind.NAMESPACE,
-            Ld_ConflictMemberKind.FUNCTION,
-        )
-        return if (Ld_ConflictMemberKind.LINK in listOf(oldKind, newKind)) {
-            oldKind in allowedKinds && newKind in allowedKinds
-        } else {
-            newKind == oldKind && newKind in allowedKinds
         }
     }
 

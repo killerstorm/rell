@@ -4,333 +4,234 @@
 
 package net.postchain.rell.base.compiler.base.lib
 
-import net.postchain.rell.base.compiler.base.core.C_DefinitionPath
+import net.postchain.rell.base.compiler.base.core.C_DefinitionName
 import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
-import net.postchain.rell.base.compiler.base.def.C_GlobalFunction
-import net.postchain.rell.base.compiler.base.expr.*
-import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
-import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty_RtValue
-import net.postchain.rell.base.compiler.base.namespace.C_NamespaceProperty_SysFunction
-import net.postchain.rell.base.compiler.base.utils.C_RNamePath
+import net.postchain.rell.base.compiler.base.namespace.*
+import net.postchain.rell.base.compiler.base.utils.C_RFullNamePath
 import net.postchain.rell.base.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.base.lmodel.*
-import net.postchain.rell.base.model.R_IdeName
+import net.postchain.rell.base.model.R_FullName
+import net.postchain.rell.base.model.R_ModuleName
 import net.postchain.rell.base.model.R_Name
-import net.postchain.rell.base.model.R_QualifiedName
-import net.postchain.rell.base.mtype.*
 import net.postchain.rell.base.utils.doc.DocSymbol
 import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.immMapOf
-import net.postchain.rell.base.utils.mutableMultimapOf
 import net.postchain.rell.base.utils.toImmList
-import net.postchain.rell.base.utils.toImmMap
 
 object C_LibAdapter {
     fun makeModule(lModule: L_Module): C_LibModule {
-        val converter = C_LibNamespaceConverter {
-            C_GlobalFunctionNaming.makeQualifiedName(it)
-        }
+        val converter = C_LibNamespaceConverter()
 
-        val namespace = converter.convertNamespace(lModule.namespace)
+        val namespace = converter.convertNamespace(lModule.moduleName, lModule.namespace)
         val typeDefs = converter.getTypeDefs()
+        val extensions = converter.getTypeExtensions()
 
-        val extensionTypes = typeDefs
-            .mapNotNull { makeExtensionType(it) }
-            .toImmList()
-
-        return C_LibModule(lModule, typeDefs, namespace, extensionTypes)
+        return C_LibModule(lModule, typeDefs, namespace, extensions)
     }
 
-    private fun makeExtensionType(typeDef: C_LibTypeDef): C_LibExtensionType? {
-        return if (!typeDef.lTypeDef.extension) null else {
-            val target = typeDef.mGenericType.params[0].bounds
-            val staticMembers = makeStaticMembers(typeDef.lTypeDef)
-            val valueMembers = makeValueMembers(typeDef.lTypeDef)
-            C_LibExtensionType(typeDef, target, staticMembers, valueMembers)
-        }
-    }
-
-    fun makeConstructor(lType: L_Type): C_GlobalFunction? {
-        val mSpecificType = lType.mType
-        val naming = C_GlobalFunctionNaming.makeConstructor(mSpecificType)
-        return constructorsToFunction(lType.typeDef, listOf(), mSpecificType, naming)
-    }
-
-    fun makeRawConstructor(lTypeDef: L_TypeDef): C_GlobalFunction? {
-        val mGenericType = lTypeDef.mGenericType
-        val naming = C_GlobalFunctionNaming.makeQualifiedName(lTypeDef.qualifiedName)
-        return constructorsToFunction(lTypeDef, mGenericType.params, null, naming)
-    }
-
-    private fun constructorsToFunction(
-        lTypeDef: L_TypeDef,
-        typeParams: List<M_TypeParam>,
-        mSpecificType: M_Type?,
-        naming: C_GlobalFunctionNaming,
-    ): C_LibGlobalFunction? {
-        val mCommonType = lTypeDef.mGenericType.commonType
-        val cons = lTypeDef.members.constructors
-
-        var cases = cons.mapNotNull { con ->
-            constructorToCase(lTypeDef, con, typeParams, mCommonType, mSpecificType, naming, validate = true)
-        }
-
-        if (cases.isEmpty()) {
-            cases = cons.mapNotNull { con ->
-                constructorToCase(lTypeDef, con, typeParams, mCommonType, mSpecificType, naming, validate = false)
-            }
-        }
-
-        return if (cases.isEmpty()) {
-            val con = lTypeDef.members.specialConstructors.firstOrNull()
-            if (con == null) null else {
-                val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_TYPE, doc = con.docSymbol)
-                C_SpecialLibGlobalFunction(con.fn, ideInfo)
-            }
-        } else {
-            C_LibFunctionUtils.makeGlobalFunction(naming, cases)
-        }
-    }
-
-    private fun constructorToCase(
-        lTypeDef: L_TypeDef,
-        mem: L_TypeDefMember_Constructor,
-        outerTypeParams: List<M_TypeParam>,
-        selfType: M_Type,
-        specificSelfType: M_Type?,
-        naming: C_GlobalFunctionNaming,
-        validate: Boolean,
-    ): C_LibFuncCase<V_GlobalFunctionCall>? {
-        //TODO consider a better solution than converting to a function
-
-        val con = mem.constructor
-
-        val mHeader = M_FunctionHeader(
-            typeParams = (outerTypeParams + con.header.typeParams).toImmList(),
-            resultType = selfType,
-            params = con.header.params.map { it.mParam }.toImmList(),
-        )
-
-        var header = L_FunctionHeader(mHeader, params = con.header.params)
-
-        val outerTypeArgs = if (specificSelfType == null) immMapOf() else M_TypeUtils.getTypeArgs(specificSelfType)
-
-        if (outerTypeArgs.isNotEmpty()) {
-            header = header.replaceTypeParams(outerTypeArgs)
-            if (validate) {
-                try {
-                    header.validate()
-                } catch (e: M_TypeException) {
-                    return null
-                }
-            }
-        }
-
-        val outerTypeArgTypes = outerTypeArgs
-            .mapKeys { R_Name.of(it.key.name) }
-            .mapValues { it.value.captureType() }
-            .toImmMap()
-
-        val function = L_Function(lTypeDef.qualifiedName, header, con.body, con.pure)
-        val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_TYPE, doc = mem.docSymbol)
-        return C_LibFuncCaseUtils.makeGlobalCase(naming, function, outerTypeArgTypes, con.deprecated, ideInfo)
-    }
-
-    fun makeStaticMembers(lTypeDef: L_TypeDef): C_LibTypeMembers<C_TypeStaticMember> {
-        val defPath = C_DefinitionPath("", lTypeDef.qualifiedName.parts.map { it.str })
-        val members = lTypeDef.allMembers
-        val list = mutableListOf<C_TypeStaticMember>()
-
-        for (m in members.constants) {
-            val c = m.constant
-            val defName = defPath.subName(c.simpleName)
-            val rType = L_TypeUtils.getRTypeNotNull(c.type)
-            val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_CONSTANT, doc = m.docSymbol)
-            val prop = C_NamespaceProperty_RtValue(c.value)
-            list.add(C_TypeStaticMember.makeProperty(defName, c.simpleName, prop, rType, ideInfo))
-        }
-
-        val nsConverter = C_LibNamespaceConverter {
-            C_GlobalFunctionNaming.makeTypeMember(lTypeDef.mGenericType.commonType, it.last)
-        }
-
-        for (e in members.staticFunctionsByName.entries) {
-            val defName = defPath.subName(e.key)
-            val cases = e.value.map {
-                val c = C_SourceFunctionCase(it.function, it.deprecated, it.docSymbol)
-                nsConverter.convertFunctionCase(c)
-            }
-            val naming = C_GlobalFunctionNaming.makeTypeMember(lTypeDef.mGenericType.commonType, e.key)
-            val cFn = C_LibFunctionUtils.makeGlobalFunction(naming, cases)
-            val ideInfo = cases.first().ideInfo
-            list.add(C_TypeStaticMember.makeFunction(defName, e.key, naming, cFn, ideInfo))
-        }
-
-        for (mem in lTypeDef.allMembers.specialStaticFunctions) {
-            val defName = defPath.subName(mem.simpleName)
-            val naming = C_GlobalFunctionNaming.makeTypeMember(lTypeDef.mGenericType.commonType, mem.simpleName)
-            val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_FUNCTION_SYSTEM, doc = mem.docSymbol)
-            val cFn = C_SpecialLibGlobalFunction(mem.fn, ideInfo)
-            list.add(C_TypeStaticMember.makeFunction(defName, mem.simpleName, naming, cFn, ideInfo))
-        }
-
-        return C_LibTypeMembers.simple(list.toImmList())
-    }
-
-    fun makeValueMembers(lTypeDef: L_TypeDef): C_LibTypeMembers<C_TypeValueMember> {
-        val propMembers = lTypeDef.allMembers.properties
-            .map { mem ->
-                val ideKind = if (mem.property.pure) IdeSymbolKind.MEM_SYS_PROPERTY_PURE else IdeSymbolKind.MEM_SYS_PROPERTY
-                val ideInfo = C_IdeSymbolInfo.direct(ideKind, doc = mem.docSymbol)
-                val ideName = R_IdeName(mem.simpleName, ideInfo)
-                val rResType = L_TypeUtils.getRTypeNotNull(mem.property.type)
-                val fn = C_SysFunction.direct(mem.property.body)
-                val attr: C_MemberAttr = C_MemberAttr_SysProperty(ideName, rResType, fn)
-                C_TypeValueMember_BasicAttr(attr)
-            }
-
-        val fnMembers = lTypeDef.allMembers.valueFunctionsByName.entries
-            .map { (name, mems) ->
-                val cases = mems.map { mem ->
-                    val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_FUNCTION_SYSTEM, doc = mem.docSymbol)
-                    C_LibFuncCaseUtils.makeMemberCase(name, mem.function, mem.deprecated, ideInfo)
-                }
-                val fn = C_LibFunctionUtils.makeMemberFunction(cases)
-                val ideInfo = cases.first().ideInfo
-                C_TypeValueMember_Function(name, fn, ideInfo)
-            }
-
-        val specFnMembers = lTypeDef.allMembers.specialValueFunctions
-            .map { mem ->
-                val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_FUNCTION_SYSTEM, doc = mem.docSymbol)
-                val cFn = C_SpecialLibMemberFunction(mem.fn, ideInfo)
-                C_TypeValueMember_Function(mem.simpleName, cFn, ideInfo)
-            }
-
-        val list = (propMembers + fnMembers + specFnMembers).toImmList()
-        return C_LibTypeMembers.simple(list)
+    fun convertFunctionCase(
+        function: L_Function,
+        naming: C_MemberNaming,
+        docSymbol: DocSymbol,
+        deprecated: C_Deprecated?,
+    ): C_LibFuncCase<V_GlobalFunctionCall> {
+        return C_LibNamespaceConverter.convertFunctionCase(function, naming, docSymbol, deprecated)
     }
 }
 
-private class C_LibNamespaceConverter(
-    private val functionNameGetter: (R_QualifiedName) -> C_GlobalFunctionNaming,
-) {
+private class C_LibNamespaceConverter {
     // Important to not convert same definition more than once. Same definition may be used by multiple members
     // because of aliases.
     private val typeDefMap = mutableMapOf<L_TypeDef, C_LibTypeDef>()
 
-    fun convertNamespace(lNs: L_Namespace): C_LibNamespace {
-        val b = C_LibNamespace.Builder(C_RNamePath.EMPTY)
+    private val memberMap = mutableMapOf<L_NamespaceMember, C_NamespaceMember?>()
+
+    private val typeExtensions = mutableListOf<C_LibTypeExtension>()
+
+    fun convertNamespace(moduleName: R_ModuleName, lNs: L_Namespace): C_LibNamespace {
+        val namePath = C_RFullNamePath.of(moduleName)
+        val b = C_LibNamespace.Builder(namePath)
         convertMembers(b, lNs)
         return b.build()
     }
 
     fun getTypeDefs(): List<C_LibTypeDef> = typeDefMap.values.toImmList()
+    fun getTypeExtensions(): List<C_LibTypeExtension> = typeExtensions.toImmList()
 
     private fun convertMembers(b: C_LibNamespace.Maker, lNs: L_Namespace) {
-        val functions = mutableMultimapOf<R_Name, L_NamespaceMember_Function>()
-
         for (lMember in lNs.members) {
-            when (lMember) {
-                is L_NamespaceMember_Namespace -> {
-                    convertMemberNamespace(b, lMember)
-                }
-                is L_NamespaceMember_Type -> {
-                    convertMemberType(b, lMember)
-                }
-                is L_NamespaceMember_Struct -> {
-                    val libMem = C_LibNamespaceMember.makeStruct(lMember.struct.rStruct, lMember.docSymbol)
-                    b.addMember(lMember.simpleName, libMem)
-                }
-                is L_NamespaceMember_Constant -> {
-                    convertMemberConstant(b, lMember)
-                }
-                is L_NamespaceMember_Property -> {
-                    convertMemberProperty(b, lMember)
-                }
-                is L_NamespaceMember_SpecialProperty -> {
-                    val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.MEM_SYS_PROPERTY, doc = lMember.docSymbol)
-                    val libMem = C_LibNamespaceMember.makeProperty(lMember.property, ideInfo)
-                    b.addMember(lMember.simpleName, libMem)
-                }
-                is L_NamespaceMember_Function -> {
-                    functions.put(lMember.simpleName, lMember)
-                }
-                is L_NamespaceMember_SpecialFunction -> {
-                    val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_FUNCTION_SYSTEM, doc = lMember.docSymbol)
-                    val cFn = C_SpecialLibGlobalFunction(lMember.fn, ideInfo)
-                    val libMem = C_LibNamespaceMember.makeFunction(cFn, ideInfo)
-                    b.addMember(lMember.simpleName, libMem)
-                }
-            }
-        }
-
-        for ((name, mems) in functions.asMap().entries) {
-            val cases = mems.map {
-                val c = C_SourceFunctionCase(it.function, it.deprecated, it.docSymbol)
-                convertFunctionCase(c)
-            }
-            val qualifiedName = b.basePath.qualifiedName(name)
-            val naming = functionNameGetter(qualifiedName)
-            val fn = C_LibFunctionUtils.makeGlobalFunction(naming, cases)
-            val ideInfo = cases.first().ideInfo
-            val libMem = C_LibNamespaceMember.makeFunction(fn, ideInfo)
-            b.addMember(name, libMem)
+            convertMember(b, lMember)
         }
     }
 
+    private fun convertMember(b: C_LibNamespace.Maker, lMember: L_NamespaceMember) {
+        when (lMember) {
+            is L_NamespaceMember_Namespace -> {
+                convertMemberNamespace(b, lMember)
+            }
+            is L_NamespaceMember_Alias -> {
+                convertMemberAlias(b, lMember)
+            }
+            is L_NamespaceMember_Function -> {
+                val fnCase = convertFunctionCase(lMember, lMember.docSymbol, lMember.deprecated)
+                b.addFunction(lMember.simpleName, fnCase)
+            }
+            else -> {
+                val cMember = convertMemberCached(lMember)
+                if (cMember != null) {
+                    val item = C_NamespaceItem(cMember)
+                    b.addMember(lMember.simpleName, item)
+                }
+            }
+        }
+    }
+
+    private fun convertMemberAlias(b: C_LibNamespace.Maker, lMember: L_NamespaceMember_Alias) {
+        val lTargetMember = lMember.finalTargetMember
+        if (lTargetMember is L_NamespaceMember_Function) {
+            val fnCase = convertFunctionCase(lTargetMember, lMember.docSymbol, lMember.deprecated)
+            b.addFunction(lMember.simpleName, fnCase)
+            return
+        }
+
+        val cMember = convertMemberCached(lTargetMember)
+        checkNotNull(cMember) {
+            "Alias points to a void member: ${lMember.qualifiedName} -> ${lTargetMember.qualifiedName}"
+        }
+
+        val ideInfo0 = cMember.ideInfo
+        val ideInfo = C_IdeSymbolInfo.direct(ideInfo0.kind, ideInfo0.defId, ideInfo0.link, lMember.docSymbol)
+        val deprecation = if (lMember.deprecated == null) cMember.deprecation else {
+            //TODO don't override target deprecation if it has higher severity
+            val defName = C_DefinitionName(lMember.fullName)
+            C_DefDeprecation(defName, lMember.deprecated)
+        }
+
+        val item = C_NamespaceItem(cMember, ideInfo, deprecation)
+        b.addMember(lMember.simpleName, item)
+    }
+
     private fun convertMemberNamespace(b: C_LibNamespace.Maker, lMember: L_NamespaceMember_Namespace) {
-        b.addNamespace(lMember.simpleName, lMember.docSymbol) { subB ->
+        val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_NAMESPACE, doc = lMember.docSymbol)
+        b.addNamespace(lMember.simpleName, ideInfo) { subB ->
             convertMembers(subB, lMember.namespace)
         }
     }
 
-    private fun convertMemberType(b: C_LibNamespace.Maker, lMember: L_NamespaceMember_Type) {
+    private fun convertMemberCached(lMember: L_NamespaceMember): C_NamespaceMember? {
+        return memberMap.computeIfAbsent(lMember) {
+            convertMember0(lMember)
+        }
+    }
+
+    private fun convertMember0(lMember: L_NamespaceMember): C_NamespaceMember? {
+        val memberFactory = memberFactory(lMember.fullName)
+
+        return when (lMember) {
+            is L_NamespaceMember_Type -> {
+                convertMemberType(memberFactory, lMember)
+            }
+            is L_NamespaceMember_TypeExtension -> {
+                convertMemberTypeExtension(lMember)
+            }
+            is L_NamespaceMember_Struct -> {
+                val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_STRUCT, doc = lMember.docSymbol)
+                memberFactory.struct(lMember.simpleName, lMember.struct.rStruct, ideInfo)
+            }
+            is L_NamespaceMember_Constant -> {
+                convertMemberConstant(memberFactory, lMember)
+            }
+            is L_NamespaceMember_Property -> {
+                convertMemberProperty(memberFactory, lMember)
+            }
+            is L_NamespaceMember_SpecialProperty -> {
+                val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.MEM_SYS_PROPERTY, doc = lMember.docSymbol)
+                memberFactory.property(lMember.simpleName, lMember.property, ideInfo)
+            }
+            is L_NamespaceMember_SpecialFunction -> {
+                val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_FUNCTION_SYSTEM, doc = lMember.docSymbol)
+                val cFn = C_SpecialLibGlobalFunction(lMember.fn, ideInfo)
+                memberFactory.function(lMember.simpleName, cFn, ideInfo)
+            }
+            is L_NamespaceMember_Namespace,
+            is L_NamespaceMember_Function,
+            is L_NamespaceMember_Alias -> throw IllegalArgumentException(lMember.javaClass.simpleName)
+        }
+    }
+
+    private fun convertMemberType(mf: C_NsMemberFactory, lMember: L_NamespaceMember_Type): C_NamespaceMember? {
         val libTypeDef = typeDefMap.computeIfAbsent(lMember.typeDef) {
             convertTypeDef(it)
         }
 
-        if (!libTypeDef.lTypeDef.hidden) {
+        return if (libTypeDef.lTypeDef.hidden) null else {
             val ideInfo = C_IdeSymbolInfo.direct(kind = IdeSymbolKind.DEF_TYPE, doc = libTypeDef.lTypeDef.docSymbol)
-            val libMem = C_LibNamespaceMember.makeType(libTypeDef, ideInfo, deprecated = lMember.deprecated)
-            b.addMember(lMember.simpleName, libMem)
+            mf.type(lMember.simpleName, libTypeDef, ideInfo, deprecated = lMember.deprecated)
         }
     }
 
-    private fun convertMemberConstant(b: C_LibNamespace.Maker, lMember: L_NamespaceMember_Constant) {
+    private fun convertMemberTypeExtension(lMember: L_NamespaceMember_TypeExtension): C_NamespaceMember? {
+        val namingFactory: (R_Name) -> C_MemberNaming = { name ->
+            C_MemberNaming.makeTypeExtensionMember(lMember.qualifiedName, name)
+        }
+
+        val typeExt = lMember.typeExt
+        val body = C_LibTypeAdapter.makeTypeBody(lMember.fullName, null, typeExt.members, namingFactory)
+        typeExtensions.add(C_LibTypeExtension(typeExt, body))
+
+        // Not adding the member to the C-namespace, because extensions can't be used by name in Rell code.
+        return null
+    }
+
+    private fun convertMemberConstant(mf: C_NsMemberFactory, lMember: L_NamespaceMember_Constant): C_NamespaceMember {
         val value = lMember.constant.value
         val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_CONSTANT, doc = lMember.docSymbol)
         val prop = C_NamespaceProperty_RtValue(value)
-        val libMem = C_LibNamespaceMember.makeProperty(prop, ideInfo)
-        b.addMember(lMember.simpleName, libMem)
+        return mf.property(lMember.simpleName, prop, ideInfo)
     }
 
-    private fun convertMemberProperty(b: C_LibNamespace.Maker, member: L_NamespaceMember_Property) {
-        val rType = L_TypeUtils.getRTypeNotNull(member.property.type)
-        val ideKind = if (member.property.pure) IdeSymbolKind.MEM_SYS_PROPERTY_PURE else IdeSymbolKind.MEM_SYS_PROPERTY
-        val ideInfo = C_IdeSymbolInfo.direct(ideKind, doc = member.docSymbol)
-        val prop = C_NamespaceProperty_SysFunction(rType, member.property.fn)
-        val libMem = C_LibNamespaceMember.makeProperty(prop, ideInfo)
-        b.addMember(member.simpleName, libMem)
+    private fun convertMemberProperty(mf: C_NsMemberFactory, lMember: L_NamespaceMember_Property): C_NamespaceMember {
+        val rType = L_TypeUtils.getRTypeNotNull(lMember.property.type)
+        val ideKind = if (lMember.property.pure) IdeSymbolKind.MEM_SYS_PROPERTY_PURE else IdeSymbolKind.MEM_SYS_PROPERTY
+        val ideInfo = C_IdeSymbolInfo.direct(ideKind, doc = lMember.docSymbol)
+        val prop = C_NamespaceProperty_SysFunction(rType, lMember.property.fn)
+        return mf.property(lMember.simpleName, prop, ideInfo)
     }
 
     private fun convertTypeDef(lTypeDef: L_TypeDef): C_LibTypeDef {
-        val rawConstructor = C_LibAdapter.makeRawConstructor(lTypeDef)
-        val staticMembers = C_LibAdapter.makeStaticMembers(lTypeDef)
-        val valueMembers = C_LibAdapter.makeValueMembers(lTypeDef)
-        return C_LibTypeDef(lTypeDef.qualifiedName.str(), lTypeDef, rawConstructor, staticMembers, valueMembers)
+        val namingFactory: (R_Name) -> C_MemberNaming = { simpleName ->
+            C_MemberNaming.makeTypeMember(lTypeDef.mGenericType.commonType, simpleName)
+        }
+
+        val body = C_LibTypeAdapter.makeTypeBody(lTypeDef.fullName, lTypeDef, lTypeDef.allMembers, namingFactory)
+        return C_LibTypeDef(lTypeDef.qualifiedName.str(), lTypeDef, body)
     }
 
-    fun convertFunctionCase(c: C_SourceFunctionCase): C_LibFuncCase<V_GlobalFunctionCall> {
-        val naming = functionNameGetter(c.function.qualifiedName)
-        val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_FUNCTION_SYSTEM, doc = c.doc)
-        val case = C_LibFuncCaseUtils.makeGlobalCase(naming, c.function, immMapOf(), null, ideInfo)
-        return if (c.deprecated == null) case else C_DeprecatedLibFuncCase(case, c.deprecated)
+    private fun convertFunctionCase(
+        member: L_NamespaceMember_Function,
+        docSymbol: DocSymbol,
+        deprecated: C_Deprecated?,
+    ): C_LibFuncCase<V_GlobalFunctionCall> {
+        val naming = C_MemberNaming.makeFullName(member.fullName)
+        return convertFunctionCase(member.function, naming, docSymbol, deprecated)
+    }
+
+    private fun memberFactory(fullName: R_FullName): C_NsMemberFactory {
+        val parts = fullName.qualifiedName.parts
+        val basePath = C_RFullNamePath.of(fullName.moduleName, parts.subList(0, parts.size - 1))
+        return C_NsMemberFactory(basePath)
+    }
+
+    companion object {
+        fun convertFunctionCase(
+            function: L_Function,
+            naming: C_MemberNaming,
+            docSymbol: DocSymbol,
+            deprecated: C_Deprecated?,
+        ): C_LibFuncCase<V_GlobalFunctionCall> {
+            val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_FUNCTION_SYSTEM, doc = docSymbol)
+            val case = C_LibFuncCaseUtils.makeGlobalCase(naming, function, immMapOf(), null, ideInfo)
+            return if (deprecated == null) case else C_DeprecatedLibFuncCase(case, deprecated)
+        }
     }
 }
-
-private class C_SourceFunctionCase(
-    val function: L_Function,
-    val deprecated: C_Deprecated?,
-    val doc: DocSymbol,
-)

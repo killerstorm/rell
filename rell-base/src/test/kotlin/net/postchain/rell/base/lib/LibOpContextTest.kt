@@ -123,7 +123,8 @@ class LibOpContextTest: BaseRellTest(false) {
         chkFn("= op_context.is_signer();", "ct_err:expr_call_argtypes:[op_context.is_signer]:")
         chkFn("= op_context.is_signer(123);", "ct_err:expr_call_argtypes:[op_context.is_signer]:integer")
         chkFn("= op_context.is_signer('1234');", "ct_err:expr_call_argtypes:[op_context.is_signer]:text")
-        chkFn("= op_context.is_signer(x'12', x'34');", "ct_err:expr_call_argtypes:[op_context.is_signer]:byte_array,byte_array")
+        chkFn("= op_context.is_signer(x'12', x'34');",
+            "ct_err:expr_call_argtypes:[op_context.is_signer]:byte_array,byte_array")
     }
 
     @Test fun testIsSignerGlobalScope() {
@@ -170,12 +171,17 @@ class LibOpContextTest: BaseRellTest(false) {
 
     @Test fun testEmitEvent() {
         tst.opContext = opContext()
+
         chkOp("op_context.emit_event('bob', gtv.from_json('{}'));", "rt_err:not_supported")
         chkOp("op_context.emit_event();", "ct_err:expr_call_argtypes:[op_context.emit_event]:")
         chkOp("op_context.emit_event('bob');", "ct_err:expr_call_argtypes:[op_context.emit_event]:text")
-        chkOp("op_context.emit_event('bob', 'alice');", "ct_err:expr_call_argtypes:[op_context.emit_event]:text,text")
-        chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 123);", "ct_err:expr_call_argtypes:[op_context.emit_event]:text,gtv,integer")
-        chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 'alice');", "ct_err:expr_call_argtypes:[op_context.emit_event]:text,gtv,text")
+
+        chkOp("op_context.emit_event('bob', 'alice');",
+            "ct_err:expr_call_argtypes:[op_context.emit_event]:text,text")
+        chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 123);",
+            "ct_err:expr_call_argtypes:[op_context.emit_event]:text,gtv,integer")
+        chkOp("op_context.emit_event('bob', gtv.from_json('{}'), 'alice');",
+            "ct_err:expr_call_argtypes:[op_context.emit_event]:text,gtv,text")
     }
 
     @Test fun testCallFucntionsFromQuery() {

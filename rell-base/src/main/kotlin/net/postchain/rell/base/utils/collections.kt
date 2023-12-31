@@ -150,6 +150,7 @@ fun <K, V> Iterable<Pair<K, V>>.toImmMap(): Map<K, V> = toMap().toImmMap()
 fun <K, V> immMultimapOf(): Multimap<K, V> = ImmutableMultimap.of()
 fun <K, V> mutableMultimapOf(): Multimap<K, V> = LinkedListMultimap.create()
 fun <K, V> Multimap<K, V>.toImmMultimap(): Multimap<K, V> = ImmutableMultimap.copyOf(this)
+fun <K, V> Multimap<K, V>.toMutableMultimap(): Multimap<K, V> = LinkedListMultimap.create(this)
 
 fun <T, K, V> Iterable<T>.toImmMultimap(fn: (T) -> Pair<K, V>): Multimap<K, V> {
     val m = mutableMultimapOf<K, V>()
@@ -180,6 +181,12 @@ fun <K, V> Map<K, Iterable<V>>.toImmMultimap(): Multimap<K, V> {
     return map.toImmMultimap()
 }
 
+fun <K, V> Multimap<K, V>.toImmMapOfList(): Map<K, List<V>> {
+    return this.asMap()
+        .mapValues { it.value.toImmList() }
+        .toImmMap()
+}
+
 fun <T> mutableMultisetOf(): Multiset<T> = LinkedHashMultiset.create()
 fun <T> Multiset<T>.toImmMultiset(): Multiset<T> = ImmutableMultiset.copyOf(this)
 
@@ -191,7 +198,11 @@ fun <K, V> MutableMap<K, V>.putAllAbsent(map: Map<K, V>) {
     }
 }
 
-fun <T> queueOf(): Queue<T> = ArrayDeque()
+fun <T> queueOf(vararg values: T): Queue<T> {
+    val res = ArrayDeque<T>()
+    res.addAll(values)
+    return res
+}
 
 fun <T> Iterable<T>.toPair(): Pair<T, T> {
     val iter = this.iterator()

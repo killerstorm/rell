@@ -146,8 +146,8 @@ class LibHiddenTest: BaseRellTest(false) {
         chk("_test.external_chain(data)", "null")
         chk("_test.external_chain(user)", "text[foo]")
 
-        chk("_test.external_chain(0)", "ct_err:expr_call:bad_arg:_test.external_chain")
-        chk("_test.external_chain(print)", "ct_err:expr_call:bad_arg:_test.external_chain")
-        chk("_test.external_chain(gtx_operation)", "ct_err:expr_call:bad_arg:_test.external_chain")
+        chk("_test.external_chain(0)", "ct_err:expr_call:bad_arg:[_test.external_chain]")
+        chk("_test.external_chain(print)", "ct_err:expr_call:bad_arg:[_test.external_chain]")
+        chk("_test.external_chain(gtx_operation)", "ct_err:expr_call:bad_arg:[_test.external_chain]")
     }
 }

@@ -28,7 +28,7 @@ import net.postchain.rell.base.utils.*
 
 object C_LibFuncCaseUtils {
     fun makeGlobalCase(
-        naming: C_GlobalFunctionNaming,
+        naming: C_MemberNaming,
         lFunction: L_Function,
         outerTypeArgs: Map<R_Name, M_Type>,
         deprecated: C_Deprecated?,
@@ -42,12 +42,12 @@ object C_LibFuncCaseUtils {
     }
 
     fun makeMemberCase(
-        simpleName: R_Name,
         lFunction: L_Function,
-        deprecated: C_Deprecated?,
         ideInfo: C_IdeSymbolInfo,
+        naming: C_MemberNaming,
+        deprecated: C_Deprecated?,
     ): C_LibFuncCase<V_MemberFunctionCall> {
-        var res: C_LibFuncCase<V_MemberFunctionCall> = C_MemberLibFuncCase(lFunction, ideInfo, simpleName)
+        var res: C_LibFuncCase<V_MemberFunctionCall> = C_MemberLibFuncCase(lFunction, ideInfo, naming)
         if (deprecated != null) {
             res = C_DeprecatedLibFuncCase(res, deprecated)
         }
@@ -231,10 +231,10 @@ private abstract class C_CommonLibFuncCase<CallT: V_FunctionCall>(
             val unresolvedNames = unresolved.map { it.name }.sorted()
             val paramsCode = unresolvedNames.joinToString(",")
             val paramsMsg = unresolvedNames.toString()
-            "fn:sys:unresolved_type_params:%s:$paramsCode" toCodeMsg
+            "fn:sys:unresolved_type_params:[%s]:$paramsCode" toCodeMsg
                     "Failed to infer type arguments for function '%s': $paramsMsg"
         } else {
-            "fn:sys:no_res_type:%s" toCodeMsg "Return type is unknown for function '%s'"
+            "fn:sys:no_res_type:[%s]" toCodeMsg "Return type is unknown for function '%s'"
         }
 
         return makeErrorMatch(matchBase, matchParams, codeMsg)
@@ -294,52 +294,76 @@ private abstract class C_CommonLibFuncCase<CallT: V_FunctionCall>(
     }
 }
 
-sealed class C_GlobalFunctionNaming {
+sealed class C_MemberNaming {
     abstract val fullNameLazy: LazyString
 
-    abstract fun replaceSelfType(selfType: M_Type?): C_GlobalFunctionNaming
+    abstract fun replaceSelfType(selfType: M_Type?): C_MemberNaming
 
     final override fun toString() = fullNameLazy.value
 
     companion object {
-        fun makeQualifiedName(qualifiedName: R_QualifiedName): C_GlobalFunctionNaming {
-            return C_GlobalFunctionNaming_QualifiedName(qualifiedName)
+        fun makeFullName(fullName: R_FullName): C_MemberNaming {
+            return C_MemberNaming_FullName(fullName)
         }
 
-        fun makeTypeMember(mType: M_Type, simpleName: R_Name): C_GlobalFunctionNaming {
-            return C_GlobalFunctionNaming_TypeMember(mType, simpleName)
+        fun makeTypeMember(mType: M_Type, simpleName: R_Name): C_MemberNaming {
+            return C_MemberNaming_TypeMember(mType, simpleName)
         }
 
-        fun makeConstructor(mType: M_Type): C_GlobalFunctionNaming {
-            return C_GlobalFunctionNaming_Constructor(mType)
+        fun makeTypeExtensionMember(qualifiedName: R_QualifiedName, simpleName: R_Name): C_MemberNaming {
+            return C_MemberNaming_TypeExtensionMember(qualifiedName, simpleName, null)
+        }
+
+        fun makeConstructor(mType: M_Type): C_MemberNaming {
+            return C_MemberNaming_Constructor(mType)
         }
     }
 }
 
-private class C_GlobalFunctionNaming_QualifiedName(
-    private val qualifiedName: R_QualifiedName,
-): C_GlobalFunctionNaming() {
+private class C_MemberNaming_FullName(
+    private val fullName: R_FullName,
+): C_MemberNaming() {
     override val fullNameLazy = LazyString.of {
-        qualifiedName.str()
+        // Using a qualified name (w/o the module name) for compatibility; may be changed in the future.
+        fullName.qualifiedName.str()
     }
 
     override fun replaceSelfType(selfType: M_Type?) = this
 }
 
-private class C_GlobalFunctionNaming_TypeMember(
+private class C_MemberNaming_TypeMember(
     private val mType: M_Type,
     private val simpleName: R_Name,
-): C_GlobalFunctionNaming() {
+): C_MemberNaming() {
     override val fullNameLazy = LazyString.of {
         "${mType.strCode()}.$simpleName"
     }
 
-    override fun replaceSelfType(selfType: M_Type?): C_GlobalFunctionNaming {
-        return if (selfType == null) this else C_GlobalFunctionNaming_TypeMember(selfType, simpleName)
+    override fun replaceSelfType(selfType: M_Type?): C_MemberNaming {
+        return if (selfType == null) this else C_MemberNaming_TypeMember(selfType, simpleName)
     }
 }
 
-private class C_GlobalFunctionNaming_Constructor(private val mType: M_Type): C_GlobalFunctionNaming() {
+private class C_MemberNaming_TypeExtensionMember(
+    private val qualifiedName: R_QualifiedName,
+    private val simpleName: R_Name,
+    private val actualSelfType: M_Type?,
+): C_MemberNaming() {
+    override val fullNameLazy = LazyString.of {
+        if (actualSelfType == null) {
+            "$qualifiedName.$simpleName"
+        } else {
+            "$qualifiedName(${actualSelfType.strCode()}).$simpleName"
+        }
+    }
+
+    override fun replaceSelfType(selfType: M_Type?): C_MemberNaming {
+        return if (selfType == null) this else
+            C_MemberNaming_TypeExtensionMember(qualifiedName, simpleName, selfType)
+    }
+}
+
+private class C_MemberNaming_Constructor(private val mType: M_Type): C_MemberNaming() {
     override val fullNameLazy = LazyString.of {
         mType.strCode()
     }
@@ -350,7 +374,7 @@ private class C_GlobalFunctionNaming_Constructor(private val mType: M_Type): C_G
 private class C_GlobalLibFuncCase(
     lFunction: L_Function,
     ideInfo: C_IdeSymbolInfo,
-    private val naming: C_GlobalFunctionNaming,
+    private val naming: C_MemberNaming,
     private val outerTypeArgs: Map<R_Name, M_Type>,
 ): C_CommonLibFuncCase<V_GlobalFunctionCall>(lFunction, ideInfo) {
     override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibFuncCase<V_GlobalFunctionCall> {
@@ -400,15 +424,16 @@ private class C_GlobalLibFuncCase(
 private class C_MemberLibFuncCase(
     lFunction: L_Function,
     ideInfo: C_IdeSymbolInfo,
-    private val simpleName: R_Name,
+    private val naming: C_MemberNaming,
 ): C_CommonLibFuncCase<V_MemberFunctionCall>(lFunction, ideInfo) {
     override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibFuncCase<V_MemberFunctionCall> {
         val lFunction2 = lFunction.replaceTypeParams(rep.map)
-        return if (lFunction2 === lFunction) this else C_MemberLibFuncCase(lFunction2, ideInfo, simpleName)
+        return if (lFunction2 === lFunction) this else C_MemberLibFuncCase(lFunction2, ideInfo, naming)
     }
 
     override fun getFullName(selfType: R_Type): LazyString {
-        return LazyString.of { "${selfType.name}.$simpleName" }
+        val actualNaming = naming.replaceSelfType(selfType.mType)
+        return actualNaming.fullNameLazy
     }
 
     override fun getCaseContext(selfType: R_Type): C_GenericFuncCaseCtx? {

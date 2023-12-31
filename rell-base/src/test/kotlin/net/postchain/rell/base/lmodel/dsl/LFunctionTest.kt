@@ -151,8 +151,8 @@ class LFunctionTest: BaseLTest() {
         }
         chkDefs(mod,
             "function f(): anything",
-            "function g(): anything",
-            "function h(): anything",
+            "alias g = f",
+            "alias h = f",
         )
     }
 

@@ -5,11 +5,22 @@
 package net.postchain.rell.base.compiler.lib
 
 import net.postchain.common.toHex
+import net.postchain.rell.base.compiler.ast.S_Expr
+import net.postchain.rell.base.compiler.base.expr.C_ExprContext
+import net.postchain.rell.base.compiler.base.expr.C_ExprUtils
+import net.postchain.rell.base.compiler.base.lib.C_LibFuncCaseCtx
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunctionBody
+import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunctionBody
+import net.postchain.rell.base.compiler.base.lib.V_SpecialMemberFunctionCall
 import net.postchain.rell.base.compiler.base.utils.toCodeMsg
+import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.lmodel.dsl.BaseLTest
 import net.postchain.rell.base.model.R_Type
+import net.postchain.rell.base.runtime.Rt_IntValue
 import net.postchain.rell.base.runtime.Rt_TextValue
 import net.postchain.rell.base.runtime.utils.Rt_Utils
 import net.postchain.rell.base.testutils.VirtualTestUtils
+import net.postchain.rell.base.utils.LazyPosString
 import net.postchain.rell.base.utils.PostchainGtvUtils
 import org.junit.Test
 
@@ -20,7 +31,7 @@ class CLibFunctionTypeExtTest: BaseCLibTest() {
         tst.typeCheck = false
         tst.extraMod = makeModule {
             fun argsToStr(m: Map<String, R_Type>) = m.entries.joinToString(", ", "{", "}") { "${it.key}=${it.value.strCode()}" }
-            type("test_ext", extension = true, hidden = true) {
+            extension("ext", type = "A") {
                 generic("A", subOf = "any")
                 staticFunction("static_self_type", result = "text") {
                     bodyMeta { body { -> Rt_TextValue.get(fnBodyMeta.rSelfType.strCode()) } }
@@ -105,26 +116,32 @@ class CLibFunctionTypeExtTest: BaseCLibTest() {
         chk("_type_of($type.test_decode(0))", "text[$type]")
         chk("_type_of($expr.test_encode(0))", "text[$type]")
 
-        chk("$type.test_decode()", "ct_err:expr_call_argtypes:[$type.test_decode]:")
-        chk("$type.test_decode('')", "ct_err:expr_call_argtypes:[$type.test_decode]:text")
-        chk("$type.test_decode(0)", "rt_err:x=int[0]")
-        chk("$type.test_decode(-1)", "rt_err:fn:error:$type.test_decode:java.lang.IllegalStateException")
-        chk("$type.test_decode(*)", "fn[$type.test_decode(*)]")
-        chk("$type.test_decode(*)(0)", "rt_err:x=int[0]")
-        chk("$type.test_decode(*)(-1)", "rt_err:fn:error:$type.test_decode:java.lang.IllegalStateException")
+        chkOp("$expr.test_prop = 123;", "ct_err:attr_not_mutable:ext($type).test_prop")
 
-        chk("$expr.test_encode()", "ct_err:expr_call_argtypes:[$type.test_encode]:")
-        chk("$expr.test_encode('')", "ct_err:expr_call_argtypes:[$type.test_encode]:text")
-        chk("$expr.test_encode(*)", "fn[$type.test_encode(*)]")
+        chk("$type.test_decode()", "ct_err:expr_call_argtypes:[ext($type).test_decode]:")
+        chk("$type.test_decode('')", "ct_err:expr_call_argtypes:[ext($type).test_decode]:text")
+        chk("$type.test_decode(0)", "rt_err:x=int[0]")
+        chk("$type.test_decode(-1)", "rt_err:fn:error:ext($type).test_decode:java.lang.IllegalStateException")
+        chk("$type.test_decode(*)", "fn[ext($type).test_decode(*)]")
+        chk("$type.test_decode(*)(0)", "rt_err:x=int[0]")
+        chk("$type.test_decode(*)(-1)", "rt_err:fn:error:ext($type).test_decode:java.lang.IllegalStateException")
+
+        chk("$expr.test_encode()", "ct_err:expr_call_argtypes:[ext($type).test_encode]:")
+        chk("$expr.test_encode('')", "ct_err:expr_call_argtypes:[ext($type).test_encode]:text")
+        chk("$expr.test_encode(*)", "fn[ext($type).test_encode(*)]")
         chk("$expr.test_encode(0)", "rt_err:x=int[0]")
-        chk("$expr.test_encode(-1)", "rt_err:fn:error:$type.test_encode:java.lang.IllegalStateException")
+        chk("$expr.test_encode(-1)", "rt_err:fn:error:ext($type).test_encode:java.lang.IllegalStateException")
         chk("$expr.test_encode(*)(0)", "rt_err:x=int[0]")
-        chk("$expr.test_encode(*)(-1)", "rt_err:fn:error:$type.test_encode:java.lang.IllegalStateException")
+        chk("$expr.test_encode(*)(-1)", "rt_err:fn:error:ext($type).test_encode:java.lang.IllegalStateException")
+
+        chk("$type.spec_decode()", "ct_err:test_error:ext($type).spec_decode")
+        chk("$expr.spec_encode()", "ct_err:test_error:ext($type).spec_encode")
     }
 
     private fun makeTypeExtensionMod() = makeModule {
-        type("test_ext", extension = true, hidden = true) {
+        extension("ext", type = "T") {
             generic("T", subOf = "any")
+            property("test_prop", type = "integer", pure = true) { _ -> Rt_IntValue.ZERO }
             staticFunction("test_decode", result = "T") {
                 param(type = "integer")
                 body { a ->
@@ -142,6 +159,27 @@ class CLibFunctionTypeExtTest: BaseCLibTest() {
                     Rt_TextValue.get(a.str())
                 }
             }
+            staticFunction("spec_decode", object: C_SpecialLibGlobalFunctionBody() {
+                override fun compileCall(
+                    ctx: C_ExprContext,
+                    name: LazyPosString,
+                    args: List<S_Expr>
+                ): V_Expr {
+                    ctx.msgCtx.error(name.pos, "test_error:${name.str}", "Test error")
+                    return C_ExprUtils.errorVExpr(ctx, name.pos)
+                }
+            })
+            function("spec_encode", object: C_SpecialLibMemberFunctionBody() {
+                override fun compileCall(
+                    ctx: C_ExprContext,
+                    callCtx: C_LibFuncCaseCtx,
+                    selfType: R_Type,
+                    args: List<V_Expr>,
+                ): V_SpecialMemberFunctionCall {
+                    ctx.msgCtx.error(callCtx.linkPos, "test_error:${callCtx.qualifiedNameMsg()}", "Test error")
+                    return BaseLTest.makeMemberFunCall(ctx)
+                }
+            })
         }
     }
 }
