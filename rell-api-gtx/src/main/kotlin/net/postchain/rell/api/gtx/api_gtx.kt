@@ -252,11 +252,7 @@ object RellApiGtxInternal {
             else -> appModules
         }
 
-        val compileConfig = config.compileConfig
-        val gtvCompileConfig = RellApiCompile.Config.Builder()
-            .cliEnv(compileConfig.cliEnv)
-            .version(compileConfig.version)
-            .moduleArgs0(compileConfig.moduleArgs)
+        val gtvCompileConfig = RellApiCompile.Config.Builder(config.compileConfig)
             .quiet(true)
             .build()
 

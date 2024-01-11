@@ -84,6 +84,8 @@ object RellApiCompile {
         val mountConflictError: Boolean,
         /** Specifying a non-test module in the list of test modules causes an error, when `true`. */
         val appModuleInTestsError: Boolean,
+        /** Additional GTX-modules to include */
+        val additionalGtxModules: List<String>,
         /** Do not print non-error compilation messages (warnings) if compilation succeeds, when `true`. */
         val quiet: Boolean,
     ) {
@@ -98,6 +100,7 @@ object RellApiCompile {
                 moduleArgsMissingError = true,
                 mountConflictError = true,
                 appModuleInTestsError = true,
+                additionalGtxModules = immListOf(),
                 quiet = false,
             )
         }
@@ -110,6 +113,7 @@ object RellApiCompile {
             private var moduleArgsMissingError = proto.moduleArgsMissingError
             private var mountConflictError = proto.mountConflictError
             private var appModuleInTestsError = proto.appModuleInTestsError
+            private var additionalGtxModules = proto.additionalGtxModules
             private var quiet = proto.quiet
 
             /** @see [Config.cliEnv] */
@@ -143,6 +147,8 @@ object RellApiCompile {
 
             /** @see [Config.appModuleInTestsError] */
             fun appModuleInTestsError(v: Boolean) = apply { appModuleInTestsError = v }
+            /** @see [Config.additionalGtxModules] */
+            fun additionalGtxModules(v: List<String>) = apply { additionalGtxModules = v.toImmList() }
 
             /** @see [Config.quiet] */
             fun quiet(v: Boolean) = apply { quiet = v }
@@ -156,6 +162,7 @@ object RellApiCompile {
                     moduleArgsMissingError = moduleArgsMissingError,
                     mountConflictError = mountConflictError,
                     appModuleInTestsError = appModuleInTestsError,
+                    additionalGtxModules = additionalGtxModules,
                     quiet = quiet,
                 )
             }

@@ -8,6 +8,8 @@ import net.postchain.StorageBuilder
 import net.postchain.config.app.AppConfig
 import net.postchain.gtv.Gtv
 import net.postchain.gtv.GtvFactory
+import net.postchain.gtv.GtvFactory.gtv
+import net.postchain.rell.api.base.RellApiCompile
 import net.postchain.rell.base.runtime.utils.Rt_SqlManager
 import net.postchain.rell.base.sql.ConnectionSqlManager
 import net.postchain.rell.base.sql.NoConnSqlManager
@@ -87,15 +89,18 @@ object RellApiGtxUtils {
         return code(sqlMgr2)
     }
 
-    fun genBlockchainConfigTemplateNoRell(pubKey: ByteArray): Gtv {
+    fun genBlockchainConfigTemplateNoRell(pubKey: ByteArray, compileConfig: RellApiCompile.Config): Gtv {
         return GtvFactory.gtv(
             "blockstrategy" to GtvFactory.gtv("name" to GtvFactory.gtv("net.postchain.base.BaseBlockBuildingStrategy")),
             "configurationfactory" to GtvFactory.gtv("net.postchain.gtx.GTXBlockchainConfigurationFactory"),
             "signers" to GtvFactory.gtv(listOf(GtvFactory.gtv(pubKey))),
             "gtx" to GtvFactory.gtv(
                 "modules" to GtvFactory.gtv(
-                    GtvFactory.gtv("net.postchain.rell.module.RellPostchainModuleFactory"),
-                    GtvFactory.gtv("net.postchain.gtx.StandardOpsGTXModule"),
+                        buildList {
+                            addAll(compileConfig.additionalGtxModules.map { GtvFactory.gtv(it) })
+                            add(gtv("net.postchain.rell.module.RellPostchainModuleFactory"))
+                            add(gtv("net.postchain.gtx.StandardOpsGTXModule"))
+                        }
                 ),
             )
         )

@@ -194,7 +194,7 @@ class Rt_DynamicBlockRunnerStrategy(
 
     private fun createConfig(): Pair<Gtv, RellGtxModuleApp> {
         val pubKey0 = keyPair.pub.toByteArray()
-        val template = RellApiGtxUtils.genBlockchainConfigTemplateNoRell(pubKey0)
+        val template = RellApiGtxUtils.genBlockchainConfigTemplateNoRell(pubKey0, compileConfig)
         val (rellNode, modApp) = RellApiBaseInternal.compileGtvEx(compileConfig, sourceDir, modules)
         val resNode = RellConfigGen.makeConfig(template, rellNode)
         return resNode to modApp

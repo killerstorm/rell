@@ -18,6 +18,7 @@ import net.postchain.gtv.GtvFactory.gtv
 import net.postchain.logging.BLOCKCHAIN_RID_TAG
 import net.postchain.logging.CHAIN_IID_TAG
 import net.postchain.logging.NODE_PUBKEY_TAG
+import net.postchain.rell.api.base.RellApiCompile
 import net.postchain.rell.api.base.RellCliEnv
 import net.postchain.rell.api.base.RellConfigGen
 import net.postchain.rell.api.gtx.RellApiGtxUtils
@@ -88,7 +89,7 @@ private fun main0(args: RunPostchainAppArgs) {
 }
 
 private fun genBlockchainConfigTemplate(pubKey: ByteArray): Gtv {
-    val template0 = RellApiGtxUtils.genBlockchainConfigTemplateNoRell(pubKey)
+    val template0 = RellApiGtxUtils.genBlockchainConfigTemplateNoRell(pubKey, RellApiCompile.Config.DEFAULT)
     val rell = gtv(
         "version" to gtv(RellVersions.VERSION_STR),
     )
