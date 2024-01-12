@@ -57,6 +57,7 @@ interface Ld_NamespaceDsl: Ld_CommonNamespaceDsl {
     fun function(
         name: String,
         result: String? = null,
+        description: String? = null,
         params: List<String>? = null,
         pure: Boolean? = null,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,

@@ -36,6 +36,7 @@ class Ld_FunctionBuilder(
     simpleName: R_Name,
     outerTypeParams: Set<R_Name>,
     bodyBuilder: Ld_FunctionBodyBuilder,
+        val description: String?
 ): Ld_CommonFunctionBuilder(outerTypeParams, bodyBuilder), Ld_FunctionMaker {
     private val aliasesBuilder = Ld_AliasesBuilder(simpleName)
     private var resultType: Ld_Type? = null
@@ -58,6 +59,7 @@ class Ld_FunctionBuilder(
             typeParams = cf.header.typeParams,
             resultType = requireNotNull(resultType) { "Result type not set" },
             params = cf.header.params,
+                description = description
         )
 
         return Ld_Function(
@@ -76,9 +78,10 @@ class Ld_FunctionBuilder(
             pure: Boolean?,
             outerTypeParams: Set<R_Name>,
             block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
+            description: String? = null,
         ): Ld_Function {
             val bodyBuilder = Ld_FunctionBodyBuilder(simpleName, pure)
-            val funBuilder = Ld_FunctionBuilder(simpleName, outerTypeParams, bodyBuilder)
+            val funBuilder = Ld_FunctionBuilder(simpleName, outerTypeParams, bodyBuilder, description)
             val bodyDslBuilder = Ld_FunctionBodyDslImpl(bodyBuilder)
             val dsl = Ld_FunctionDslImpl(funBuilder, bodyDslBuilder)
 
@@ -103,6 +106,7 @@ class Ld_FunctionHeader(
     private val typeParams: List<Ld_TypeParam>,
     private val resultType: Ld_Type,
     private val params: List<Ld_FunctionParam>,
+    val description: String? = null,
 ) {
     fun finish(ctx: Ld_TypeFinishContext): L_FunctionHeader {
         val lTypeParams = Ld_TypeParam.finishList(ctx, typeParams)
@@ -113,7 +117,7 @@ class Ld_FunctionHeader(
         val mParams = lParams.map { it.mParam }
         val mHeader = M_FunctionHeader(lTypeParams.list, mResultType, mParams)
 
-        return L_FunctionHeader(mHeader, lParams)
+        return L_FunctionHeader(mHeader, lParams, description)
     }
 }
 

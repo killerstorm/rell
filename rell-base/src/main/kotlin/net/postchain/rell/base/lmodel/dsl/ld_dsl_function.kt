@@ -27,6 +27,7 @@ interface Ld_CommonFunctionDsl: Ld_FunctionContextDsl, Ld_FunctionBodyDsl {
     fun param(
         type: String,
         name: String? = null,
+        description: String? = null,
         arity: L_ParamArity = L_ParamArity.ONE,
         exact: Boolean = false,
         nullable: Boolean = false,

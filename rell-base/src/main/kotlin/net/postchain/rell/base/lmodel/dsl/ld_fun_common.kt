@@ -37,6 +37,7 @@ abstract class Ld_CommonFunctionDslImpl(
     override fun param(
         type: String,
         name: String?,
+        description: String?,
         arity: L_ParamArity,
         exact: Boolean,
         nullable: Boolean,
@@ -46,6 +47,7 @@ abstract class Ld_CommonFunctionDslImpl(
         commonMaker.param(
             type = type,
             name = name,
+            description = description,
             arity = arity,
             exact = exact,
             nullable = nullable,
@@ -62,6 +64,7 @@ interface Ld_CommonFunctionMaker {
     fun param(
         type: String,
         name: String?,
+        description: String? = null,
         arity: L_ParamArity = L_ParamArity.ONE,
         exact: Boolean = false,
         nullable: Boolean = false,
@@ -104,6 +107,7 @@ abstract class Ld_CommonFunctionBuilder(
     final override fun param(
         type: String,
         name: String?,
+        description: String?,
         arity: L_ParamArity,
         exact: Boolean,
         nullable: Boolean,
@@ -119,6 +123,7 @@ abstract class Ld_CommonFunctionBuilder(
         val param = Ld_FunctionParam(
             index = params.size,
             name = if (name == null) null else R_Name.of(name),
+            description = description,
             type = Ld_Type.parse(type),
             arity = arity.mArity,
             exact = exact,
@@ -165,6 +170,7 @@ class Ld_CommonFunction(
 class Ld_FunctionParam(
     val index: Int,
     val name: R_Name?,
+    val description: String?,
     val type: Ld_Type,
     val arity: M_ParamArity,
     val exact: Boolean,
@@ -185,6 +191,7 @@ class Ld_FunctionParam(
         val mParam = M_FunctionParam(
             name = name?.str,
             type = mType,
+            description= description,
             arity = arity,
             exact = exact,
             nullable = nullable,

@@ -37,7 +37,7 @@ object Ld_DocSymbols {
             symbolName = DocSymbolName.global(fullName.moduleName.str(), fullName.qualifiedName.str()),
             mountName = null,
             declaration = dec,
-            comment = null,
+            comment = DocComment(header.description),
         )
     }
 

@@ -16,6 +16,7 @@ enum class M_ParamArity(val many: Boolean) {
 class M_FunctionParam(
     val name: String?,
     val type: M_Type,
+    val description: String?,
     val arity: M_ParamArity,
     val exact: Boolean,
     val nullable: Boolean,
@@ -36,6 +37,7 @@ class M_FunctionParam(
         return M_FunctionParam(
             name = name,
             type = resType,
+            description = description,
             arity = arity,
             exact = exact,
             nullable = nullable,
@@ -46,6 +48,7 @@ class M_FunctionParam(
         return if (arity == M_ParamArity.ONE) this else M_FunctionParam(
             name = name,
             type = type,
+            description = description,
             arity = M_ParamArity.ONE,
             exact = exact,
             nullable = nullable,
@@ -65,6 +68,7 @@ class M_FunctionParam(
         ) = M_FunctionParam(
             name = null,
             type = type,
+            description = null,
             arity = arity,
             exact = exact,
             nullable = nullable,

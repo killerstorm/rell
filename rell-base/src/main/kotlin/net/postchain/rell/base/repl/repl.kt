@@ -95,18 +95,18 @@ object NullReplInterpreterProjExt: ReplInterpreterProjExt() {
 }
 
 class ReplInterpreterConfig(
-    val compilerOptions: C_CompilerOptions,
-    val sourceDir: C_SourceDir,
-    val module: R_ModuleName?,
-    val rtGlobalCtx: Rt_GlobalContext,
-    val sqlMgr: SqlManager,
-    val projExt: ReplInterpreterProjExt,
-    val outChannel: ReplOutputChannel,
-    val moduleArgsSource: Rt_ModuleArgsSource,
+        val compilerOptions: C_CompilerOptions,
+        val sourceDir: C_SourceDir,
+        val module: R_ModuleName?,
+        val rtGlobalCtx: Rt_GlobalContext,
+        val sqlMgr: SqlManager,
+        val projExt: ReplInterpreterProjExt,
+        val outChannel: ReplOutputChannel,
+        val moduleArgsSource: Rt_ModuleArgsSource,
 )
 
 class ReplInterpreter private constructor(
-    private val config: ReplInterpreterConfig,
+        private val config: ReplInterpreterConfig,
 ) {
     private val sqlMgr = config.sqlMgr
     private val outChannel = config.outChannel

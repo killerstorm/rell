@@ -78,6 +78,7 @@ class L_FunctionParam(
 class L_FunctionHeader(
     val mHeader: M_FunctionHeader,
     val params: List<L_FunctionParam>,
+        val description: String? = null
 ) {
     val typeParams = mHeader.typeParams
     val resultType = mHeader.resultType

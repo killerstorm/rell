@@ -4,4 +4,4 @@
 
 package net.postchain.rell.base.utils.doc
 
-class DocComment
+class DocComment(description: String?)

@@ -68,6 +68,7 @@ interface Ld_NamespaceMaker: Ld_CommonNamespaceMaker {
     fun function(
         name: String,
         result: String?,
+        description: String?,
         params: List<String>?,
         pure: Boolean?,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
@@ -156,11 +157,12 @@ class Ld_NamespaceDslImpl(
     override fun function(
         name: String,
         result: String?,
+        description: String?,
         params: List<String>?,
         pure: Boolean?,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     ) {
-        maker.function(name, result, params, pure, block)
+        maker.function(name, result, description, params, pure, block)
     }
 
     override fun function(name: String, fn: C_SpecialLibGlobalFunctionBody) {
@@ -312,6 +314,7 @@ class Ld_NamespaceBuilder(
     override fun function(
         name: String,
         result: String?,
+        description: String?,
         params: List<String>?,
         pure: Boolean?,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
@@ -325,6 +328,7 @@ class Ld_NamespaceBuilder(
             pure = pure,
             outerTypeParams = immSetOf(),
             block = block,
+                description = description,
         )
 
         conflictChecker.addMember(simpleName, Ld_ConflictMemberKind.FUNCTION)
@@ -394,6 +398,7 @@ class Ld_Namespace(
         val fullName = ctx.getFullName(member.simpleName)
         ctx.declareMember(fullName.qualifiedName, future)
 
+        future.getResult().first()
         val futures = mutableListOf(future)
 
         for (alias in member.getAliases()) {
