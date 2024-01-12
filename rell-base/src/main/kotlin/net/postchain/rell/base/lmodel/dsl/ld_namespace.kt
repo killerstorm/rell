@@ -155,12 +155,12 @@ class Ld_NamespaceDslImpl(
     }
 
     override fun function(
-        name: String,
-        result: String?,
-        description: String?,
-        params: List<String>?,
-        pure: Boolean?,
-        block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
+            name: String,
+            result: String?,
+            params: List<String>?,
+            description: String?,
+            pure: Boolean?,
+            block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     ) {
         maker.function(name, result, description, params, pure, block)
     }

@@ -47,7 +47,7 @@ object Lib_Crypto {
                 bodyRaw(Sha256)
             }
 
-            function("keccak256", "byte_array", pure = true, description = "Computes the keccak256 hash of a byte_array.") {
+            function("keccak256", "byte_array", description = "Computes the keccak256 hash of a byte_array.", pure = true) {
                 param("byte_array", description = "Input bytes to hash")
                 body { a ->
                     val data = a.asByteArray()

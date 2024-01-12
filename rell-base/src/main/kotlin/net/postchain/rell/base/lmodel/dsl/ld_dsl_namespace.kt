@@ -55,12 +55,12 @@ interface Ld_NamespaceDsl: Ld_CommonNamespaceDsl {
     fun property(name: String, property: C_NamespaceProperty)
 
     fun function(
-        name: String,
-        result: String? = null,
-        description: String? = null,
-        params: List<String>? = null,
-        pure: Boolean? = null,
-        block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
+            name: String,
+            result: String? = null,
+            params: List<String>? = null,
+            description: String? = null,
+            pure: Boolean? = null,
+            block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     )
 
     fun function(name: String, fn: C_SpecialLibGlobalFunctionBody)

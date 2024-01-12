@@ -11,6 +11,7 @@ import net.postchain.rell.base.model.R_TupleType
 import net.postchain.rell.base.runtime.Rt_IntValue
 import net.postchain.rell.base.runtime.Rt_TextValue
 import net.postchain.rell.base.runtime.Rt_TupleValue
+import org.bouncycastle.asn1.x500.style.RFC4519Style.description
 import org.junit.Test
 
 class CLibFunctionPartCallTest: BaseCLibTest() {
@@ -101,7 +102,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
             function("_foo", "text", listOf("integer")) {
                 body { a -> Rt_TextValue.get("_foo(integer):${a.str()}") }
             }
-            function("_foo", "text", listOf("boolean")) {
+            function("_foo", "text",  listOf("boolean")) {
                 body { a -> Rt_TextValue.get("_foo(boolean):${a.str()}") }
             }
         }
@@ -157,7 +158,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
 
     @Test fun testPartCallCasesHintOneGood() {
         tst.extraMod = makeModule {
-            function("_foo", "text", listOf("integer")) {
+            function("_foo", "text",  listOf("integer")) {
                 body { a -> Rt_TextValue.get("_foo:${a.strCode()}") }
             }
         }
