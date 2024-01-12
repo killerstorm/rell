@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.gtx
@@ -92,7 +92,7 @@ class GtxConfigTest: BaseGtxTest() {
         chkVersion("0.13.4", "OK")
         chkVersion("0.13.5", "OK")
         chkVersion("0.13.6", "OK")
-        chkVersion("0.14.0", "OK")
+        chkVersion("0.13.7", "OK")
     }
 
     @Test fun testSourcesWithVersionOutOfRange() {
@@ -103,7 +103,8 @@ class GtxConfigTest: BaseGtxTest() {
         chkVersion("0.10.12", "$msg: 0.10.12")
         chkVersion("0.11.1", "$msg: 0.11.1")
         chkVersion("0.12.1", "$msg: 0.12.1")
-        chkVersion("0.13.7", "$msg: 0.13.7")
+        chkVersion("0.13.8", "$msg: 0.13.8")
+        chkVersion("0.14.0", "$msg: 0.14.0")
         chkVersion("0.14.1", "$msg: 0.14.1")
         chkVersion("0.15.0", "$msg: 0.15.0")
         chkVersion("1.0.0", "$msg: 1.0.0")
