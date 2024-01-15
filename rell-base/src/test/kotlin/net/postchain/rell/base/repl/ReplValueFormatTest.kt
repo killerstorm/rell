@@ -34,7 +34,7 @@ class ReplValueFormatTest: BaseRellTest(false) {
         repl.chk("'Hello'", "\"Hello\"")
         repl.chk("l", "[[123, \"Hello\"], [456, \"Bye\"]]")
         repl.chk("m", "[[123, \"Hello\"], [456, \"Bye\"]]")
-        repl.chk("m2", "{Bye=456, Hello=123}")
+        repl.chk("m2", """["Bye": 456, "Hello": 123]""")
     }
 
     @Test fun testGtvJson() {
