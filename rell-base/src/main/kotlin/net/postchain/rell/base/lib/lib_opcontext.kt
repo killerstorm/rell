@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -55,7 +55,7 @@ object Lib_OpContext {
         // the function is used in existing code.
         function("is_signer", result = "boolean") {
             deprecated(newName = "op_context.is_signer", error = false)
-            param(type = "byte_array")
+            param("pubkey", type = "byte_array")
             validate { ctx -> checkCtx(ctx.exprCtx, ctx.callPos, allowTest = true) }
             bodyContext { ctx, a ->
                 val bytes = a.asByteArray().toBytes()
@@ -118,7 +118,7 @@ object Lib_OpContext {
             }
 
             function("is_signer", result = "boolean") {
-                param(type = "byte_array")
+                param("pubkey", type = "byte_array")
                 validate(::checkCtx)
                 bodyContext { ctx, a ->
                     val bytes = a.asByteArray().toBytes()
@@ -143,8 +143,8 @@ object Lib_OpContext {
             }
 
             function("emit_event", result = "unit") {
-                param(type = "text")
-                param(type = "gtv")
+                param("type", type = "text")
+                param("data", type = "gtv")
                 validate(::checkCtx)
                 bodyContext { ctx, arg1, arg2 ->
                     val type = arg1.asString()

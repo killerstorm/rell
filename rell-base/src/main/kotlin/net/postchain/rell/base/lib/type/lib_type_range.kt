@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -17,16 +17,16 @@ object Lib_Type_Range {
             parent(type = "iterable<integer>")
 
             constructor(pure = true) {
-                param("integer")
+                param("end", "integer")
                 body { a ->
                     calcRange(0, a.asInteger(), 1)
                 }
             }
 
             constructor(pure = true) {
-                param("integer")
-                param("integer")
-                param("integer", arity = L_ParamArity.ZERO_ONE)
+                param("start", "integer")
+                param("end", "integer")
+                param("step", "integer", arity = L_ParamArity.ZERO_ONE)
                 bodyOpt2 { a, b, c ->
                     calcRange(a.asInteger(), b.asInteger(), c?.asInteger() ?: 1)
                 }

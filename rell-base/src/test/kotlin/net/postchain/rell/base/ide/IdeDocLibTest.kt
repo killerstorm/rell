@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.ide
@@ -81,7 +81,7 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
     @Test fun testNamespaceFunction() {
         extraModule {
             function("foo", result = "text") {
-                param(type = "integer")
+                param("a", type = "integer")
                 body { -> Rt_UnitValue }
             }
         }
@@ -408,8 +408,7 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
         )
     }
 
-    //TODO enable this test when named args for system functions are supported
-    /*@Test*/ fun testFunctionParameter() {
+    @Test fun testFunctionParameter() {
         extraModule {
             function("f", result = "unit") {
                 param(type = "integer", name = "a")
@@ -419,8 +418,10 @@ class IdeDocLibTest: BaseIdeSymbolTest() {
         }
 
         chkSyms("function _f() { f(a = 123, b = 456); }",
-            "a=...", "?head=...",
-            "b=...", "?head=...",
+            "f=DEF_FUNCTION_SYSTEM|-|-",
+            "?doc=FUNCTION|mod:f|<function> f(\n\ta: [integer],\n\t<lazy> b: [integer]\n): [unit]",
+            "a=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|a|a: [integer]",
+            "b=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|b|<lazy> b: [integer]",
         )
     }
 }

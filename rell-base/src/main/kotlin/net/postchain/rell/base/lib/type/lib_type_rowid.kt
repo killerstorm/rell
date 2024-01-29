@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -15,7 +15,7 @@ object Lib_Type_Rowid {
     val NAMESPACE = Ld_NamespaceDsl.make {
         type("rowid", rType = R_RowidType) {
             constructor(pure = true) {
-                param("integer")
+                param("value", "integer")
                 body { a ->
                     val v = a.asInteger()
                     Rt_Utils.check(v >= 0) { "rowid(integer):negative:$v" toCodeMsg "Negative value: $v" }

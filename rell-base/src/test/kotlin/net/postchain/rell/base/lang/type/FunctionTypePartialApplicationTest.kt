@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.type
@@ -40,7 +40,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("f1(x = 123)", "text[f1:123]")
         chk("f1(x = 123, *)", "fn[f1(int[123])]")
         chk("f1(x = 123, *)()", "text[f1:123]")
-        chk("f1(*, x = 123)", "ct_err:expr:call:named_arg_already_specified:[f1]:x")
+        chk("f1(*, x = 123)", "ct_err:expr:call:named_conflict:[f1]:x")
 
         chk("f2(*)", "fn[f2(*,*)]")
         chk("f2(*)(123, 456)", "text[f2:123,456]")
@@ -57,7 +57,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("f2(y = 456, *)", "fn[f2(*,int[456])]")
         chk("f2(y = 456, *)(123)", "text[f2:123,456]")
 
-        chk("f2(*, x = 123)", "ct_err:expr:call:named_arg_already_specified:[f2]:x")
+        chk("f2(*, x = 123)", "ct_err:expr:call:named_conflict:[f2]:x")
         chk("f2(*, y = 456)", "fn[f2(*,int[456])]")
         chk("f2(*, y = 456)(123)", "text[f2:123,456]")
 
@@ -74,8 +74,8 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("f1(*)", "fn[f1(*)]")
         chk("f1(*, *)", "ct_err:expr:call:last_wildcard_not_alone")
         chk("f1(x = *, *)", "ct_err:expr:call:last_wildcard_not_alone")
-        chk("f1(*, x = *)", "ct_err:expr:call:named_arg_already_specified:[f1]:x")
-        chk("f1(*, x = 123)", "ct_err:expr:call:named_arg_already_specified:[f1]:x")
+        chk("f1(*, x = *)", "ct_err:expr:call:named_conflict:[f1]:x")
+        chk("f1(*, x = 123)", "ct_err:expr:call:named_conflict:[f1]:x")
         chk("f1(123, *)", "fn[f1(int[123])]")
         chk("f1(123, *)()", "text[f1:123]")
 
@@ -147,7 +147,7 @@ class FunctionTypePartialApplicationTest: BaseRellTest(false) {
         chk("f2(*, y = *)", "fn[f2(*,*)]")
         chk("f2(*, y = *)(777, 888)", "text[f2:777,888]")
         chk("f2(*, y = *, *)", "ct_err:expr:call:last_wildcard_not_alone")
-        chk("f2(*, x = *)", "ct_err:expr:call:named_arg_already_specified:[f2]:x")
+        chk("f2(*, x = *)", "ct_err:expr:call:named_conflict:[f2]:x")
 
         chk("f2(777, *)", "fn[f2(int[777],int[456])]")
         chk("f2(777, *)()", "text[f2:777,456]")

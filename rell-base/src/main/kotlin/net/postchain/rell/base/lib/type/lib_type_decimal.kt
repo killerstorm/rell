@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -38,22 +38,22 @@ object Lib_Type_Decimal {
             constant("MAX_VALUE", Lib_DecimalMath.DECIMAL_MAX_VALUE)
 
             constructor {
-                param("text")
+                param("value", "text")
                 bodyRaw(DecFns.FromText)
             }
 
             constructor {
-                param("integer")
+                param("value", "integer")
                 bodyRaw(DecFns.FromInteger)
             }
 
             constructor {
-                param("big_integer")
+                param("value", "big_integer")
                 bodyRaw(DecFns.FromBigInteger)
             }
 
             staticFunction("from_text", "decimal") {
-                param("text")
+                param("value", "text")
                 bodyRaw(DecFns.FromText)
             }
 
@@ -80,12 +80,12 @@ object Lib_Type_Decimal {
             }
 
             function("min", "decimal") {
-                param("decimal")
+                param("value", "decimal")
                 bodyRaw(Lib_Math.Min_Decimal)
             }
 
             function("max", "decimal") {
-                param("decimal")
+                param("value", "decimal")
                 bodyRaw(Lib_Math.Max_Decimal)
             }
 
@@ -99,7 +99,7 @@ object Lib_Type_Decimal {
             }
 
             function("round", "decimal", pure = true) {
-                param("integer")
+                param("digits", "integer")
                 // Argument #2 has to be casted to INT, as PostgreSQL doesn't allow BIGINT.
                 dbFunctionTemplate("decimal.round", 2, "ROUND(#0,(#1)::INT)")
                 body { a, b ->
@@ -149,7 +149,7 @@ object Lib_Type_Decimal {
             }
 
             function("to_text", "text", pure = true) {
-                param("boolean")
+                param("scientific", "boolean")
                 body { a, b ->
                     val v = a.asDecimal()
                     val sci = b.asBoolean()

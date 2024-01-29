@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.def
@@ -70,10 +70,10 @@ class FunctionTest: BaseRellTest(false) {
 
     @Test fun testWrongArgs() {
         chkFnErr("function f(){}", "f(123)", "ct_err:expr:call:too_many_args:[f]:0:1")
-        chkFnErr("function f(x:integer){}", "f()", "ct_err:expr:call:missing_args:[f]:0:x")
+        chkFnErr("function f(x:integer){}", "f()", "ct_err:expr:call:missing_args:[f]:[0:x]")
         chkFnErr("function f(x:integer){}", "f(123, 456)", "ct_err:expr:call:too_many_args:[f]:1:2")
-        chkFnErr("function f(x:integer,y:text){}", "f()", "ct_err:expr:call:missing_args:[f]:0:x,1:y")
-        chkFnErr("function f(x:integer,y:text){}", "f(123)", "ct_err:expr:call:missing_args:[f]:1:y")
+        chkFnErr("function f(x:integer,y:text){}", "f()", "ct_err:expr:call:missing_args:[f]:[0:x,1:y]")
+        chkFnErr("function f(x:integer,y:text){}", "f(123)", "ct_err:expr:call:missing_args:[f]:[1:y]")
         chkFnErr("function f(x:integer,y:text){}", "f(123,'Hello','World')", "ct_err:expr:call:too_many_args:[f]:2:3")
 
         chkFnErr("function f(x:integer){}", "f('Hello')", "ct_err:expr_call_argtype:[f]:0:x:integer:text")
@@ -292,14 +292,14 @@ class FunctionTest: BaseRellTest(false) {
         chkFn(fn, "f(123, z = true, y = 'Hello')", "text[123,Hello,true]")
         chkFn(fn, "f(123, 'Hello', z = true)", "text[123,Hello,true]")
 
-        chkFn(fn, "f(x = 123)", "ct_err:expr:call:missing_args:[f]:1:y,2:z")
-        chkFn(fn, "f(y = 'Hello')", "ct_err:expr:call:missing_args:[f]:0:x,2:z")
-        chkFn(fn, "f(z = true)", "ct_err:expr:call:missing_args:[f]:0:x,1:y")
-        chkFn(fn, "f(x = 123, y = 'Hello')", "ct_err:expr:call:missing_args:[f]:2:z")
-        chkFn(fn, "f(x = 123, z = true)", "ct_err:expr:call:missing_args:[f]:1:y")
+        chkFn(fn, "f(x = 123)", "ct_err:expr:call:missing_args:[f]:[1:y,2:z]")
+        chkFn(fn, "f(y = 'Hello')", "ct_err:expr:call:missing_args:[f]:[0:x,2:z]")
+        chkFn(fn, "f(z = true)", "ct_err:expr:call:missing_args:[f]:[0:x,1:y]")
+        chkFn(fn, "f(x = 123, y = 'Hello')", "ct_err:expr:call:missing_args:[f]:[2:z]")
+        chkFn(fn, "f(x = 123, z = true)", "ct_err:expr:call:missing_args:[f]:[1:y]")
         chkFn(fn, "f(x = 123, y = 'Hello', true)", "ct_err:expr:call:positional_after_named")
         chkFn(fn, "f(true, x = 123, y = 'Hello')",
-                "ct_err:[expr:call:missing_args:[f]:2:z][expr_call_argtype:[f]:0:x:integer:boolean][expr:call:named_arg_already_specified:[f]:x]")
+                "ct_err:[expr:call:missing_args:[f]:[2:z]][expr_call_argtype:[f]:0:x:integer:boolean][expr:call:named_conflict:[f]:x]")
 
         chkFn(fn, "f(x = 'Bye', y = 'Hello', z = true)", "ct_err:expr_call_argtype:[f]:0:x:integer:text")
         chkFn(fn, "f(x = 123, y = 456, z = true)", "ct_err:expr_call_argtype:[f]:1:y:text:integer")
@@ -322,8 +322,8 @@ class FunctionTest: BaseRellTest(false) {
 
         chk("g(456,'Bye',false)", "text[456,Bye,false]")
         chk("g(456,'Bye')", "text[456,Bye,true]")
-        chk("g(456)", "ct_err:expr:call:missing_args:[g]:1:y")
-        chk("g('Bye')", "ct_err:[expr:call:missing_args:[g]:1:y][expr_call_argtype:[g]:0:x:integer:text]")
+        chk("g(456)", "ct_err:expr:call:missing_args:[g]:[1:y]")
+        chk("g('Bye')", "ct_err:[expr:call:missing_args:[g]:[1:y]][expr_call_argtype:[g]:0:x:integer:text]")
         chk("g(y='Bye')", "text[123,Bye,true]")
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -14,7 +14,7 @@ import net.postchain.rell.base.utils.immListOf
 object Lib_TryCall {
     val NAMESPACE = Ld_NamespaceDsl.make {
         function("try_call", "boolean") {
-            param(type = "() -> unit", exact = true)
+            param("fn", type = "() -> unit", exact = true)
             bodyContext { ctx, f ->
                 tryCall(ctx, f, Rt_BooleanValue.TRUE) { Rt_BooleanValue.FALSE }
             }
@@ -23,7 +23,7 @@ object Lib_TryCall {
         function("try_call") {
             generic("T")
             result(type = "T?")
-            param(type = "() -> T")
+            param("fn", type = "() -> T")
             bodyContext { ctx, f ->
                 tryCall(ctx, f, null) { Rt_NullValue }
             }
@@ -32,8 +32,8 @@ object Lib_TryCall {
         function("try_call") {
             generic("T")
             result(type = "T")
-            param(type = "() -> T")
-            param(type = "T", lazy = true)
+            param("fn", type = "() -> T")
+            param("default", type = "T", lazy = true)
             bodyContext { ctx, f, v ->
                 tryCall(ctx, f, null) { v.asLazyValue() }
             }

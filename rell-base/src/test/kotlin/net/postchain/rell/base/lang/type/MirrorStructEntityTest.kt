@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.type
@@ -172,7 +172,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("(user@?{'Bob'})?.to_struct()", "struct<user>[name=text[Bob],rating=int[123]]")
         chk("(user@?{'Alice'})?.to_struct()", "null")
 
-        chk("(user@{}).to_struct(123)", "ct_err:expr_call_argtypes:[rell.entity_ext(user).to_struct]:integer")
+        chk("(user@{}).to_struct(123)", "ct_err:expr_call_badargs:[rell.entity_ext(user).to_struct]:[integer]")
         chk("(user@{}).to_error()", "ct_err:unknown_member:[user]:to_error")
     }
 
@@ -198,7 +198,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("user @ { user.to_struct() == struct<user>('Bob',123) }", "ct_err:expr_sqlnotallowed")
         chk("user @ { user.to_struct().name == 'Bob' }", "ct_err:expr_sqlnotallowed")
 
-        chk("user@{} (user.to_struct(123))", "ct_err:expr_call_argtypes:[rell.entity_ext(user).to_struct]:integer")
+        chk("user@{} (user.to_struct(123))", "ct_err:expr_call_badargs:[rell.entity_ext(user).to_struct]:[integer]")
         chk("user@{} (user.to_error())", "ct_err:unknown_member:[user]:to_error")
     }
 
@@ -301,7 +301,7 @@ class MirrorStructEntityTest: BaseRellTest(false) {
         chk("user @ {} ( state.to_struct() )", "struct<state>[x=int[123],y=text[abc]]")
         chk("(user@*{}) @ {} ( state.to_struct() )", "struct<state>[x=int[123],y=text[abc]]")
 
-        chk("_type_of(state.to_struct(123))", "ct_err:expr_call_argtypes:[rell.object_ext(state).to_struct]:integer")
+        chk("_type_of(state.to_struct(123))", "ct_err:expr_call_badargs:[rell.object_ext(state).to_struct]:[integer]")
         chk("_type_of(state.to_error())", "ct_err:unknown_member:[state]:to_error")
     }
 

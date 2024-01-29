@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -24,7 +24,6 @@ interface Ld_CommonTypeDsl {
     fun function(
         name: String,
         result: String? = null,
-        params: List<String>? = null,
         pure: Boolean? = null,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     )
@@ -34,7 +33,6 @@ interface Ld_CommonTypeDsl {
     fun staticFunction(
         name: String,
         result: String? = null,
-        params: List<String>? = null,
         pure: Boolean? = null,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     )
@@ -61,12 +59,7 @@ interface Ld_TypeDefDsl: Ld_CommonTypeDsl, Ld_CommonNamespaceDsl {
     fun supertypeStrategySpecial(predicate: (M_Type) -> Boolean)
     fun supertypeStrategyComposite(predicate: (M_Type_Composite) -> Boolean)
 
-    fun constructor(
-        params: List<String>? = null,
-        pure: Boolean? = null,
-        block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef,
-    )
-
+    fun constructor(pure: Boolean? = null, block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef)
     fun constructor(fn: C_SpecialLibGlobalFunctionBody)
 }
 

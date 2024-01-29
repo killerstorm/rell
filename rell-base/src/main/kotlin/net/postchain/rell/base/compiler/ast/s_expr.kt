@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.ast
@@ -686,24 +686,16 @@ class S_CallArgumentValue_Wildcard(val pos: S_Pos): S_CallArgumentValue() {
 
 class S_CallArgument(val name: S_Name?, val value: S_CallArgumentValue) {
     fun compile(
-            ctx: C_ExprContext,
-            index: Int,
-            positional: Boolean,
-            typeHints: C_CallTypeHints,
-            ideInfoProvider: C_CallArgumentIdeInfoProvider
-    ): C_CallArgument {
+        ctx: C_ExprContext,
+        index: Int,
+        positional: Boolean,
+        typeHints: C_CallTypeHints,
+    ): C_CallArgumentHandle {
         val nameHand = name?.compile(ctx)
-        if (nameHand != null) {
-            val ideInfo = ideInfoProvider.getIdeInfo(nameHand.rName)
-            nameHand.setIdeInfo(ideInfo)
-        }
-
-        val cName = nameHand?.name
         val hintIndex = if (positional) index else null
-        val typeHint = typeHints.getTypeHint(hintIndex, cName?.rName)
+        val typeHint = typeHints.getTypeHint(hintIndex, nameHand?.rName)
         val argValue = value.compile(ctx, typeHint)
-
-        return C_CallArgument(index, cName, argValue)
+        return C_CallArgumentHandle(index, nameHand, argValue)
     }
 }
 

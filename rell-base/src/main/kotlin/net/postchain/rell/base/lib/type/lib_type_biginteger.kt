@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -49,17 +49,17 @@ object Lib_Type_BigInteger {
             constant("MAX_VALUE", Lib_BigIntegerMath.MAX_VALUE)
 
             constructor {
-                param(type = "text")
+                param("s", type = "text")
                 bodyRaw(FromText_1)
             }
 
             constructor {
-                param(type = "integer")
+                param("value", type = "integer")
                 bodyRaw(FromInteger)
             }
 
             staticFunction("from_bytes", result = "big_integer", pure = true) {
-                param(type = "byte_array")
+                param("value", type = "byte_array")
                 body { a ->
                     val bytes = a.asByteArray()
                     val bigInt = BigInteger(bytes)
@@ -68,7 +68,7 @@ object Lib_Type_BigInteger {
             }
 
             staticFunction("from_bytes_unsigned", result = "big_integer", pure = true) {
-                param(type = "byte_array")
+                param("value", type = "byte_array")
                 body { a ->
                     val bytes = a.asByteArray()
                     val bigInt = BigInteger(1, bytes)
@@ -77,13 +77,13 @@ object Lib_Type_BigInteger {
             }
 
             staticFunction("from_text", result = "big_integer") {
-                param(type = "text")
+                param("value", type = "text")
                 bodyRaw(FromText_1)
             }
 
             staticFunction("from_text", result = "big_integer", pure = true) {
-                param(type = "text")
-                param(type = "integer")
+                param("value", type = "text")
+                param("radix", type = "integer")
                 body { a, b ->
                     val s = a.asString()
                     val r = b.asInteger()
@@ -95,7 +95,7 @@ object Lib_Type_BigInteger {
             }
 
             staticFunction("from_hex", result = "big_integer", pure = true) {
-                param(type = "text")
+                param("value", type = "text")
                 body { a ->
                     val s = a.asString()
                     calcFromText(s, 16, "from_hex")
@@ -107,12 +107,12 @@ object Lib_Type_BigInteger {
             }
 
             function("min", "big_integer") {
-                param("big_integer")
+                param("value", "big_integer")
                 bodyRaw(Lib_Math.Min_BigInteger)
             }
 
             function("min", "decimal", pure = true) {
-                param("decimal")
+                param("value", "decimal")
                 dbFunctionSimple("big_integer.min", "LEAST")
                 body { a, b ->
                     val v1 = a.asBigInteger()
@@ -123,12 +123,12 @@ object Lib_Type_BigInteger {
             }
 
             function("max", "big_integer") {
-                param("big_integer")
+                param("value", "big_integer")
                 bodyRaw(Lib_Math.Max_BigInteger)
             }
 
             function("max", "decimal", pure = true) {
-                param("decimal")
+                param("value", "decimal")
                 dbFunctionSimple("big_integer.max", "GREATEST")
                 body { a, b ->
                     val v1 = a.asBigInteger()
@@ -224,7 +224,7 @@ object Lib_Type_BigInteger {
             }
 
             function("to_text", "text", pure = true) {
-                param("integer")
+                param("radix", "integer")
                 body { a, b ->
                     val v = a.asBigInteger()
                     val r = b.asInteger()

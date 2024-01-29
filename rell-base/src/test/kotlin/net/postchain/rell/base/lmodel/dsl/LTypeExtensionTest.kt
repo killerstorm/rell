@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -17,7 +17,7 @@ class LTypeExtensionTest: BaseLTest() {
                     body { -> Rt_UnitValue }
                 }
                 function("set", result = "anything") {
-                    param(type = "T")
+                    param("a", type = "T")
                     body { -> Rt_UnitValue }
                 }
                 staticFunction("create", result = "T") {
@@ -27,7 +27,7 @@ class LTypeExtensionTest: BaseLTest() {
         }
 
         chkDefs(mod, "extension ext<T:-any>: T")
-        chkTypeMems(mod, "ext", "function get(): T", "function set(T): anything", "static function create(): T")
+        chkTypeMems(mod, "ext", "function get(): T", "function set(a: T): anything", "static function create(): T")
     }
 
     @Test fun testExtensionList() {

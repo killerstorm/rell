@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.lib
@@ -18,6 +18,7 @@ import net.postchain.rell.base.compiler.vexpr.*
 import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.R_MemberCalculator
 import net.postchain.rell.base.utils.LazyPosString
+import net.postchain.rell.base.utils.immMapOf
 import net.postchain.rell.base.utils.mapOrSame
 import net.postchain.rell.base.utils.toImmList
 
@@ -41,6 +42,8 @@ abstract class C_LibGlobalFunction: C_GlobalFunction() {
 }
 
 sealed class C_LibMemberFunction {
+    abstract fun getDefaultIdeInfo(): C_IdeSymbolInfo
+    abstract fun getDefaultArgIdeInfos(): Map<R_Name, C_IdeSymbolInfo>
     abstract fun getCallTypeHints(selfType: R_Type): C_CallTypeHints
 
     abstract fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibMemberFunction
@@ -49,7 +52,7 @@ sealed class C_LibMemberFunction {
         ctx: C_ExprContext,
         callCtx: C_LibFuncCaseCtx,
         selfType: R_Type,
-        args: List<V_Expr>,
+        args: C_FullCallArguments,
         resTypeHint: C_TypeHint,
     ): V_MemberFunctionCall
 
@@ -117,7 +120,7 @@ class C_SpecialLibGlobalFunction(
         }
 
         val vExpr = body.compileCall(ctx, name, argExprs)
-        return V_GlobalFunctionCall(vExpr, ideInfo)
+        return V_GlobalFunctionCall(vExpr, ideInfo, immMapOf())
     }
 }
 
@@ -142,20 +145,23 @@ class C_SpecialLibMemberFunction(
     private val body: C_SpecialLibMemberFunctionBody,
     private val ideInfo: C_IdeSymbolInfo,
 ): C_LibMemberFunction() {
-    override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibMemberFunction = this
-
+    override fun getDefaultIdeInfo() = ideInfo
+    override fun getDefaultArgIdeInfos() = immMapOf<R_Name, C_IdeSymbolInfo>()
     override fun getCallTypeHints(selfType: R_Type): C_CallTypeHints = C_CallTypeHints_None
+
+    override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibMemberFunction = this
 
     override fun compileCallFull(
         ctx: C_ExprContext,
         callCtx: C_LibFuncCaseCtx,
         selfType: R_Type,
-        args: List<V_Expr>,
+        args: C_FullCallArguments,
         resTypeHint: C_TypeHint,
     ): V_MemberFunctionCall {
-        val vCall = body.compileCall(ctx, callCtx, selfType, args)
+        val vArgs = args.compileSimpleArgs(callCtx.fullNameLazy)
+        val vCall = body.compileCall(ctx, callCtx, selfType, vArgs)
         vCall ?: return V_MemberFunctionCall_Error(ctx, ideInfo)
-        return V_MemberFunctionCall_SpecialLibFunction(ctx, ideInfo, args, vCall)
+        return V_MemberFunctionCall_SpecialLibFunction(ctx, ideInfo, vArgs, vCall)
     }
 
     override fun compileCallPartial(
@@ -174,7 +180,7 @@ class C_SpecialLibMemberFunction(
         ideInfo: C_IdeSymbolInfo,
         private val vExprs: List<V_Expr>,
         private val specialCall: V_SpecialMemberFunctionCall,
-    ): V_MemberFunctionCall(exprCtx, ideInfo) {
+    ): V_MemberFunctionCall(exprCtx, ideInfo, immMapOf()) {
         override fun vExprs() = vExprs
         override fun globalConstantRestriction() = specialCall.globalConstantRestriction()
         override fun returnType() = specialCall.returnType
@@ -194,6 +200,8 @@ private class C_RegularLibGlobalFunction(
     private val naming: C_MemberNaming,
     private val cases: List<C_LibFuncCase<V_GlobalFunctionCall>>,
 ): C_LibGlobalFunction() {
+    private val defaultCase = cases.first()
+
     override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibGlobalFunction {
         val naming2 = naming.replaceSelfType(rep.selfType)
         val cases2 = cases.mapOrSame { it.replaceTypeParams(rep) }
@@ -207,27 +215,13 @@ private class C_RegularLibGlobalFunction(
         resTypeHint: C_TypeHint,
     ): V_GlobalFunctionCall {
         val target = C_FunctionCallTarget_LibGlobalFunction(ctx, name)
-        val vCall = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target)
-        return vCall ?: C_ExprUtils.errorVGlobalCall(ctx, name.pos, ideInfo = cases.first().ideInfo)
-    }
-
-    private fun matchCase(
-        ctx: C_ExprContext,
-        caseCtx: C_LibFuncCaseCtx,
-        name: LazyPosString,
-        args: List<V_Expr>,
-        resTypeHint: C_TypeHint,
-    ): C_LibFuncCaseMatch<V_GlobalFunctionCall>? {
-        for (case in cases) {
-            val res = case.match(caseCtx, R_UnitType, args, resTypeHint)
-            if (res != null) {
-                return res
-            }
-        }
-
-        val argTypes = args.map { it.type }
-        C_LibFuncCaseUtils.errNoMatch(ctx, name.pos, name.str, argTypes)
-        return null
+        val vCall = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, target, defaultCase.argIdeInfos)
+        return vCall ?: C_ExprUtils.errorVGlobalCall(
+            ctx,
+            name.pos,
+            ideInfo = defaultCase.ideInfo,
+            argIdeInfos = defaultCase.argIdeInfos,
+        )
     }
 
     private inner class C_FunctionCallTarget_LibGlobalFunction(
@@ -236,12 +230,10 @@ private class C_RegularLibGlobalFunction(
     ): C_FunctionCallTarget() {
         override fun retType() = null
         override fun typeHints() = C_LibFunctionParamHints(R_UnitType, cases)
-        override fun getParameter(name: R_Name) = null
 
         override fun compileFull(args: C_FullCallArguments, resTypeHint: C_TypeHint): V_GlobalFunctionCall? {
-            val vArgs = args.compileSimpleArgs(name.lazyStr)
             val caseCtx = C_LibFuncCaseCtx(name.pos, naming.fullNameLazy)
-            val match = matchCase(ctx, caseCtx, name, vArgs, resTypeHint)
+            val match = C_LibFuncCase.matchCase(ctx.msgCtx, caseCtx, R_UnitType, args, resTypeHint, cases)
             match ?: return null
             return match.compileCall(ctx, caseCtx)
         }
@@ -318,9 +310,9 @@ private class C_RegularLibGlobalFunction(
                 return null
             }
 
+            val callInfo = C_FunctionCallInfo(caseCtx.linkPos, match.target.fullName)
             val callParams = C_FunctionCallParameters.fromTypes(rParamTypes)
-            val callInfo = C_FunctionCallInfo(caseCtx.linkPos, match.target.fullName, callParams)
-            val effArgs = args.compileEffectiveArgs(callInfo)
+            val effArgs = args.compileEffectiveArgs(callInfo, callParams)
             effArgs ?: return null
 
             return match.match.compileCall(ctx, effArgs)
@@ -336,43 +328,27 @@ private class C_RegularLibGlobalFunction(
 private class C_RegularLibMemberFunction(
     private val cases: List<C_LibFuncCase<V_MemberFunctionCall>>,
 ): C_LibMemberFunction() {
+    private val defaultCase = cases.first()
+
+    override fun getDefaultIdeInfo() = defaultCase.ideInfo
+    override fun getDefaultArgIdeInfos() = defaultCase.argIdeInfos
+    override fun getCallTypeHints(selfType: R_Type): C_CallTypeHints = C_LibFunctionParamHints(selfType, cases)
+
     override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibMemberFunction {
         val cases2 = cases.mapOrSame { it.replaceTypeParams(rep) }
         return if (cases2 === cases) this else C_RegularLibMemberFunction(cases2)
     }
 
-    override fun getCallTypeHints(selfType: R_Type): C_CallTypeHints = C_LibFunctionParamHints(selfType, cases)
-
     override fun compileCallFull(
         ctx: C_ExprContext,
         callCtx: C_LibFuncCaseCtx,
         selfType: R_Type,
-        args: List<V_Expr>,
+        args: C_FullCallArguments,
         resTypeHint: C_TypeHint,
     ): V_MemberFunctionCall {
-        val match = matchCase(ctx, callCtx, selfType, args, resTypeHint)
-        match ?: return C_ExprUtils.errorVMemberCall(ctx, ideInfo = cases.first().ideInfo)
+        val match = C_LibFuncCase.matchCase(ctx.msgCtx, callCtx, selfType, args, resTypeHint, cases)
+        match ?: return C_ExprUtils.errorVMemberCall(ctx, ideInfo = defaultCase.ideInfo)
         return match.compileCall(ctx, callCtx)
-    }
-
-    private fun matchCase(
-        ctx: C_ExprContext,
-        caseCtx: C_LibFuncCaseCtx,
-        selfType: R_Type,
-        args: List<V_Expr>,
-        resTypeHint: C_TypeHint,
-    ): C_LibFuncCaseMatch<V_MemberFunctionCall>? {
-        for (case in cases) {
-            val res = case.match(caseCtx, selfType, args, resTypeHint)
-            if (res != null) {
-                return res
-            }
-        }
-
-        val qName = caseCtx.qualifiedNameMsg()
-        val argTypes = args.map { it.type }
-        C_LibFuncCaseUtils.errNoMatch(ctx, caseCtx.linkPos, qName, argTypes)
-        return null
     }
 
     override fun compileCallPartial(

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -57,7 +57,6 @@ interface Ld_NamespaceDsl: Ld_CommonNamespaceDsl {
     fun function(
         name: String,
         result: String? = null,
-        params: List<String>? = null,
         pure: Boolean? = null,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     )

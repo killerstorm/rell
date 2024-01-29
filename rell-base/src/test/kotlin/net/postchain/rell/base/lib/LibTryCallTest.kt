@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -24,8 +24,8 @@ class LibTryCallTest: BaseRellTest(false) {
 
     @Test fun testTwoArgsUnit() {
         def("function f(x: integer) { require(x > 0); }")
-        chk("try_call(f(1, *), true)", "ct_err:expr_call_argtypes:[try_call]:()->unit,boolean")
-        chk("try_call(f(1, *), 0)", "ct_err:expr_call_argtypes:[try_call]:()->unit,integer")
+        chk("try_call(f(1, *), true)", "ct_err:expr_call_badargs:[try_call]:[()->unit,boolean]")
+        chk("try_call(f(1, *), 0)", "ct_err:expr_call_badargs:[try_call]:[()->unit,integer]")
         chk("try_call(f(1, *), null)", "ct_err:fn:sys:no_res_type:[try_call]")
     }
 
@@ -40,7 +40,7 @@ class LibTryCallTest: BaseRellTest(false) {
         chk("try_call(f(5, *), null)", "int[25]")
         chk("try_call(f(-5, *), null)", "null")
 
-        chk("try_call(f(5, *), 123L)", "ct_err:expr_call_argtypes:[try_call]:()->integer,big_integer")
+        chk("try_call(f(5, *), 123L)", "ct_err:expr_call_badargs:[try_call]:[()->integer,big_integer]")
     }
 
     @Test fun testTwoArgsEvaluation() {
@@ -72,13 +72,13 @@ class LibTryCallTest: BaseRellTest(false) {
 
     @Test fun testWrongArity() {
         def("function f(x: integer, y: integer, z: integer): integer { require(x + y + z > 0); return x * y * z; }")
-        chk("try_call(f(*))", "ct_err:expr_call_argtypes:[try_call]:(integer,integer,integer)->integer")
-        chk("try_call(f(1, *))", "ct_err:expr_call_argtypes:[try_call]:(integer,integer)->integer")
-        chk("try_call(f(1, 2, *))", "ct_err:expr_call_argtypes:[try_call]:(integer)->integer")
+        chk("try_call(f(*))", "ct_err:expr_call_badargs:[try_call]:[(integer,integer,integer)->integer]")
+        chk("try_call(f(1, *))", "ct_err:expr_call_badargs:[try_call]:[(integer,integer)->integer]")
+        chk("try_call(f(1, 2, *))", "ct_err:expr_call_badargs:[try_call]:[(integer)->integer]")
         chk("try_call(f(1, 2, 3, *))", "int[6]")
-        chk("try_call(f(*), -5)", "ct_err:expr_call_argtypes:[try_call]:(integer,integer,integer)->integer,integer")
-        chk("try_call(f(1, *), -5)", "ct_err:expr_call_argtypes:[try_call]:(integer,integer)->integer,integer")
-        chk("try_call(f(1, 2, *), -5)", "ct_err:expr_call_argtypes:[try_call]:(integer)->integer,integer")
+        chk("try_call(f(*), -5)", "ct_err:expr_call_badargs:[try_call]:[(integer,integer,integer)->integer,integer]")
+        chk("try_call(f(1, *), -5)", "ct_err:expr_call_badargs:[try_call]:[(integer,integer)->integer,integer]")
+        chk("try_call(f(1, 2, *), -5)", "ct_err:expr_call_badargs:[try_call]:[(integer)->integer,integer]")
         chk("try_call(f(1, 2, 3, *), -5)", "int[6]")
     }
 

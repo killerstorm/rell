@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -132,28 +132,38 @@ class LTypeTest: BaseLTest() {
             imports(BASIC_TYPES)
             type("json") {
                 constructor {
-                    param(type = "text")
+                    param("a", type = "text")
                     body { -> Rt_UnitValue }
                 }
             }
         }
 
         chkDefs(mod, "type json")
-        chkTypeMems(mod, "json", "constructor (text)")
+        chkTypeMems(mod, "json", "constructor (a: text)")
     }
 
     @Test fun testConstructorHeader() {
         val mod = makeModule("test") {
             imports(BASIC_TYPES)
             type("data") {
-                constructor(listOf("text")) {
-                    chkErr("LDE:common_fun:params_already_defined:text") { param(type = "text") }
-                    chkErr("LDE:common_fun:params_already_defined:integer") { param(type = "integer") }
+                constructor {
+                    param("a", "text")
+                    chkErr("LDE:common_fun:param_name_conflict:a") { param("a", type = "integer") }
+                    param("b", "integer")
+                    body { -> Rt_UnitValue }
+                }
+                constructor {
+                    param("a", "text")
+                    deprecated("foo")
+                    chkErr("LDE:common_fun:params_already_defined:b") { param("b", type = "integer") }
                     body { -> Rt_UnitValue }
                 }
             }
         }
-        chkTypeMems(mod, "data", "constructor (text)")
+        chkTypeMems(mod, "data",
+            "constructor (a: text, b: integer)",
+            "@deprecated constructor (a: text)",
+        )
     }
 
     @Test fun testConstructorPure() {
@@ -205,19 +215,19 @@ class LTypeTest: BaseLTest() {
             type("data") {
                 generic("T")
                 constructor {
-                    param(type = "T")
+                    param("a", type = "T")
                     body { -> Rt_UnitValue }
                 }
                 function("get", result = "T") {
                     body { -> Rt_UnitValue }
                 }
                 function("set", result = "unit") {
-                    param(type = "T")
+                    param("a", type = "T")
                     body { -> Rt_UnitValue }
                 }
             }
         }
-        chkTypeMems(mod, "data", "constructor (T)", "function get(): T", "function set(T): unit")
+        chkTypeMems(mod, "data", "constructor (a: T)", "function get(): T", "function set(a: T): unit")
     }
 
     @Test fun testTypeParamOfConstructor() {
@@ -225,12 +235,12 @@ class LTypeTest: BaseLTest() {
             type("data") {
                 constructor {
                     generic("T")
-                    param(type = "T")
+                    param("a", type = "T")
                     body { -> Rt_UnitValue }
                 }
             }
         }
-        chkTypeMems(mod, "data", "constructor <T> (T)")
+        chkTypeMems(mod, "data", "constructor <T> (a: T)")
     }
 
     @Test fun testTypeParamOuterInner() {
@@ -239,20 +249,20 @@ class LTypeTest: BaseLTest() {
                 generic("T")
                 constructor {
                     generic("U")
-                    param(type = "T")
-                    param(type = "U")
+                    param("a", type = "T")
+                    param("b", type = "U")
                     body { -> Rt_UnitValue }
                 }
                 function("f") {
                     generic("V")
                     result(type = "(T,V)")
-                    param(type = "V")
-                    param(type = "T")
+                    param("a", type = "V")
+                    param("b", type = "T")
                     body { -> Rt_UnitValue }
                 }
             }
         }
-        chkTypeMems(mod, "data", "constructor <U> (T, U)", "function <V> f(V, T): (T,V)")
+        chkTypeMems(mod, "data", "constructor <U> (a: T, b: U)", "function <V> f(a: V, b: T): (T,V)")
     }
 
     @Test fun testTypeParamUsesTypeParamType() {
@@ -262,13 +272,13 @@ class LTypeTest: BaseLTest() {
                 generic("U", subOf = "T")
                 function("f") {
                     result(type = "U")
-                    param(type = "T")
+                    param("a", type = "T")
                     body { -> Rt_UnitValue }
                 }
             }
         }
         chkDefs(mod, "type data<T,U:-T>")
-        chkTypeMems(mod, "data", "function f(T): U")
+        chkTypeMems(mod, "data", "function f(a: T): U")
     }
 
     @Test fun testTypeParamInParentType() {
@@ -340,7 +350,7 @@ class LTypeTest: BaseLTest() {
                 generic("U")
                 parent("iterable<U>")
                 function("add", result = "boolean") {
-                    param(type = "U")
+                    param("a", type = "U")
                     body { -> Rt_UnitValue }
                 }
             }
@@ -349,7 +359,7 @@ class LTypeTest: BaseLTest() {
                 generic("V")
                 parent("iterable<(K,V)>")
                 function("get", result = "V?") {
-                    param(type = "K")
+                    param("a", type = "K")
                     body { -> Rt_UnitValue }
                 }
             }
@@ -358,24 +368,24 @@ class LTypeTest: BaseLTest() {
                 generic("B")
                 parent("map<A,list<B>>")
                 function("put", result = "boolean") {
-                    param(type = "A")
-                    param(type = "B")
+                    param("a", type = "A")
+                    param("b", type = "B")
                     body { -> Rt_UnitValue }
                 }
             }
         }
 
         chkTypeAllMems(mod, "iterable", "function iterator(): iterator<T>")
-        chkTypeAllMems(mod, "list", "function add(U): boolean", "function iterator(): iterator<U>")
+        chkTypeAllMems(mod, "list", "function add(a: U): boolean", "function iterator(): iterator<U>")
 
         chkTypeAllMems(mod, "map",
-            "function get(K): V?",
+            "function get(a: K): V?",
             "function iterator(): iterator<(K,V)>",
         )
 
         chkTypeAllMems(mod, "multi_map",
-            "function put(A, B): boolean",
-            "function get(A): list<B>?",
+            "function put(a: A, b: B): boolean",
+            "function get(a: A): list<B>?",
             "function iterator(): iterator<(A,list<B>)>",
         )
     }
@@ -388,7 +398,7 @@ class LTypeTest: BaseLTest() {
                     body { -> Rt_UnitValue }
                 }
                 staticFunction("concat", result = "iterable<T>") {
-                    param(type = "iterable<iterable<T>>")
+                    param("a", type = "iterable<iterable<T>>")
                     body { -> Rt_UnitValue }
                 }
             }
@@ -400,12 +410,12 @@ class LTypeTest: BaseLTest() {
 
         chkTypeAllMems(mod, "iterable",
             "static function empty(): iterable<T>",
-            "static function concat(iterable<iterable<T>>): iterable<T>",
+            "static function concat(a: iterable<iterable<T>>): iterable<T>",
         )
 
         chkTypeAllMems(mod, "list",
             "static function empty(): iterable<U>",
-            "static function concat(iterable<iterable<U>>): iterable<U>",
+            "static function concat(a: iterable<iterable<U>>): iterable<U>",
         )
     }
 

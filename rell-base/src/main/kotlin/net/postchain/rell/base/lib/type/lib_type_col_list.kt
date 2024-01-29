@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -31,7 +31,7 @@ object Lib_Type_List {
             }
 
             constructor(pure = true) {
-                param(type = "iterable<-T>")
+                param("values", type = "iterable<-T>")
                 bodyMeta {
                     val elementType = fnBodyMeta.typeArg("T")
                     val rKind = R_CollectionKind_List(R_ListType(elementType))
@@ -43,7 +43,7 @@ object Lib_Type_List {
             }
 
             function("get", "T", pure = true) {
-                param("integer")
+                param("index", "integer")
                 body { a, b ->
                     val list = a.asList()
                     val i = b.asInteger()
@@ -59,7 +59,7 @@ object Lib_Type_List {
 
             function("index_of", "integer", pure = true) {
                 alias("indexOf", deprecated = C_MessageType.ERROR)
-                param("T")
+                param("value", "T")
                 body { a, b ->
                     val list = a.asList()
                     Rt_IntValue.get(list.indexOf(b).toLong())
@@ -68,7 +68,7 @@ object Lib_Type_List {
 
             function("remove_at", "T") {
                 alias("removeAt", deprecated = C_MessageType.ERROR)
-                param("integer")
+                param("index", "integer")
                 body { a, b ->
                     val list = a.asList()
                     val i = b.asInteger()
@@ -86,7 +86,7 @@ object Lib_Type_List {
             }
 
             function("sub", "list<T>", pure = true) {
-                param("integer")
+                param("start", "integer")
                 body { a, b ->
                     val type = a.type()
                     val list = a.asList()
@@ -96,8 +96,8 @@ object Lib_Type_List {
             }
 
             function("sub", "list<T>", pure = true) {
-                param("integer")
-                param("integer")
+                param("start", "integer")
+                param("end", "integer")
                 body { a, b, c ->
                     val type = a.type()
                     val list = a.asList()
@@ -109,8 +109,8 @@ object Lib_Type_List {
 
             function("set", "T") {
                 alias("_set", deprecated = C_MessageType.WARNING)
-                param("integer")
-                param("T")
+                param("index", "integer")
+                param("value", "T")
                 body { a, b, c ->
                     val list = a.asList()
                     val i = b.asInteger()
@@ -128,8 +128,8 @@ object Lib_Type_List {
             }
 
             function("add", "boolean") {
-                param("integer")
-                param("T")
+                param("index", "integer")
+                param("value", "T")
                 body { a, b, c ->
                     val list = a.asList()
                     val i = b.asInteger()
@@ -148,8 +148,8 @@ object Lib_Type_List {
 
             function("add_all", "boolean") {
                 alias("addAll", deprecated = C_MessageType.ERROR)
-                param("integer")
-                param("collection<-T>")
+                param("index", "integer")
+                param("values", "collection<-T>")
                 body { a, b, c ->
                     val list = a.asList()
                     val i = b.asInteger()
@@ -178,7 +178,7 @@ object Lib_Type_List {
             }
 
             function("repeat", "list<T>") {
-                param("integer")
+                param("n", "integer")
                 body { a, b ->
                     val list = a.asList()
                     val n = b.asInteger()

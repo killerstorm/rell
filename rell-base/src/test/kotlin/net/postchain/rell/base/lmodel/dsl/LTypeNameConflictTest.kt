@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -11,8 +11,8 @@ class LTypeNameConflictTest: BaseLTest() {
     @Test fun testFunction() {
         val block = makeBlock { function("f", "anything") { body { -> Rt_UnitValue } } }
         val defs = arrayOf("function f(): anything")
-        chkNameConflictOK(defs, block, "function f(anything): anything") {
-            function("f", "anything") { param("anything"); body { -> Rt_UnitValue } }
+        chkNameConflictOK(defs, block, "function f(a: anything): anything") {
+            function("f", "anything") { param("a", "anything"); body { -> Rt_UnitValue } }
         }
         chkNameConflictErr(defs, block, "f") {
             function("f", makeMemberFun())
@@ -31,8 +31,8 @@ class LTypeNameConflictTest: BaseLTest() {
     @Test fun testStaticFunction() {
         val block = makeBlock { staticFunction("f", "anything") { body { -> Rt_UnitValue } } }
         val defs = arrayOf("static function f(): anything")
-        chkNameConflictOK(defs, block, "static function f(anything): anything") {
-            staticFunction("f", "anything") { param("anything"); body { -> Rt_UnitValue } }
+        chkNameConflictOK(defs, block, "static function f(a: anything): anything") {
+            staticFunction("f", "anything") { param("a", "anything"); body { -> Rt_UnitValue } }
         }
         chkNameConflictOK(defs, block, "function f(): anything") {
             function("f", "anything") { body { -> Rt_UnitValue } }
@@ -116,8 +116,8 @@ class LTypeNameConflictTest: BaseLTest() {
         chkNameConflictErr(defs, block, "p") {
             function("x", "anything") { alias("p"); body { -> Rt_UnitValue } }
         }
-        chkNameConflictOK(defs, block, "function x(anything): anything", "alias f = x") {
-            function("x", "anything") { alias("f"); param("anything"); body { -> Rt_UnitValue } }
+        chkNameConflictOK(defs, block, "function x(a: anything): anything", "alias f = x") {
+            function("x", "anything") { alias("f"); param("a", "anything"); body { -> Rt_UnitValue } }
         }
         chkNameConflictErr(defs, block, "g") {
             function("x", "anything") { alias("g"); body { -> Rt_UnitValue } }
@@ -144,11 +144,11 @@ class LTypeNameConflictTest: BaseLTest() {
         chkNameConflictOK(defs, block, "static function x(): anything", "alias g = x") {
             staticFunction("x", "anything") { alias("g"); body { -> Rt_UnitValue } }
         }
-        chkNameConflictOK(defs, block, "static function x(anything): anything", "alias h = x") {
-            staticFunction("x", "anything") { alias("h"); param("anything"); body { -> Rt_UnitValue } }
+        chkNameConflictOK(defs, block, "static function x(a: anything): anything", "alias h = x") {
+            staticFunction("x", "anything") { alias("h"); param("a", "anything"); body { -> Rt_UnitValue } }
         }
         chkNameConflictErr(defs, block, "i") {
-            staticFunction("x", "anything") { alias("i"); param("anything"); body { -> Rt_UnitValue } }
+            staticFunction("x", "anything") { alias("i"); param("a", "anything"); body { -> Rt_UnitValue } }
         }
     }
 
@@ -158,7 +158,7 @@ class LTypeNameConflictTest: BaseLTest() {
             property("p", "anything") { Rt_UnitValue }
             function("f", "anything") { body { -> Rt_UnitValue } }
             function("g", makeMemberFun())
-            staticFunction("h", "anything") { param("anything"); body { -> Rt_UnitValue } }
+            staticFunction("h", "anything") { param("a", "anything"); body { -> Rt_UnitValue } }
             staticFunction("i", makeGlobalFun())
         }
 
@@ -167,7 +167,7 @@ class LTypeNameConflictTest: BaseLTest() {
             "property p: anything",
             "function f(): anything",
             "special function g(...)",
-            "static function h(anything): anything",
+            "static function h(a: anything): anything",
             "static special function i(...)",
         )
 

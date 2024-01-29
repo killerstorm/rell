@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -25,8 +25,8 @@ interface Ld_CommonFunctionDsl: Ld_FunctionContextDsl, Ld_FunctionBodyDsl {
     fun generic(name: String, subOf: String? = null, superOf: String? = null)
 
     fun param(
+        name: String,
         type: String,
-        name: String? = null,
         arity: L_ParamArity = L_ParamArity.ONE,
         exact: Boolean = false,
         nullable: Boolean = false,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.fn
@@ -74,14 +74,13 @@ object C_FunctionUtils {
     }
 
     fun compileRegularCall(
-            ctx: C_ExprContext,
-            callInfo: C_FunctionCallInfo,
-            callTarget: C_FunctionCallTarget,
-            args: List<S_CallArgument>,
-            resTypeHint: C_TypeHint
+        base: C_FunctionCallTargetBase,
+        callTarget: C_FunctionCallTarget,
+        args: List<S_CallArgument>,
+        resTypeHint: C_TypeHint
     ): V_GlobalFunctionCall {
-        val res = C_FunctionCallArgsUtils.compileCall(ctx, args, resTypeHint, callTarget)
-        return res ?: C_ExprUtils.errorVGlobalCall(ctx, callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
+        val res = C_FunctionCallArgsUtils.compileCall(base.ctx, args, resTypeHint, callTarget, base.callParams.map)
+        return res ?: C_ExprUtils.errorVGlobalCall(base.ctx, base.callInfo.callPos, callTarget.retType() ?: R_CtErrorType)
     }
 
     fun compileReturnType(ctx: C_ExprContext, name: LazyPosString, header: C_FunctionHeader): R_Type? {

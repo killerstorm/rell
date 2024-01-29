@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -24,8 +24,8 @@ class LibDecimalTest: BaseRellTest(false) {
     //TODO support pow(), or delete the function and the test (if supporting, add non-integer power test cases to the test)
     /*@Test*/ fun testPow() {
         chk("decimal('2').pow(16)", "dec[65536]")
-        chk("decimal('2').pow(decimal('4'))", "ct_err:expr_call_argtypes:decimal.pow:decimal")
-        chk("decimal('2').pow(decimal('0.5'))", "ct_err:expr_call_argtypes:decimal.pow:decimal")
+        chk("decimal('2').pow(decimal('4'))", "ct_err:expr_call_badargs:decimal.pow:[decimal]")
+        chk("decimal('2').pow(decimal('0.5'))", "ct_err:expr_call_badargs:decimal.pow:[decimal]")
         chk("decimal('2').pow(-1)", "rt_err:decimal.pow:negative_power:-1")
 
         chk("decimal('0').pow(0)", "dec[1]")

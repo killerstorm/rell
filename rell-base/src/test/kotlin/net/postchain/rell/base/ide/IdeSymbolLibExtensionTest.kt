@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.ide
@@ -62,22 +62,22 @@ class IdeSymbolLibExtensionTest: BaseIdeSymbolTest() {
         )
         chkSymsExpr("colors.value(0)",
             "value=DEF_FUNCTION_SYSTEM|-|-",
-            "?doc=FUNCTION|rell:rell.enum_ext.value|<pure> <static> <function> value(\n\t[integer]\n): [T]",
+            "?doc=FUNCTION|rell:rell.enum_ext.value|<pure> <static> <function> value(\n\tvalue: [integer]\n): [T]",
         )
         chkSymsExpr("colors.value('red')",
             "value=DEF_FUNCTION_SYSTEM|-|-",
-            "?doc=FUNCTION|rell:rell.enum_ext.value|<pure> <static> <function> value(\n\t[text]\n): [T]",
+            "?doc=FUNCTION|rell:rell.enum_ext.value|<pure> <static> <function> value(\n\tname: [text]\n): [T]",
         )
     }
 
     @Test fun testGtvExt() {
         chkSymsExpr("text.from_gtv(gtv.from_bytes(x''))",
             "from_gtv=DEF_FUNCTION_SYSTEM|-|-",
-            "?doc=FUNCTION|rell:rell.gtv_ext.from_gtv|<pure> <static> <function> from_gtv(\n\t[gtv]\n): [T]",
+            "?doc=FUNCTION|rell:rell.gtv_ext.from_gtv|<pure> <static> <function> from_gtv(\n\tgtv: [gtv]\n): [T]",
         )
         chkSymsExpr("text.from_gtv_pretty(gtv.from_bytes(x''))",
             "from_gtv_pretty=DEF_FUNCTION_SYSTEM|-|-",
-            "?doc=FUNCTION|rell:rell.gtv_ext.from_gtv_pretty|<pure> <static> <function> from_gtv_pretty(\n\t[gtv]\n): [T]",
+            "?doc=FUNCTION|rell:rell.gtv_ext.from_gtv_pretty|<pure> <static> <function> from_gtv_pretty(\n\tgtv: [gtv]\n): [T]",
         )
         chkSymsExpr("''.hash()",
             "hash=DEF_FUNCTION_SYSTEM|-|-",
@@ -101,7 +101,7 @@ class IdeSymbolLibExtensionTest: BaseIdeSymbolTest() {
         )
         chkSymsExpr("data.from_bytes(x'')",
             "from_bytes=DEF_FUNCTION_SYSTEM|-|-",
-            "?doc=FUNCTION|rell:rell.struct_ext.from_bytes|<pure> <static> <function> from_bytes(\n\t[byte_array]\n): [T]",
+            "?doc=FUNCTION|rell:rell.struct_ext.from_bytes|<pure> <static> <function> from_bytes(\n\tbytes: [byte_array]\n): [T]",
         )
     }
 }

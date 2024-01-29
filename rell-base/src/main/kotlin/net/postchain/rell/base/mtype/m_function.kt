@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.mtype
@@ -14,7 +14,7 @@ enum class M_ParamArity(val many: Boolean) {
 }
 
 class M_FunctionParam(
-    val name: String?,
+    val name: String,
     val type: M_Type,
     val arity: M_ParamArity,
     val exact: Boolean,
@@ -22,13 +22,18 @@ class M_FunctionParam(
 ) {
     override fun toString() = strCode()
 
-    fun strCode(): String {
-        var res = type.strCode()
-        if (name != null) res = "$name: $res"
-        if (arity != M_ParamArity.ONE) res = "@arity($arity) $res"
-        if (exact) res = "@exact $res"
-        if (nullable) res = "@nullable $res"
-        return res
+    fun strCode(compact: Boolean = true): String {
+        val parts = mutableListOf<String>()
+
+        if (arity != M_ParamArity.ONE) parts.add("@arity($arity)")
+        if (exact) parts.add("@exact")
+        if (nullable) parts.add("@nullable")
+
+        val typeStr = type.strCode()
+        val sep = if (compact) ":" else ": "
+        parts.add("$name$sep$typeStr")
+
+        return parts.joinToString(" ")
     }
 
     fun replaceTypeParams(map: Map<M_TypeParam, M_TypeSet>): M_FunctionParam {
@@ -54,21 +59,6 @@ class M_FunctionParam(
 
     fun validate() {
         type.validate()
-    }
-
-    companion object {
-        fun make(
-            type: M_Type,
-            arity: M_ParamArity = M_ParamArity.ONE,
-            exact: Boolean = false,
-            nullable: Boolean = false,
-        ) = M_FunctionParam(
-            name = null,
-            type = type,
-            arity = arity,
-            exact = exact,
-            nullable = nullable,
-        )
     }
 }
 

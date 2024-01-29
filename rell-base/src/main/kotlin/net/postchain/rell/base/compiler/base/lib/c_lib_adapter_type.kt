@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.lib
@@ -346,7 +346,7 @@ private class C_LibTypeBodyBuilder(
         val ideInfo = C_IdeSymbolInfo.direct(IdeSymbolKind.DEF_FUNCTION_SYSTEM, doc = header.docSymbol)
         val cFn = C_SpecialLibMemberFunction(fn, ideInfo)
         val naming = namingFactory(header.simpleName)
-        val cMember = C_TypeValueMember_Function(header.simpleName, cFn, ideInfo, naming)
+        val cMember = C_TypeValueMember_Function(header.simpleName, cFn, naming)
         valueMembers.add(cMember)
     }
 
@@ -370,8 +370,7 @@ private class C_LibTypeBodyBuilder(
                     C_LibFuncCaseUtils.makeMemberCase(m.member, ideInfo, naming, m.deprecated)
                 }
                 val fn = C_LibFunctionUtils.makeMemberFunction(cases)
-                val ideInfo = cases.first().ideInfo
-                C_TypeValueMember_Function(name, fn, ideInfo, naming)
+                C_TypeValueMember_Function(name, fn, naming)
             }
 
         val all = (valueMembers + cFunctions).toImmList()

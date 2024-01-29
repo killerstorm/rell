@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.core
@@ -370,7 +370,7 @@ object C_Compiler {
         extraLibMod: C_LibModule?,
     ): C_CompilationResult {
         val globalCtx = C_GlobalContext(options, sourceDir)
-        val msgCtx = C_MessageContext(globalCtx)
+        val msgCtx = C_MessageContext.create(globalCtx)
         val controller = C_CompilerController(msgCtx)
 
         val res = C_LateInit.context(controller.executor) {

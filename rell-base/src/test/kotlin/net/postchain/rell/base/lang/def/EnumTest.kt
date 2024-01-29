@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.def
@@ -150,9 +150,9 @@ class EnumTest: BaseRellTest() {
         chk("foo.value('C')", "foo[C]")
         chk("foo.value('D')", "rt_err:enum_badname:foo:D")
 
-        chk("foo.value(true)", "ct_err:expr_call_argtypes:[rell.enum_ext(foo).value]:boolean")
-        chk("foo.value(null)", "ct_err:expr_call_argtypes:[rell.enum_ext(foo).value]:null")
-        chk("foo.value(foo.A)", "ct_err:expr_call_argtypes:[rell.enum_ext(foo).value]:foo")
+        chk("foo.value(true)", "ct_err:expr_call_badargs:[rell.enum_ext(foo).value]:[boolean]")
+        chk("foo.value(null)", "ct_err:expr_call_badargs:[rell.enum_ext(foo).value]:[null]")
+        chk("foo.value(foo.A)", "ct_err:expr_call_badargs:[rell.enum_ext(foo).value]:[foo]")
     }
 
     @Test fun testMemberProperties() {

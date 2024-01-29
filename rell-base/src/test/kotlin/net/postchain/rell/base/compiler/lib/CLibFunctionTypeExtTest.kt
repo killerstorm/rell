@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.lib
@@ -118,16 +118,16 @@ class CLibFunctionTypeExtTest: BaseCLibTest() {
 
         chkOp("$expr.test_prop = 123;", "ct_err:attr_not_mutable:ext($type).test_prop")
 
-        chk("$type.test_decode()", "ct_err:expr_call_argtypes:[ext($type).test_decode]:")
-        chk("$type.test_decode('')", "ct_err:expr_call_argtypes:[ext($type).test_decode]:text")
+        chk("$type.test_decode()", "ct_err:expr:call:missing_args:[ext($type).test_decode]:[0:a]")
+        chk("$type.test_decode('')", "ct_err:expr_call_badargs:[ext($type).test_decode]:[text]")
         chk("$type.test_decode(0)", "rt_err:x=int[0]")
         chk("$type.test_decode(-1)", "rt_err:fn:error:ext($type).test_decode:java.lang.IllegalStateException")
         chk("$type.test_decode(*)", "fn[ext($type).test_decode(*)]")
         chk("$type.test_decode(*)(0)", "rt_err:x=int[0]")
         chk("$type.test_decode(*)(-1)", "rt_err:fn:error:ext($type).test_decode:java.lang.IllegalStateException")
 
-        chk("$expr.test_encode()", "ct_err:expr_call_argtypes:[ext($type).test_encode]:")
-        chk("$expr.test_encode('')", "ct_err:expr_call_argtypes:[ext($type).test_encode]:text")
+        chk("$expr.test_encode()", "ct_err:expr:call:missing_args:[ext($type).test_encode]:[0:a]")
+        chk("$expr.test_encode('')", "ct_err:expr_call_badargs:[ext($type).test_encode]:[text]")
         chk("$expr.test_encode(*)", "fn[ext($type).test_encode(*)]")
         chk("$expr.test_encode(0)", "rt_err:x=int[0]")
         chk("$expr.test_encode(-1)", "rt_err:fn:error:ext($type).test_encode:java.lang.IllegalStateException")
@@ -143,7 +143,7 @@ class CLibFunctionTypeExtTest: BaseCLibTest() {
             generic("T", subOf = "any")
             property("test_prop", type = "integer", pure = true) { _ -> Rt_IntValue.ZERO }
             staticFunction("test_decode", result = "T") {
-                param(type = "integer")
+                param("a", type = "integer")
                 body { a ->
                     Rt_Utils.check(a.asInteger() != 0L) { "x=${a.strCode()}" toCodeMsg "x = ${a.str()}" }
                     check(a.asInteger() >= 0)
@@ -151,7 +151,7 @@ class CLibFunctionTypeExtTest: BaseCLibTest() {
                 }
             }
             function("test_encode", result = "T") {
-                param(type = "integer")
+                param("a", type = "integer")
                 body { _, a ->
                     val v = a.asInteger()
                     Rt_Utils.check(v != 0L) { "x=${a.strCode()}" toCodeMsg "x = ${a.str()}" }

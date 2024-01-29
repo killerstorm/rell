@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.testutils
@@ -40,11 +40,7 @@ class LibModuleTester(private val tst: RellCodeTester, vararg importedModules: C
 
     fun setRTypeFactory(dsl: Ld_TypeDefDsl, typeName: String = dsl.typeSimpleName, genericCount: Int = 0) {
         val modRef = curModRef!!
-        val typeTag = Any()
-        dsl.rTypeFactory { args ->
-            checkEquals(args.size, genericCount)
-            R_TestType(typeName, typeTag, modRef::get, args.toImmList())
-        }
+        setRTypeFactory(dsl, modRef::get, typeName, genericCount)
     }
 
     companion object {

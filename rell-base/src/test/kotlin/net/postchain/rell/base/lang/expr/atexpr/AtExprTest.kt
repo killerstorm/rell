@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.expr.atexpr
@@ -312,13 +312,13 @@ class AtExprTest: BaseRellTest() {
     }
 
     @Test fun testCollectionConstructorExpr() {
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + list([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map([123:'Hello']))", "(text[Gates],text[{123=Hello}])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, ''+list([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, ''+set([1,2,3]))", "(text[Gates],text[[1, 2, 3]])")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, ''+map([123:'Hello']))", "(text[Gates],text[{123=Hello}])")
 
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + list(.firstName))", "ct_err:expr_call_argtypes:[list]:text")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + set(.firstName))", "ct_err:expr_call_argtypes:[set]:text")
-        chk("user @ { .firstName == 'Bill' } (_=.lastName, '' + map(.firstName))", "ct_err:expr_call_argtypes:[map]:text")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, ''+list(.firstName))", "ct_err:expr_call_badargs:[list]:[text]")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, ''+set(.firstName))", "ct_err:expr_call_badargs:[set]:[text]")
+        chk("user @ { .firstName == 'Bill' } (_=.lastName, ''+map(.firstName))", "ct_err:expr_call_badargs:[map]:[text]")
     }
 
     @Test fun testOrConditionBug() {

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -33,8 +33,8 @@ object Lib_Type_Text {
         type("text", rType = R_TextType) {
 
             staticFunction("from_bytes", result = "text", pure = true) {
-                param(type = "byte_array")
-                param(type = "boolean", arity = L_ParamArity.ZERO_ONE)
+                param("bytes", type = "byte_array")
+                param("ignore_errors", type = "boolean", arity = L_ParamArity.ZERO_ONE)
                 bodyOpt1 { a, b ->
                     val ignoreErr = b?.asBoolean() ?: false
                     val bytes = a.asByteArray()
@@ -89,7 +89,7 @@ object Lib_Type_Text {
 
             function("compare_to", result = "integer", pure = true) {
                 alias("compareTo", C_MessageType.ERROR)
-                param(type = "text")
+                param("other", type = "text")
                 body { a, b ->
                     val s1 = a.asString()
                     val s2 = b.asString()
@@ -98,7 +98,7 @@ object Lib_Type_Text {
             }
 
             function("contains", result = "boolean", pure = true) {
-                param(type = "text")
+                param("text", type = "text")
                 dbFunctionTemplate("text.contains", 2, "(STRPOS(#0, #1) > 0)")
                 body { a, b ->
                     val s1 = a.asString()
@@ -109,7 +109,7 @@ object Lib_Type_Text {
 
             function("starts_with", result = "boolean", pure = true) {
                 alias("startsWith", C_MessageType.ERROR)
-                param(type = "text")
+                param("prefix", type = "text")
                 dbFunctionTemplate("text.starts_with", 2, "(LEFT(#0, LENGTH(#1)) = #1)")
                 body { a, b ->
                     val s1 = a.asString()
@@ -120,7 +120,7 @@ object Lib_Type_Text {
 
             function("ends_with", result = "boolean", pure = true) {
                 alias("endsWith", C_MessageType.ERROR)
-                param(type = "text")
+                param("suffix", type = "text")
                 dbFunctionTemplate("text.ends_with", 2, "(RIGHT(#0, LENGTH(#1)) = #1)")
                 body { a, b ->
                     val s1 = a.asString()
@@ -130,7 +130,7 @@ object Lib_Type_Text {
             }
 
             function("format", result = "text", pure = true) {
-                param(type = "anything", arity = L_ParamArity.ZERO_MANY)
+                param("args", type = "anything", arity = L_ParamArity.ZERO_MANY)
                 bodyN { args ->
                     Rt_Utils.check(args.isNotEmpty()) { "fn:text.format:no_args" toCodeMsg "No arguments" }
                     val s = args[0].asString()
@@ -145,8 +145,8 @@ object Lib_Type_Text {
             }
 
             function("replace", result = "text", pure = true) {
-                param(type = "text")
-                param(type = "text")
+                param("old_value", type = "text")
+                param("new_value", type = "text")
                 dbFunctionTemplate("text.replace", 3, "REPLACE(#0, #1, #2)")
                 body { a, b, c ->
                     val s1 = a.asString()
@@ -157,12 +157,12 @@ object Lib_Type_Text {
             }
 
             function("split", result = "list<text>", pure = true) {
-                param(type = "text")
+                param("delimiter", type = "text")
                 body { a, b ->
                     val s1 = a.asString()
                     val s2 = b.asString()
                     val arr = s1.split(s2)
-                    val list = MutableList<Rt_Value>(arr.size) { Rt_TextValue.get(arr[it]) }
+                    val list = MutableList(arr.size) { Rt_TextValue.get(arr[it]) }
                     Rt_ListValue(SPLIT_TYPE, list)
                 }
             }
@@ -176,7 +176,7 @@ object Lib_Type_Text {
             }
 
             function("like", result = "boolean", pure = true) {
-                param(type = "text")
+                param("pattern", type = "text")
                 dbFunctionTemplate("text.like", 2, "((#0) LIKE (#1))")
                 body { a, b ->
                     val s = a.asString()
@@ -187,7 +187,7 @@ object Lib_Type_Text {
             }
 
             function("matches", result = "boolean", pure = true) {
-                param(type = "text")
+                param("regex", type = "text")
                 body { a, b ->
                     val s = a.asString()
                     val pattern = b.asString()
@@ -202,7 +202,7 @@ object Lib_Type_Text {
 
             function("char_at", result = "integer", pure = true) {
                 alias("charAt", C_MessageType.ERROR)
-                param(type = "integer")
+                param("index", type = "integer")
                 dbFunctionTemplate("text.char_at", 2, "ASCII(${SqlConstants.FN_TEXT_GETCHAR}(#0, (#1)::INT))")
                 body { a, b ->
                     val s = a.asString()
@@ -220,7 +220,7 @@ object Lib_Type_Text {
 
             function("index_of", result = "integer", pure = true) {
                 alias("indexOf", C_MessageType.ERROR)
-                param(type = "text")
+                param("text", type = "text")
                 dbFunctionTemplate("text.index_of", 2, "(STRPOS(#0, #1) - 1)")
                 body { a, b ->
                     val s1 = a.asString()
@@ -231,8 +231,8 @@ object Lib_Type_Text {
 
             function("index_of", result = "integer", pure = true) {
                 alias("indexOf", C_MessageType.ERROR)
-                param(type = "text")
-                param(type = "integer")
+                param("text", type = "text")
+                param("start", type = "integer")
                 body { a, b, c ->
                     val s1 = a.asString()
                     val s2 = b.asString()
@@ -249,7 +249,7 @@ object Lib_Type_Text {
 
             function("last_index_of", result = "integer", pure = true) {
                 alias("lastIndexOf", C_MessageType.ERROR)
-                param(type = "text")
+                param("text", type = "text")
                 body { a, b ->
                     val s1 = a.asString()
                     val s2 = b.asString()
@@ -259,8 +259,8 @@ object Lib_Type_Text {
 
             function("last_index_of", result = "integer", pure = true) {
                 alias("lastIndexOf", C_MessageType.ERROR)
-                param(type = "text")
-                param(type = "integer")
+                param("text", type = "text")
+                param("max", type = "integer")
                 body { a, b, c ->
                     val s1 = a.asString()
                     val s2 = b.asString()
@@ -276,7 +276,7 @@ object Lib_Type_Text {
             }
 
             function("repeat", result = "text", pure = true) {
-                param(type = "integer")
+                param("n", type = "integer")
                 dbFunctionTemplate("text.repeat", 2, "${SqlConstants.FN_TEXT_REPEAT}(#0, (#1)::INT)")
                 body { a, b ->
                     val s = a.asString()
@@ -301,7 +301,7 @@ object Lib_Type_Text {
             }
 
             function("sub", result = "text", pure = true) {
-                param(type = "integer")
+                param("start", type = "integer")
                 dbFunctionTemplate("text.sub/1", 2, "${SqlConstants.FN_TEXT_SUBSTR1}(#0, (#1)::INT)")
                 body { a, b ->
                     val s = a.asString()
@@ -311,8 +311,8 @@ object Lib_Type_Text {
             }
 
             function("sub", result = "text", pure = true) {
-                param(type = "integer")
-                param(type = "integer")
+                param("start", type = "integer")
+                param("end", type = "integer")
                 dbFunctionTemplate("text.sub/2", 3, "${SqlConstants.FN_TEXT_SUBSTR2}(#0, (#1)::INT, (#2)::INT)")
                 body { a, b, c ->
                     val s = a.asString()

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.expr.expr
@@ -242,8 +242,8 @@ class ExpressionTest: BaseRellTest(false) {
         chk("list()", "ct_err:fn:sys:unresolved_type_params:[list]:T")
         chk("list<integer>()", "list<integer>[]")
         chk("list<integer>([1,2,3])", "list<integer>[int[1],int[2],int[3]]")
-        chk("list<integer>(['Hello'])", "ct_err:expr_call_argtypes:[list<integer>]:list<text>")
-        chk("list<text>([12345])", "ct_err:expr_call_argtypes:[list<text>]:list<integer>")
+        chk("list<integer>(['Hello'])", "ct_err:expr_call_badargs:[list<integer>]:[list<text>]")
+        chk("list<text>([12345])", "ct_err:expr_call_badargs:[list<text>]:[list<integer>]")
         chk("['Hello', 'World']", "list<text>[text[Hello],text[World]]")
         chk("['Hello', 'World', 12345]", "ct_err:expr_list_itemtype:[text]:[integer]")
         chk("[unit()]", "ct_err:expr_list_unit")
@@ -647,10 +647,13 @@ class ExpressionTest: BaseRellTest(false) {
     }
 
     @Test fun testNamedArgumentsInSysFunctions() {
-        chk("abs(x=123)", "ct_err:expr:call:named_args_not_allowed:[abs]:x")
-        chk("abs(123)", "int[123]")
-        chk("'hello'.sub(start=3)", "ct_err:expr:call:named_args_not_allowed:[text.sub]:start")
+        chk("abs(-123)", "int[123]")
+        chk("abs(a=-123)", "int[123]")
+        chk("abs(x=-123)", "ct_err:expr_call_badargs:[abs]:[x:integer]")
         chk("'hello'.sub(3)", "text[lo]")
+        chk("'hello'.sub(start=3)", "text[lo]")
+        chk("'hello'.sub(foo=3)", "ct_err:expr_call_badargs:[text.sub]:[foo:integer]")
+        chk("'hello'.sub(end=3)", "ct_err:expr_call_badargs:[text.sub]:[end:integer]")
     }
 
     @Test fun testTypeOfUnit() {

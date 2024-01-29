@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.ide
@@ -336,5 +336,31 @@ class IdeSymbolLibTest: BaseIdeSymbolTest() {
         chkSymsExpr("get_tx().tx_hash", *txHash)
         chkSymsExpr("get_tx().tx_data", *txData)
         chkSymsExpr("get_tx().block", *block)
+    }
+
+    @Test fun testFunctionParameters() {
+        chkSymsExpr("abs(a = 123)", "a=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|a|a: [integer]")
+        chkSymsExpr("min(a = 123, b = 456L)",
+            "a=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|a|a: [big_integer]",
+            "b=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|b|b: [big_integer]",
+        )
+
+        chkSymsExpr("require(value = true)", "value=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|value|value: [boolean]")
+        chkSymsExpr("require(value = true, message = 'hello')",
+            "value=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|value|value: [boolean]",
+            "message=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|message|<lazy> <zero_one> message: [text]",
+        )
+
+        chkSymsExpr("integer(value = '123')", "value=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|value|value: [text]")
+        chkSymsExpr("integer(value = '123', radix = 10)",
+            "value=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|value|value: [text]",
+            "radix=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|radix|<zero_one> radix: [integer]",
+        )
+
+        chkSymsExpr("'hello'.sub(start = 2)", "start=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|start|start: [integer]")
+        chkSymsExpr("'hello'.sub(start = 2, end = 3)",
+            "start=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|start|start: [integer]",
+            "end=EXPR_CALL_ARG|-|-", "?doc=PARAMETER|end|end: [integer]",
+        )
     }
 }

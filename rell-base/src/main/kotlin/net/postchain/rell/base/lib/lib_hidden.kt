@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -25,7 +25,7 @@ object Lib_RellHidden {
     val MODULE = C_LibModule.make("rell.hidden", Lib_Rell.MODULE) {
         namespace(TEST_NS_NAME) {
             function("crash", result = "unit") {
-                param("text")
+                param("message", "text")
                 body { a ->
                     val s = a.asString()
                     throw RellInterpreterCrashException(s)
@@ -33,8 +33,8 @@ object Lib_RellHidden {
             }
 
             function("throw", "unit") {
-                param("text")
-                param("text")
+                param("code", "text")
+                param("msg", "text")
                 body { a, b ->
                     val code = a.asString()
                     val msg = b.asString()
@@ -56,31 +56,31 @@ object Lib_RellHidden {
         function("_nullable", pure = true) {
             generic("T")
             result(type = "T?")
-            param(type = "T")
+            param("value", type = "T")
             body { a -> a }
         }
 
         function("_nullable_int", "integer?", pure = true) {
-            param(type = "integer?")
+            param("value", type = "integer?")
             body { a -> a }
         }
 
         function("_nullable_text", result = "text?", pure = true) {
-            param("text?")
+            param("value", "text?")
             body { a -> a }
         }
 
         function("_nop", pure = true) {
             generic("T")
             result("T")
-            param("T")
+            param("value", "T")
             body { a -> a }
         }
 
         function("_nop_print", pure = true) {
             generic("T")
             result(type = "T")
-            param(type = "T")
+            param("value", type = "T")
             bodyContext { ctx, a ->
                 ctx.globalCtx.outPrinter.print(a.str())
                 a
@@ -88,7 +88,7 @@ object Lib_RellHidden {
         }
 
         function("_strict_str", result = "text") {
-            param(type = "anything")
+            param("value", type = "anything")
             body { a ->
                 val s = a.strCode()
                 Rt_TextValue.get(s)

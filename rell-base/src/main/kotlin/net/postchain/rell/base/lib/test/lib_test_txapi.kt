@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.test
@@ -135,7 +135,7 @@ private class BlockCommonFunctions(
         }
 
         function(runMustFailSimpleName, sFailType) {
-            param("text")
+            param("expected_message", "text")
             bodyContext { ctx, arg1, arg2 ->
                 val block = getRunBlock(ctx, arg1, runMustFailFullName)
                 val expected = arg2.asString()
@@ -169,21 +169,21 @@ private class TxCommonFunctions(private val txGetter: (self: Rt_Value) -> Rt_Tes
         val sTxType = R_TestTxType.name
 
         function("sign", sTxType) {
-            param(type = "list<rell.test.keypair>")
+            param("keypairs", type = "list<rell.test.keypair>")
             body { arg1, arg2 ->
                 signByKeyPairs(arg1, arg2.asList())
             }
         }
 
         function("sign", sTxType) {
-            param(type = "list<byte_array>")
+            param("privkeys", type = "list<byte_array>")
             body { arg1, arg2 ->
                 signByByteArrays(arg1, arg2.asList())
             }
         }
 
         function("sign", sTxType) {
-            param("byte_array", arity = L_ParamArity.ONE_MANY)
+            param("privkeys", "byte_array", arity = L_ParamArity.ONE_MANY)
             bodyN { args ->
                 check(args.isNotEmpty())
                 signByByteArrays(args[0], args.subList(1, args.size))
@@ -191,7 +191,7 @@ private class TxCommonFunctions(private val txGetter: (self: Rt_Value) -> Rt_Tes
         }
 
         function("sign", sTxType) {
-            param(type = "rell.test.keypair", arity = L_ParamArity.ONE_MANY)
+            param("keypairs", type = "rell.test.keypair", arity = L_ParamArity.ONE_MANY)
             bodyN { args ->
                 check(args.isNotEmpty())
                 signByKeyPairs(args[0], args.subList(1, args.size))
@@ -243,28 +243,28 @@ private object Lib_Type_Block {
                 common.define(this)
 
                 constructor {
-                    param(type = "list<${Lib_RellTest.TX_TYPE_QNAME_STR}>")
+                    param("txs", type = "list<${Lib_RellTest.TX_TYPE_QNAME_STR}>")
                     body { arg ->
                         Rt_TestBlockValue(arg.asList().map { asTestTx(it).toRaw() })
                     }
                 }
 
                 constructor {
-                    param(type = Lib_RellTest.TX_TYPE_QNAME_STR, arity = L_ParamArity.ZERO_MANY)
+                    param("txs", type = Lib_RellTest.TX_TYPE_QNAME_STR, arity = L_ParamArity.ZERO_MANY)
                     bodyN { args ->
                         Rt_TestBlockValue(args.map { asTestTx(it).toRaw() })
                     }
                 }
 
                 constructor {
-                    param(type = "list<${Lib_RellTest.OP_TYPE_QNAME_STR}>")
+                    param("ops", type = "list<${Lib_RellTest.OP_TYPE_QNAME_STR}>")
                     body { arg ->
                         newOps(arg.asList())
                     }
                 }
 
                 constructor {
-                    param(type = Lib_RellTest.OP_TYPE_QNAME_STR, arity = L_ParamArity.ONE_MANY)
+                    param("ops", type = Lib_RellTest.OP_TYPE_QNAME_STR, arity = L_ParamArity.ONE_MANY)
                     bodyN { args ->
                         newOps(args)
                     }
@@ -280,14 +280,14 @@ private object Lib_Type_Block {
                 }
 
                 function("tx", sSelfType) {
-                    param(type = "list<rell.test.tx>")
+                    param("txs", type = "list<rell.test.tx>")
                     body { arg1, arg2 ->
                         addTxs(arg1, arg2.asList())
                     }
                 }
 
                 function("tx", sSelfType) {
-                    param(type = "rell.test.tx", arity = L_ParamArity.ONE_MANY)
+                    param("txs", type = "rell.test.tx", arity = L_ParamArity.ONE_MANY)
                     bodyN { args ->
                         check(args.isNotEmpty())
                         addTxs(args[0], args.subList(1, args.size))
@@ -295,14 +295,14 @@ private object Lib_Type_Block {
                 }
 
                 function("tx", sSelfType) {
-                    param(type = "list<rell.test.op>")
+                    param("ops", type = "list<rell.test.op>")
                     body { arg1, arg2 ->
                         addOps(arg1, arg2.asList())
                     }
                 }
 
                 function("tx", sSelfType) {
-                    param(type = "rell.test.op", arity = L_ParamArity.ONE_MANY)
+                    param("ops", type = "rell.test.op", arity = L_ParamArity.ONE_MANY)
                     bodyN { args ->
                         check(args.isNotEmpty())
                         addOps(args[0], args.subList(1, args.size))
@@ -349,7 +349,7 @@ private object Lib_Type_Tx {
                 val sSelfType = "rell.test.tx"
 
                 constructor {
-                    param(type = "list<${Lib_RellTest.OP_TYPE_QNAME_STR}>")
+                    param("ops", type = "list<${Lib_RellTest.OP_TYPE_QNAME_STR}>")
                     body { arg ->
                         val ops = arg.asList().map { asTestOp(it).toRaw() }
                         newTx(ops)
@@ -357,7 +357,7 @@ private object Lib_Type_Tx {
                 }
 
                 constructor {
-                    param(type = Lib_RellTest.OP_TYPE_QNAME_STR, arity = L_ParamArity.ZERO_MANY)
+                    param("ops", type = Lib_RellTest.OP_TYPE_QNAME_STR, arity = L_ParamArity.ZERO_MANY)
                     bodyN { args ->
                         val ops = args.map { asTestOp(it).toRaw() }
                         newTx(ops)
@@ -365,7 +365,7 @@ private object Lib_Type_Tx {
                 }
 
                 constructor {
-                    param(type = "list<-mirror_struct<-operation>>")
+                    param("ops", type = "list<-mirror_struct<-operation>>")
                     body { arg ->
                         val list = arg.asList()
                         val ops = list.map { structToOpRaw(it) }
@@ -374,7 +374,7 @@ private object Lib_Type_Tx {
                 }
 
                 constructor {
-                    param(type = "mirror_struct<-operation>", arity = L_ParamArity.ONE_MANY)
+                    param("ops", type = "mirror_struct<-operation>", arity = L_ParamArity.ONE_MANY)
                     bodyN { args ->
                         val ops = args.map { structToOpRaw(it) }
                         newTx(ops)
@@ -382,14 +382,14 @@ private object Lib_Type_Tx {
                 }
 
                 function("op", sSelfType) {
-                    param(type = "list<rell.test.op>")
+                    param("ops", type = "list<rell.test.op>")
                     body { arg1, arg2 ->
                         addOps(arg1, arg2.asList())
                     }
                 }
 
                 function("op", sSelfType) {
-                    param(type = "rell.test.op", arity = L_ParamArity.ONE_MANY)
+                    param("ops", type = "rell.test.op", arity = L_ParamArity.ONE_MANY)
                     bodyN { args ->
                         check(args.isNotEmpty())
                         addOps(args[0], args.subList(1, args.size))
@@ -397,14 +397,14 @@ private object Lib_Type_Tx {
                 }
 
                 function("op", sSelfType) {
-                    param(type = "list<-mirror_struct<-operation>>")
+                    param("ops", type = "list<-mirror_struct<-operation>>")
                     body { arg1, arg2 ->
                         addOpStructs(arg1, arg2.asList())
                     }
                 }
 
                 function("op", sSelfType) {
-                    param(type = "mirror_struct<-operation>", arity = L_ParamArity.ONE_MANY)
+                    param("ops", type = "mirror_struct<-operation>", arity = L_ParamArity.ONE_MANY)
                     bodyN { args ->
                         check(args.isNotEmpty())
                         addOpStructs(args[0], args.subList(1, args.size))
@@ -421,21 +421,21 @@ private object Lib_Type_Tx {
                 }
 
                 function("nop", sSelfType) {
-                    param(type = "integer")
+                    param("x", type = "integer")
                     body { arg1, arg2 ->
                         calcNopOneArg(arg1, arg2)
                     }
                 }
 
                 function("nop", sSelfType) {
-                    param("text")
+                    param("x", "text")
                     body { arg1, arg2 ->
                         calcNopOneArg(arg1, arg2)
                     }
                 }
 
                 function("nop", sSelfType) {
-                    param("byte_array")
+                    param("x", "byte_array")
                     body { arg1, arg2 ->
                         calcNopOneArg(arg1, arg2)
                     }
@@ -536,16 +536,16 @@ private object Lib_Type_Op {
                 tx.define(this)
 
                 constructor {
-                    param(type = "text")
-                    param(type = "list<gtv>")
+                    param("name", type = "text")
+                    param("args", type = "list<gtv>")
                     body { arg1, arg2 ->
                         newOp(arg1, arg2.asList())
                     }
                 }
 
                 constructor {
-                    param(type = "text")
-                    param(type = "gtv", arity = L_ParamArity.ZERO_MANY)
+                    param("name", type = "text")
+                    param("args", type = "gtv", arity = L_ParamArity.ZERO_MANY)
                     bodyN { args ->
                         check(args.isNotEmpty())
                         val nameArg = args[0]
@@ -612,21 +612,21 @@ private object Lib_Nop {
             }
 
             function("nop", testOpType) {
-                param("integer")
+                param("x", "integer")
                 body { arg ->
                     callOneArg(arg)
                 }
             }
 
             function("nop", testOpType) {
-                param("text")
+                param("x", "text")
                 body { arg ->
                     callOneArg(arg)
                 }
             }
 
             function("nop", testOpType) {
-                param("byte_array")
+                param("x", "byte_array")
                 body { arg ->
                     callOneArg(arg)
                 }

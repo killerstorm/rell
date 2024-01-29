@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -49,28 +49,28 @@ object Lib_Type_ByteArray {
             parent(type = "iterable<integer>")
 
             constructor {
-                param(type = "text")
+                param("hex", type = "text")
                 bodyRaw(FromHex)
             }
 
             constructor {
                 deprecated(newName = "byte_array.from_list")
-                param(type = "list<integer>")
+                param("list", type = "list<integer>")
                 bodyRaw(FromList)
             }
 
             staticFunction("from_list", result = "byte_array") {
-                param(type = "list<integer>")
+                param("list", type = "list<integer>")
                 bodyRaw(FromList)
             }
 
             staticFunction("from_hex", result = "byte_array") {
-                param(type = "text")
+                param("value", type = "text")
                 bodyRaw(FromHex)
             }
 
             staticFunction("from_base64", result = "byte_array") {
-                param(type = "text")
+                param("value", type = "text")
                 body { a ->
                     val s = a.asString()
                     val bytes = Rt_Utils.wrapErr("fn:byte_array.from_base64") {
@@ -115,7 +115,7 @@ object Lib_Type_ByteArray {
             }
 
             function("repeat", "byte_array", pure = true) {
-                param("integer")
+                param("n", "integer")
                 body { a, b ->
                     val bs = a.asByteArray()
                     val n = b.asInteger()
@@ -140,7 +140,7 @@ object Lib_Type_ByteArray {
             }
 
             function("sub", "byte_array", pure = true) {
-                param("integer")
+                param("start", "integer")
                 dbFunctionTemplate("byte_array.sub/1", 2, "${SqlConstants.FN_BYTEA_SUBSTR1}(#0, (#1)::INT)")
                 body { a, b ->
                     val ba = a.asByteArray()
@@ -150,8 +150,8 @@ object Lib_Type_ByteArray {
             }
 
             function("sub", "byte_array", pure = true) {
-                param("integer")
-                param("integer")
+                param("start", "integer")
+                param("end", "integer")
                 dbFunctionTemplate("byte_array.sub/2", 3, "${SqlConstants.FN_BYTEA_SUBSTR2}(#0, (#1)::INT, (#2)::INT)")
                 body { a, b, c ->
                     val ba = a.asByteArray()

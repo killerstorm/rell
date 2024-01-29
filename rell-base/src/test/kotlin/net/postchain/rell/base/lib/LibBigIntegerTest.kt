@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -21,15 +21,15 @@ class LibBigIntegerTest: BaseRellTest(false) {
         // More tests in OperatorsBaseTest.
         chk("big_integer('1234')", "bigint[1234]")
         chk("big_integer(1234)", "bigint[1234]")
-        chk("big_integer(12.34)", "ct_err:expr_call_argtypes:[big_integer]:decimal")
-        chk("big_integer(false)", "ct_err:expr_call_argtypes:[big_integer]:boolean")
-        chk("big_integer(123L)", "ct_err:expr_call_argtypes:[big_integer]:big_integer")
+        chk("big_integer(12.34)", "ct_err:expr_call_badargs:[big_integer]:[decimal]")
+        chk("big_integer(false)", "ct_err:expr_call_badargs:[big_integer]:[boolean]")
+        chk("big_integer(123L)", "ct_err:expr_call_badargs:[big_integer]:[big_integer]")
     }
 
     @Test fun testFromText() {
         // More tests in OperatorsBaseTest.
         chk("big_integer.from_text('1234')", "bigint[1234]")
-        chk("big_integer.from_text(false)", "ct_err:expr_call_argtypes:[big_integer.from_text]:boolean")
+        chk("big_integer.from_text(false)", "ct_err:expr_call_badargs:[big_integer.from_text]:[boolean]")
     }
 
     @Test fun testFromTextBase() {
@@ -113,8 +113,8 @@ class LibBigIntegerTest: BaseRellTest(false) {
         chk("big_integer.from_hex('+7fffffffffffffff')", "bigint[9223372036854775807]")
         chk("big_integer.from_hex('+ffffffffffffffff')", "bigint[18446744073709551615]")
 
-        chk("big_integer.from_hex()", "ct_err:expr_call_argtypes:[big_integer.from_hex]:")
-        chk("big_integer.from_hex(123)", "ct_err:expr_call_argtypes:[big_integer.from_hex]:integer")
+        chk("big_integer.from_hex()", "ct_err:expr:call:missing_args:[big_integer.from_hex]:[0:value]")
+        chk("big_integer.from_hex(123)", "ct_err:expr_call_badargs:[big_integer.from_hex]:[integer]")
         chk("big_integer.from_hex('')", "rt_err:fn:big_integer.from_hex:")
         chk("big_integer.from_hex('ghi')", "rt_err:fn:big_integer.from_hex:ghi")
         chk("big_integer.from_hex('0x7b')", "rt_err:fn:big_integer.from_hex:0x7b")

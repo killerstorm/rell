@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -44,7 +44,7 @@ object Lib_Type_Map {
             }
 
             constructor(pure = true) {
-                param(type = "iterable<-map_entry<K,V>>")
+                param("entries", type = "iterable<-map_entry<K,V>>")
                 bodyMeta {
                     val (keyType, valueType) = fnBodyMeta.typeArgs("K", "V")
                     val mapType = R_MapType(keyType, valueType)
@@ -96,8 +96,8 @@ object Lib_Type_Map {
             }
 
             function("put", result = "unit") {
-                param(type = "K")
-                param(type = "V")
+                param("key", type = "K")
+                param("value", type = "V")
                 body { a, b, c ->
                     val map = a.asMutableMap()
                     map[b] = c
@@ -107,7 +107,7 @@ object Lib_Type_Map {
 
             function("put_all", result = "unit") {
                 alias("putAll", C_MessageType.ERROR)
-                param(type = "map<-K,-V>")
+                param("map", type = "map<-K,-V>")
                 body { a, b ->
                     val map1 = a.asMutableMap()
                     val map2 = b.asMap()
@@ -117,7 +117,7 @@ object Lib_Type_Map {
             }
 
             function("remove", result = "V") {
-                param(type = "K")
+                param("key", type = "K")
                 body { a, b ->
                     val map = a.asMutableMap()
                     val v = map.remove(b)
@@ -126,7 +126,7 @@ object Lib_Type_Map {
             }
 
             function("remove_or_null", result = "V?") {
-                param(type = "K")
+                param("key", type = "K")
                 body { a, b ->
                     val map = a.asMutableMap()
                     val v = map.remove(b)
@@ -158,7 +158,7 @@ object Lib_Type_Map {
         }
 
         function("get", result = "V", pure = true) {
-            param(type = "K")
+            param("key", type = "K")
             body { self, a ->
                 val map = self.asMap()
                 val v = map[a]
@@ -167,7 +167,7 @@ object Lib_Type_Map {
         }
 
         function("get_or_null", result = "V?", pure = true) {
-            param(type = "K")
+            param("key", type = "K")
             body { self, a ->
                 val map = self.asMap()
                 val r = map[a]
@@ -178,8 +178,8 @@ object Lib_Type_Map {
         function("get_or_default", pure = true) {
             generic("R", superOf = "V")
             result(type = "R")
-            param(type = "K")
-            param(type = "R", lazy = true)
+            param("key", type = "K")
+            param("default", type = "R", lazy = true)
             body { self, a, b ->
                 val map = self.asMap()
                 map[a] ?: b.asLazyValue()
@@ -187,7 +187,7 @@ object Lib_Type_Map {
         }
 
         function("contains", result = "boolean", pure = true) {
-            param(type = "K")
+            param("key", type = "K")
             body { self, a ->
                 val map = self.asMap()
                 Rt_BooleanValue.get(a in map)

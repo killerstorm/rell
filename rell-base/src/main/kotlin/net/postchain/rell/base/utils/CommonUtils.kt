@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.utils
@@ -85,7 +85,7 @@ object CommonUtils {
         return if (homeDir.isDirectory) homeDir else null
     }
 
-    fun <T> chainToList(first: T?, nextGetter: (T) -> T?): List<T> {
+    fun <T: Any> chainToList(first: T?, nextGetter: (T) -> T?): List<T> {
         if (first == null) return immListOf()
 
         val res = mutableListOf<T>()
@@ -98,7 +98,7 @@ object CommonUtils {
         return res.toImmList()
     }
 
-    fun <T> concatLists(list1: List<T>, list2: List<T>): List<T> {
+    fun <T: Any> concatLists(list1: List<T>, list2: List<T>): List<T> {
         return when {
             list2.isEmpty() -> list1
             list1.isEmpty() -> list2

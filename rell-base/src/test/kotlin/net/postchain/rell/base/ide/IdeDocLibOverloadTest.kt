@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.ide
@@ -39,7 +39,7 @@ class IdeDocLibOverloadTest: BaseIdeSymbolTest() {
         chkSyms("function _f() = f(false);",
             "f=DEF_FUNCTION_SYSTEM|-|-",
             "?doc=FUNCTION|mod:f|<function> f(): [text]",
-            err = "expr_call_argtypes:[f]:boolean",
+            err = "expr_call_badargs:[f]:[boolean]",
         )
         chkSyms("function _f() = f;",
             "f=DEF_FUNCTION_SYSTEM|-|-",
@@ -175,7 +175,7 @@ class IdeDocLibOverloadTest: BaseIdeSymbolTest() {
         chkSyms("function _f() = data(false);",
             "data=DEF_TYPE|-|-",
             "?doc=CONSTRUCTOR|mod:data|<constructor>(\n\tx: [text]\n)",
-            err = "expr_call_argtypes:[data]:boolean",
+            err = "expr_call_badargs:[data]:[boolean]",
         )
         chkSyms("function _f() = data;",
             "data=DEF_TYPE|-|-",
@@ -255,12 +255,12 @@ class IdeDocLibOverloadTest: BaseIdeSymbolTest() {
         chkSyms("function _f(d: data) = d.f(false);",
             "f=DEF_FUNCTION_SYSTEM|-|-",
             "?doc=FUNCTION|mod:data.f|<function> f(): [text]",
-            err = "expr_call_argtypes:[data.f]:boolean",
+            err = "expr_call_badargs:[data.f]:[boolean]",
         )
         chkSyms("function _f(d: data) = d.f(foo = 'hello');",
             "f=DEF_FUNCTION_SYSTEM|-|-",
             "?doc=FUNCTION|mod:data.f|<function> f(): [text]",
-            err = "[expr_call_argtypes:[data.f]:text][expr:call:named_args_not_allowed:[data.f]:foo]",
+            err = "expr_call_badargs:[data.f]:[foo:text]",
         )
         chkSyms("function _f(d: data) = d.f;",
             "f=DEF_FUNCTION_SYSTEM|-|-",
@@ -330,12 +330,12 @@ class IdeDocLibOverloadTest: BaseIdeSymbolTest() {
         chkSyms("function _f() = data.f(false);",
             "f=DEF_FUNCTION_SYSTEM|-|-",
             "?doc=FUNCTION|mod:data.f|<static> <function> f(): [text]",
-            err = "expr_call_argtypes:[data.f]:boolean",
+            err = "expr_call_badargs:[data.f]:[boolean]",
         )
         chkSyms("function _f() = data.f(foo = 'hello');",
             "f=DEF_FUNCTION_SYSTEM|-|-",
             "?doc=FUNCTION|mod:data.f|<static> <function> f(): [text]",
-            err = "[expr_call_argtypes:[data.f]:text][expr:call:named_args_not_allowed:[data.f]:foo]",
+            err = "expr_call_badargs:[data.f]:[foo:text]",
         )
         chkSyms("function _f() = data.f;",
             "f=DEF_FUNCTION_SYSTEM|-|-",

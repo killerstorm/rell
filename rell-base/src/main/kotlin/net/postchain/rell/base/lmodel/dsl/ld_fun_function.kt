@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -41,6 +41,7 @@ class Ld_FunctionBuilder(
     private var resultType: Ld_Type? = null
 
     override fun alias(name: String, deprecated: C_MessageType?) {
+        finishParams()
         aliasesBuilder.alias(name, deprecated)
     }
 
@@ -48,6 +49,7 @@ class Ld_FunctionBuilder(
         Ld_Exception.check(resultType == null) {
             "function:result_already_defined:$type" to "Result type already set"
         }
+        finishParams()
         resultType = Ld_Type.parse(type)
     }
 
@@ -72,7 +74,6 @@ class Ld_FunctionBuilder(
         fun build(
             simpleName: R_Name,
             result: String?,
-            params: List<String>?,
             pure: Boolean?,
             outerTypeParams: Set<R_Name>,
             block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
@@ -84,13 +85,6 @@ class Ld_FunctionBuilder(
 
             if (result != null) {
                 dsl.result(result)
-            }
-
-            if (params != null) {
-                for (param in params) {
-                    dsl.param(param)
-                }
-                funBuilder.paramsDefined()
             }
 
             val bodyRes = block(dsl)

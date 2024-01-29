@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -149,8 +149,8 @@ class LDocTest: BaseLTest() {
     @Test fun testNamespaceFunction() {
         val mod = makeDocModule {
             function("foo", result = "text") {
-                param(type = "integer")
-                param(type = "decimal")
+                param("a", type = "integer")
+                param("b", type = "decimal")
                 body { -> Rt_UnitValue }
             }
             function("pure_1", result = "text", pure = true) { body { -> Rt_UnitValue } }
@@ -158,7 +158,7 @@ class LDocTest: BaseLTest() {
                 bodyRaw(C_SysFunctionBody(true, { _, _ -> Rt_UnitValue }, null))
             }
         }
-        chkDoc(mod, "foo", "FUNCTION|mod:foo", "<function> foo(\n\t[integer],\n\t[decimal]\n): [text]")
+        chkDoc(mod, "foo", "FUNCTION|mod:foo", "<function> foo(\n\ta: [integer],\n\tb: [decimal]\n): [text]")
         chkDoc(mod, "pure_1", "FUNCTION|mod:pure_1", "<pure> <function> pure_1(): [text]")
         chkDoc(mod, "pure_2", "FUNCTION|mod:pure_2", "<pure> <function> pure_2(): [text]")
     }
@@ -167,11 +167,11 @@ class LDocTest: BaseLTest() {
         val mod = makeDocModule {
             function("foo", result = "T?") {
                 generic("T", subOf = "any")
-                param(type = "(T,integer)")
+                param("a", type = "(T,integer)")
                 body { -> Rt_UnitValue }
             }
         }
-        chkDoc(mod, "foo", "FUNCTION|mod:foo", "<function> <T: -[any]> foo(\n\t([T], [integer])\n): [T]?")
+        chkDoc(mod, "foo", "FUNCTION|mod:foo", "<function> <T: -[any]> foo(\n\ta: ([T], [integer])\n): [T]?")
     }
 
     @Test fun testNamespaceFunctionSpecial() {
@@ -185,18 +185,18 @@ class LDocTest: BaseLTest() {
         val mod = makeDocModule {
             function("f", result = "text") {
                 deprecated("new_f")
-                param(type = "integer")
+                param("a", type = "integer")
                 body { -> Rt_UnitValue }
             }
             function("g", result = "text") {
                 deprecated("new_g", error = false)
-                param(type = "integer")
+                param("a", type = "integer")
                 body { -> Rt_UnitValue }
             }
         }
 
-        chkDoc(mod, "f", "FUNCTION|mod:f", "@deprecated(ERROR)\n<function> f(\n\t[integer]\n): [text]")
-        chkDoc(mod, "g", "FUNCTION|mod:g", "@deprecated\n<function> g(\n\t[integer]\n): [text]")
+        chkDoc(mod, "f", "FUNCTION|mod:f", "@deprecated(ERROR)\n<function> f(\n\ta: [integer]\n): [text]")
+        chkDoc(mod, "g", "FUNCTION|mod:g", "@deprecated\n<function> g(\n\ta: [integer]\n): [text]")
     }
 
     @Test fun testNamespaceFunctionAlias() {
@@ -367,25 +367,25 @@ class LDocTest: BaseLTest() {
             type("data") {
                 function("f", result = "text") {
                     deprecated("new_f")
-                    param(type = "integer")
+                    param("a", type = "integer")
                     body { -> Rt_UnitValue }
                 }
                 function("g", result = "text") {
                     deprecated("new_g", error = false)
-                    param(type = "integer")
+                    param("a", type = "integer")
                     body { -> Rt_UnitValue }
                 }
                 staticFunction("h", result = "text") {
                     deprecated("new_h", error = false)
-                    param(type = "integer")
+                    param("a", type = "integer")
                     body { -> Rt_UnitValue }
                 }
             }
         }
 
-        chkDoc(mod, "data.f", "FUNCTION|mod:data.f", "@deprecated(ERROR)\n<function> f(\n\t[integer]\n): [text]")
-        chkDoc(mod, "data.g", "FUNCTION|mod:data.g", "@deprecated\n<function> g(\n\t[integer]\n): [text]")
-        chkDoc(mod, "data.h", "FUNCTION|mod:data.h", "@deprecated\n<static> <function> h(\n\t[integer]\n): [text]")
+        chkDoc(mod, "data.f", "FUNCTION|mod:data.f", "@deprecated(ERROR)\n<function> f(\n\ta: [integer]\n): [text]")
+        chkDoc(mod, "data.g", "FUNCTION|mod:data.g", "@deprecated\n<function> g(\n\ta: [integer]\n): [text]")
+        chkDoc(mod, "data.h", "FUNCTION|mod:data.h", "@deprecated\n<static> <function> h(\n\ta: [integer]\n): [text]")
     }
 
     @Test fun testTypeDefFunctionAlias() {
@@ -422,14 +422,12 @@ class LDocTest: BaseLTest() {
             function("f", result = "unit") {
                 param(type = "integer", name = "a")
                 param(type = "integer", name = "b", lazy = true)
-                param(type = "integer")
                 param(type = "integer", name = "c", arity = L_ParamArity.ZERO_MANY)
                 body { -> Rt_UnitValue }
             }
         }
         chkDoc(mod, "f.a", "PARAMETER|a", "a: [integer]")
         chkDoc(mod, "f.b", "PARAMETER|b", "<lazy> b: [integer]")
-        chkDoc(mod, "f.#2", "PARAMETER|#2", "[integer]")
         chkDoc(mod, "f.c", "PARAMETER|c", "<zero_many> c: [integer]")
     }
 
@@ -464,18 +462,16 @@ class LDocTest: BaseLTest() {
     @Test fun testFunctionParamModifiers() {
         chkFunParamModifiers("a: [integer]") { param(type = "integer", name = "a") }
         chkFunParamModifiers("<exact> a: [integer]") { param(type = "integer", name = "a", exact = true) }
-        chkFunParamModifiers("<exact> [integer]") { param(type = "integer", exact = true) }
-        chkFunParamModifiers("<nullable> [integer]?") { param(type = "integer?", nullable = true) }
-        chkFunParamModifiers("<lazy> [integer]") { param(type = "integer", lazy = true) }
-        chkFunParamModifiers("[integer]") { param(type = "integer", arity = L_ParamArity.ONE) }
-        chkFunParamModifiers("<zero_one> [integer]") { param(type = "integer", arity = L_ParamArity.ZERO_ONE) }
-        chkFunParamModifiers("<zero_many> [integer]") { param(type = "integer", arity = L_ParamArity.ZERO_MANY) }
-        chkFunParamModifiers("<one_many> [integer]") { param(type = "integer", arity = L_ParamArity.ONE_MANY) }
-        chkFunParamModifiers("@implies(NOT_NULL) [integer]?") {
-            param(type = "integer?", implies = L_ParamImplication.NOT_NULL)
+        chkFunParamModifiers("<nullable> a: [integer]?") { param("a", type = "integer?", nullable = true) }
+        chkFunParamModifiers("<lazy> a: [integer]") { param("a", type = "integer", lazy = true) }
+        chkFunParamModifiers("<zero_one> a: [integer]") { param("a", type = "integer", arity = L_ParamArity.ZERO_ONE) }
+        chkFunParamModifiers("<zero_many> a: [integer]") { param("a", type = "integer", arity = L_ParamArity.ZERO_MANY) }
+        chkFunParamModifiers("<one_many> a: [integer]") { param("a", type = "integer", arity = L_ParamArity.ONE_MANY) }
+        chkFunParamModifiers("@implies(NOT_NULL) a: [integer]?") {
+            param("a", type = "integer?", implies = L_ParamImplication.NOT_NULL)
         }
-        chkFunParamModifiers("<exact> <lazy> <zero_many> [integer]") {
-            param(type = "integer", exact = true, lazy = true, arity = L_ParamArity.ZERO_MANY)
+        chkFunParamModifiers("<exact> <lazy> <zero_many> a: [integer]") {
+            param("a", type = "integer", exact = true, lazy = true, arity = L_ParamArity.ZERO_MANY)
         }
     }
 

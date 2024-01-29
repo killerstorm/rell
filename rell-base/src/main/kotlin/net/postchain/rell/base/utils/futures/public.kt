@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.utils.futures
@@ -34,7 +34,7 @@ interface FcFutureBuilderBase<SelfT: FcFutureBuilderBase<SelfT>> {
 interface FcFutureBuilder: FcFutureBuilderBase<FcFutureBuilder> {
     fun <B> after(f: FcFuture<B>): FcFutureBuilderN<B>
     fun <B> after(f: List<FcFuture<B>>): FcFutureBuilderN<List<B>>
-    fun <K, B> after(f: Map<K, FcFuture<B>>): FcFutureBuilderN<Map<K, B>>
+    fun <K: Any, B> after(f: Map<K, FcFuture<B>>): FcFutureBuilderN<Map<K, B>>
     fun <T> compute(block: () -> T): FcFuture<T>
     fun <T> delegate(block: () -> FcFuture<T>): FcFuture<T>
 }
@@ -42,7 +42,7 @@ interface FcFutureBuilder: FcFutureBuilderBase<FcFutureBuilder> {
 interface FcFutureBuilderN<R>: FcFutureBuilderBase<FcFutureBuilderN<R>> {
     fun <B> after(f: FcFuture<B>): FcFutureBuilderN<FcPair<R, B>>
     fun <B> after(f: List<FcFuture<B>>): FcFutureBuilderN<FcPair<R, List<B>>>
-    fun <K, B> after(f: Map<K, FcFuture<B>>): FcFutureBuilderN<FcPair<R, Map<K, B>>>
+    fun <K: Any, B> after(f: Map<K, FcFuture<B>>): FcFutureBuilderN<FcPair<R, Map<K, B>>>
     fun <T> compute(block: (R) -> T): FcFuture<T>
     fun <T> delegate(block: (R) -> FcFuture<T>): FcFuture<T>
 }

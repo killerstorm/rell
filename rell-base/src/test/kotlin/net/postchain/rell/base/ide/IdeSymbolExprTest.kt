@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.ide
@@ -77,8 +77,8 @@ class IdeSymbolExprTest: BaseIdeSymbolTest() {
             err = "expr:call:unknown_named_arg:[f]:foo",
         )
 
-        chkSymsExpr("f()", *f, err = "expr:call:missing_args:[f]:0:x,1:y")
-        chkSymsExpr("f(123)", *f, err = "expr:call:missing_args:[f]:1:y")
+        chkSymsExpr("f()", *f, err = "expr:call:missing_args:[f]:[0:x,1:y]")
+        chkSymsExpr("f(123)", *f, err = "expr:call:missing_args:[f]:[1:y]")
         chkSymsExpr("f('hello', 123)", *f, err = "[expr_call_argtype:[f]:0:x:integer:text][expr_call_argtype:[f]:1:y:text:integer]")
         chkSymsExpr("f(123, 'hello', true)", *f, err = "expr:call:too_many_args:[f]:2:3")
 
@@ -106,26 +106,26 @@ class IdeSymbolExprTest: BaseIdeSymbolTest() {
         chkSymsExpr("p()(x = 123)",
             "p=DEF_FUNCTION|-|module.rell/function[p]", "?head=FUNCTION|:p",
             "x=UNKNOWN|-|-", "?head=-",
-            err = "[expr:call:missing_args:[?]:0][expr:call:unknown_named_arg:[?]:x]",
+            err = "expr:call:unknown_named_arg:[?]:x",
         )
 
         chkSymsExpr("integer.from_text(x = '123')",
             "integer=DEF_TYPE|-|-", "?head=TYPE|rell:integer",
             "from_text=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|rell:integer.from_text",
             "x=UNKNOWN|-|-", "?head=-",
-            err = "expr:call:named_args_not_allowed:[integer.from_text]:x",
+            err = "[expr:call:missing_args:[integer.from_text]:[0:value]][expr:call:unknown_named_arg:[integer.from_text]:x]",
         )
 
         chkSymsExpr("'Hello'.size(x = 123)",
             "size=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|rell:text.size",
             "x=UNKNOWN|-|-", "?head=-",
-            err = "[expr_call_argtypes:[text.size]:integer][expr:call:named_args_not_allowed:[text.size]:x]",
+            err = "expr:call:unknown_named_arg:[text.size]:x",
         )
 
         chkSymsExpr("'Hello'.char_at(x = 123)",
             "char_at=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|rell:text.char_at",
             "x=UNKNOWN|-|-", "?head=-",
-            err = "expr:call:named_args_not_allowed:[text.char_at]:x",
+            err = "[expr:call:missing_args:[text.char_at]:[0:index]][expr:call:unknown_named_arg:[text.char_at]:x]",
         )
 
         chkSymsExpr("33(x = 1)", "x=UNKNOWN|-|-", "?head=-", err = "expr_call_nofn:integer")
@@ -351,7 +351,7 @@ class IdeSymbolExprTest: BaseIdeSymbolTest() {
         )
 
         val abs = arrayOf("abs=DEF_FUNCTION_SYSTEM|-|-", "?head=FUNCTION|rell:abs")
-        val err = "expr_call_argtypes:[abs]:"
+        val err = "expr_call_badargs:[abs]:[]"
         chkSymsExpr("abs().a", *abs, "a=UNKNOWN|-|-", "?head=-", err = err)
         chkSymsExpr("abs().f()", *abs, "f=UNKNOWN|-|-", "?head=-", err = err)
         chkSymsExpr("abs().a.b", *abs, "a=UNKNOWN|-|-", "?head=-", "b=UNKNOWN|-|-", "?head=-", err = err)

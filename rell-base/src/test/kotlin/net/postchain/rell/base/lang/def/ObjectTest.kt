@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.def
@@ -82,7 +82,7 @@ class ObjectTest: BaseRellTest() {
 
         chk("'' + foo", "text[foo]")
         chk("_type_of(foo)", "text[foo]")
-        chk("abs(foo)", "ct_err:expr_call_argtypes:[abs]:foo")
+        chk("abs(foo)", "ct_err:expr_call_badargs:[abs]:[foo]")
         chk("foo", "foo")
 
         chk("foo == foo", "ct_err:binop_operand_type:==:[foo]:[foo]")

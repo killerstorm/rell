@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.lib
@@ -34,19 +34,19 @@ class CLibFunctionTest: BaseCLibTest() {
 
     private fun makeTypeHintNs() = makeModule {
         function("_type_hint", "text") {
-            param("list<integer>")
+            param("a", "list<integer>")
             body { arg -> Rt_TextValue.get("A:${arg.strCode()}") }
         }
         function("_type_hint", "text") {
-            param("set<text>")
+            param("a", "set<text>")
             body { arg -> Rt_TextValue.get("B:${arg.strCode()}") }
         }
         function("_type_hint", "text") {
-            param("map<decimal,integer>")
+            param("a", "map<decimal,integer>")
             body { arg -> Rt_TextValue.get("C:${arg.strCode()}") }
         }
         function("_type_hint", "text") {
-            param("(big_integer) -> decimal")
+            param("a", "(big_integer) -> decimal")
             body { arg -> Rt_TextValue.get("D:${arg.strCode()}") }
         }
     }
@@ -54,23 +54,23 @@ class CLibFunctionTest: BaseCLibTest() {
     @Test fun testTypeHintMoreCollections() {
         tst.extraMod = makeModule {
             function("f_list", "text") {
-                param("list<integer>")
+                param("a", "list<integer>")
                 body { arg -> Rt_TextValue.get(arg.strCode()) }
             }
             function("f_set", "text") {
-                param("set<integer>")
+                param("a", "set<integer>")
                 body { arg -> Rt_TextValue.get(arg.strCode()) }
             }
             function("f_collection", "text") {
-                param("collection<integer>")
+                param("a", "collection<integer>")
                 body { arg -> Rt_TextValue.get(arg.strCode()) }
             }
             function("f_iterable", "text") {
-                param("iterable<(integer,text)>")
+                param("a", "iterable<(integer,text)>")
                 body { arg -> Rt_TextValue.get(arg.strCode()) }
             }
             function("f_map", "text") {
-                param("map<integer,text>")
+                param("a", "map<integer,text>")
                 body { arg -> Rt_TextValue.get(arg.strCode()) }
             }
         }
@@ -88,6 +88,12 @@ class CLibFunctionTest: BaseCLibTest() {
         chk("f_map([:])", "text[map<integer,text>[]]")
         chk("f_map([])", "ct_err:expr_list_no_type")
         chk("f_map(set())", "ct_err:fn:sys:unresolved_type_params:[set]:T")
+
+        chk("f_list(a = [])", "text[list<integer>[]]")
+        chk("f_set(a = set())", "text[set<integer>[]]")
+        chk("f_collection(a = [])", "text[list<integer>[]]")
+        chk("f_collection(a = set())", "text[set<integer>[]]")
+        chk("f_map(a = [:])", "text[map<integer,text>[]]")
     }
 
     @Test fun testLibAssertNull() {
@@ -104,18 +110,22 @@ class CLibFunctionTest: BaseCLibTest() {
     @Test fun testNullableMatching() {
         tst.extraMod = makeModule {
             function("f", "text") {
-                param("text?", nullable = true)
+                param("a", "text?", nullable = true)
                 body { _ -> Rt_TextValue.get("f(text?)") }
             }
             function("f", "text") {
-                param("integer?", nullable = true)
+                param("a", "integer?", nullable = true)
                 body { _ -> Rt_TextValue.get("f(integer?)") }
             }
             function("f", "text") {
-                param("boolean?", nullable = true)
+                param("a", "boolean?", nullable = true)
                 body { _ -> Rt_TextValue.get("f(boolean?)") }
             }
         }
+
+        chk("f('hello')", "ct_err:expr_call_badargs:[f]:[text]")
+        chk("f(123)", "ct_err:expr_call_badargs:[f]:[integer]")
+        chk("f(true)", "ct_err:expr_call_badargs:[f]:[boolean]")
 
         chkEx("{ val x: text? = 'hello'; return f(x); }", "text[f(text?)]")
         chkWarn("expr:smartnull:var:never:x")
@@ -161,7 +171,7 @@ class CLibFunctionTest: BaseCLibTest() {
         tst.extraMod = makeModule {
             function("f", result = "T") {
                 generic("T")
-                param("T")
+                param("a", "T")
                 validate { ctx ->
                     ctx.exprCtx.msgCtx.error(ctx.callPos, "test:validation_error_1", "Validation failed 1")
                 }
@@ -210,19 +220,19 @@ class CLibFunctionTest: BaseCLibTest() {
     @Test fun testFunctionParamImplies() {
         tst.extraMod = makeModule {
             function("f", result = "unit") {
-                param(type = "integer?", implies = L_ParamImplication.NOT_NULL)
+                param("a", type = "integer?", implies = L_ParamImplication.NOT_NULL)
                 body { _ -> Rt_UnitValue }
             }
             extension("ext", type = "any") {
                 function("g", result = "unit") {
-                    param(type = "integer?", implies = L_ParamImplication.NOT_NULL)
+                    param("a", type = "integer?", implies = L_ParamImplication.NOT_NULL)
                     body { _, _ -> Rt_UnitValue }
                 }
             }
         }
 
         chkEx("{ val t = _nullable_int(-123); return _type_of(t); }", "text[integer?]")
-        chkEx("{ val t = _nullable_int(-123); return abs(t); }", "ct_err:expr_call_argtypes:[abs]:integer?")
+        chkEx("{ val t = _nullable_int(-123); return abs(t); }", "ct_err:expr_call_badargs:[abs]:[integer?]")
         chkEx("{ val t = _nullable_int(-123); f(t); return _type_of(t); }", "text[integer]")
         chkEx("{ val t = _nullable_int(-123); f(t); return abs(t); }", "int[123]")
         chkEx("{ val t = _nullable_int(-123); ''.g(t); return _type_of(t); }", "text[integer]")

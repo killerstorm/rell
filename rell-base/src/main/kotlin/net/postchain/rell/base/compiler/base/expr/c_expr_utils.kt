@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.expr
@@ -12,10 +12,7 @@ import net.postchain.rell.base.compiler.base.core.C_QualifiedName
 import net.postchain.rell.base.compiler.base.utils.C_Error
 import net.postchain.rell.base.compiler.base.utils.C_Errors
 import net.postchain.rell.base.compiler.vexpr.*
-import net.postchain.rell.base.model.R_BooleanType
-import net.postchain.rell.base.model.R_CtErrorType
-import net.postchain.rell.base.model.R_SysFunction
-import net.postchain.rell.base.model.R_Type
+import net.postchain.rell.base.model.*
 import net.postchain.rell.base.model.expr.*
 import net.postchain.rell.base.model.stmt.R_ExprStatement
 import net.postchain.rell.base.runtime.Rt_CommonError
@@ -23,6 +20,7 @@ import net.postchain.rell.base.runtime.Rt_Exception
 import net.postchain.rell.base.utils.CommonUtils
 import net.postchain.rell.base.utils.LazyPosString
 import net.postchain.rell.base.utils.LazyString
+import net.postchain.rell.base.utils.immMapOf
 
 object C_ExprUtils {
     val ERROR_R_EXPR = errorRExpr()
@@ -123,9 +121,10 @@ object C_ExprUtils {
         type: R_Type = R_CtErrorType,
         msg: String = "Compilation error",
         ideInfo: C_IdeSymbolInfo? = null,
+        argIdeInfos: Map<R_Name, C_IdeSymbolInfo> = immMapOf(),
     ): V_GlobalFunctionCall {
         val vExpr = errorVExpr(ctx, pos, type, msg)
-        return V_GlobalFunctionCall(vExpr, ideInfo)
+        return V_GlobalFunctionCall(vExpr, ideInfo, argIdeInfos)
     }
 
     fun errorVMemberCall(

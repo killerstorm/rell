@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.expr
@@ -113,7 +113,6 @@ class C_TypeValueMember_BasicAttr(
 class C_TypeValueMember_Function(
     private val rName: R_Name,
     private val fn: C_LibMemberFunction,
-    private val defaultIdeInfo: C_IdeSymbolInfo,
     private val naming: C_MemberNaming,
 ): C_TypeValueMember(rName) {
     override fun kindMsg() = "function"
@@ -123,13 +122,13 @@ class C_TypeValueMember_Function(
 
     override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_TypeValueMember {
         val fn2 = fn.replaceTypeParams(rep)
-        return if (fn2 === fn) this else C_TypeValueMember_Function(rName, fn2, defaultIdeInfo, naming)
+        return if (fn2 === fn) this else C_TypeValueMember_Function(rName, fn2, naming)
     }
 
     override fun value(ctx: C_ExprContext, linkPos: S_Pos, linkName: C_Name?): V_TypeValueMember {
         val codeMsg = C_NoValueExpr.errNoValue(kindMsg(), nameMsg().msg)
         ctx.msgCtx.error(linkPos, codeMsg)
-        return C_ExprUtils.errorVMember(linkPos, ideInfo = defaultIdeInfo)
+        return C_ExprUtils.errorVMember(linkPos, ideInfo = fn.getDefaultIdeInfo())
     }
 
     override fun call(
@@ -139,7 +138,7 @@ class C_TypeValueMember_Function(
         args: List<S_CallArgument>,
         resTypeHint: C_TypeHint,
     ): V_TypeValueMember {
-        val callTargetInfo = C_FunctionCallTargetInfo_SysMemberFunction(selfType, fn)
+        val callTargetInfo = C_FunctionCallTargetInfo_LibMemberFunction(selfType, fn)
         val callArgs = C_FunctionCallArgsUtils.compileCallArgs(ctx, args, callTargetInfo)
         val fullName = naming.replaceSelfType(selfType.mType).fullNameLazy
 
@@ -148,8 +147,7 @@ class C_TypeValueMember_Function(
         val vCall = when (callArgs) {
             null -> null
             is C_FullCallArguments -> {
-                val vArgs = callArgs.compileSimpleArgs(fullName)
-                fn.compileCallFull(ctx, callCtx, selfType, vArgs, resTypeHint)
+                fn.compileCallFull(ctx, callCtx, selfType, callArgs, resTypeHint)
             }
             is C_PartialCallArguments -> {
                 val fnType = resTypeHint.getFunctionType()
@@ -157,7 +155,9 @@ class C_TypeValueMember_Function(
             }
         }
 
-        vCall ?: return C_ExprUtils.errorVMember(linkPos, ideInfo = defaultIdeInfo)
+        callArgs?.setArgIdeInfos(vCall?.argIdeInfos ?: fn.getDefaultArgIdeInfos())
+
+        vCall ?: return C_ExprUtils.errorVMember(linkPos, ideInfo = fn.getDefaultIdeInfo())
 
         val retType = vCall.returnType()
         return V_TypeValueMember_FunctionCall(retType, vCall, linkPos)
@@ -186,13 +186,12 @@ class C_TypeValueMember_Function(
         override fun dbExprWhat(base: V_Expr, safe: Boolean) = call.dbExprWhat(base, safe)
     }
 
-    private class C_FunctionCallTargetInfo_SysMemberFunction(
+    private class C_FunctionCallTargetInfo_LibMemberFunction(
         val selfType: R_Type,
         val fn: C_LibMemberFunction,
     ): C_FunctionCallTargetInfo() {
         override fun retType() = null
         override fun typeHints() = fn.getCallTypeHints(selfType)
-        override fun getParameter(name: R_Name) = null
     }
 }
 

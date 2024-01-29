@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.type
@@ -105,14 +105,14 @@ class FunctionTypeTest: BaseRellTest(false) {
         chk("fns().f0(123)", "ct_err:expr:call:too_many_args:[?]:0:1")
         chk("fns().f0(123, 'Hello')", "ct_err:expr:call:too_many_args:[?]:0:2")
 
-        chk("fns().f1()", "ct_err:expr:call:missing_args:[?]:0")
+        chk("fns().f1()", "ct_err:expr:call:missing_args:[?]:[0]")
         chk("fns().f1(123)", "text[lo1:123]")
         chk("fns().f1('Hello')", "ct_err:$errType:0:integer:text")
         chk("fns().f1(123, 'Hello')", "ct_err:expr:call:too_many_args:[?]:1:2")
 
-        chk("fns().f2()", "ct_err:expr:call:missing_args:[?]:0,1")
-        chk("fns().f2(123)", "ct_err:expr:call:missing_args:[?]:1")
-        chk("fns().f2('Hello')", "ct_err:[expr:call:missing_args:[?]:1][$errType:0:integer:text]")
+        chk("fns().f2()", "ct_err:expr:call:missing_args:[?]:[0,1]")
+        chk("fns().f2(123)", "ct_err:expr:call:missing_args:[?]:[1]")
+        chk("fns().f2('Hello')", "ct_err:[expr:call:missing_args:[?]:[1]][$errType:0:integer:text]")
         chk("fns().f2(123, 'Hello')", "text[lo2:123:Hello]")
         chk("fns().f2('Hello', 123)", "ct_err:[$errType:0:integer:text][$errType:1:text:integer]")
         chk("fns().f2('Hello', 'World')", "ct_err:$errType:0:integer:text")
@@ -122,8 +122,8 @@ class FunctionTypeTest: BaseRellTest(false) {
 
     @Test fun testArgumentByName() {
         def("function f(x: integer) = x * x;")
-        chk("f(*)(x = 7)", "ct_err:[expr:call:missing_args:[?]:0][expr:call:unknown_named_arg:[?]:x]")
-        chk("f(*)(y = 7)", "ct_err:[expr:call:missing_args:[?]:0][expr:call:unknown_named_arg:[?]:y]")
+        chk("f(*)(x = 7)", "ct_err:expr:call:unknown_named_arg:[?]:x")
+        chk("f(*)(y = 7)", "ct_err:expr:call:unknown_named_arg:[?]:y")
         chk("f(*)(7)", "int[49]")
     }
 

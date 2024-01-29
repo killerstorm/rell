@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -43,12 +43,12 @@ object Lib_Crypto {
 
         namespace("crypto") {
             function("sha256", "byte_array") {
-                param("byte_array")
+                param("input", "byte_array")
                 bodyRaw(Sha256)
             }
 
             function("keccak256", "byte_array", pure = true) {
-                param("byte_array")
+                param("input", "byte_array")
                 body { a ->
                     val data = a.asByteArray()
                     val res = keccak256(data)
@@ -57,15 +57,15 @@ object Lib_Crypto {
             }
 
             function("verify_signature", "boolean", pure = true) {
-                param("byte_array")
-                param("byte_array")
-                param("byte_array")
+                param("data_hash", "byte_array")
+                param("pubkey", "pubkey")
+                param("signature", "byte_array")
 
                 body { a, b, c ->
-                    val digest = a.asByteArray()
+                    val dataHash = a.asByteArray()
                     val res = try {
                         val signature = Signature(b.asByteArray(), c.asByteArray())
-                        PostchainGtvUtils.cryptoSystem.verifyDigest(digest, signature)
+                        PostchainGtvUtils.cryptoSystem.verifyDigest(dataHash, signature)
                     } catch (e: Exception) {
                         throw Rt_Exception.common("verify_signature", e.message ?: "Signature verification crashed")
                     }
@@ -74,10 +74,10 @@ object Lib_Crypto {
             }
 
             function("eth_ecrecover", "byte_array", pure = true) {
-                param("byte_array")
-                param("byte_array")
-                param("integer")
-                param("byte_array")
+                param("r", "byte_array")
+                param("s", "byte_array")
+                param("rec_id", "integer")
+                param("data_hash", "byte_array")
 
                 body { a, b, c, d ->
                     val r = a.asByteArray()
@@ -100,8 +100,8 @@ object Lib_Crypto {
             val signatureTypeStr = "(byte_array,byte_array,integer)"
 
             function("eth_sign", signatureTypeStr, pure = true) {
-                param("byte_array")
-                param("byte_array")
+                param("data_hash", "byte_array")
+                param("privkey", "byte_array")
 
                 body { a, b ->
                     val hash = a.asByteArray()
@@ -145,8 +145,8 @@ object Lib_Crypto {
             }
 
             function("privkey_to_pubkey", "byte_array", pure = true) {
-                param("byte_array")
-                param("boolean", arity = L_ParamArity.ZERO_ONE)
+                param("privkey", "byte_array")
+                param("compressed", "boolean", arity = L_ParamArity.ZERO_ONE)
 
                 bodyOpt1 { arg1, arg2 ->
                     val compressed = arg2?.asBoolean() ?: false

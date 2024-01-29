@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -23,8 +23,8 @@ object Lib_Type_Integer {
             constant("MAX_VALUE", Long.MAX_VALUE)
 
             constructor(pure = true) {
-                param("text")
-                param("integer", arity = L_ParamArity.ZERO_ONE)
+                param("value", "text")
+                param("radix", "integer", arity = L_ParamArity.ZERO_ONE)
                 bodyOpt1 { a, b ->
                     val r = b?.asInteger() ?: 10
                     calcFromText(a, r)
@@ -32,13 +32,13 @@ object Lib_Type_Integer {
             }
 
             constructor {
-                param("decimal")
+                param("value", "decimal")
                 bodyRaw(Lib_Type_Decimal.ToInteger)
             }
 
             staticFunction("from_text", "integer", pure = true) {
-                param("text")
-                param("integer", arity = L_ParamArity.ZERO_ONE)
+                param("value", "text")
+                param("radix", "integer", arity = L_ParamArity.ZERO_ONE)
                 bodyOpt1 { a, b ->
                     val r = b?.asInteger() ?: 10
                     calcFromText(a, r)
@@ -47,7 +47,7 @@ object Lib_Type_Integer {
 
             staticFunction("from_hex", "integer", pure = true) {
                 alias("parseHex", C_MessageType.ERROR)
-                param("text")
+                param("value", "text")
                 body { a ->
                     val s = a.asString()
                     val r = try {
@@ -64,12 +64,12 @@ object Lib_Type_Integer {
             }
 
             function("min", "integer") {
-                param("integer")
+                param("value", "integer")
                 bodyRaw(Lib_Math.Min_Integer)
             }
 
             function("min", "big_integer", pure = true) {
-                param("big_integer")
+                param("value", "big_integer")
                 dbFunctionSimple("min", "LEAST")
                 body { a, b ->
                     val v1 = a.asInteger()
@@ -80,7 +80,7 @@ object Lib_Type_Integer {
             }
 
             function("min", "decimal", pure = true) {
-                param("decimal")
+                param("value", "decimal")
                 dbFunctionSimple("min", "LEAST")
                 body { a, b ->
                     val v1 = a.asInteger()
@@ -91,12 +91,12 @@ object Lib_Type_Integer {
             }
 
             function("max", "integer") {
-                param("integer")
+                param("value", "integer")
                 bodyRaw(Lib_Math.Max_Integer)
             }
 
             function("max", "big_integer", pure = true) {
-                param("big_integer")
+                param("value", "big_integer")
                 dbFunctionSimple("max", "GREATEST")
                 body { a, b ->
                     val v1 = a.asInteger()
@@ -107,7 +107,7 @@ object Lib_Type_Integer {
             }
 
             function("max", "decimal", pure = true) {
-                param("decimal")
+                param("value", "decimal")
                 dbFunctionSimple("max", "GREATEST")
                 body { a, b ->
                     val v1 = a.asInteger()
@@ -157,7 +157,7 @@ object Lib_Type_Integer {
 
             function("to_text", "text", pure = true) {
                 alias("str")
-                param("integer")
+                param("radix", "integer")
                 body { a, b ->
                     val v = a.asInteger()
                     val r = b.asInteger()

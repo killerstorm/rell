@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel
@@ -9,6 +9,7 @@ import net.postchain.rell.base.compiler.base.core.C_TypeAdapter
 import net.postchain.rell.base.compiler.base.core.C_VarUid
 import net.postchain.rell.base.compiler.base.expr.C_VarFact
 import net.postchain.rell.base.compiler.base.expr.C_VarFacts
+import net.postchain.rell.base.compiler.base.fn.C_ArgMatching
 import net.postchain.rell.base.compiler.base.lib.C_SpecialLibGlobalFunctionBody
 import net.postchain.rell.base.compiler.base.lib.C_SpecialLibMemberFunctionBody
 import net.postchain.rell.base.compiler.base.lib.C_SysFunction
@@ -41,7 +42,7 @@ enum class L_ParamImplication {
 }
 
 class L_FunctionParam(
-    val name: R_Name?,
+    val name: R_Name,
     val mParam: M_FunctionParam,
     val lazy: Boolean,
     val implies: L_ParamImplication?,
@@ -54,7 +55,7 @@ class L_FunctionParam(
     override fun toString() = strCode()
 
     fun strCode(): String {
-        var res = mParam.strCode()
+        var res = mParam.strCode(compact = false)
         if (lazy) res = "@lazy $res"
         if (implies != null) res = "@implies($implies) $res"
         return res
@@ -83,11 +84,7 @@ class L_FunctionHeader(
     val resultType = mHeader.resultType
 
     private val paramsMap: Map<R_Name, L_FunctionParam> by lazy {
-        params
-            .mapNotNull {
-                if (it.name == null) null else (it.name to it)
-            }
-            .toImmMap()
+        params.associateBy { it.name }.toImmMap()
     }
 
     init {
@@ -128,22 +125,15 @@ class L_FunctionHeader(
         return if (mHeader2 === mHeader && params2 === params) this else L_FunctionHeader(mHeader2, params2)
     }
 
-    fun matchParams(nArgs: Int): L_FunctionParamsMatch? {
-        val mMatch = mHeader.matchParams(nArgs)
-        mMatch ?: return null
-        val actualParams = mMatch.paramIndexes.map { i -> params[i].replaceMParam(mMatch.actualParams[i]) }.toImmList()
-        return L_FunctionParamsMatch(this, mMatch, actualParams)
-    }
-
     fun getParam(name: R_Name): L_FunctionParam? {
         return paramsMap[name]
     }
 }
 
 class L_FunctionParamsMatch(
-    private val header: L_FunctionHeader,
     private val mMatch: M_FunctionParamsMatch,
     val actualParams: List<L_FunctionParam>,
+    val argMatching: C_ArgMatching,
 ) {
     fun matchArgs(argTypes: List<M_Type>, expectedResultType: M_Type?): L_FunctionHeaderMatch? {
         val m = mMatch.matchArgs(argTypes, expectedResultType)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.lib
@@ -17,7 +17,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
     @Test fun testPartCallOptionalParam1() {
         tst.extraMod = makeModule {
             function("_foo", "text") {
-                param("text", arity = L_ParamArity.ZERO_ONE)
+                param("a", "text", arity = L_ParamArity.ZERO_ONE)
                 bodyN { args -> Rt_TextValue.get(args.joinToString(",", "${this.fnSimpleName}:") { it.strCode() }) }
             }
         }
@@ -39,8 +39,8 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
     @Test fun testPartCallOptionalParam2() {
         tst.extraMod = makeModule {
             function("_foo", "text") {
-                param("integer")
-                param("text", arity = L_ParamArity.ZERO_ONE)
+                param("a", "integer")
+                param("b", "text", arity = L_ParamArity.ZERO_ONE)
                 bodyN { args -> Rt_TextValue.get(args.joinToString(",", "${this.fnSimpleName}:") { it.strCode() }) }
             }
         }
@@ -67,13 +67,13 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
     @Test fun testPartCallOptionalParamOverload() {
         tst.extraMod = makeModule {
             function("_foo", "text") {
-                param("integer")
-                param("text", arity = L_ParamArity.ZERO_ONE)
+                param("a", "integer")
+                param("b", "text", arity = L_ParamArity.ZERO_ONE)
                 bodyN { args -> Rt_TextValue.get(args.joinToString(",", "${this.fnSimpleName}:a:") { it.strCode() }) }
             }
             function("_foo", "text") {
-                param("decimal")
-                param("text")
+                param("a", "decimal")
+                param("b", "text")
                 bodyN { args -> Rt_TextValue.get(args.joinToString(",", "${this.fnSimpleName}:b:") { it.strCode() }) }
             }
         }
@@ -98,10 +98,12 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
 
     @Test fun testPartCallCasesNoHintMany() {
         tst.extraMod = makeModule {
-            function("_foo", "text", listOf("integer")) {
+            function("_foo", "text") {
+                param("a", "integer")
                 body { a -> Rt_TextValue.get("_foo(integer):${a.str()}") }
             }
-            function("_foo", "text", listOf("boolean")) {
+            function("_foo", "text") {
+                param("a", "boolean")
                 body { a -> Rt_TextValue.get("_foo(boolean):${a.str()}") }
             }
         }
@@ -111,7 +113,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
     @Test fun testPartCallCasesNoHintOneBad() {
         tst.extraMod = makeModule {
             function("_foo", "text") {
-                param("iterable<-any>")
+                param("a", "iterable<-any>")
                 body { a -> Rt_TextValue.get("_foo:${a.str()}") }
             }
         }
@@ -120,7 +122,8 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
 
     @Test fun testPartCallCasesNoHintOneGood() {
         tst.extraMod = makeModule {
-            function("_foo", "text", listOf("integer")) {
+            function("_foo", "text") {
+                param("a", "integer")
                 body { a -> Rt_TextValue.get("_foo:${a.strCode()}") }
             }
         }
@@ -130,10 +133,12 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
 
     @Test fun testPartCallCasesHintMany() {
         tst.extraMod = makeModule {
-            function("_foo", "text", listOf("iterable<integer>")) {
+            function("_foo", "text") {
+                param("a", "iterable<integer>")
                 body { a -> Rt_TextValue.get("_foo(iterable):${a.str()}") }
             }
-            function("_foo", "text", listOf("collection<integer>")) {
+            function("_foo", "text") {
+                param("a", "collection<integer>")
                 body { a -> Rt_TextValue.get("_foo(collection):${a.str()}") }
             }
         }
@@ -146,7 +151,7 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
     @Test fun testPartCallCasesHintOneBad() {
         tst.extraMod = makeModule {
             function("_foo", "text") {
-                param("iterable<-any>")
+                param("a", "iterable<-any>")
                 body { a -> Rt_TextValue.get("_foo:${a.str()}") }
             }
         }
@@ -157,7 +162,8 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
 
     @Test fun testPartCallCasesHintOneGood() {
         tst.extraMod = makeModule {
-            function("_foo", "text", listOf("integer")) {
+            function("_foo", "text") {
+                param("a", "integer")
                 body { a -> Rt_TextValue.get("_foo:${a.strCode()}") }
             }
         }
@@ -170,15 +176,15 @@ class CLibFunctionPartCallTest: BaseCLibTest() {
     @Test fun testPartCallExactMatchParams() {
         tst.extraMod = makeModule {
             function("_foo", "text") {
-                param("(integer?,text)")
+                param("a", "(integer?,text)")
                 body { a -> Rt_TextValue.get("_foo_0:${a.strCode()}") }
             }
             function("_foo", "text") {
-                param("(integer,text?)")
+                param("a", "(integer,text?)")
                 body { a -> Rt_TextValue.get("_foo_1:${a.strCode()}") }
             }
             function("_foo", "text") {
-                param("(integer?,text?)")
+                param("a", "(integer?,text?)")
                 body { a -> Rt_TextValue.get("_foo_2:${a.strCode()}") }
             }
         }

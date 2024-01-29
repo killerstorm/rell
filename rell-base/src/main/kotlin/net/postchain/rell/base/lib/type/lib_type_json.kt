@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -14,7 +14,7 @@ object Lib_Type_Json {
     val NAMESPACE = Ld_NamespaceDsl.make {
         type("json", rType = R_JsonType) {
             constructor(pure = true) {
-                param(type = "text")
+                param("value", type = "text")
                 dbFunctionCast("json", "JSONB")
                 body { a ->
                     val s = a.asString()

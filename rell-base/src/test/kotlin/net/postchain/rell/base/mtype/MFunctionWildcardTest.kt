@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.mtype
@@ -8,21 +8,21 @@ import org.junit.Test
 
 class MFunctionWildcardTest: BaseMFunctionTest() {
     @Test fun testGlobalInput() {
-        chkGlobalEx("<T>(data<T>,T):unit", "data<int>,int", "[T=int] (data<int>,int):unit")
+        chkGlobalEx("<T>(data<T>,T):unit", "data<int>,int", "[T=int] (a:data<int>,b:int):unit")
         chkGlobalEx("<T>(data<T>,T):unit", "data<-int>,int", "n/a")
-        chkGlobalEx("<T>(data<T>,T):unit", "data<+int>,int", "[T=CAP<+int>] (data<CAP<+int>>,CAP<+int>):unit")
+        chkGlobalEx("<T>(data<T>,T):unit", "data<+int>,int", "[T=CAP<+int>] (a:data<CAP<+int>>,b:CAP<+int>):unit")
     }
 
     @Test fun testGlobalOutput() {
-        chkGlobalEx("<T>(data<T>):T", "data<int>", "[T=int] (data<int>):int")
-        chkGlobalEx("<T>(data<T>):T", "data<-int>", "[T=CAP<-int>] (data<CAP<-int>>):int")
-        chkGlobalEx("<T>(data<T>):T", "data<+int>", "[T=CAP<+int>] (data<CAP<+int>>):anything")
+        chkGlobalEx("<T>(data<T>):T", "data<int>", "[T=int] (a:data<int>):int")
+        chkGlobalEx("<T>(data<T>):T", "data<-int>", "[T=CAP<-int>] (a:data<CAP<-int>>):int")
+        chkGlobalEx("<T>(data<T>):T", "data<+int>", "[T=CAP<+int>] (a:data<CAP<+int>>):anything")
     }
 
     @Test fun testMemberInput() {
-        chkMemberEx("data<int>", "(T):unit", "int", "(int):unit OK")
-        chkMemberEx("data<-int>", "(T):unit", "int", "(CAP<-int>):unit n/a")
-        chkMemberEx("data<+int>", "(T):unit", "int", "(CAP<+int>):unit OK")
+        chkMemberEx("data<int>", "(T):unit", "int", "(a:int):unit OK")
+        chkMemberEx("data<-int>", "(T):unit", "int", "(a:CAP<-int>):unit n/a")
+        chkMemberEx("data<+int>", "(T):unit", "int", "(a:CAP<+int>):unit OK")
     }
 
     @Test fun testMemberOutput() {
@@ -74,34 +74,34 @@ class MFunctionWildcardTest: BaseMFunctionTest() {
     }
 
     @Test fun testWildcardVsWildcardGlobal() {
-        chkGlobalEx("<T>(data<T>):data<T>", "data<int>", "[T=int] (data<int>):data<int>")
-        chkGlobalEx("<T>(data<T>):data<T>", "data<-int>", "[T=CAP<-int>] (data<CAP<-int>>):data<-int>")
-        chkGlobalEx("<T>(data<T>):data<T>", "data<+int>", "[T=CAP<+int>] (data<CAP<+int>>):data<+int>")
-        chkGlobalEx("<T>(data<-T>):data<T>", "data<int>", "[T=int] (data<-int>):data<int>")
-        chkGlobalEx("<T>(data<-T>):data<T>", "data<-int>", "[T=CAP<-int>] (data<-CAP<-int>>):data<-int>")
-        chkGlobalEx("<T>(data<-T>):data<T>", "data<+int>", "[T=CAP<+int>] (data<-CAP<+int>>):data<+int>")
-        chkGlobalEx("<T>(data<+T>):data<T>", "data<int>", "[T=int] (data<+int>):data<int>")
-        chkGlobalEx("<T>(data<+T>):data<T>", "data<-int>", "[T=CAP<-int>] (data<+CAP<-int>>):data<-int>")
-        chkGlobalEx("<T>(data<+T>):data<T>", "data<+int>", "[T=CAP<+int>] (data<+CAP<+int>>):data<+int>")
+        chkGlobalEx("<T>(data<T>):data<T>", "data<int>", "[T=int] (a:data<int>):data<int>")
+        chkGlobalEx("<T>(data<T>):data<T>", "data<-int>", "[T=CAP<-int>] (a:data<CAP<-int>>):data<-int>")
+        chkGlobalEx("<T>(data<T>):data<T>", "data<+int>", "[T=CAP<+int>] (a:data<CAP<+int>>):data<+int>")
+        chkGlobalEx("<T>(data<-T>):data<T>", "data<int>", "[T=int] (a:data<-int>):data<int>")
+        chkGlobalEx("<T>(data<-T>):data<T>", "data<-int>", "[T=CAP<-int>] (a:data<-CAP<-int>>):data<-int>")
+        chkGlobalEx("<T>(data<-T>):data<T>", "data<+int>", "[T=CAP<+int>] (a:data<-CAP<+int>>):data<+int>")
+        chkGlobalEx("<T>(data<+T>):data<T>", "data<int>", "[T=int] (a:data<+int>):data<int>")
+        chkGlobalEx("<T>(data<+T>):data<T>", "data<-int>", "[T=CAP<-int>] (a:data<+CAP<-int>>):data<-int>")
+        chkGlobalEx("<T>(data<+T>):data<T>", "data<+int>", "[T=CAP<+int>] (a:data<+CAP<+int>>):data<+int>")
 
-        chkGlobalEx("<T>(data<T>):data<-T>", "data<int>", "[T=int] (data<int>):data<-int>")
-        chkGlobalEx("<T>(data<T>):data<-T>", "data<-int>", "[T=CAP<-int>] (data<CAP<-int>>):data<-int>")
-        chkGlobalEx("<T>(data<T>):data<-T>", "data<+int>", "[T=CAP<+int>] (data<CAP<+int>>):data<*>")
-        chkGlobalEx("<T>(data<T>):data<+T>", "data<int>", "[T=int] (data<int>):data<+int>")
-        chkGlobalEx("<T>(data<T>):data<+T>", "data<-int>", "[T=CAP<-int>] (data<CAP<-int>>):data<*>")
-        chkGlobalEx("<T>(data<T>):data<+T>", "data<+int>", "[T=CAP<+int>] (data<CAP<+int>>):data<+int>")
+        chkGlobalEx("<T>(data<T>):data<-T>", "data<int>", "[T=int] (a:data<int>):data<-int>")
+        chkGlobalEx("<T>(data<T>):data<-T>", "data<-int>", "[T=CAP<-int>] (a:data<CAP<-int>>):data<-int>")
+        chkGlobalEx("<T>(data<T>):data<-T>", "data<+int>", "[T=CAP<+int>] (a:data<CAP<+int>>):data<*>")
+        chkGlobalEx("<T>(data<T>):data<+T>", "data<int>", "[T=int] (a:data<int>):data<+int>")
+        chkGlobalEx("<T>(data<T>):data<+T>", "data<-int>", "[T=CAP<-int>] (a:data<CAP<-int>>):data<*>")
+        chkGlobalEx("<T>(data<T>):data<+T>", "data<+int>", "[T=CAP<+int>] (a:data<CAP<+int>>):data<+int>")
     }
 
     @Test fun testWildcardVsWildcardMemberParam() {
-        chkMemberEx("data<int>", "(data<T>):unit", "nothing", "(data<int>):unit OK")
-        chkMemberEx("data<int>", "(data<-T>):unit", "nothing", "(data<-int>):unit OK")
-        chkMemberEx("data<int>", "(data<+T>):unit", "nothing", "(data<+int>):unit OK")
-        chkMemberEx("data<-int>", "(data<T>):unit", "nothing", "(data<CAP<-int>>):unit OK")
-        chkMemberEx("data<-int>", "(data<-T>):unit", "nothing", "(data<-CAP<-int>>):unit OK")
-        chkMemberEx("data<-int>", "(data<+T>):unit", "nothing", "(data<+CAP<-int>>):unit OK")
-        chkMemberEx("data<+int>", "(data<T>):unit", "nothing", "(data<CAP<+int>>):unit OK")
-        chkMemberEx("data<+int>", "(data<-T>):unit", "nothing", "(data<-CAP<+int>>):unit OK")
-        chkMemberEx("data<+int>", "(data<+T>):unit", "nothing", "(data<+CAP<+int>>):unit OK")
+        chkMemberEx("data<int>", "(data<T>):unit", "nothing", "(a:data<int>):unit OK")
+        chkMemberEx("data<int>", "(data<-T>):unit", "nothing", "(a:data<-int>):unit OK")
+        chkMemberEx("data<int>", "(data<+T>):unit", "nothing", "(a:data<+int>):unit OK")
+        chkMemberEx("data<-int>", "(data<T>):unit", "nothing", "(a:data<CAP<-int>>):unit OK")
+        chkMemberEx("data<-int>", "(data<-T>):unit", "nothing", "(a:data<-CAP<-int>>):unit OK")
+        chkMemberEx("data<-int>", "(data<+T>):unit", "nothing", "(a:data<+CAP<-int>>):unit OK")
+        chkMemberEx("data<+int>", "(data<T>):unit", "nothing", "(a:data<CAP<+int>>):unit OK")
+        chkMemberEx("data<+int>", "(data<-T>):unit", "nothing", "(a:data<-CAP<+int>>):unit OK")
+        chkMemberEx("data<+int>", "(data<+T>):unit", "nothing", "(a:data<+CAP<+int>>):unit OK")
     }
 
     @Test fun testWildcardVsWildcardMemberResult() {
@@ -117,24 +117,26 @@ class MFunctionWildcardTest: BaseMFunctionTest() {
     }
 
     @Test fun testMultipleWildcardArguments() {
-        chkGlobalEx("<T>(data<T>,data<T>):unit", "data<int>,data<int>", "[T=int] (data<int>,data<int>):unit")
+        chkGlobalEx("<T>(data<T>,data<T>):unit", "data<int>,data<int>", "[T=int] (a:data<int>,b:data<int>):unit")
         chkGlobalEx("<T>(data<T>,data<T>):unit", "data<-int>,data<int>", "n/a")
         chkGlobalEx("<T>(data<T>,data<T>):unit", "data<+int>,data<int>", "n/a")
         chkGlobalEx("<T>(data<T>,data<T>):unit", "data<*>,data<int>", "n/a")
 
-        chkGlobalEx("<T>(data<-T>,data<T>):unit", "data<int>,data<int>", "[T=int] (data<-int>,data<int>):unit")
-        chkGlobalEx("<T>(data<-T>,data<T>):unit", "data<-int>,data<int>", "[T=int] (data<-int>,data<int>):unit")
+        chkGlobalEx("<T>(data<-T>,data<T>):unit", "data<int>,data<int>", "[T=int] (a:data<-int>,b:data<int>):unit")
+        chkGlobalEx("<T>(data<-T>,data<T>):unit", "data<-int>,data<int>", "[T=int] (a:data<-int>,b:data<int>):unit")
         chkGlobalEx("<T>(data<-T>,data<T>):unit", "data<+int>,data<int>", "n/a")
         chkGlobalEx("<T>(data<-T>,data<T>):unit", "data<*>,data<int>", "n/a")
         chkGlobalEx("<T>(data<-T>,data<T>):unit", "data<int>,data<-int>", "n/a")
-        chkGlobalEx("<T>(data<-T>,data<T>):unit", "data<int>,data<+int>", "[T=CAP<+int>] (data<-CAP<+int>>,data<CAP<+int>>):unit")
+        chkGlobalEx("<T>(data<-T>,data<T>):unit", "data<int>,data<+int>",
+            "[T=CAP<+int>] (a:data<-CAP<+int>>,b:data<CAP<+int>>):unit")
         chkGlobalEx("<T>(data<-T>,data<T>):unit", "data<int>,data<*>", "n/a")
 
-        chkGlobalEx("<T>(data<+T>,data<T>):unit", "data<int>,data<int>", "[T=int] (data<+int>,data<int>):unit")
+        chkGlobalEx("<T>(data<+T>,data<T>):unit", "data<int>,data<int>", "[T=int] (a:data<+int>,b:data<int>):unit")
         chkGlobalEx("<T>(data<+T>,data<T>):unit", "data<-int>,data<int>", "n/a")
-        chkGlobalEx("<T>(data<+T>,data<T>):unit", "data<+int>,data<int>", "[T=int] (data<+int>,data<int>):unit")
+        chkGlobalEx("<T>(data<+T>,data<T>):unit", "data<+int>,data<int>", "[T=int] (a:data<+int>,b:data<int>):unit")
         chkGlobalEx("<T>(data<+T>,data<T>):unit", "data<*>,data<int>", "n/a")
-        chkGlobalEx("<T>(data<+T>,data<T>):unit", "data<int>,data<-int>", "[T=CAP<-int>] (data<+CAP<-int>>,data<CAP<-int>>):unit")
+        chkGlobalEx("<T>(data<+T>,data<T>):unit", "data<int>,data<-int>",
+            "[T=CAP<-int>] (a:data<+CAP<-int>>,b:data<CAP<-int>>):unit")
         chkGlobalEx("<T>(data<+T>,data<T>):unit", "data<int>,data<+int>", "n/a")
         chkGlobalEx("<T>(data<+T>,data<T>):unit", "data<int>,data<*>", "n/a")
     }

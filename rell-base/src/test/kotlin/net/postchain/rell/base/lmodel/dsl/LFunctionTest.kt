@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -31,20 +31,44 @@ class LFunctionTest: BaseLTest() {
             type("integer")
             type("text")
             type("data") {
-                function("foo", params = listOf("text")) {
+                function("param_conflict") {
+                    param("a", "text")
+                    chkErr("LDE:common_fun:param_name_conflict:a") { param("a", type = "integer") }
+                    param("b", "integer")
                     result(type = "integer")
-                    chkErr("LDE:common_fun:params_already_defined:text") { param(type = "text") }
-                    chkErr("LDE:common_fun:params_already_defined:integer") { param(type = "integer") }
                     body { -> Rt_UnitValue }
                 }
-                function("bar", result = "integer") {
+                function("result_after_params") {
+                    param("a", "text")
+                    result(type = "integer")
+                    body { -> Rt_UnitValue }
+                }
+                function("result_before_params") {
+                    result(type = "integer")
+                    param("a", "text")
+                    body { -> Rt_UnitValue }
+                }
+                function("result_between_params") {
+                    param("a", "text")
+                    result(type = "integer")
+                    chkErr("LDE:common_fun:params_already_defined:b") { param("b", type = "integer") }
+                    body { -> Rt_UnitValue }
+                }
+                function("result_already_defined", result = "integer") {
                     chkErr("LDE:function:result_already_defined:integer") { result(type = "integer") }
                     chkErr("LDE:function:result_already_defined:text") { result(type = "text") }
                     body { -> Rt_UnitValue }
                 }
             }
         }
-        chkTypeMems(mod, "data", "function foo(text): integer", "function bar(): integer")
+
+        chkTypeMems(mod, "data",
+            "function param_conflict(a: text, b: integer): integer",
+            "function result_after_params(a: text): integer",
+            "function result_before_params(a: text): integer",
+            "function result_between_params(a: text): integer",
+            "function result_already_defined(): integer",
+        )
     }
 
     @Test fun testFunctionUsesSelfType() {
@@ -57,12 +81,12 @@ class LFunctionTest: BaseLTest() {
                 }
                 function("index_of") {
                     result(type = "integer")
-                    param(type = "text")
+                    param("a", type = "text")
                     body { -> Rt_UnitValue }
                 }
             }
         }
-        chkTypeMems(mod, "text", "function upper_case(): text", "function index_of(text): integer")
+        chkTypeMems(mod, "text", "function upper_case(): text", "function index_of(a: text): integer")
     }
 
     @Test fun testTypeParamOfFunction() {
@@ -71,12 +95,12 @@ class LFunctionTest: BaseLTest() {
                 function("f") {
                     generic("T")
                     result(type = "T")
-                    param(type = "T")
+                    param("a", type = "T")
                     body { -> Rt_UnitValue }
                 }
             }
         }
-        chkTypeMems(mod, "data", "function <T> f(T): T")
+        chkTypeMems(mod, "data", "function <T> f(a: T): T")
     }
 
     @Test fun testTypeParamUsesTypeParamFunction() {
@@ -86,12 +110,12 @@ class LFunctionTest: BaseLTest() {
                     generic("T")
                     generic("U", subOf = "T")
                     result(type = "U")
-                    param(type = "T")
+                    param("a", type = "T")
                     body { -> Rt_UnitValue }
                 }
             }
         }
-        chkTypeMems(mod, "data", "function <T,U:-T> f(T): U")
+        chkTypeMems(mod, "data", "function <T,U:-T> f(a: T): U")
     }
 
     @Test fun testTypeParamConflictOuter() {
@@ -133,7 +157,7 @@ class LFunctionTest: BaseLTest() {
         chkModuleErr("LDE:function:param_not_nullable:integer") {
             type("integer")
             function("f", result = "anything") {
-                param(type = "integer", nullable = true)
+                param("a", type = "integer", nullable = true)
                 body { -> Rt_UnitValue }
             }
         }

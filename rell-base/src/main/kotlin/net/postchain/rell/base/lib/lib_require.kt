@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -17,16 +17,16 @@ import net.postchain.rell.base.runtime.Rt_Value
 object Lib_Require {
     val NAMESPACE = Ld_NamespaceDsl.make {
         function("require", "unit", pure = true) {
-            param("boolean")
-            param("text", lazy = true, arity = L_ParamArity.ZERO_ONE)
+            param("value", "boolean")
+            param("message", "text", lazy = true, arity = L_ParamArity.ZERO_ONE)
             makeRequireBody(this, R_RequireCondition_Boolean)
         }
 
         function("require", pure = true) {
             generic("T", subOf = "any")
             result(type = "T")
-            param(type = "T?", nullable = true, implies = L_ParamImplication.NOT_NULL)
-            param("text", lazy = true, arity = L_ParamArity.ZERO_ONE)
+            param("value", type = "T?", nullable = true, implies = L_ParamImplication.NOT_NULL)
+            param("message", "text", lazy = true, arity = L_ParamArity.ZERO_ONE)
             makeRequireBody(this, R_RequireCondition_Nullable)
         }
 
@@ -34,8 +34,8 @@ object Lib_Require {
             alias("requireNotEmpty", C_MessageType.ERROR)
             generic("T")
             result(type = "list<T>")
-            param(type = "list<T>?")
-            param("text", lazy = true, arity = L_ParamArity.ZERO_ONE)
+            param("value", type = "list<T>?")
+            param("message", "text", lazy = true, arity = L_ParamArity.ZERO_ONE)
             makeRequireBody(this, R_RequireCondition_Collection)
         }
 
@@ -43,8 +43,8 @@ object Lib_Require {
             alias("requireNotEmpty", C_MessageType.ERROR)
             generic("T", subOf = "immutable")
             result(type = "set<T>")
-            param(type = "set<T>?")
-            param("text", lazy = true, arity = L_ParamArity.ZERO_ONE)
+            param("value", type = "set<T>?")
+            param("message", "text", lazy = true, arity = L_ParamArity.ZERO_ONE)
             makeRequireBody(this, R_RequireCondition_Collection)
         }
 
@@ -53,8 +53,8 @@ object Lib_Require {
             generic("K", subOf = "immutable")
             generic("V")
             result(type = "map<K,V>")
-            param(type = "map<K,V>?")
-            param("text", lazy = true, arity = L_ParamArity.ZERO_ONE)
+            param("value", type = "map<K,V>?")
+            param("message", "text", lazy = true, arity = L_ParamArity.ZERO_ONE)
             makeRequireBody(this, R_RequireCondition_Map)
         }
 
@@ -62,8 +62,8 @@ object Lib_Require {
             alias("requireNotEmpty", C_MessageType.ERROR)
             generic("T", subOf = "any")
             result(type = "T")
-            param(type = "T?", nullable = true, implies = L_ParamImplication.NOT_NULL)
-            param("text", lazy = true, arity = L_ParamArity.ZERO_ONE)
+            param("value", type = "T?", nullable = true, implies = L_ParamImplication.NOT_NULL)
+            param("message", "text", lazy = true, arity = L_ParamArity.ZERO_ONE)
             makeRequireBody(this, R_RequireCondition_Nullable)
         }
     }

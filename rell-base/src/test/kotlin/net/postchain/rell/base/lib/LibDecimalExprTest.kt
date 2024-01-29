@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -59,7 +59,7 @@ abstract class LibDecimalExprTest: BaseExprTest() {
         chkConstructor("1.0", "dec[1]")
         chkConstructor("1.00000", "dec[1]")
 
-        chkExpr("decimal(false)", "ct_err:expr_call_argtypes:[decimal]:boolean")
+        chkExpr("decimal(false)", "ct_err:expr_call_badargs:[decimal]:[boolean]")
     }
 
     @Test fun testConstructorTextInvalid() {

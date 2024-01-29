@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -12,11 +12,11 @@ class LibRowidTest: BaseRellTest(false) {
         chk("_type_of(rowid(0))", "text[rowid]")
         chk("rowid(0)", "rowid[0]")
         chk("rowid(12345)", "rowid[12345]")
-        chk("rowid()", "ct_err:expr_call_argtypes:[rowid]:")
-        chk("rowid(1, 2)", "ct_err:expr_call_argtypes:[rowid]:integer,integer")
-        chk("rowid('a')", "ct_err:expr_call_argtypes:[rowid]:text")
-        chk("rowid(false)", "ct_err:expr_call_argtypes:[rowid]:boolean")
-        chk("rowid(rowid(0))", "ct_err:expr_call_argtypes:[rowid]:rowid")
+        chk("rowid()", "ct_err:expr:call:missing_args:[rowid]:[0:value]")
+        chk("rowid(1, 2)", "ct_err:expr:call:too_many_args:[rowid]:1:2")
+        chk("rowid('a')", "ct_err:expr_call_badargs:[rowid]:[text]")
+        chk("rowid(false)", "ct_err:expr_call_badargs:[rowid]:[boolean]")
+        chk("rowid(rowid(0))", "ct_err:expr_call_badargs:[rowid]:[rowid]")
         chk("rowid(-1)", "rt_err:rowid(integer):negative:-1")
     }
 

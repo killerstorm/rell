@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -68,7 +68,6 @@ interface Ld_NamespaceMaker: Ld_CommonNamespaceMaker {
     fun function(
         name: String,
         result: String?,
-        params: List<String>?,
         pure: Boolean?,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     )
@@ -156,11 +155,10 @@ class Ld_NamespaceDslImpl(
     override fun function(
         name: String,
         result: String?,
-        params: List<String>?,
         pure: Boolean?,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     ) {
-        maker.function(name, result, params, pure, block)
+        maker.function(name, result, pure, block)
     }
 
     override fun function(name: String, fn: C_SpecialLibGlobalFunctionBody) {
@@ -312,7 +310,6 @@ class Ld_NamespaceBuilder(
     override fun function(
         name: String,
         result: String?,
-        params: List<String>?,
         pure: Boolean?,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     ) {
@@ -321,7 +318,6 @@ class Ld_NamespaceBuilder(
         val fn = Ld_FunctionBuilder.build(
             simpleName = simpleName,
             result = result,
-            params = params,
             pure = pure,
             outerTypeParams = immSetOf(),
             block = block,
@@ -444,11 +440,28 @@ private class Ld_NamespaceMember_Alias(
     }
 
     private fun finish(ctx: Ld_NamespaceFinishContext, fullName: R_FullName): List<L_NamespaceMember> {
-        val members = ctx.getNamespaceMembers(targetName, errPos)
-        check(members.isNotEmpty()) { "Alias target not found: ${fullName.qualifiedName} -> $targetName" }
+        val members = findMembers(ctx, fullName)
+        Ld_Exception.check(members.isNotEmpty()) {
+            val msg = "Alias target not found: ${fullName.qualifiedName} -> $targetName"
+            "alias_target_not_found:[$fullName]:[$targetName]" to msg
+        }
         return members.map {
             finishMember(fullName, it, deprecated)
         }
+    }
+
+    private fun findMembers(ctx: Ld_NamespaceFinishContext, fullName: R_FullName): List<L_NamespaceMember> {
+        // Current implementation allows shadowing: names in nested namespaces shadow names in outer namespaces.
+        val fullPath = fullName.qualifiedName.parts
+        for (drop in 1 .. fullPath.size) {
+            val basePath = fullPath.subList(0, fullPath.size - drop)
+            val actualTargetName = R_QualifiedName(basePath + targetName.parts)
+            val members = ctx.getNamespaceMembers(actualTargetName, errPos)
+            if (members.isNotEmpty()) {
+                return members
+            }
+        }
+        return immListOf()
     }
 
     companion object {

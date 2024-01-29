@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -89,10 +89,10 @@ class LibTest: BaseRellTest(false) {
         chk("$f(zmap(map<integer,text>()))", "boolean[${!exists}]")
         chk("$f(zmap(null))", "boolean[${!exists}]")
 
-        chk("$f(123)", "ct_err:expr_call_argtypes:[$f]:integer")
-        chk("$f(false)", "ct_err:expr_call_argtypes:[$f]:boolean")
-        chk("$f('Hello')", "ct_err:expr_call_argtypes:[$f]:text")
-        chk("$f(null)", "ct_err:expr_call_argtypes:[$f]:null")
+        chk("$f(123)", "ct_err:expr_call_badargs:[$f]:[integer]")
+        chk("$f(false)", "ct_err:expr_call_badargs:[$f]:[boolean]")
+        chk("$f('Hello')", "ct_err:expr_call_badargs:[$f]:[text]")
+        chk("$f(null)", "ct_err:expr_call_badargs:[$f]:[null]")
     }
 
     @Test fun testDeprecatedError() {

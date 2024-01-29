@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.utils
@@ -140,10 +140,10 @@ object C_Utils {
         C_Errors.check(type != R_UnitType, pos, errSupplier)
     }
 
-    fun checkUnitType(msgCtx: C_MessageContext, pos: S_Pos, type: R_Type, errSupplier: C_CodeMsgSupplier): Boolean {
+    fun checkUnitType(msgMgr: C_MessageManager, pos: S_Pos, type: R_Type, errSupplier: C_CodeMsgSupplier): Boolean {
         if (type == R_UnitType) {
             val codeMsg = errSupplier()
-            msgCtx.error(pos, codeMsg)
+            msgMgr.error(pos, codeMsg)
             return false
         }
         return true
@@ -445,7 +445,6 @@ object C_Parser {
     }
 
     fun checkEofErrorRepl(code: String): C_Error? {
-        val path = C_SourcePath.parse("<console>")
         val res = parse0(replParserPath, code, S_Grammar.replParser)
         return when (res) {
             is C_SuccessParserResult -> null
@@ -484,7 +483,7 @@ object C_Parser {
 }
 
 object C_GraphUtils {
-    fun <T> findCycles(graph: Map<T, Collection<T>>): List<List<T>> {
+    fun <T: Any> findCycles(graph: Map<T, Collection<T>>): List<List<T>> {
         val graphEx = graph.mapValues { vert ->
             vert.value.map { 0 to it }.toImmList()
         }
@@ -580,7 +579,7 @@ object C_GraphUtils {
         return result.toList()
     }
 
-    fun <T> findCyclicVertices(graph: Map<T, Collection<T>>): List<T> {
+    fun <T: Any> findCyclicVertices(graph: Map<T, Collection<T>>): List<T> {
         val cycles = findCycles(graph)
         val cyclicVertices = mutableSetOf<T>()
         for (cycle in cycles) {
@@ -755,7 +754,7 @@ class C_LateInit<T: Any>(val pass: C_CompilerPass, fallback: T) {
     }
 }
 
-class C_ListBuilder<T>(proto: List<T> = immListOf()) {
+class C_ListBuilder<T: Any>(proto: List<T> = immListOf()) {
     private val list = proto.toMutableList()
     private var commit: List<T>? = null
 
@@ -774,7 +773,7 @@ class C_ListBuilder<T>(proto: List<T> = immListOf()) {
     }
 }
 
-class C_MapBuilder<K, V>(proto: Map<K, V> = immMapOf()) {
+class C_MapBuilder<K: Any, V: Any>(proto: Map<K, V> = immMapOf()) {
     private val map = proto.toMutableMap()
     private var commit: Map<K, V>? = null
 

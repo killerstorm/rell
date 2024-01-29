@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -30,7 +30,7 @@ object Lib_Type_Set {
             }
 
             constructor(pure = true) {
-                param(type = "iterable<-T>")
+                param("values", type = "iterable<-T>")
                 bodyMeta {
                     val elementType = fnBodyMeta.typeArg("T")
                     val rKind = R_CollectionKind_Set(R_SetType(elementType))

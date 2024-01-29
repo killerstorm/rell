@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.lib
@@ -17,29 +17,29 @@ class CLibFunctionLazyParamTest: BaseCLibTest() {
     @Test fun testLazyParamVarFacts() {
         tst.extraMod = makeModule {
             function("f", result = "unit") {
-                param(type = "integer", lazy = true)
+                param("a", type = "integer", lazy = true)
                 body { _ -> Rt_UnitValue }
             }
             extension("ext", type = "any") {
                 function("g", result = "unit") {
-                    param(type = "integer", lazy = true)
+                    param("a", type = "integer", lazy = true)
                     body { _, _ -> Rt_UnitValue }
                 }
             }
         }
 
         chkEx("{ val t = _nullable_int(123); return _type_of(t); }", "text[integer?]")
-        chkEx("{ val t = _nullable_int(123); return abs(t); }", "ct_err:expr_call_argtypes:[abs]:integer?")
+        chkEx("{ val t = _nullable_int(123); return abs(t); }", "ct_err:expr_call_badargs:[abs]:[integer?]")
         chkEx("{ val t = _nullable_int(123); f(t!!); return _type_of(t); }", "text[integer?]")
-        chkEx("{ val t = _nullable_int(123); f(t!!); return abs(t); }", "ct_err:expr_call_argtypes:[abs]:integer?")
+        chkEx("{ val t = _nullable_int(123); f(t!!); return abs(t); }", "ct_err:expr_call_badargs:[abs]:[integer?]")
         chkEx("{ val t = _nullable_int(123); ''.g(t!!); return _type_of(t); }", "text[integer?]")
-        chkEx("{ val t = _nullable_int(123); ''.g(t!!); return abs(t); }", "ct_err:expr_call_argtypes:[abs]:integer?")
+        chkEx("{ val t = _nullable_int(123); ''.g(t!!); return abs(t); }", "ct_err:expr_call_badargs:[abs]:[integer?]")
     }
 
     @Test fun testLazyParamsMany() {
         tst.extraMod = makeModule {
             function("sum", "text") {
-                param("integer", arity = L_ParamArity.ONE_MANY, lazy = true)
+                param("a", "integer", arity = L_ParamArity.ONE_MANY, lazy = true)
                 bodyN { args ->
                     val sum = args.sumOf { it.asLazyValue().asInteger() }
                     Rt_TextValue.get("${args.size}:$sum")
@@ -161,8 +161,8 @@ class CLibFunctionLazyParamTest: BaseCLibTest() {
         val MODULE: C_LibModule = C_LibModule.make("test", Lib_Rell.MODULE) {
             extension("boolean_ext", type = "boolean") {
                 function("if_int", result = "integer") {
-                    param(type = "integer", lazy = true)
-                    param(type = "integer", lazy = true)
+                    param("a", type = "integer", lazy = true)
+                    param("b", type = "integer", lazy = true)
                     body { arg1, arg2, arg3 ->
                         val resValue = if (arg1.asBoolean()) arg2 else arg3
                         resValue.asLazyValue()
@@ -178,9 +178,9 @@ class CLibFunctionLazyParamTest: BaseCLibTest() {
                 }
 
                 function("if_int", result = "integer") {
-                    param(type = "boolean")
-                    param(type = "integer", lazy = true)
-                    param(type = "integer", lazy = true)
+                    param("a", type = "boolean")
+                    param("b", type = "integer", lazy = true)
+                    param("c", type = "integer", lazy = true)
                     body { _, arg1, arg2, arg3 ->
                         val resValue = if (arg1.asBoolean()) arg2 else arg3
                         resValue.asLazyValue()
@@ -189,9 +189,9 @@ class CLibFunctionLazyParamTest: BaseCLibTest() {
             }
 
             function("if_int", "integer") {
-                param("boolean")
-                param("integer", lazy = true)
-                param("integer", lazy = true)
+                param("a", "boolean")
+                param("b", "integer", lazy = true)
+                param("c", "integer", lazy = true)
                 body { a, b, c ->
                     val resValue = if (a.asBoolean()) b else c
                     resValue.asLazyValue()

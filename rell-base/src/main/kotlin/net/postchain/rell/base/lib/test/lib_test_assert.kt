@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.test
@@ -43,8 +43,8 @@ object Lib_Test_Assert {
             function("assert_equals", pure = true) {
                 generic("T")
                 result("unit")
-                param(type = "T")
-                param(type = "T")
+                param("actual", type = "T")
+                param("expected", type = "T")
                 body { actualValue, expectedValue ->
                     calcAssertEquals("assert_equals", expectedValue, actualValue, R_BinaryOp_Eq)
                 }
@@ -53,8 +53,8 @@ object Lib_Test_Assert {
             function("assert_not_equals", pure = true) {
                 generic("T")
                 result("unit")
-                param(type = "T")
-                param(type = "T")
+                param("actual", type = "T")
+                param("illegal", type = "T")
                 body { actualValue, expectedValue ->
                     val equalsValue = R_BinaryOp_Eq.evaluate(actualValue, expectedValue)
                     if (equalsValue.asBoolean()) {
@@ -66,21 +66,21 @@ object Lib_Test_Assert {
             }
 
             function("assert_true", "unit", pure = true) {
-                param("boolean")
+                param("actual", "boolean")
                 body { arg ->
                     calcAssertBoolean(true, arg)
                 }
             }
 
             function("assert_false", "unit", pure = true) {
-                param("boolean")
+                param("actual", "boolean")
                 body { arg ->
                     calcAssertBoolean(false, arg)
                 }
             }
 
             function("assert_null", "unit", pure = true) {
-                param(type = "anything", nullable = true)
+                param("actual", type = "anything", nullable = true)
                 body { arg ->
                     if (arg != Rt_NullValue) {
                         throw Rt_AssertError.exception("assert_null:${arg.strCode()}", "expected null but was <${arg.str()}>")
@@ -91,7 +91,7 @@ object Lib_Test_Assert {
 
             function("assert_not_null", "unit", pure = true) {
                 generic("T", subOf = "any")
-                param(type = "T?", nullable = true, implies = L_ParamImplication.NOT_NULL)
+                param("actual", type = "T?", nullable = true, implies = L_ParamImplication.NOT_NULL)
                 body { arg ->
                     if (arg == Rt_NullValue) {
                         throw Rt_AssertError.exception("assert_not_null", "expected not null")
@@ -102,7 +102,7 @@ object Lib_Test_Assert {
 
             function("assert_fails", "rell.test.failure") {
                 generic("T")
-                param(type = "() -> T")
+                param("fn", type = "() -> T")
                 bodyContext { ctx, arg ->
                     val fn = arg.asFunction()
                     calcAssertFails(ctx, fn, null)
@@ -111,8 +111,8 @@ object Lib_Test_Assert {
 
             function("assert_fails", "rell.test.failure") {
                 generic("T")
-                param(type = "text")
-                param(type = "() -> T")
+                param("expected_message", type = "text")
+                param("fn", type = "() -> T")
                 bodyContext { ctx, arg1, arg2 ->
                     val expected = arg1.asString()
                     val fn = arg2.asFunction()
@@ -135,8 +135,8 @@ object Lib_Test_Assert {
     private fun defAssertCompare(mk: Ld_NamespaceDsl, name: String, op: R_CmpOp) = with(mk) {
         function(name, "unit", pure = true) {
             generic("T", subOf = "comparable")
-            param(type = "T")
-            param(type = "T")
+            param("actual", type = "T")
+            param("expected", type = "T")
             bodyMeta {
                 val comparator = getAssertComparator(this)
                 body { left, right ->
@@ -150,9 +150,9 @@ object Lib_Test_Assert {
     private fun defAssertRange(m: Ld_NamespaceDsl, name: String, op1: R_CmpOp, op2: R_CmpOp) = with(m) {
         function(name, "unit", pure = true) {
             generic("T", subOf = "comparable")
-            param(type = "T")
-            param(type = "T")
-            param(type = "T")
+            param("actual", type = "T")
+            param("expected1", type = "T")
+            param("expected2", type = "T")
             bodyMeta {
                 val comparator = getAssertComparator(this)
                 body { actual, expected1, expected2 ->

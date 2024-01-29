@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 // Sample docs HTML generator. Purpose: to see which docs format is better.
@@ -95,6 +95,7 @@ private fun generateDocSamples(buf: StringBuilder) {
     docExpr(buf, "Type extension function: set (value)", "set<integer>().to_gtv()", "to_gtv")
     docExpr(buf, "Type extension function: set (static)", "set<integer>.from_gtv(gtv.from_json(''))", "from_gtv")
 
+    docDef(buf, "User function", "function f(x: integer, y: text) {}", "f")
     docDef(buf, "Parameter type (function)", "function f(x: ((integer,text)->boolean)?) {}", "x")
     docDef(buf, "Parameter type (tuple)", "function f(y: (a:integer,b:text)) {}", "y")
     docDef(buf, "Parameter type (map)", "function f(z: map<integer,list<(text,boolean)>>) {}", "z")
@@ -213,8 +214,8 @@ private object SampleDocLib {
 
                 constructor {
                     generic("U", subOf = "immutable")
-                    param(type = "list<U>")
-                    param(type = "map<U, integer>")
+                    param("a", type = "list<U>")
+                    param("b", type = "map<U, integer>")
                     body { -> Rt_UnitValue }
                 }
 
@@ -251,8 +252,8 @@ private object SampleDocLib {
 
                 constructor {
                     generic("U", subOf = "immutable")
-                    param(type = "list<U>")
-                    param(type = "map<U, (K, V)>")
+                    param("a", type = "list<U>")
+                    param("b", type = "map<U, (K, V)>")
                     body { -> Rt_UnitValue }
                 }
             }

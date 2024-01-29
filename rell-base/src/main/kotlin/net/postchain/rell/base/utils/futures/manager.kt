@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.utils.futures
@@ -125,7 +125,7 @@ private class FcFutureBuilder_Impl(
 ): FcFutureBuilderBase_Impl<FcFutureBuilder>(core, settings), FcFutureBuilder {
     override fun <B> after(f: FcFuture<B>) = after0(FcBefore_Value(f))
     override fun <B> after(f: List<FcFuture<B>>) = after0(FcBefore_List(f.toImmList()))
-    override fun <K, B> after(f: Map<K, FcFuture<B>>) = after0(FcBefore_Map(f.toImmMap()))
+    override fun <K: Any, B> after(f: Map<K, FcFuture<B>>) = after0(FcBefore_Map(f.toImmMap()))
 
     private fun <B> after0(before: FcBefore<B>): FcFutureBuilderN<B> {
         return FcFutureBuilderN_Impl(core, settings, before)
@@ -154,7 +154,7 @@ private class FcFutureBuilderN_Impl<R>(
 ): FcFutureBuilderBase_Impl<FcFutureBuilderN<R>>(core, settings), FcFutureBuilderN<R> {
     override fun <B> after(f: FcFuture<B>) = after0(FcBefore_Value(f))
     override fun <B> after(f: List<FcFuture<B>>) = after0(FcBefore_List(f.toImmList()))
-    override fun <K, B> after(f: Map<K, FcFuture<B>>) = after0(FcBefore_Map(f.toImmMap()))
+    override fun <K: Any, B> after(f: Map<K, FcFuture<B>>) = after0(FcBefore_Map(f.toImmMap()))
 
     private fun <B> after0(before2: FcBefore<B>): FcFutureBuilderN<FcPair<R, B>> {
         return FcFutureBuilderN_Impl(core, settings, FcBefore_Pair(before, before2))
@@ -732,7 +732,7 @@ private object FcPrivate {
 }
 
 /** A stack which does not allow duplicates (useful for detecting recursion). */
-private class UniqueStack<T> {
+private class UniqueStack<T: Any> {
     private val set = mutableSetOf<T>()
     private val list = mutableListOf<T>()
 

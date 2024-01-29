@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -11,7 +11,6 @@ import org.junit.Test
 import kotlin.test.assertEquals
 
 // TODO more alias tests:
-// absolute vs. relative target name
 // same namespace/nested namespace/outer namespace
 // same namespace, but different occurrence
 // overloaded functions
@@ -249,8 +248,44 @@ class LNamespaceTest: BaseLTest() {
         )
     }
 
+    @Test fun testAliasRelativeName() {
+        val mod = makeModule("test") {
+            namespace("a") {
+                namespace("b") {
+                    namespace("c") {
+                        type("data")
+                    }
+                    alias("c_data", "c.data")
+                    alias("ac_data", "a.c.data")
+                    alias("abc_data", "a.b.c.data")
+                }
+                namespace("c") {
+                    type("data")
+                }
+                alias("c_data", "c.data")
+                alias("ac_data", "a.c.data")
+                alias("abc_data", "a.b.c.data")
+            }
+        }
+
+        chkDefs(mod,
+            "namespace a",
+            "namespace a.b",
+            "namespace a.b.c",
+            "type a.b.c.data",
+            "alias a.b.c_data = a.b.c.data",
+            "alias a.b.ac_data = a.c.data",
+            "alias a.b.abc_data = a.b.c.data",
+            "namespace a.c",
+            "type a.c.data",
+            "alias a.c_data = a.c.data",
+            "alias a.ac_data = a.c.data",
+            "alias a.abc_data = a.b.c.data",
+        )
+    }
+
     @Test fun testAliasNotFound() {
-        chkModuleErr("LDE:member_not_found:foo") {
+        chkModuleErr("LDE:alias_target_not_found:[test:ref]:[foo]") {
             alias(name = "ref", target = "foo")
         }
     }

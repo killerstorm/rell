@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.ast
@@ -217,12 +217,10 @@ class S_UpdateStatement(pos: S_Pos, val target: S_UpdateTarget, val what: List<S
             entity: R_EntityDefinition,
             subValues: MutableList<V_Expr>
     ): List<R_UpdateStatementWhat> {
-        val ideInfoProvider = C_CallArgumentIdeInfoProvider_Attribute(entity.attributes)
-
         val args = what.mapIndexed { i, w ->
             val nameHand = w.name?.compile(ctx)
             if (nameHand != null) {
-                val ideInfo = ideInfoProvider.getIdeInfo(nameHand.rName)
+                val ideInfo = entity.attributes[nameHand.rName]?.ideInfo ?: C_IdeSymbolInfo.UNKNOWN
                 nameHand.setIdeInfo(ideInfo)
             }
 

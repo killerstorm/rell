@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.core
@@ -46,37 +46,15 @@ class C_GlobalContext(
     }
 }
 
-class C_MessageContext(val globalCtx: C_GlobalContext) {
-    val msgMgr = C_MessageManager()
-
-    fun message(type: C_MessageType, pos: S_Pos, code: String, text: String) {
-        msgMgr.message(type, pos, code, text)
+class C_MessageContext private constructor(
+    val globalCtx: C_GlobalContext,
+    msgMgr: C_MessageManager
+): C_MessageManager by msgMgr {
+    companion object {
+        fun create(globalCtx: C_GlobalContext): C_MessageContext {
+            return C_MessageContext(globalCtx, C_DefaultMessageManager())
+        }
     }
-
-    fun warning(pos: S_Pos, code: String, text: String) {
-        message(C_MessageType.WARNING, pos, code, text)
-    }
-
-    fun error(pos: S_Pos, code: String, msg: String) {
-        message(C_MessageType.ERROR, pos, code, msg)
-    }
-
-    fun error(error: C_Error) {
-        error(error.pos, error.code, error.errMsg)
-    }
-
-    fun error(error: C_PosCodeMsg) {
-        error(error.pos, error.code, error.msg)
-    }
-
-    fun error(pos: S_Pos, codeMsg: C_CodeMsg) {
-        error(pos, codeMsg.code, codeMsg.msg)
-    }
-
-    fun messages() = msgMgr.messages()
-    fun <T> consumeError(code: () -> T): T? = msgMgr.consumeError(code)
-    fun errorWatcher() = msgMgr.errorWatcher()
-    fun firstErrorReporter() = msgMgr.firstErrorReporter()
 }
 
 class C_ModuleProvider(modules: Map<C_ModuleKey, C_Module>, preModules: Map<C_ModuleKey, C_PrecompiledModule>) {

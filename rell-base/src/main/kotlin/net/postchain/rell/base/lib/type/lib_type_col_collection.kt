@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -39,7 +39,7 @@ object Lib_Type_Collection {
             }
 
             function("contains", "boolean", pure = true) {
-                param("T")
+                param("value", "T")
                 body { a, b ->
                     val col = a.asCollection()
                     Rt_BooleanValue.get(col.contains(b))
@@ -48,7 +48,7 @@ object Lib_Type_Collection {
 
             function("contains_all", "boolean", pure = true) {
                 alias("containsAll", deprecated = C_MessageType.ERROR)
-                param(type = "collection<-T>")
+                param("values", type = "collection<-T>")
                 body { a, b ->
                     val col1 = a.asCollection()
                     val col2 = b.asCollection()
@@ -57,7 +57,7 @@ object Lib_Type_Collection {
             }
 
             function("add", "boolean") {
-                param("T")
+                param("value", "T")
                 body { a, b ->
                     val col = a.asCollection()
                     Rt_BooleanValue.get(col.add(b))
@@ -66,7 +66,7 @@ object Lib_Type_Collection {
 
             function("add_all", "boolean") {
                 alias("addAll", deprecated = C_MessageType.ERROR)
-                param(type = "collection<-T>")
+                param("values", type = "collection<-T>")
                 body { a, b ->
                     val col = a.asCollection()
                     Rt_BooleanValue.get(col.addAll(b.asCollection()))
@@ -74,7 +74,7 @@ object Lib_Type_Collection {
             }
 
             function("remove", "boolean") {
-                param("T")
+                param("value", "T")
                 body { a, b ->
                     val col = a.asCollection()
                     Rt_BooleanValue.get(col.remove(b))
@@ -83,7 +83,7 @@ object Lib_Type_Collection {
 
             function("remove_all", "boolean") {
                 alias("removeAll", deprecated = C_MessageType.ERROR)
-                param(type = "collection<-T>")
+                param("values", type = "collection<-T>")
                 body { a, b ->
                     val col1 = a.asCollection()
                     val col2 = b.asCollection()

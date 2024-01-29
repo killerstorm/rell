@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.utils
@@ -24,13 +24,15 @@ class C_Message(
     }
 }
 
-class C_MessageManager {
-    private val messages = mutableListOf<C_Message>()
-    private var errorCount = 0
+interface C_MessageManager {
+    fun isError(): Boolean
+    fun messages(): List<C_Message>
+
+    fun message(message: C_Message)
+    fun message(type: C_MessageType, pos: S_Pos, lazyCodeMsg: Lazy<C_CodeMsg>)
 
     fun message(type: C_MessageType, pos: S_Pos, code: String, text: String) {
-        messages.add(C_Message(type, pos, code, text))
-        if (type == C_MessageType.ERROR) errorCount = IntMath.checkedAdd(errorCount, 1)
+        message(C_Message(type, pos, code, text))
     }
 
     fun warning(pos: S_Pos, code: String, text: String) {
@@ -45,24 +47,73 @@ class C_MessageManager {
         error(error.pos, error.code, error.errMsg)
     }
 
-    fun messages() = messages.toImmList()
+    fun error(error: C_PosCodeMsg) {
+        error(error.pos, error.code, error.msg)
+    }
+
+    fun error(pos: S_Pos, codeMsg: C_CodeMsg) {
+        error(pos, codeMsg.code, codeMsg.msg)
+    }
+
+    fun error(pos: S_Pos, lazyCodeMsg: () -> C_CodeMsg) {
+        message(C_MessageType.ERROR, pos, lazy(lazyCodeMsg))
+    }
 
     fun <T> consumeError(code: () -> T): T? {
-        try {
-            return code()
+        return try {
+            code()
         } catch (e: C_Error) {
             error(e)
-            return null
+            null
         }
     }
 
-    fun errorWatcher() = C_ErrorWatcher()
-    fun firstErrorReporter() = C_FirstErrorReporter()
+    fun errorWatcher(): C_ErrorWatcher
+    fun firstErrorReporter(): C_FirstErrorReporter
 
-    inner class C_ErrorWatcher {
+    interface C_ErrorWatcher {
+        fun hasNewErrors(): Boolean
+    }
+
+    interface C_FirstErrorReporter {
+        fun error(pos: S_Pos, code: String, msg: String)
+        fun error(pos: S_Pos, codeMsg: C_CodeMsg) = error(pos, codeMsg.code, codeMsg.msg)
+    }
+}
+
+class C_DefaultMessageManager: C_MessageManager {
+    private val messages = mutableListOf<C_InternalMessage>()
+    private var errorCount = 0
+
+    override fun isError() = errorCount > 0
+
+    override fun message(message: C_Message) {
+        messages.add(C_InternalMessage_Direct(message))
+        trackMessage(message.type)
+    }
+
+    override fun message(type: C_MessageType, pos: S_Pos, lazyCodeMsg: Lazy<C_CodeMsg>) {
+        messages.add(C_InternalMessage_Lazy(type, pos, lazyCodeMsg))
+        trackMessage(type)
+    }
+
+    private fun trackMessage(type: C_MessageType) {
+        if (type == C_MessageType.ERROR) {
+            errorCount = IntMath.checkedAdd(errorCount, 1)
+        }
+    }
+
+    override fun messages(): List<C_Message> {
+        return messages.map { it.getMessage() }.toImmList()
+    }
+
+    override fun errorWatcher(): C_MessageManager.C_ErrorWatcher = C_ErrorWatcherImpl()
+    override fun firstErrorReporter(): C_MessageManager.C_FirstErrorReporter = C_FirstErrorReporterImpl()
+
+    private inner class C_ErrorWatcherImpl: C_MessageManager.C_ErrorWatcher {
         private var lastErrorCount = errorCount
 
-        fun hasNewErrors(): Boolean {
+        override fun hasNewErrors(): Boolean {
             val count = errorCount
             val res = count > lastErrorCount
             lastErrorCount = count
@@ -70,16 +121,33 @@ class C_MessageManager {
         }
     }
 
-    inner class C_FirstErrorReporter {
+    private inner class C_FirstErrorReporterImpl: C_MessageManager.C_FirstErrorReporter {
         private var reported = false
 
-        fun error(pos: S_Pos, code: String, msg: String) {
+        override fun error(pos: S_Pos, code: String, msg: String) {
             if (!reported) {
                 reported = true
-                this@C_MessageManager.error(pos, code, msg)
+                this@C_DefaultMessageManager.error(pos, code, msg)
             }
         }
+    }
 
-        fun error(pos: S_Pos, codeMsg: C_CodeMsg) = error(pos, codeMsg.code, codeMsg.msg)
+    private abstract class C_InternalMessage {
+        abstract fun getMessage(): C_Message
+    }
+
+    private class C_InternalMessage_Direct(val cMessage: C_Message): C_InternalMessage() {
+        override fun getMessage() = cMessage
+    }
+
+    private class C_InternalMessage_Lazy(
+        val type: C_MessageType,
+        val pos: S_Pos,
+        val lazyCodeMsg: Lazy<C_CodeMsg>,
+    ): C_InternalMessage() {
+        override fun getMessage(): C_Message {
+            val codeMsg = lazyCodeMsg.value
+            return C_Message(type, pos, codeMsg.code, codeMsg.msg)
+        }
     }
 }

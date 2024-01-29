@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -304,14 +304,13 @@ interface Ld_TypeDefMaker: Ld_CommonNamespaceMaker {
 
     fun property(name: String, type: String, body: C_SysFunctionBody)
 
-    fun constructor(params: List<String>?, pure: Boolean?, block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef)
+    fun constructor(pure: Boolean?, block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef)
     fun constructor(fn: C_SpecialLibGlobalFunctionBody)
 
     fun function(
         isStatic: Boolean,
         name: String,
         result: String?,
-        params: List<String>?,
         pure: Boolean?,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     )
@@ -409,8 +408,8 @@ class Ld_TypeDefDslImpl(
         maker.property(name, type, body)
     }
 
-    override fun constructor(params: List<String>?, pure: Boolean?, block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef) {
-        maker.constructor(params, pure = pure, block = block)
+    override fun constructor(pure: Boolean?, block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef) {
+        maker.constructor(pure = pure, block = block)
     }
 
     override fun constructor(fn: C_SpecialLibGlobalFunctionBody) {
@@ -420,11 +419,10 @@ class Ld_TypeDefDslImpl(
     override fun function(
         name: String,
         result: String?,
-        params: List<String>?,
         pure: Boolean?,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     ) {
-        maker.function(isStatic = false, name = name, result = result, params = params, pure = pure, block = block)
+        maker.function(isStatic = false, name = name, result = result, pure = pure, block = block)
     }
 
     override fun function(name: String, fn: C_SpecialLibMemberFunctionBody) {
@@ -434,11 +432,10 @@ class Ld_TypeDefDslImpl(
     override fun staticFunction(
         name: String,
         result: String?,
-        params: List<String>?,
         pure: Boolean?,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     ) {
-        maker.function(isStatic = true, name = name, result = result, params = params, pure = pure, block = block)
+        maker.function(isStatic = true, name = name, result = result, pure = pure, block = block)
     }
 
     override fun staticFunction(name: String, fn: C_SpecialLibGlobalFunctionBody) {
@@ -550,20 +547,13 @@ private class Ld_TypeDefBuilder(
         members.add(Ld_TypeDefMember_Property(property))
     }
 
-    override fun constructor(params: List<String>?, pure: Boolean?, block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef) {
+    override fun constructor(pure: Boolean?, block: Ld_ConstructorDsl.() -> Ld_FunctionBodyRef) {
         checkCanHaveConstructor()
 
         val bodyBuilder = Ld_FunctionBodyBuilder(simpleName, pure = pure)
         val conBuilder = Ld_ConstructorBuilder(outerTypeParams = typeParams.keys.toImmSet(), bodyBuilder)
         val bodyDslBuilder = Ld_FunctionBodyDslImpl(bodyBuilder)
         val dsl = Ld_ConstructorDslImpl(conBuilder, bodyDslBuilder)
-
-        if (params != null) {
-            for (param in params) {
-                dsl.param(param)
-            }
-            conBuilder.paramsDefined()
-        }
 
         val bodyRes = block(dsl)
 
@@ -586,7 +576,6 @@ private class Ld_TypeDefBuilder(
         isStatic: Boolean,
         name: String,
         result: String?,
-        params: List<String>?,
         pure: Boolean?,
         block: Ld_FunctionDsl.() -> Ld_FunctionBodyRef,
     ) {
@@ -595,7 +584,6 @@ private class Ld_TypeDefBuilder(
         val fn = Ld_FunctionBuilder.build(
             simpleName = rName,
             result = result,
-            params = params,
             pure = pure,
             outerTypeParams = typeParams.keys.toImmSet(),
             block = block,

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.def
@@ -9,7 +9,7 @@ import net.postchain.rell.base.compiler.base.core.C_CompilerPass
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.fn.C_FormalParameters
-import net.postchain.rell.base.compiler.base.fn.C_FunctionCallInfo
+import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTargetBase
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTarget_Regular
 import net.postchain.rell.base.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.base.compiler.base.utils.C_LateInit
@@ -44,9 +44,9 @@ class C_OperationGlobalFunction(val rOp: R_OperationDefinition): C_GlobalFunctio
         resTypeHint: C_TypeHint,
     ): V_GlobalFunctionCall {
         val header = headerLate.get()
-        val callInfo = C_FunctionCallInfo.forDirectFunction(name, header.params)
-        val callTarget = C_FunctionCallTarget_Operation(ctx, callInfo, rOp)
-        val vCall = C_FunctionUtils.compileRegularCall(ctx, callInfo, callTarget, args, resTypeHint)
+        val callTargetBase = C_FunctionCallTargetBase.forDirectFunction(ctx, name, header.params)
+        val callTarget = C_FunctionCallTarget_Operation(callTargetBase, rOp)
+        val vCall = C_FunctionUtils.compileRegularCall(callTargetBase, callTarget, args, resTypeHint)
 
         if (!ctx.defCtx.modCtx.isTestLib()) {
             ctx.msgCtx.error(name.pos, "expr:operation_call:no_test:$name",
@@ -58,9 +58,8 @@ class C_OperationGlobalFunction(val rOp: R_OperationDefinition): C_GlobalFunctio
 }
 
 private class C_FunctionCallTarget_Operation(
-        ctx: C_ExprContext,
-        callInfo: C_FunctionCallInfo,
-        private val rOp: R_OperationDefinition
-): C_FunctionCallTarget_Regular(ctx, callInfo, R_TestOpType) {
+    base: C_FunctionCallTargetBase,
+    private val rOp: R_OperationDefinition
+): C_FunctionCallTarget_Regular(base, R_TestOpType) {
     override fun createVTarget() = V_FunctionCallTarget_Operation(rOp)
 }

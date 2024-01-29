@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.def
@@ -11,7 +11,7 @@ import net.postchain.rell.base.compiler.base.core.C_FunctionBodyContext
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.fn.C_FormalParameters
-import net.postchain.rell.base.compiler.base.fn.C_FunctionCallInfo
+import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTargetBase
 import net.postchain.rell.base.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.base.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.base.compiler.base.utils.C_LateInit
@@ -50,9 +50,9 @@ class C_QueryGlobalFunction(val rQuery: R_QueryDefinition): C_GlobalFunction() {
     ): V_GlobalFunctionCall {
         val header = headerLate.get()
         val retType = C_FunctionUtils.compileReturnType(ctx, name, header)
-        val callInfo = C_FunctionCallInfo.forDirectFunction(name, header.params)
-        val callTarget = C_FunctionCallTarget_RegularUserFunction(ctx, callInfo, retType, rQuery)
-        return C_FunctionUtils.compileRegularCall(ctx, callInfo, callTarget, args, resTypeHint)
+        val callTargetBase = C_FunctionCallTargetBase.forDirectFunction(ctx, name, header.params)
+        val callTarget = C_FunctionCallTarget_RegularUserFunction(callTargetBase, retType, rQuery)
+        return C_FunctionUtils.compileRegularCall(callTargetBase, callTarget, args, resTypeHint)
     }
 }
 

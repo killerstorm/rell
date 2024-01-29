@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -26,7 +26,7 @@ object Lib_Type_Gtv {
         type("gtv", rType = R_GtvType) {
             staticFunction("from_bytes", "gtv", pure = true) {
                 alias("fromBytes", C_MessageType.ERROR)
-                param("byte_array")
+                param("bytes", "byte_array")
                 body { a ->
                     val bytes = a.asByteArray()
                     Rt_Utils.wrapErr("fn:gtv.from_bytes") {
@@ -37,7 +37,7 @@ object Lib_Type_Gtv {
             }
 
             staticFunction("from_bytes_or_null", "gtv?", pure = true) {
-                param("byte_array")
+                param("bytes", "byte_array")
                 body { a ->
                     val bytes = a.asByteArray()
                     val gtv = try {
@@ -51,7 +51,7 @@ object Lib_Type_Gtv {
 
             staticFunction("from_json", "gtv", pure = true) {
                 alias("fromJSON", C_MessageType.ERROR)
-                param("text")
+                param("json", "text")
                 body { a ->
                     val str = a.asString()
                     Rt_Utils.wrapErr("fn:gtv.from_json(text)") {
@@ -63,7 +63,7 @@ object Lib_Type_Gtv {
 
             staticFunction("from_json", "gtv", pure = true) {
                 alias("fromJSON", C_MessageType.ERROR)
-                param("json")
+                param("json", "json")
                 body { a ->
                     val str = a.asJsonString()
                     Rt_Utils.wrapErr("fn:gtv.from_json(json)") {
@@ -99,12 +99,12 @@ object Lib_Type_Gtv {
                 generic("T", subOf = "any")
 
                 staticFunction("from_gtv", result = "T", pure = true) {
-                    param(type = "gtv")
+                    param("gtv", type = "gtv")
                     makeFromGtvBody(this, pretty = false)
                 }
 
                 staticFunction("from_gtv_pretty", result = "T", pure = true) {
-                    param(type = "gtv")
+                    param("gtv", type = "gtv")
                     makeFromGtvBody(this, pretty = true, allowVirtual = false)
                 }
 

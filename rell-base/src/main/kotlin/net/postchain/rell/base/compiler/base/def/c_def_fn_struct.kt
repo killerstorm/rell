@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.def
@@ -16,6 +16,7 @@ import net.postchain.rell.base.compiler.vexpr.V_GlobalFunctionCall
 import net.postchain.rell.base.compiler.vexpr.V_StructExpr
 import net.postchain.rell.base.model.R_Struct
 import net.postchain.rell.base.utils.LazyPosString
+import net.postchain.rell.base.utils.immMapOf
 
 class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
     override fun compileCall(
@@ -45,6 +46,6 @@ class C_StructGlobalFunction(private val struct: R_Struct): C_GlobalFunction() {
         }
 
         val vExpr = V_StructExpr(ctx, fnPos, struct, attrs.explicitAttrs, attrs.implicitAttrs)
-        return V_GlobalFunctionCall(vExpr)
+        return V_GlobalFunctionCall(vExpr, null, immMapOf())
     }
 }

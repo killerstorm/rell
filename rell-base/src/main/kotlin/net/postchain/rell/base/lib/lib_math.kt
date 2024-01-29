@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -88,21 +88,21 @@ object Lib_Math {
 
     private fun defFnAbs(d: Ld_NamespaceDsl, type: String, fn: C_SysFunctionBody) {
         d.function("abs", type) {
-            param(type)
+            param("a", type)
             bodyRaw(fn)
         }
     }
 
     private fun defFnMinMax(d: Ld_NamespaceDsl, type: String, fnMin: C_SysFunctionBody, fnMax: C_SysFunctionBody) {
         d.function("min", type) {
-            param(type)
-            param(type)
+            param("a", type)
+            param("b", type)
             bodyRaw(fnMin)
         }
 
         d.function("max", type) {
-            param(type)
-            param(type)
+            param("a", type)
+            param("b", type)
             bodyRaw(fnMax)
         }
     }

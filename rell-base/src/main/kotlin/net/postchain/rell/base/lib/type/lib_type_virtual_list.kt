@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -28,7 +28,7 @@ object Lib_Type_VirtualList {
             }
 
             function("get", result = "T2", pure = true) {
-                param(type = "integer")
+                param("index", type = "integer")
                 body { a, b ->
                     val list = a.asVirtualList()
                     val index = b.asInteger()

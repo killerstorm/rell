@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -148,8 +148,8 @@ object Lib_Type_Entity {
             args: List<V_Expr>,
         ): V_SpecialMemberFunctionCall? {
             if (args.isNotEmpty()) {
-                val argTypes = args.map { it.type }
-                C_LibFuncCaseUtils.errNoMatch(ctx, callCtx.linkPos, callCtx.qualifiedNameMsg(), argTypes)
+                val errArgs = args.map { null to it.type }
+                C_LibFuncCaseUtils.errNoMatch(ctx.msgCtx, callCtx.linkPos, callCtx.qualifiedNameMsg(), errArgs)
             }
             return compile0(ctx, selfType)
         }

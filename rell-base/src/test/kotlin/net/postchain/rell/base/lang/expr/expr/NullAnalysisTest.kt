@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.expr.expr
@@ -19,8 +19,8 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkEx("{ val x: integer?; x = f(123); return x + 1; }", "ct_err:binop_operand_type:+:[integer?]:[integer]")
         chkEx("{ val x: integer?; x = 123; return x + 1; }", "int[124]")
 
-        chkEx("{ val x: integer? = null; return abs(x); }", "ct_err:expr_call_argtypes:[abs]:integer?")
-        chkEx("{ val x: integer? = f(123); return abs(x); }", "ct_err:expr_call_argtypes:[abs]:integer?")
+        chkEx("{ val x: integer? = null; return abs(x); }", "ct_err:expr_call_badargs:[abs]:[integer?]")
+        chkEx("{ val x: integer? = f(123); return abs(x); }", "ct_err:expr_call_badargs:[abs]:[integer?]")
         chkEx("{ val x: integer? = 123; return abs(x); }", "int[123]")
 
         chkEx("{ val x: integer? = 123; val y: integer? = x; val z: integer? = y; return _type_of(z); }",
@@ -155,6 +155,10 @@ class NullAnalysisTest: BaseRellTest(false) {
     @Test fun testImplicationsRequire() {
         chkImplicationsExpr("require(x)")
         chkImplicationsExpr("require_not_empty(x)")
+        chkImplicationsExpr("require(x, 'hello')")
+        chkImplicationsExpr("require_not_empty(x, 'hello')")
+        chkImplicationsExpr("require(message = 'hello', value = x)")
+        chkImplicationsExpr("require_not_empty(message = 'hello', value = x)")
     }
 
     @Test fun testSafeAccess() {
@@ -181,13 +185,13 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable(123); if (x != null) return x + 1; return -1; }", "int[124]")
         chkEx("{ val x = _nullable(123); if (x == null) return -1; return x + 1; }", "int[124]")
 
-        chkEx("{ val x = _nullable(123); return abs(x); }", "ct_err:expr_call_argtypes:[abs]:integer?")
+        chkEx("{ val x = _nullable(123); return abs(x); }", "ct_err:expr_call_badargs:[abs]:[integer?]")
         chkEx("{ val x = _nullable(123); if (x == null) return 0; return abs(x); }", "int[123]")
         chkEx("{ val x = _nullable(123); if (x != null) return 0; return abs(x); }",
-            "ct_err:expr_call_argtypes:[abs]:integer?")
+            "ct_err:expr_call_badargs:[abs]:[integer?]")
         chkEx("{ val x = _nullable(123); if (x != null) return abs(x); return 0; }", "int[123]")
         chkEx("{ val x = _nullable(123); if (x == null) return abs(x); return 0; }",
-            "ct_err:expr_call_argtypes:[abs]:integer?")
+            "ct_err:expr_call_badargs:[abs]:[integer?]")
     }
 
     @Test fun testIfType() {
@@ -282,13 +286,13 @@ class NullAnalysisTest: BaseRellTest(false) {
         chkEx("{ val x = _nullable(123); when { x != null -> return x + 1; } return -1; }", "int[124]")
         chkEx("{ val x = _nullable(123); when { x == null -> return -1; } return x + 1; }", "int[124]")
 
-        chkEx("{ val x = _nullable(123); return abs(x); }", "ct_err:expr_call_argtypes:[abs]:integer?")
+        chkEx("{ val x = _nullable(123); return abs(x); }", "ct_err:expr_call_badargs:[abs]:[integer?]")
         chkEx("{ val x = _nullable(123); when { x == null -> return 0; } return abs(x); }", "int[123]")
         chkEx("{ val x = _nullable(123); when { x != null -> return 0; } return abs(x); }",
-            "ct_err:expr_call_argtypes:[abs]:integer?")
+            "ct_err:expr_call_badargs:[abs]:[integer?]")
         chkEx("{ val x = _nullable(123); when { x != null -> return abs(x); } return 0; }", "int[123]")
         chkEx("{ val x = _nullable(123); when { x == null -> return abs(x); } return 0; }",
-            "ct_err:expr_call_argtypes:[abs]:integer?")
+            "ct_err:expr_call_badargs:[abs]:[integer?]")
     }
 
     @Test fun testWhenMultipleConditions() {
@@ -482,8 +486,8 @@ class NullAnalysisTest: BaseRellTest(false) {
     @Test fun testDefiniteFactExists() {
         def("struct rec { a: integer; }")
         def("function f(r: rec?): rec? = r;")
-        chkDefiniteFactExpr("exists(x)", "boolean[false]", "boolean[true]", "ct_err:expr_call_argtypes:[exists]:rec")
-        chkDefiniteFactExpr("not exists(x)", "boolean[true]", "boolean[false]", "ct_err:expr_call_argtypes:[exists]:rec")
+        chkDefiniteFactExpr("exists(x)", "boolean[false]", "boolean[true]", "ct_err:expr_call_badargs:[exists]:[rec]")
+        chkDefiniteFactExpr("not exists(x)", "boolean[true]", "boolean[false]", "ct_err:expr_call_badargs:[exists]:[rec]")
     }
 
     private fun chkDefiniteFactExpr(expr: String, resNull: String, resNotNull: String, ctErr: String) {
@@ -508,9 +512,9 @@ class NullAnalysisTest: BaseRellTest(false) {
     }
 
     @Test fun testDefiniteFactRequire() {
-        chkDefiniteFactNullCast("require(x)", "ct_err:expr_call_argtypes:[require]:integer", "req_err:null")
+        chkDefiniteFactNullCast("require(x)", "ct_err:expr_call_badargs:[require]:[integer]", "req_err:null")
         chkDefiniteFactNullCast("require_not_empty(x)",
-            "ct_err:expr_call_argtypes:[require_not_empty]:integer", "req_err:null")
+            "ct_err:expr_call_badargs:[require_not_empty]:[integer]", "req_err:null")
     }
 
     private fun chkDefiniteFactNullCast(expr: String, ctErr: String, rtErr: String) {

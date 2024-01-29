@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.ast
@@ -12,6 +12,7 @@ import net.postchain.rell.base.compiler.base.modifier.C_ModifierValues
 import net.postchain.rell.base.compiler.base.module.*
 import net.postchain.rell.base.compiler.base.namespace.C_UserNsProtoBuilder
 import net.postchain.rell.base.compiler.base.utils.C_CommonError
+import net.postchain.rell.base.compiler.base.utils.C_DefaultMessageManager
 import net.postchain.rell.base.compiler.base.utils.C_MessageManager
 import net.postchain.rell.base.model.R_FullName
 import net.postchain.rell.base.model.R_ModuleName
@@ -410,7 +411,7 @@ class S_ImportDefinition(
         val modExternal = mods.field(C_ModifierFields.EXTERNAL_CHAIN)
         val docModifiers = modifiers.compile(modifierCtx, mods)
 
-        val cModulePath = modulePath.compile(ctx.msgCtx.msgMgr, ctx.symCtx, kwPos, ctx.moduleName)
+        val cModulePath = modulePath.compile(ctx.msgCtx, ctx.symCtx, kwPos, ctx.moduleName)
         cModulePath ?: return null
 
         val moduleName = cModulePath.moduleName
@@ -438,7 +439,7 @@ class S_ImportDefinition(
     }
 
     override fun ideGetImportedModules(moduleName: R_ModuleName, res: MutableSet<R_ModuleName>) {
-        val msgMgr = C_MessageManager()
+        val msgMgr = C_DefaultMessageManager()
         val cModulePath = modulePath.compile(msgMgr, C_NopSymbolContext, kwPos, moduleName)
         if (cModulePath != null) {
             res.add(cModulePath.moduleName)

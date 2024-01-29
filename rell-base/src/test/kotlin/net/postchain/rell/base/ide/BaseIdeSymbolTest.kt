@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.ide
@@ -214,6 +214,7 @@ abstract class BaseIdeSymbolTest: BaseRellTest(false) {
                 .symbolInfoFile(file)
                 .testLib(true)
                 .ide(true)
+                .ideDocSymbolsEnabled(true)
                 .build()
 
             val cRes = RellTestUtils.compileApp(sourceDir, modSel, cOpts, tst.extraMod)

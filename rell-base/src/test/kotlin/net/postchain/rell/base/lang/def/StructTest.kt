@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.def
@@ -305,7 +305,7 @@ class StructTest: BaseRellTest(false) {
         chk("map<text,foo>()", "map<text,foo>[]")
         chk("[ foo(123) : 'Hello' ]", "ct_err:expr_map_keytype:foo")
         chk("[ 'Hello' : foo(123) ]", "map<text,foo>[text[Hello]=foo[x=int[123]]]")
-        chk("set([foo(123)])", "ct_err:expr_call_argtypes:[set]:list<foo>")
+        chk("set([foo(123)])", "ct_err:expr_call_badargs:[set]:[list<foo>]")
         chk("[foo(123)]", "list<foo>[foo[x=int[123]]]")
     }
 

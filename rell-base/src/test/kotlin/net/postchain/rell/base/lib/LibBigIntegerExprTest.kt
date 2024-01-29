@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -184,8 +184,8 @@ abstract class LibBigIntegerExprTest: BaseExprTest() {
 
     @Test fun testPow() {
         chkExpr("_type_of((0L).pow(1))", "text[big_integer]")
-        chkExpr("(0L).pow(1L)", "ct_err:expr_call_argtypes:[big_integer.pow]:big_integer")
-        chkExpr("(0L).pow(1.0)", "ct_err:expr_call_argtypes:[big_integer.pow]:decimal")
+        chkExpr("(0L).pow(1L)", "ct_err:expr_call_badargs:[big_integer.pow]:[big_integer]")
+        chkExpr("(0L).pow(1.0)", "ct_err:expr_call_badargs:[big_integer.pow]:[decimal]")
 
         getIntTest().chkPowCommon("bigint", ::vBigInt)
 

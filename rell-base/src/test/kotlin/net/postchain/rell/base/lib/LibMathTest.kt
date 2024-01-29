@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -12,9 +12,9 @@ class LibMathTest: BaseRellTest(false) {
         chk("abs(a)", 0, "int[0]")
         chk("abs(a)", -123, "int[123]")
         chk("abs(a)", 123, "int[123]")
-        chk("abs('Hello')", "ct_err:expr_call_argtypes:[abs]:text")
-        chk("abs()", "ct_err:expr_call_argtypes:[abs]:")
-        chk("abs(1, 2)", "ct_err:expr_call_argtypes:[abs]:integer,integer")
+        chk("abs('Hello')", "ct_err:expr_call_badargs:[abs]:[text]")
+        chk("abs()", "ct_err:expr_call_badargs:[abs]:[]")
+        chk("abs(1, 2)", "ct_err:expr_call_badargs:[abs]:[integer,integer]")
     }
 
     @Test fun testMinMax() {

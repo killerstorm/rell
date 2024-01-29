@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.core
@@ -127,7 +127,7 @@ object C_ReplCompiler {
             oldDefsState: C_ReplDefsState,
             oldCodeState: ReplCodeState
     ): C_ReplResult {
-        val msgCtx = C_MessageContext(globalCtx)
+        val msgCtx = C_MessageContext.create(globalCtx)
         val controller = C_CompilerController(msgCtx)
 
         val res = C_LateInit.context(controller.executor) {

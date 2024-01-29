@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -58,7 +58,7 @@ object Lib_Type_Enum {
                 }
 
                 staticFunction("value", result = "T", pure = true) {
-                    param(type = "text")
+                    param("name", type = "text")
                     bodyMeta {
                         val enumType = fnBodyMeta.rResultType as R_EnumType
                         val enum = enumType.enum
@@ -77,7 +77,7 @@ object Lib_Type_Enum {
                 }
 
                 staticFunction("value", result = "T", pure = true) {
-                    param(type = "integer")
+                    param("value", type = "integer")
                     bodyMeta {
                         val enumType = fnBodyMeta.rResultType as R_EnumType
                         val enum = enumType.enum

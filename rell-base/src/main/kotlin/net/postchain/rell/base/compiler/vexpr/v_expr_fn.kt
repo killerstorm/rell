@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.vexpr
@@ -16,27 +16,32 @@ import net.postchain.rell.base.runtime.Rt_CallContext
 import net.postchain.rell.base.runtime.Rt_CallFrame
 import net.postchain.rell.base.runtime.Rt_NullValue
 import net.postchain.rell.base.runtime.Rt_Value
-import net.postchain.rell.base.utils.LazyString
-import net.postchain.rell.base.utils.checkEquals
-import net.postchain.rell.base.utils.immListOf
-import net.postchain.rell.base.utils.toImmList
+import net.postchain.rell.base.utils.*
 
 class V_FunctionCallArgs(
     exprs: List<V_Expr>,
-    mapping: List<Int>,
+    paramsToExprs: List<Int>,
+    exprsToParams: List<Int>,
 ) {
     val exprs = exprs.toImmList()
-    val mapping = mapping.toImmList()
+    val paramsToExprs = paramsToExprs.toImmList()
+    val exprsToParams = exprsToParams.toImmList()
 
     init {
-        checkEquals(this.mapping.sorted().toList(), this.exprs.indices.toList())
+        checkEquals(this.paramsToExprs.size, this.exprs.size)
+        checkEquals(this.exprsToParams.size, this.exprs.size)
+        for (i in exprs.indices) {
+            checkEquals(this.paramsToExprs[this.exprsToParams[i]], i)
+            checkEquals(this.exprsToParams[this.paramsToExprs[i]], i)
+        }
     }
 
     companion object {
-        val EMPTY = V_FunctionCallArgs(immListOf(), immListOf())
+        val EMPTY = V_FunctionCallArgs(immListOf(), immListOf(), immListOf())
 
         fun positional(args: List<V_Expr>): V_FunctionCallArgs {
-            return V_FunctionCallArgs(args, args.indices.toImmList())
+            val mapping = args.indices.toImmList()
+            return V_FunctionCallArgs(args, mapping, mapping)
         }
     }
 }
@@ -153,13 +158,13 @@ class V_CommonFunctionCall_Full(
         baseValue: Rt_Value?,
         argValues: List<Rt_Value>,
     ): Rt_Value {
-        val values2 = callArgs.mapping.map { argValues[it] }
+        val values2 = callArgs.paramsToExprs.map { argValues[it] }
         val subCallCtx = callCtx.subContext(callFilePos)
         return rTarget.call(subCallCtx, baseValue, values2)
     }
 
     override fun rCall0(rTarget: R_FunctionCallTarget, rArgExprs: List<R_Expr>): R_FunctionCall {
-        return R_FullFunctionCall(returnType, rTarget, callFilePos, rArgExprs, callArgs.mapping)
+        return R_FullFunctionCall(returnType, rTarget, callFilePos, rArgExprs, callArgs.paramsToExprs)
     }
 
     override fun dbExpr(dbBase: Db_Expr?): Db_Expr {
@@ -283,19 +288,23 @@ class V_FunctionCallTarget_SysGlobalFunction(
     }
 }
 
-abstract class V_FunctionCall
+abstract class V_FunctionCall(
+    val argIdeInfos: Map<R_Name, C_IdeSymbolInfo>,
+)
 
 class V_GlobalFunctionCall(
     private val expr: V_Expr,
     val ideInfo: C_IdeSymbolInfo? = null,
-): V_FunctionCall() {
+    argIdeInfos: Map<R_Name, C_IdeSymbolInfo>,
+): V_FunctionCall(argIdeInfos) {
     fun vExpr() = expr
 }
 
 abstract class V_MemberFunctionCall(
     protected val exprCtx: C_ExprContext,
     val ideInfo: C_IdeSymbolInfo,
-): V_FunctionCall() {
+    paramIdeInfos: Map<R_Name, C_IdeSymbolInfo>,
+): V_FunctionCall(paramIdeInfos) {
     abstract fun vExprs(): List<V_Expr>
     open fun postVarFacts(): C_VarFacts = C_VarFacts.andPostFacts(vExprs())
     open fun globalConstantRestriction(): V_GlobalConstantRestriction? = null
@@ -311,9 +320,10 @@ abstract class V_MemberFunctionCall(
 class V_MemberFunctionCall_CommonCall(
     exprCtx: C_ExprContext,
     ideInfo: C_IdeSymbolInfo,
+    argIdeInfos: Map<R_Name, C_IdeSymbolInfo>,
     private val call: V_CommonFunctionCall,
     private val returnType: R_Type,
-): V_MemberFunctionCall(exprCtx, ideInfo) {
+): V_MemberFunctionCall(exprCtx, ideInfo, argIdeInfos) {
     override fun vExprs() = call.args
     override fun postVarFacts() = call.postVarFacts()
     override fun globalConstantRestriction() = call.globalConstantRestriction()
@@ -340,7 +350,7 @@ class V_MemberFunctionCall_Error(
     ideInfo: C_IdeSymbolInfo,
     private val returnType: R_Type = R_CtErrorType,
     private val msg: String = "Compilation error",
-): V_MemberFunctionCall(exprCtx, ideInfo) {
+): V_MemberFunctionCall(exprCtx, ideInfo, immMapOf()) {
     override fun vExprs() = immListOf<V_Expr>()
     override fun returnType() = returnType
     override fun calculator(): R_MemberCalculator = R_MemberCalculator_Error(returnType, msg)

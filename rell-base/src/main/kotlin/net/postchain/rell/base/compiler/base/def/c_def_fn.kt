@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.def
@@ -68,11 +68,7 @@ abstract class C_UserGlobalFunction(
 
     final override fun getFunctionDefinition() = rFunction
 
-    protected abstract fun compileCallTarget(
-            ctx: C_ExprContext,
-            callInfo: C_FunctionCallInfo,
-            retType: R_Type?
-    ): C_FunctionCallTarget
+    protected abstract fun compileCallTarget(base: C_FunctionCallTargetBase, retType: R_Type?): C_FunctionCallTarget
 
     final override fun compileCall(
         ctx: C_ExprContext,
@@ -82,9 +78,9 @@ abstract class C_UserGlobalFunction(
     ): V_GlobalFunctionCall {
         val header = headerLate.get()
         val retType = C_FunctionUtils.compileReturnType(ctx, name, header)
-        val callInfo = C_FunctionCallInfo.forDirectFunction(name, header.params)
-        val callTarget = compileCallTarget(ctx, callInfo, retType)
-        return C_FunctionUtils.compileRegularCall(ctx, callInfo, callTarget, args, resTypeHint)
+        val callTargetBase = C_FunctionCallTargetBase.forDirectFunction(ctx, name, header.params)
+        val callTarget = compileCallTarget(callTargetBase, retType)
+        return C_FunctionUtils.compileRegularCall(callTargetBase, callTarget, args, resTypeHint)
     }
 }
 
@@ -164,16 +160,15 @@ class C_RegularUserGlobalFunction(
 ): C_UserGlobalFunction(rFunction) {
     override fun getAbstractDescriptor() = abstractDescriptor
 
-    override fun compileCallTarget(ctx: C_ExprContext, callInfo: C_FunctionCallInfo, retType: R_Type?): C_FunctionCallTarget {
-        return C_FunctionCallTarget_RegularUserFunction(ctx, callInfo, retType, rFunction)
+    override fun compileCallTarget(base: C_FunctionCallTargetBase, retType: R_Type?): C_FunctionCallTarget {
+        return C_FunctionCallTarget_RegularUserFunction(base, retType, rFunction)
     }
 }
 
 class C_FunctionCallTarget_RegularUserFunction(
-        ctx: C_ExprContext,
-        callInfo: C_FunctionCallInfo,
-        retType: R_Type?,
-        private val rFunction: R_RoutineDefinition,
-): C_FunctionCallTarget_Regular(ctx, callInfo, retType) {
+    base: C_FunctionCallTargetBase,
+    retType: R_Type?,
+    private val rFunction: R_RoutineDefinition,
+): C_FunctionCallTarget_Regular(base, retType) {
     override fun createVTarget(): V_FunctionCallTarget = V_FunctionCallTarget_RegularUserFunction(rFunction)
 }

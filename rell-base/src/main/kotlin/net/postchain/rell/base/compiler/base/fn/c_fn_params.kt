@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.fn
@@ -19,6 +19,7 @@ import net.postchain.rell.base.utils.checkEquals
 import net.postchain.rell.base.utils.doc.DocDeclaration
 import net.postchain.rell.base.utils.doc.DocFunctionParam
 import net.postchain.rell.base.utils.doc.DocSymbol
+import net.postchain.rell.base.utils.ide.IdeSymbolKind
 import net.postchain.rell.base.utils.toImmList
 import net.postchain.rell.base.utils.toImmMap
 
@@ -36,7 +37,10 @@ class C_FormalParameter(
 
     val docDeclaration: DocDeclaration get() = docDeclarationGetter.get()
 
-    fun toCallParameter() = C_FunctionCallParameter(name.rName, type, index, ideInfo, defaultValue)
+    fun toCallParameter(): C_FunctionCallParameter {
+        val namedArgIdeInfo = ideInfo.update(kind = IdeSymbolKind.EXPR_CALL_ARG)
+        return C_FunctionCallParameter(name.rName, type, index, ideInfo, namedArgIdeInfo, defaultValue)
+    }
 
     fun createMirrorAttr(mutable: Boolean): R_Attribute {
         val keyIndexKind: R_KeyIndexKind? = null

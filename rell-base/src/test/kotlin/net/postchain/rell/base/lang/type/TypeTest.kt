@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.type
@@ -41,9 +41,9 @@ class TypeTest: BaseRellTest() {
                 """json[{"a":5,"b":[1,2,3],"c":{"x":10,"y":20}}]""")
 
         // Bad argument
-        chkEx("= json();", "ct_err:expr_call_argtypes:[json]:")
-        chkEx("= json(1234);", "ct_err:expr_call_argtypes:[json]:integer")
-        chkEx("= json(json('{}'));", "ct_err:expr_call_argtypes:[json]:json")
+        chkEx("= json();", "ct_err:expr:call:missing_args:[json]:[0:value]")
+        chkEx("= json(1234);", "ct_err:expr_call_badargs:[json]:[integer]")
+        chkEx("= json(json('{}'));", "ct_err:expr_call_badargs:[json]:[json]")
         chkEx("= json('');", "rt_err:fn_json_badstr")
         chkEx("= json('{]');", "rt_err:fn_json_badstr")
     }
@@ -306,9 +306,9 @@ class TypeTest: BaseRellTest() {
         chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return f(a < b, c > d); }", "int[123]")
 
         chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return f(a < b, c > ()); }",
-            "ct_err:[expr:call:missing_args:[f]:1:y][unknown_name:a][unknown_name:b][unknown_name:c]")
+            "ct_err:[expr:call:missing_args:[f]:[1:y]][unknown_name:a][unknown_name:b][unknown_name:c]")
         chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return f(a < b, c > . d()); }",
-            "ct_err:[expr:call:missing_args:[f]:1:y][unknown_name:a][unknown_name:b][unknown_name:c]")
+            "ct_err:[expr:call:missing_args:[f]:[1:y]][unknown_name:a][unknown_name:b][unknown_name:c]")
 
         chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return g(list<integer>()); }", "int[123]")
         chkEx("{ val (a, b, c, d) = (1, 2, 3, 4); return g(list<integer>.from_gtv(gtv.from_json('[]'))); }", "int[123]")

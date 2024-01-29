@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -48,7 +48,7 @@ private class C_SysFn_Exists(private val not: Boolean): C_SpecialLibGlobalFuncti
         val vArg = cArg.value()
         val condition = compileCondition(vArg)
         if (condition == null) {
-            C_LibFuncCaseUtils.errNoMatch(ctx, name.pos, name.str, listOf(vArg.type))
+            C_LibFuncCaseUtils.errNoMatch(ctx.msgCtx, name.pos, name.str, listOf(null to vArg.type))
             return C_ExprUtils.errorVExpr(ctx, name.pos, R_BooleanType)
         }
 

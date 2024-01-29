@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.core
@@ -439,7 +439,7 @@ class C_OwnerBlockContext(
         return null
     }
 
-    private fun <T> findAllValues(getter: (C_OwnerBlockContext) -> List<T>): List<T> {
+    private fun <T: Any> findAllValues(getter: (C_OwnerBlockContext) -> List<T>): List<T> {
         var ctx: C_OwnerBlockContext? = this
         val res = mutableListOf<T>()
         while (ctx != null) {

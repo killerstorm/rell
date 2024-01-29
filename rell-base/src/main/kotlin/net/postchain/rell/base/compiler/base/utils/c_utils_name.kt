@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.utils
@@ -14,7 +14,7 @@ import net.postchain.rell.base.utils.immListOf
 import net.postchain.rell.base.utils.toImmList
 import java.util.*
 
-abstract class C_GenericQualifiedName<NameT, FullNameT: C_GenericQualifiedName<NameT, FullNameT>>
+abstract class C_GenericQualifiedName<NameT: Any, FullNameT: C_GenericQualifiedName<NameT, FullNameT>>
 protected constructor(parts: List<NameT>) {
     val parts = parts.let {
         check(it.isNotEmpty())
@@ -44,7 +44,7 @@ protected constructor(parts: List<NameT>) {
     final override fun toString() = str()
 
     protected companion object {
-        fun <NameT, FullNameT: C_GenericQualifiedName<NameT, FullNameT>> ofNames0(
+        fun <NameT: Any, FullNameT: C_GenericQualifiedName<NameT, FullNameT>> ofNames0(
                 parts: List<NameT>,
                 ctor: (List<NameT>) -> FullNameT
         ): FullNameT {
@@ -57,7 +57,7 @@ protected constructor(parts: List<NameT>) {
             return res
         }
 
-        fun <NameT, FullNameT: C_GenericQualifiedName<NameT, FullNameT>> ofName0(
+        fun <NameT: Any, FullNameT: C_GenericQualifiedName<NameT, FullNameT>> ofName0(
                 name: NameT,
                 ctor: (List<NameT>) -> FullNameT
         ): FullNameT {

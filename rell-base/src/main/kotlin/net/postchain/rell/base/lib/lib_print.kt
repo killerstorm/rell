@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -12,7 +12,7 @@ import net.postchain.rell.base.runtime.Rt_UnitValue
 object Lib_Print {
     val NAMESPACE = Ld_NamespaceDsl.make {
         function("print", result = "unit") {
-            param(type = "anything", arity = L_ParamArity.ZERO_MANY)
+            param("values", type = "anything", arity = L_ParamArity.ZERO_MANY)
             bodyContextN { ctx, args ->
                 val str = args.joinToString(" ") { it.str() }
                 ctx.globalCtx.outPrinter.print(str)
@@ -21,7 +21,7 @@ object Lib_Print {
         }
 
         function("log", result = "unit") {
-            param(type = "anything", arity = L_ParamArity.ZERO_MANY)
+            param("values", type = "anything", arity = L_ParamArity.ZERO_MANY)
 
             bodyMeta {
                 val filePos = fnBodyMeta.callPos.toFilePos()

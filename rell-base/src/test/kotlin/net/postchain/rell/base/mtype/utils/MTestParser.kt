@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.mtype.utils
@@ -302,12 +302,14 @@ private class MsTypeDef(
 }
 
 private class MsFunParam(private val annotations: List<String>, private val type: MsType) {
-    fun compile(ctx: MsTypeCtx): M_FunctionParam {
+    fun compile(ctx: MsTypeCtx, name: String): M_FunctionParam {
         val annMap = MsParamAnn.values().map { it.name.lowercase() to it }.toImmMap()
         val anns = annotations.map { annMap.getValue(it) }.toImmSet()
         val mType = type.compile(ctx)
-        return M_FunctionParam.make(
-            mType.type,
+        return M_FunctionParam(
+            name = name,
+            type = mType.type,
+            arity = M_ParamArity.ONE,
             exact = MsParamAnn.EXACT in anns,
             nullable = MsParamAnn.NULLABLE in anns,
         )
@@ -324,7 +326,10 @@ private class MsFunHeader(val typeParams: List<MsTypeParam>, val params: List<Ms
         val mTypeParams = MsTypeParam.compileAll(ctx, typeParams)
         val subCtx = ctx.nestedTypeParams(mTypeParams)
         val mResType = result.compile(subCtx)
-        val mParams = params.map { it.compile(subCtx) }
+        val mParams = params.mapIndexed { i, param ->
+            val name = ('a' + i).toString()
+            param.compile(subCtx, name)
+        }
         return M_FunctionHeader(typeParams = mTypeParams, resultType = mResType.type, params = mParams)
     }
 }

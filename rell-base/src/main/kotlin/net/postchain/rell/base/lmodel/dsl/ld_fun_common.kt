@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -35,8 +35,8 @@ abstract class Ld_CommonFunctionDslImpl(
     }
 
     override fun param(
+        name: String,
         type: String,
-        name: String?,
         arity: L_ParamArity,
         exact: Boolean,
         nullable: Boolean,
@@ -44,8 +44,8 @@ abstract class Ld_CommonFunctionDslImpl(
         implies: L_ParamImplication?,
     ) {
         commonMaker.param(
-            type = type,
             name = name,
+            type = type,
             arity = arity,
             exact = exact,
             nullable = nullable,
@@ -60,8 +60,8 @@ interface Ld_CommonFunctionMaker {
     fun generic(name: String, subOf: String? = null, superOf: String? = null)
 
     fun param(
+        name: String,
         type: String,
-        name: String?,
         arity: L_ParamArity = L_ParamArity.ONE,
         exact: Boolean = false,
         nullable: Boolean = false,
@@ -76,11 +76,12 @@ abstract class Ld_CommonFunctionBuilder(
 ): Ld_CommonFunctionMaker {
     private var deprecated: C_Deprecated? = null
     private val typeParams = mutableMapOf<R_Name, Ld_TypeParam>()
-    private val params = mutableListOf<Ld_FunctionParam>()
-    private var paramsDefined = false
+    private val params = mutableMapOf<R_Name, Ld_FunctionParam>()
+    private var paramsFinished = false
 
     final override fun deprecated(deprecated: C_Deprecated) {
         require(this.deprecated == null)
+        finishParams()
         this.deprecated = deprecated
     }
 
@@ -102,8 +103,8 @@ abstract class Ld_CommonFunctionBuilder(
     }
 
     final override fun param(
+        name: String,
         type: String,
-        name: String?,
         arity: L_ParamArity,
         exact: Boolean,
         nullable: Boolean,
@@ -112,13 +113,18 @@ abstract class Ld_CommonFunctionBuilder(
     ) {
         require(bodyBuilder.isEmpty()) { "Body already set" }
 
-        Ld_Exception.check(!paramsDefined) {
-            "common_fun:params_already_defined:$type" to "Parameters already defined"
+        Ld_Exception.check(!paramsFinished) {
+            "common_fun:params_already_defined:$name" to "Parameters already defined"
+        }
+
+        val rName = R_Name.of(name)
+        Ld_Exception.check(rName !in params) {
+            "common_fun:param_name_conflict:$name" to "Parameter name conflict: $name"
         }
 
         val param = Ld_FunctionParam(
             index = params.size,
-            name = if (name == null) null else R_Name.of(name),
+            name = rName,
             type = Ld_Type.parse(type),
             arity = arity.mArity,
             exact = exact,
@@ -127,18 +133,19 @@ abstract class Ld_CommonFunctionBuilder(
             implies = implies,
         )
 
-        params.add(param)
+        params[rName] = param
     }
 
-    fun paramsDefined() {
-        require(!paramsDefined)
-        paramsDefined = true
+    protected fun finishParams() {
+        if (params.isNotEmpty()) {
+            paramsFinished = true
+        }
     }
 
     protected fun commonBuild(bodyRes: Ld_FunctionBodyRef): Ld_CommonFunction {
         val header = Ld_CommonFunctionHeader(
             typeParams = typeParams.values.toImmList(),
-            params = params.toImmList(),
+            params = params.values.toImmList(),
         )
 
         val body = bodyBuilder.build(bodyRes)
@@ -164,7 +171,7 @@ class Ld_CommonFunction(
 
 class Ld_FunctionParam(
     val index: Int,
-    val name: R_Name?,
+    val name: R_Name,
     val type: Ld_Type,
     val arity: M_ParamArity,
     val exact: Boolean,
@@ -183,19 +190,18 @@ class Ld_FunctionParam(
         }
 
         val mParam = M_FunctionParam(
-            name = name?.str,
+            name = name.str,
             type = mType,
             arity = arity,
             exact = exact,
             nullable = nullable,
         )
 
-        val docName = if (name != null) name.str else "#$index"
         val docParam = L_TypeUtils.docFunctionParam(mParam)
 
         val doc = DocSymbol(
             kind = DocSymbolKind.PARAMETER,
-            symbolName = DocSymbolName.local(docName),
+            symbolName = DocSymbolName.local(name.str),
             mountName = null,
             declaration = DocDeclaration_Parameter(docParam, lazy, implies, null),
             comment = null,

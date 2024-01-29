@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.module
@@ -258,7 +258,7 @@ class C_ModuleDefs(
     }
 }
 
-class C_ModuleDefTableBuilder<T> {
+class C_ModuleDefTableBuilder<T: Any> {
     private val map = mutableMapOf<String, T>()
 
     fun add(name: String, def: T) {

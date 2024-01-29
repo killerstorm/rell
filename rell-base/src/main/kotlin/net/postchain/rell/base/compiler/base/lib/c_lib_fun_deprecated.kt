@@ -1,41 +1,48 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.lib
 
+import net.postchain.rell.base.compiler.base.core.C_IdeSymbolInfo
 import net.postchain.rell.base.compiler.base.core.C_TypeHint
 import net.postchain.rell.base.compiler.base.expr.C_ExprContext
 import net.postchain.rell.base.compiler.base.fn.C_EffectivePartialArguments
+import net.postchain.rell.base.compiler.base.fn.C_FullCallArguments
 import net.postchain.rell.base.compiler.base.fn.C_PartialCallTarget
 import net.postchain.rell.base.compiler.base.fn.C_PartialCallTargetMatch
 import net.postchain.rell.base.compiler.base.namespace.C_DeclarationType
 import net.postchain.rell.base.compiler.base.namespace.C_Deprecated
 import net.postchain.rell.base.compiler.base.namespace.C_NamespaceElement
-import net.postchain.rell.base.compiler.vexpr.V_Expr
+import net.postchain.rell.base.compiler.base.utils.C_MessageManager
 import net.postchain.rell.base.compiler.vexpr.V_FunctionCall
 import net.postchain.rell.base.model.R_FunctionType
+import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_Type
 
 class C_DeprecatedLibFuncCase<CallT: V_FunctionCall>(
     private val case: C_LibFuncCase<CallT>,
     private val deprecated: C_Deprecated,
 ): C_LibFuncCase<CallT>(case.ideInfo) {
+    override val argIdeInfos: Map<R_Name, C_IdeSymbolInfo>
+        get() = case.argIdeInfos
+
+    override fun getSpecificName(selfType: R_Type) = case.getSpecificName(selfType)
+    override fun getCallTypeHints(selfType: R_Type) = case.getCallTypeHints(selfType)
+
     override fun replaceTypeParams(rep: C_TypeMemberReplacement): C_LibFuncCase<CallT> {
         val case2 = case.replaceTypeParams(rep)
         return if (case2 === case) this else C_DeprecatedLibFuncCase(case2, deprecated)
     }
 
-    override fun getSpecificName(selfType: R_Type) = case.getSpecificName(selfType)
-    override fun getCallTypeHints(selfType: R_Type) = case.getCallTypeHints(selfType)
-
     override fun match(
+        msgMgr: C_MessageManager,
         caseCtx: C_LibFuncCaseCtx,
         selfType: R_Type,
-        args: List<V_Expr>,
+        args: C_FullCallArguments,
         resTypeHint: C_TypeHint,
     ): C_LibFuncCaseMatch<CallT>? {
-        val match = case.match(caseCtx, selfType, args, resTypeHint)
+        val match = case.match(msgMgr, caseCtx, selfType, args, resTypeHint)
         return if (match == null) null else C_DeprecatedLibFuncCaseMatch(match, deprecated)
     }
 

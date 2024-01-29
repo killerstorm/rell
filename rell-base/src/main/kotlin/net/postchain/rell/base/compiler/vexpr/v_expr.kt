@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.vexpr
@@ -8,7 +8,7 @@ import net.postchain.rell.base.compiler.ast.S_CallArgument
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.*
 import net.postchain.rell.base.compiler.base.expr.*
-import net.postchain.rell.base.compiler.base.fn.C_FunctionCallInfo
+import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTargetBase
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTarget_FunctionType
 import net.postchain.rell.base.compiler.base.fn.C_FunctionUtils
 import net.postchain.rell.base.compiler.base.lib.C_TypeMember
@@ -228,16 +228,17 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
             safe: Boolean
     ): V_Expr {
         if (type is R_FunctionType) {
-            val callInfo = C_FunctionCallInfo.forFunctionType(pos, type)
-            val callTarget = C_FunctionCallTarget_FunctionType(ctx, callInfo, this, type, safe)
-            val vCall = C_FunctionUtils.compileRegularCall(ctx, callInfo, callTarget, args, resTypeHint)
+            val callTargetBase = C_FunctionCallTargetBase.forFunctionType(ctx, pos, type)
+            val callTarget = C_FunctionCallTarget_FunctionType(callTargetBase, this, type, safe)
+            val vCall = C_FunctionUtils.compileRegularCall(callTargetBase, callTarget, args, resTypeHint)
             return vCall.vExpr()
         }
 
         // Validate args.
         args.forEachIndexed { index, arg ->
             ctx.msgCtx.consumeError {
-                arg.compile(ctx, index, true, C_CallTypeHints_None, C_CallArgumentIdeInfoProvider_Unknown)
+                val cArg = arg.compile(ctx, index, true, C_CallTypeHints_None)
+                cArg.nameHand?.setIdeInfo(C_IdeSymbolInfo.UNKNOWN)
             }
         }
 
@@ -258,7 +259,7 @@ abstract class V_Expr(protected val exprCtx: C_ExprContext, val pos: S_Pos) {
         }
     }
 
-    fun <T> traverseToSet(code: (V_Expr) -> Collection<T>): Set<T> {
+    fun <T: Any> traverseToSet(code: (V_Expr) -> Collection<T>): Set<T> {
         val res = mutableListOf<T>()
         traverseToCollection(res, code)
         return res.toImmSet()

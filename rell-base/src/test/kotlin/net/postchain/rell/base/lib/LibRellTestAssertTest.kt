@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib
@@ -85,16 +85,16 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     @Test fun testAssertEqualsBadArgs() {
-        chkAssertEqualsBadArgs("assert_equals")
-        chkAssertEqualsBadArgs("assert_not_equals")
+        chkAssertEqualsBadArgs("assert_equals", "expected")
+        chkAssertEqualsBadArgs("assert_not_equals", "illegal")
     }
 
-    private fun chkAssertEqualsBadArgs(fn: String) {
-        chkAssert("$fn()", "ct_err:expr_call_argtypes:[FN]:")
-        chkAssert("$fn(0)", "ct_err:expr_call_argtypes:[FN]:integer")
-        chkAssert("$fn(0, 1, 'Hello')", "ct_err:expr_call_argtypes:[FN]:integer,integer,text")
-        chkAssert("$fn(0, 1, 2)", "ct_err:expr_call_argtypes:[FN]:integer,integer,integer")
-        chkAssert("$fn(123, 'Hello')", "ct_err:expr_call_argtypes:[FN]:integer,text")
+    private fun chkAssertEqualsBadArgs(fn: String, arg2: String) {
+        chkAssert("$fn()", "ct_err:expr:call:missing_args:[FN]:[0:actual,1:$arg2]")
+        chkAssert("$fn(0)", "ct_err:expr:call:missing_args:[FN]:[1:$arg2]")
+        chkAssert("$fn(0, 1, 'Hello')", "ct_err:expr:call:too_many_args:[FN]:2:3")
+        chkAssert("$fn(0, 1, 2)", "ct_err:expr:call:too_many_args:[FN]:2:3")
+        chkAssert("$fn(123, 'Hello')", "ct_err:expr_call_badargs:[FN]:[integer,text]")
     }
 
     private fun chkAssertEquals(e1: String, e2: String, v1: String, v2: String) {
@@ -108,8 +108,8 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     private fun chkAssertEqualsBad(e1: String, e2: String, t1: String, t2: String) {
-        chkAssert("assert_equals($e1, $e2)", "ct_err:expr_call_argtypes:[FN]:$t1,$t2")
-        chkAssert("assert_not_equals($e1, $e2)", "ct_err:expr_call_argtypes:[FN]:$t1,$t2")
+        chkAssert("assert_equals($e1, $e2)", "ct_err:expr_call_badargs:[FN]:[$t1,$t2]")
+        chkAssert("assert_not_equals($e1, $e2)", "ct_err:expr_call_badargs:[FN]:[$t1,$t2]")
     }
 
     @Test fun testAssertTrueFalse() {
@@ -118,22 +118,22 @@ class LibRellTestAssertTest: BaseRellTest(false) {
         chkAssert("assert_false(true)", "asrt_err:assert_boolean:false")
         chkAssert("assert_false(false)", "int[0]")
 
-        chkAssert("assert_true(123)", "ct_err:expr_call_argtypes:[FN]:integer")
-        chkAssert("assert_false(123)", "ct_err:expr_call_argtypes:[FN]:integer")
-        chkAssert("assert_true(_nullable(true))", "ct_err:expr_call_argtypes:[FN]:boolean?")
-        chkAssert("assert_false(_nullable(true))", "ct_err:expr_call_argtypes:[FN]:boolean?")
+        chkAssert("assert_true(123)", "ct_err:expr_call_badargs:[FN]:[integer]")
+        chkAssert("assert_false(123)", "ct_err:expr_call_badargs:[FN]:[integer]")
+        chkAssert("assert_true(_nullable(true))", "ct_err:expr_call_badargs:[FN]:[boolean?]")
+        chkAssert("assert_false(_nullable(true))", "ct_err:expr_call_badargs:[FN]:[boolean?]")
     }
 
     @Test fun testAssertNull() {
         chkAssert("assert_null(_nullable_int(123))", "asrt_err:assert_null:int[123]")
         chkAssert("assert_null(_nullable_int(null))", "int[0]")
-        chkAssert("assert_null(123)", "ct_err:expr_call_argtypes:[FN]:integer")
-        chkAssert("assert_null(null)", "ct_err:expr_call_argtypes:[FN]:null")
+        chkAssert("assert_null(123)", "ct_err:expr_call_badargs:[FN]:[integer]")
+        chkAssert("assert_null(null)", "ct_err:expr_call_badargs:[FN]:[null]")
 
         chkAssert("assert_not_null(_nullable_int(123))", "int[0]")
         chkAssert("assert_not_null(_nullable_int(null))", "asrt_err:assert_not_null")
-        chkAssert("assert_not_null(123)", "ct_err:expr_call_argtypes:[FN]:integer")
-        chkAssert("assert_not_null(null)", "ct_err:expr_call_argtypes:[FN]:null")
+        chkAssert("assert_not_null(123)", "ct_err:expr_call_badargs:[FN]:[integer]")
+        chkAssert("assert_not_null(null)", "ct_err:expr_call_badargs:[FN]:[null]")
     }
 
     @Test fun testAssertNullNullabilityAnalysis() {
@@ -253,10 +253,10 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     private fun chkAssertCmpWrongArgs(args: String, types: String) {
-        chk("assert_lt($args)", "ct_err:expr_call_argtypes:[assert_lt]:$types")
-        chk("assert_gt($args)", "ct_err:expr_call_argtypes:[assert_gt]:$types")
-        chk("assert_le($args)", "ct_err:expr_call_argtypes:[assert_le]:$types")
-        chk("assert_ge($args)", "ct_err:expr_call_argtypes:[assert_ge]:$types")
+        chk("assert_lt($args)", "ct_err:expr_call_badargs:[assert_lt]:[$types]")
+        chk("assert_gt($args)", "ct_err:expr_call_badargs:[assert_gt]:[$types]")
+        chk("assert_le($args)", "ct_err:expr_call_badargs:[assert_le]:[$types]")
+        chk("assert_ge($args)", "ct_err:expr_call_badargs:[assert_ge]:[$types]")
     }
 
     @Test fun testAssertRange() {
@@ -341,8 +341,8 @@ class LibRellTestAssertTest: BaseRellTest(false) {
     }
 
     @Test fun testAssertFails() {
-        chkAssert("assert_fails(integer.from_hex(*))", "ct_err:expr_call_argtypes:[FN]:(text)->integer")
-        chkAssert("assert_fails(123)", "ct_err:expr_call_argtypes:[FN]:integer")
+        chkAssert("assert_fails(integer.from_hex(*))", "ct_err:expr_call_badargs:[FN]:[(text)->integer]")
+        chkAssert("assert_fails(123)", "ct_err:expr_call_badargs:[FN]:[integer]")
 
         chkAssert("assert_fails(integer.from_hex('xyz', *))", "int[0]")
         chkAssert("assert_fails(integer.from_hex('123', *))",

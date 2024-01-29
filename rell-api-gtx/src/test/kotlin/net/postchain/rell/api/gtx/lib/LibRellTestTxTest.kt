@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.api.gtx.lib
@@ -39,7 +39,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chk("rell.test.block([foo(123)])", "rell.test.block[rell.test.tx[op[foo(123)]]]")
         chk("rell.test.block([foo(123),foo(456)])", "rell.test.block[rell.test.tx[op[foo(123)],op[foo(456)]]]")
 
-        chk("rell.test.block(struct<foo>(123))", "ct_err:expr_call_argtypes:[rell.test.block]:struct<foo>")
+        chk("rell.test.block(struct<foo>(123))", "ct_err:expr_call_badargs:[rell.test.block]:[struct<foo>]")
     }
 
     @Test fun testBlockRun() {
@@ -58,7 +58,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chk("_type_of(rell.test.block().tx(foo(123)).tx(foo(456)))", "text[rell.test.block]")
 
         chk("rell.test.block()", "rell.test.block[]")
-        chk("rell.test.block().tx()", "ct_err:expr_call_argtypes:[rell.test.block.tx]:")
+        chk("rell.test.block().tx()", "ct_err:expr_call_badargs:[rell.test.block.tx]:[]")
         chk("rell.test.block().tx(rell.test.tx(foo(123)))", "rell.test.block[rell.test.tx[op[foo(123)]]]")
         chk("rell.test.block().tx(rell.test.tx(foo(123)),rell.test.tx(foo(456)))",
                 "rell.test.block[rell.test.tx[op[foo(123)]],rell.test.tx[op[foo(456)]]]")
@@ -177,7 +177,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
     private fun chkSignCommon(exprType: String, expr: String) {
         chk("_type_of($expr.sign(rell.test.keypairs.bob))", "text[rell.test.tx]")
 
-        chk("$expr.sign()", "ct_err:expr_call_argtypes:[$exprType.sign]:")
+        chk("$expr.sign()", "ct_err:expr_call_badargs:[$exprType.sign]:[]")
         chk("$expr.sign(rell.test.keypairs.bob)", "rell.test.tx[op[foo(123)],034f35]")
         chk("$expr.sign(rell.test.keypairs.bob,rell.test.keypairs.alice)", "rell.test.tx[op[foo(123)],034f35,02466d]")
         chk("$expr.sign(rell.test.keypairs.bob).sign(rell.test.keypairs.alice)", "rell.test.tx[op[foo(123)],034f35,02466d]")
@@ -200,8 +200,8 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chk("$expr.sign(rell.test.pubkeys.bob)", "rt_err:tx.sign:priv_key_size:32:33")
         chk("$expr.sign(x'')", "rt_err:tx.sign:priv_key_size:32:0")
         chk("$expr.sign(x'00')", "rt_err:tx.sign:priv_key_size:32:1")
-        chk("$expr.sign(123)", "ct_err:expr_call_argtypes:[$exprType.sign]:integer")
-        chk("$expr.sign('bob')", "ct_err:expr_call_argtypes:[$exprType.sign]:text")
+        chk("$expr.sign(123)", "ct_err:expr_call_badargs:[$exprType.sign]:[integer]")
+        chk("$expr.sign('bob')", "ct_err:expr_call_badargs:[$exprType.sign]:[text]")
         chk("$expr.sign(rell.test.keypair(priv=x'12', pub=x'34'))", "rt_err:keypair:wrong_byte_array_size:33:1")
     }
 
@@ -248,7 +248,7 @@ class LibRellTestTxTest: BaseRellTest(false) {
     }
 
     @Test fun testOpConstructor() {
-        chk("rell.test.op()", "ct_err:expr_call_argtypes:[rell.test.op]:")
+        chk("rell.test.op()", "ct_err:expr_call_badargs:[rell.test.op]:[]")
         chk("rell.test.op('foo')", "op[foo()]")
         chk("rell.test.op('foo', (123).to_gtv())", "op[foo(123)]")
         chk("rell.test.op('foo', (123).to_gtv(), 'Hello'.to_gtv())", """op[foo(123,"Hello")]""")
@@ -258,8 +258,8 @@ class LibRellTestTxTest: BaseRellTest(false) {
         chk("rell.test.op('foo', [(123).to_gtv()])", "op[foo(123)]")
         chk("rell.test.op('foo', [(123).to_gtv(), 'Hello'.to_gtv()])", """op[foo(123,"Hello")]""")
 
-        chk("rell.test.op('foo', 123)", "ct_err:expr_call_argtypes:[rell.test.op]:text,integer")
-        chk("rell.test.op('foo', 'Hello')", "ct_err:expr_call_argtypes:[rell.test.op]:text,text")
+        chk("rell.test.op('foo', 123)", "ct_err:expr_call_badargs:[rell.test.op]:[text,integer]")
+        chk("rell.test.op('foo', 'Hello')", "ct_err:expr_call_badargs:[rell.test.op]:[text,text]")
 
         chk("rell.test.op('', list<gtv>())", "rt_err:rell.test.op:bad_name:")
         chk("rell.test.op('123', list<gtv>())", "rt_err:rell.test.op:bad_name:123")

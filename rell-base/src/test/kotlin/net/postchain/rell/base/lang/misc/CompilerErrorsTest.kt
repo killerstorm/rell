@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.misc
@@ -9,9 +9,9 @@ import org.junit.Test
 
 class CompilerErrorsTest: BaseRellTest(false) {
     private val badExpr1 = "abs(x'')"
-    private val badError1 = "expr_call_argtypes:[abs]:byte_array"
+    private val badError1 = "expr_call_badargs:[abs]:[byte_array]"
     private val badExpr2 = "min()"
-    private val badError2 = "expr_call_argtypes:[min]:"
+    private val badError2 = "expr_call_badargs:[min]:[]"
 
     @Test fun testTypeTuple() {
         val ut = "unknown_name"
@@ -83,8 +83,8 @@ class CompilerErrorsTest: BaseRellTest(false) {
         chkCompile("function m() { foo(123, false, 'Hello'); }", "ct_err:$typeErr")
         chkCompile("function m() { foo(123, 0, 'Hello'); }", "ct_err:$typeErr")
 
-        chkCompile("function m() { foo(); }", "ct_err:[$typeErr][expr:call:missing_args:[foo]:0:x,1:y,2:z]")
-        chkCompile("function m() { foo(123, 'Hello'); }", "ct_err:[$typeErr][expr:call:missing_args:[foo]:2:z]")
+        chkCompile("function m() { foo(); }", "ct_err:[$typeErr][expr:call:missing_args:[foo]:[0:x,1:y,2:z]]")
+        chkCompile("function m() { foo(123, 'Hello'); }", "ct_err:[$typeErr][expr:call:missing_args:[foo]:[2:z]]")
         chkCompile("function m() { foo(123, null, 'Hello', false); }", "ct_err:[$typeErr][expr:call:too_many_args:[foo]:3:4]")
 
         chkCompile("function m() { foo('Bye', null, 'Hello'); }", "ct_err:[$typeErr][expr_call_argtype:[foo]:0:x:integer:text]")
@@ -151,7 +151,7 @@ class CompilerErrorsTest: BaseRellTest(false) {
     }
 
     @Test fun testStmtVarDeclaratorSimple() {
-        val err3 = "expr_call_argtypes:[max]:integer"
+        val err3 = "expr_call_badargs:[max]:[integer]"
 
         chkStmt("val _; $badExpr2;", "ct_err:[unknown_name_type:_][$badError2]")
         chkStmt("val _: BAD; $badExpr2;", "ct_err:[var_wildcard_type][unknown_name:BAD][$badError2]")

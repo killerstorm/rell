@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.def
@@ -7,9 +7,8 @@ package net.postchain.rell.base.compiler.base.def
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_CompilerPass
 import net.postchain.rell.base.compiler.base.core.C_MessageContext
-import net.postchain.rell.base.compiler.base.expr.C_ExprContext
-import net.postchain.rell.base.compiler.base.fn.C_FunctionCallInfo
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTarget
+import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTargetBase
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTarget_Regular
 import net.postchain.rell.base.compiler.base.module.*
 import net.postchain.rell.base.compiler.base.utils.C_Errors
@@ -38,8 +37,8 @@ class C_AbstractUserGlobalFunction(
 
     override fun getAbstractDescriptor() = descriptor
 
-    override fun compileCallTarget(ctx: C_ExprContext, callInfo: C_FunctionCallInfo, retType: R_Type?): C_FunctionCallTarget {
-        return C_FunctionCallTarget_AbstractUserFunction(ctx, callInfo, retType, rFunction, rOverrideLate.getter)
+    override fun compileCallTarget(base: C_FunctionCallTargetBase, retType: R_Type?): C_FunctionCallTarget {
+        return C_FunctionCallTarget_AbstractUserFunction(base, retType, rFunction, rOverrideLate.getter)
     }
 
     fun compileOverride() {
@@ -49,12 +48,11 @@ class C_AbstractUserGlobalFunction(
 }
 
 private class C_FunctionCallTarget_AbstractUserFunction(
-        ctx: C_ExprContext,
-        callInfo: C_FunctionCallInfo,
-        retType: R_Type?,
-        private val rBaseFunction: R_FunctionDefinition,
-        private val overrideGetter: C_LateGetter<R_FunctionBase>
-): C_FunctionCallTarget_Regular(ctx, callInfo, retType) {
+    base: C_FunctionCallTargetBase,
+    retType: R_Type?,
+    private val rBaseFunction: R_FunctionDefinition,
+    private val overrideGetter: C_LateGetter<R_FunctionBase>
+): C_FunctionCallTarget_Regular(base, retType) {
     override fun createVTarget(): V_FunctionCallTarget {
         return V_FunctionCallTarget_AbstractUserFunction(rBaseFunction, overrideGetter)
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.type
@@ -129,7 +129,7 @@ object Lib_Type_Struct {
 
                 staticFunction("from_bytes", result = "T", pure = true) {
                     alias("fromBytes", C_MessageType.ERROR)
-                    param(type = "byte_array")
+                    param("bytes", type = "byte_array")
 
                     bodyMeta {
                         val resType = fnBodyMeta.rResultType
@@ -152,13 +152,13 @@ object Lib_Type_Struct {
                 // (they used to exist only for structs, not for all types).
                 staticFunction("fromGTXValue", result = "T", pure = true) {
                     deprecated(newName = "from_gtv")
-                    param(type = "gtv")
+                    param("gtv", type = "gtv")
                     Lib_Type_Gtv.makeFromGtvBody(this, pretty = false)
                 }
 
                 staticFunction("fromPrettyGTXValue", result = "T", pure = true) {
                     deprecated(newName = "from_gtv_pretty")
-                    param(type = "gtv")
+                    param("gtv", type = "gtv")
                     Lib_Type_Gtv.makeFromGtvBody(this, pretty = true)
                 }
             }

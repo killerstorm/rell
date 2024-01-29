@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.def
@@ -711,7 +711,7 @@ class FunctionExtendTest: BaseRellTest(false) {
 
         chk("lib.g(1)", "list<integer>[int[123]]")
         chk("lib.g(x = 1)", "list<integer>[int[123]]")
-        chk("lib.g()", "ct_err:expr:call:missing_args:[g]:0:x")
+        chk("lib.g()", "ct_err:expr:call:missing_args:[g]:[0:x]")
         chk("lib.g('A')", "ct_err:expr_call_argtype:[g]:0:x:integer:text")
         chk("lib.g(x = 'A')", "ct_err:expr_call_argtype:[g]:0:x:integer:text")
         chk("lib.g(true)", "ct_err:expr_call_argtype:[g]:0:x:integer:boolean")
@@ -720,12 +720,12 @@ class FunctionExtendTest: BaseRellTest(false) {
         chk("lib.h('A', true)", "list<integer>[int[123]]")
         chk("lib.h(x = 'A', y = true)", "list<integer>[int[123]]")
         chk("lib.h(y = true, x = 'A')", "list<integer>[int[123]]")
-        chk("lib.h()", "ct_err:expr:call:missing_args:[h]:0:x,1:y")
-        chk("lib.h('A')", "ct_err:expr:call:missing_args:[h]:1:y")
-        chk("lib.h(x = 'A')", "ct_err:expr:call:missing_args:[h]:1:y")
-        chk("lib.h(true)", "ct_err:[expr:call:missing_args:[h]:1:y][expr_call_argtype:[h]:0:x:text:boolean]")
-        chk("lib.h(x = true)", "ct_err:[expr:call:missing_args:[h]:1:y][expr_call_argtype:[h]:0:x:text:boolean]")
-        chk("lib.h(y = true)", "ct_err:expr:call:missing_args:[h]:0:x")
+        chk("lib.h()", "ct_err:expr:call:missing_args:[h]:[0:x,1:y]")
+        chk("lib.h('A')", "ct_err:expr:call:missing_args:[h]:[1:y]")
+        chk("lib.h(x = 'A')", "ct_err:expr:call:missing_args:[h]:[1:y]")
+        chk("lib.h(true)", "ct_err:[expr:call:missing_args:[h]:[1:y]][expr_call_argtype:[h]:0:x:text:boolean]")
+        chk("lib.h(x = true)", "ct_err:[expr:call:missing_args:[h]:[1:y]][expr_call_argtype:[h]:0:x:text:boolean]")
+        chk("lib.h(y = true)", "ct_err:expr:call:missing_args:[h]:[0:x]")
         chk("lib.h('A', 1)", "ct_err:expr_call_argtype:[h]:1:y:boolean:integer")
         chk("lib.h(true, 'A')", "ct_err:[expr_call_argtype:[h]:0:x:text:boolean][expr_call_argtype:[h]:1:y:boolean:text]")
         chk("lib.h('A', true, 1)", "ct_err:expr:call:too_many_args:[h]:2:3")
@@ -890,7 +890,7 @@ class FunctionExtendTest: BaseRellTest(false) {
 
         chkFull("@extend(lib.g) function h(x: integer = 456) = [x + 1]; query q() = lib.g(123);", "[124, 123]")
         chkFull("@extend(lib.g) function h(x: integer = 456) = [x + 1]; query q() = lib.g();",
-            "ct_err:expr:call:missing_args:[g]:0:x")
+            "ct_err:expr:call:missing_args:[g]:[0:x]")
         chkFull("@extend(lib.g) function h(x: integer = 456) = [x + 1]; query q() = h();", "[457]")
     }
 

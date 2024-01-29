@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -39,8 +39,8 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkNameConflictErr(defs, block, "f") { constant("f", "anything", Rt_UnitValue) }
         chkNameConflictErr(defs, block, "f") { property("f", "anything") { bodyContext { Rt_UnitValue } } }
         chkNameConflictErr(defs, block, "f") { property("f", makeSpecProp()) }
-        chkNameConflictOK(defs, block, "function f(anything): anything") {
-            function("f", "anything") { param("anything"); body { -> Rt_UnitValue } }
+        chkNameConflictOK(defs, block, "function f(a: anything): anything") {
+            function("f", "anything") { param("a", "anything"); body { -> Rt_UnitValue } }
         }
         chkNameConflictErr(defs, block, "f") { function("f", makeGlobalFun()) }
     }
@@ -80,7 +80,10 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkNameConflictErr(defs, block, "l") { property("l", "anything") { bodyContext { Rt_UnitValue } } }
         chkNameConflictErr(defs, block, "l") { property("l", makeSpecProp()) }
         chkNameConflictErr(defs, block, "l") { function("l", makeGlobalFun()) }
-        chkNameConflictErr(defs, block, "l") { function("l", "anything") { param("anything"); body { -> Rt_UnitValue } } }
+
+        chkNameConflictErr(defs, block, "l") {
+            function("l", "anything") { param("a", "anything"); body { -> Rt_UnitValue } }
+        }
     }
 
     @Test fun testAliasType() {
@@ -111,10 +114,10 @@ class LNamespaceNameConflictTest: BaseLTest() {
         chkAliasFunction("f2")
 
         val (defs, block) = initAlias()
-        chkNameConflictOK(defs, block, "function x(anything): anything", "alias f1 = x") {
+        chkNameConflictOK(defs, block, "function x(a: anything): anything", "alias f1 = x") {
             function("x", "anything") {
                 alias("f1")
-                param("anything")
+                param("a", "anything")
                 body { -> Rt_UnitValue }
             }
         }

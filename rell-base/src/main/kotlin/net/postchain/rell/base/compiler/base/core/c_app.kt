@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.core
@@ -360,7 +360,7 @@ private class C_AppDefsBuilder(executor: C_CompilerExecutor): C_AppDefsAdder {
     override fun addOperation(op: R_OperationDefinition) = add(operations, op)
     override fun addQuery(q: R_QueryDefinition) = add(queries, q)
 
-    private fun <T, K> add(table: C_AppDefsTableBuilder<T, K>, value: T) {
+    private fun <T: Any, K> add(table: C_AppDefsTableBuilder<T, K>, value: T) {
         check(!build)
         table.add(value)
     }
@@ -378,7 +378,10 @@ private class C_AppDefsBuilder(executor: C_CompilerExecutor): C_AppDefsAdder {
     }
 }
 
-private class C_AppDefsTableBuilder<T, K>(private val executor: C_CompilerExecutor, private val keyGetter: (T) -> K) {
+private class C_AppDefsTableBuilder<T: Any, K>(
+    private val executor: C_CompilerExecutor,
+    private val keyGetter: (T) -> K,
+) {
     private val keys: MutableSet<K> = SetUtils.newIdentityHashSet()
     private val defs = mutableListOf<T>()
     private var build = false

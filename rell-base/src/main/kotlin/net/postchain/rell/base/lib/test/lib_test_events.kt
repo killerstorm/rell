@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lib.test
@@ -22,7 +22,7 @@ object Lib_Test_Events {
 
         namespace("rell.test") {
             function("assert_events", "unit") {
-                param(EVENT_TYPE_STR, arity = L_ParamArity.ZERO_MANY)
+                param("expected", EVENT_TYPE_STR, arity = L_ParamArity.ZERO_MANY)
                 bodyContextN { ctx, args ->
                     val events = ctx.exeCtx.emittedEvents
                     val actual: Rt_Value = Rt_ListValue(EVENT_LIST_TYPE, events.toMutableList())

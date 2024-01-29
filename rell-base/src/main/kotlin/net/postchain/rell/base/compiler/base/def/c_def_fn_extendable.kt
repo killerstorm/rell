@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.compiler.base.def
@@ -7,9 +7,8 @@ package net.postchain.rell.base.compiler.base.def
 import net.postchain.rell.base.compiler.ast.S_Pos
 import net.postchain.rell.base.compiler.base.core.C_AppContext
 import net.postchain.rell.base.compiler.base.core.C_CompilerPass
-import net.postchain.rell.base.compiler.base.expr.C_ExprContext
-import net.postchain.rell.base.compiler.base.fn.C_FunctionCallInfo
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTarget
+import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTargetBase
 import net.postchain.rell.base.compiler.base.fn.C_FunctionCallTarget_Regular
 import net.postchain.rell.base.compiler.base.utils.C_LateGetter
 import net.postchain.rell.base.compiler.base.utils.C_LateInit
@@ -76,9 +75,9 @@ class C_ExtendableUserGlobalFunction(
 
     override fun getExtendableDescriptor() = descriptor
 
-    override fun compileCallTarget(ctx: C_ExprContext, callInfo: C_FunctionCallInfo, retType: R_Type?): C_FunctionCallTarget {
+    override fun compileCallTarget(base: C_FunctionCallTargetBase, retType: R_Type?): C_FunctionCallTarget {
         val rDescriptor = rDescriptorLazy
-        return C_FunctionCallTarget_ExtendableUserFunction(ctx, callInfo, retType, rFunction, rDescriptor)
+        return C_FunctionCallTarget_ExtendableUserFunction(base, retType, rFunction, rDescriptor)
     }
 
     fun compileDefinition() {
@@ -106,12 +105,11 @@ class C_ExtendableUserGlobalFunction(
 }
 
 private class C_FunctionCallTarget_ExtendableUserFunction(
-        ctx: C_ExprContext,
-        callInfo: C_FunctionCallInfo,
-        retType: R_Type?,
-        private val rBaseFunction: R_FunctionDefinition,
-        private val descriptor: R_ExtendableFunctionDescriptor
-): C_FunctionCallTarget_Regular(ctx, callInfo, retType) {
+    base: C_FunctionCallTargetBase,
+    retType: R_Type?,
+    private val rBaseFunction: R_FunctionDefinition,
+    private val descriptor: R_ExtendableFunctionDescriptor
+): C_FunctionCallTarget_Regular(base, retType) {
     override fun createVTarget(): V_FunctionCallTarget {
         return V_FunctionCallTarget_ExtendableUserFunction(rBaseFunction, descriptor)
     }

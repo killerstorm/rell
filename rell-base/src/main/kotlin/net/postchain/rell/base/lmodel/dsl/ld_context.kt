@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lmodel.dsl
@@ -12,13 +12,10 @@ import net.postchain.rell.base.model.R_Name
 import net.postchain.rell.base.model.R_QualifiedName
 import net.postchain.rell.base.mtype.M_Type
 import net.postchain.rell.base.mtype.M_Types
+import net.postchain.rell.base.utils.*
 import net.postchain.rell.base.utils.futures.FcCycleException
 import net.postchain.rell.base.utils.futures.FcExecutor
 import net.postchain.rell.base.utils.futures.FcFuture
-import net.postchain.rell.base.utils.immMapOf
-import net.postchain.rell.base.utils.mutableMultimapOf
-import net.postchain.rell.base.utils.toImmMap
-import net.postchain.rell.base.utils.unionNoConflicts
 
 class Ld_ModuleContext(
     val moduleName: R_ModuleName,
@@ -192,8 +189,7 @@ class Ld_NamespaceFinishContext(
 
     fun getNamespaceMembers(qualifiedName: R_QualifiedName, errPos: Exception): List<L_NamespaceMember> {
         val future = tables.members[qualifiedName]
-        future ?: throw Ld_Exception("member_not_found:$qualifiedName", "Member not found: $qualifiedName", errPos)
-        return future.getResult()
+        return future?.getResult() ?: immListOf()
     }
 }
 

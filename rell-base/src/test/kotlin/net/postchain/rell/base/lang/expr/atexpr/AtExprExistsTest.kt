@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 ChromaWay AB. See LICENSE for license information.
+ * Copyright (C) 2024 ChromaWay AB. See LICENSE for license information.
  */
 
 package net.postchain.rell.base.lang.expr.atexpr
@@ -266,9 +266,9 @@ class AtExprExistsTest: BaseRellTest() {
         chkCardinality("@? { c.city != 'London' }", "rt_err:at:wrong_count:3")
         chkCardinality("@? { c.city == 'Berlin' }", "[]")
 
-        chkCardinality("@  { c.city == 'London' }", "ct_err:expr_call_argtypes:[exists]:company")
-        chkCardinality("@  { c.city != 'London' }", "ct_err:expr_call_argtypes:[exists]:company")
-        chkCardinality("@  { c.city == 'Berlin' }", "ct_err:expr_call_argtypes:[exists]:company")
+        chkCardinality("@  { c.city == 'London' }", "ct_err:expr_call_badargs:[exists]:[company]")
+        chkCardinality("@  { c.city != 'London' }", "ct_err:expr_call_badargs:[exists]:[company]")
+        chkCardinality("@  { c.city == 'Berlin' }", "ct_err:expr_call_badargs:[exists]:[company]")
     }
 
     private fun chkCardinality(expr: String, expected: String) {
